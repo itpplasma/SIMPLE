@@ -1,672 +1,275 @@
-# SPECTRE orbit programme: recovered status and plan
+# SPECTRE orbits: model comparison and execution plan
 
-Updated 2026-10-15. Active study: `research/spectre-loss-study-20261014`.
-Recovery branch: `recovery/spectre-session-20261014`.
-Production baseline: `origin/main` at `fe002a3`, including cleanup PR #533.
-Measurement baseline remains pinned to this revision even if main advances.
-This consolidates the stopped Claude controller and its GPT Sol, strategy,
-Opus and nested derivation workers. It records unfinished research rather
-than claiming the scientific programme is complete. No previous worker is
-running or being resumed by this recovery.
+Updated 2026-10-15. Active branch: `research/spectre-loss-study-20261014`.
+Main and the frozen measurement baseline are `fe002a3` (including PR #533).
+The active branch already contains that main revision. Recovery/archive
+history and all retained failed results remain available.
 
-## Latest loss diagnosis and branch status, 2026-10-15
+## Strategy and active choices
 
-The 48-versus-53 G3V3L3Fi comparison exposed a real boundary inconsistency:
-the multi-volume hybrid excluded the outer edge from FO entry and absorbed
-the guiding centre, while the reference absorbed the particle. The repair
-uses the existing FO entry/exit distances at the outer edge and recovers
-markers 62, 124, 126 and 247. Both default and refined hybrid grids now lose
-**52/256**, with identical statuses and zero stops, FO failures or holds.
-The old multi-volume GC-only absorber is removed and recorded as ledger F8;
-no new production setting selects it. The separate single-volume GC boundary
-contract is preserved, with its original tests and thresholds unchanged.
+Keep the verified source repairs, particle-wall repair and cheap spline FO
+provider. They improve the reference implementation and comparison conditions;
+they do not select the final hybrid model. The present phase-discarding hybrid
+remains a measured baseline with unresolved model and convergence errors.
 
-Marker 129 remains a switch-model discrepancy, not an accepted physical
-difference. Sixteen FO launch phases at its fixed GC start span loss times
-1.910–2.055 ms across the 2 ms cutoff. Default/finer hybrid fields and tighter
-Meiss construction retain survival through 2.125 ms. Hybrid microstep controls
-also retain survival but do not establish trajectory convergence. Changing
-the entry distance changes its outcome; FO throughout the hybrid pipeline
-reproduces the same-grid phase-zero reference to about 1e-16 s in loss time.
-Do not tune the entry distance to manufacture 53 losses. Coherent action/phase
-transport and joint step/entry-distance controls remain scientific work.
+Compare phase-complete first-order GC (`1+`), second-order GC (`GC2`) and FO.
+Higher-order GC is an active comparison track. Its production integration
+depends on real-stellarator accuracy and cost evidence. Build the shared
+canonical action/phase infrastructure for both GC orders before choosing one.
 
-| Latest model, 256 markers / 2 ms | Losses | Differences from refined FO | Trace / end-to-end [s] |
+| Approach | Role and next decision | Status |
+| --- | --- | --- |
+| Spline-based, event-resolved FO | Reference; resolve sharp-sheet and particle-wall encounters | Implemented and measured; no new symplectic guarantee |
+| Present GC/FO hybrid | Baseline for cost, losses and switch error | Phase is discarded; trajectory convergence remains unresolved |
+| Phase-complete first-order GC, `1+` | Essential GC baseline with consistent phase evolution and reconstruction | Local prototype exists; real SPECTRE implementation required |
+| Second-order GC, `GC2` | Active contender using the same canonical infrastructure | Local prototype exists; stellarator benefit and production cost unmeasured |
+| Encounter maps and cycle compression | Conditional acceleration if resolved FO encounters remain expensive | Exact planar controls exist; curved-field extension unvalidated |
+| Resolved smooth-layer GL2 and variational FO | Secondary physics/structure controls; later alternatives | Concept-only; no production option or complete hybrid proof |
+
+Higher order addresses smooth-volume dynamics. It supplies no GC crossing rule
+for a sharp sheet. Keep resolved FO at sheets while comparing GC orders.
+Hamiltonian, canonical momenta, phase evolution and particle reconstruction
+must belong to one consistent formulation. A frequency counter added to the
+current fixed-mu GC state does not provide that formulation.
+
+Choose by physical error versus total runtime, including table construction,
+memory and FO residence. Matching final loss counts alone is insufficient.
+Retain the eventual bounded-energy and symplectic objectives, with separate
+evidence for continuous physics, the numerical map and its implementation.
+
+## Current implementation and measured checkpoint
+
+| Production change | Review branch / revision | State |
+| --- | --- | --- |
+| FO logical splines, endpoint reuse and regular axis chart | [#534](https://github.com/itpplasma/SIMPLE/pull/534), `perf/spectre-fo-logical-spline`, `47d3fb0` | Open, ready; T4 senior review required |
+| Three GC final-Newton extrapolation repairs | [#535](https://github.com/itpplasma/SIMPLE/pull/535), `fix/gc-field-extrapolation`, `6970eff` | Open, ready; T3 domain review required |
+| Multi-volume particle-wall loss repair | [#536](https://github.com/itpplasma/SIMPLE/pull/536), `fix/spectre-particle-edge-loss`, `914544f` | Open, ready; stacked on #534; T3 domain review required |
+
+All three changes are integrated on the active research branch. The GC repair
+is independent of the performance PR. Research can proceed while these changes
+undergo the review required by `docs/review-policy.md`; CI is not awaited.
+
+Latest physical controls use 3.5 keV alphas, 256 volume-sampled GC starts,
+2 ms and 16 local OpenMP threads. The hybrid replays have zero numerical stops,
+FO failures and warning holds. The unchanged FO references retain their
+original case-specific provenance.
+
+| Field/model | Losses / 256 | Paired status differences from refined FO | Trace / total [s] |
 | --- | ---: | ---: | ---: |
-| NCSX repaired hybrid | 97 | 8 | 238.37 / 258.19 |
 | NCSX refined FO | 99 | reference | 440.55 / 458.70 |
-| G3V3L3Fi repaired hybrid | 52 | 1 | 52.65 / 67.09 |
+| NCSX repaired hybrid | 97 | 8 | 238.37 / 258.19 |
 | G3V3L3Fi refined FO | 53 | reference | 109.02 / 128.60 |
-
-NCSX changes only marker 50 from loss to survival versus its previous hybrid
-(98 losses). Its eight disagreements remain open. Both replays have zero
-health flags; these shared-host accuracy timings overlap local checks/builds
-and do not replace the controlled 5.8–7.4x tracing comparison below.
-The four unchanged FO references retain their own source provenance.
-
-The scientific report and plots are in
-[`concept/spectre_loss_study/RND.md`](concept/spectre_loss_study/RND.md).
-New retained data are `results/loss-diagnosis/` and `results/full-wall-fixed/`
-under that study. Earlier snapshots remain intact. Both reports replot from
-retained data with identical numeric records and metadata.
-
-Production repair `535bc9e`, scope correction `5e88fe5` and ledger `c957615`
-are integrated here. The focused wall branch is
-`fix/spectre-particle-edge-loss`, ready as [PR #536](https://github.com/itpplasma/SIMPLE/pull/536),
-based on performance PR #534. Its independent
-review scope excludes the GC source fix and recovered concepts. The integrated
-affected sweep passed 24/25 checks; the sole failure caught the unintended
-single-volume behavior change. After the scope correction, that unchanged test
-and both wall regressions pass, 3/3; the other 22 results are reused. The isolated
-wall branch passes nine native checks plus its three-case scope rerun. Restoring
-the old outer exclusion makes both wall regressions fail. No obsolete-parameter
-rejection tests, acceptance relaxations or compatibility settings were added.
-
-Remaining order: required review/promotion of the focused production PRs;
-coherent action/phase model and switch integration; joint physical convergence
-and the full loss matrix; whole-implementation energy/symplectic obligations.
-The larger research programme remains open. CI is not awaited, and no protected
-host was used. R&D publication outside the repository needs the destination:
-the connected Zulip has no `rnd` stream or existing SPECTRE thread.
-
-## Pre-wall-repair measurement checkpoint (retained)
-
-The repaired 24-case controls are complete: 32 matched markers, 200 us,
-16 local threads, NCSX/G3V3L3Fi, sheet/volume starts, FO/current hybrid,
-and main/default/refined fields. Every case completed with zero numerical
-stops, FO failures or warning-held intervals. All paired loss statuses agree
-with main. Retained starts, sparse traces and source/dependency hashes are in
-`concept/spectre_loss_study/results/long/{summary.json,traces.npz}`; reproduce
-plots with `analyze.py` using that directory as input.
-
-| Case | FO tracing speedup | Hybrid tracing speedup | FO / hybrid losses |
-| --- | ---: | ---: | ---: |
-| NCSX sheet | 7.43x | 7.44x | 4/32 / 3/32 |
-| NCSX volume | 6.63x | 7.43x | 9/32 / 9/32 |
-| G3V3L3Fi sheet | 5.79x | 6.47x | 0/32 / 0/32 |
-| G3V3L3Fi volume | 5.87x | 6.11x | 2/32 / 2/32 |
-
-These are tracing speedups on a shared host, excluding setup. They do not
-establish trajectory identity: the largest NCSX sheet FO separation from
-main is 26.3 cm at the default grid and 0.623 cm at the refined grid after
-200 us. Hybrid sheet runs have up to four sampled GC/FO representation
-mismatches; paired positions exclude those records. The repaired near-axis
-marker completes, but its raw-main trajectory differs from both converging
-spline grids. Independent axis-limit tests, rather than exact agreement with
-a singular raw pole evaluation, check the field there. Aggregate loss
-agreement alone is insufficient for scientific promotion.
-
-The six 256-marker, 2 ms physical-volume controls are complete, each on
-16 bound local OpenMP threads. Both hybrids were replayed after the GC repair
-with zero stops/failures/holds. The table uses those latest hybrid rows and
-the unchanged original FO references (FO throughout does not execute the
-repaired GC stepper). Retained starts, sparse traces, case-specific provenance
-and paired statistics are in `concept/spectre_loss_study/results/full-gc-fixed/`.
-The original six-run snapshot remains in `results/full/`. Reproduce plots with
-`full_report.py RESULTS_DIR OUTPUT_DIR`; the replay is an accuracy check on a
-shared host, rather than a fresh controlled throughput benchmark.
-
-| Field / model | Tracing [s] | End-to-end [s] | Losses / 256 | FO residence |
-| --- | ---: | ---: | ---: | ---: |
-| NCSX FO default | 436.59 | 451.36 | 101 | 100% |
-| NCSX FO refined | 440.55 | 458.70 | 99 | 100% |
-| NCSX current hybrid | 228.82 | 249.20 | 98 | 29.9% |
-| G3V3L3Fi FO default | 105.17 | 117.70 | 53 | 100% |
-| G3V3L3Fi FO refined | 109.02 | 128.60 | 53 | 100% |
-| G3V3L3Fi current hybrid | 49.19 | 65.98 | 48 | 38.8% |
-
-Relative to refined FO, NCSX default FO has four paired status disagreements
-(net +0.781 percentage points, paired SE 0.781 pp); the repaired hybrid has seven
-(net -0.391 pp, SE 1.035 pp). Both-lost NCSX markers can differ in loss time by
-1.08 ms (default FO) / 1.24 ms (hybrid), so equal final counts are not pathwise
-convergence. G3V3L3Fi default/refined FO have no status disagreements and a
-maximum paired loss-time difference of 2.14e-12 s. Zero disagreements in 256
-markers still permits an unobserved disagreement rate up to 1.16% at one-sided
-95% confidence under an independent-marker model. G3V3L3Fi hybrid loses five
-fewer markers (net -1.953 pp, paired SE 0.867 pp), all five status differences
-in that direction. This discrepancy remains to be explained by the consistent
-switch/entry and boundary study; it is not removed by the FO spatial grid.
-
-Maximum sampled energy-shell errors are 5.97e-5 for NCSX FO, 5.00e-4 for its
-hybrid, and 1.30–1.34e-5 for the G3V3L3Fi controls. These are measured errors,
-not a bounded-energy or whole-map symplectic proof. The fixed production entry
-phase and GC-centre/FO-particle absorbing-edge conventions still apply.
-
-These direct costs replace the earlier hours-scale estimate for this workload;
-thread counts, host load and implementation differed in that estimate. The
-complete six-control batch took about 24 minutes sequentially including native
-launch/setup/output. No direct 256-marker/2 ms raw-main run was measured here.
-No protected-host job was started, resumed or cancelled.
-
-Published plots (uploaded 2026-10-14; links expire after three days):
-
-- Latest FO-reference / GC-fixed hybrid end-to-end cost: https://box.sloppy.at/2c9db.png
-- Latest loss curves and pointwise uncertainty: https://box.sloppy.at/8af3d.png
-- Paired main/spline tracing cost at 200 us: https://box.sloppy.at/17ce5.png
-- GC energy/domain limits and equal-time refinement: https://box.sloppy.at/a4710.png
-- Local first-order switch accuracy / pullback scaling: https://box.sloppy.at/667cc.png
-
-The GC source/proof audit is retained on
-`research/gc-source-audit-20261014` through `d9df7a8`. The independent closed-form
-Hamiltonian witness reproduces three production bugs (RED `810f1e5`): an extra
-midpoint-radius Taylor increment in both midpoint branches, a wrong Gauss
-r/phi Hessian index, and omitted Gauss parallel-speed p_phi increment. The
-fix is `6a4fc33`; each individual regression is rejected when reintroduced.
-The dedicated main-based branch `fix/gc-field-extrapolation` contains only
-those source repairs, the independent regression and affected documentation;
-it is pushed as PR #535, commit `6970eff`. Native main-based checks pass
-85/85 in 478.83 s; after fixing local interpreter discovery, the rebuilt
-Python API suite passes all 17 cases in 99.52 s. Other backend-dependent Python
-suites were not rerun. The repair is integrated here as `0993478`; affected
-SPECTRE checks pass, 22/22 in 137.19 s. Both 256-marker hybrid controls
-were replayed against retained FO references, giving 98 NCSX / 48 G3V3L3Fi
-losses with no stops/failures/holds. The original NCSX hybrid lost 99; one
-additional paired final-status difference is retained rather than suppressed.
-
-All eight methods pass the one-step/100-step NCSX canonical-flux/Boozer and QH
-Boozer map checks with unchanged bounds (1e-7/1e-5) and original spacings
-(1e-4/5e-5). The original fourth-order finite-difference stencil failed two
-NCSX 100-step checks before and after the source repair; an eight-point stencil
-improves oracle resolution and passes. Both outcomes remain retained.
-
-The long energy acceptance is **not closed**. QH Boozer passes all methods at
-both starts for 100,000 steps. NCSX trapped starts reach the chart boundary;
-some landing solves return status 5 near s=1, which is not relabelled physical
-loss. NCSX Boozer passing Gauss2 fails the original coarse-step envelope gate;
-halving the step at equal elapsed interval passes and reduces extrema from
-roughly 1.6e-4 to 2.6e-7. Original failures, source hashes, samples and plots are
-retained under the audit branch's `concept/gc_symplectic_proof/`. No thresholds
-or starts were changed to obtain acceptance. Ideal fixed-step tableau theorems
-survive; finite-Newton/field/domain and whole-hybrid proof bridges remain open.
-
-
-The consistent-switch concept continues on
-`research/canonical-switch-20261014` (`7626cd8` for the portable build and real
-Hessians). Its original zero magnetic Hessians fail independent Cartesian
-checks on both stellarators. Correct logical second jets plus geometry
-chain-rule terms pass all six volume samples (max scaled error 2.62e-6,
-fixed acceptance bound 2e-4). The build/runner now use native Make/CTest.
-New independent two-form pullback and analytic-Jacobian checks pass on analytic
-fields and all three volumes of each stellarator: selector 1 defects scale
-with epsilon squared; selector 0 remains first order. These are numerical
-checks, not exact emitted-map identities or production integration. The full
-10-case, seven-epsilon reconstruction study is complete: finest-four mu-defect
-orders are 1.995–2.001, worst scaled round trips below 4e-13 and temporal
-refinement changes below 0.033%. The source-linked regeneration check reproduces
-the committed kernel exactly. The repaired checker proves 132/132 identities
-without probes, for its stated local field family and generic Lie-series
-claims; this is not an exact general nonlinear SPECTRE-field identity. These
-results are pushed as `c3a3f31`. Production still uses its existing switch and
-phase. Actual extended canonical GC action/phase, connection tables and
-production entry/exit remain to be implemented and validated.
-
-The recovered branch has now been merged into this checkout (`8afaecb`), and
-the completed switch work is integrated as `97fde90`, `060d17f`, `4d963cc`.
-Latest GC audit sources, results and exact native registration patch are also
-collected here; their known RED energy acceptance stays outside the default
-suite. Historical Lean caches are preserved and ignored. Production changes
-remain reviewable as the two focused PRs #534 and #535; this research branch
-also contains the recovered concept inventory and all retained new evidence.
-The consolidated native Fast sweep passed 98/99 cases in 463.91 s. Its sole
-failure was the recovered W1 diagnostic: it compared a raw-field construction
-with the spline-based entry map at near machine precision. The diagnostic now
-uses the same owning-volume interpolant, retaining its original strict phase
-identity and other bounds. Its focused native rerun passes in 2.37 s; the other
-98 results remain valid because only this test and documentation changed.
-Thus all 99 selected checks are covered without repeating unchanged cases.
-The rejected-model symbolic verifier also passes after consolidation. No
-retired parameter rejection checks or runtime compatibility paths were added.
-
-## Goal and constraints
-
-Physically faithful long stellarator orbits, without artificial loss or
-confinement, with bounded oscillating energy error. The eventual symplectic
-claim must cover the actual implementation through source-tied generation,
-exact symbolic identities, mathematical theorems and executable oracles.
-Continuous physics and numerical discretization must be validated separately.
-
-NCSX and G3V3L3Fi are acceptance cases. Tokamak/axisymmetric examples provide
-smoke checks and derivation controls only. Retain genuine failures and their
-original thresholds. Rejected SPECTRE modes remain in history, without shims
-or compatibility switches. Higher-order GC remains a standalone concept until
-its field requirements and reconstruction are established in production.
-
-The previous controller narrowed the immediate proof target to smooth-volume
-GC and kept RK45 at sheets. This is a practical intermediate decision, not
-fulfilment of the requested eventual symplectic hybrid. Neither a proof of the
-whole current hybrid nor a general impossibility theorem has been established.
-The last instruction in that session was to stop agents, record state and push.
-This recovery publishes their work and an actionable continuation plan.
-
-## What already shipped
-
-- PR #533: collect the comparison in `4a1f842`, then remove demonstrated failed
-  paths in `3a6fd37`, with the exact provenance pinned in the follow-up ledger.
-  The merge preserves add/remove history. Removed executable candidates:
-  fixed-mu C1L0/L1, phase-discarding C2fixed/pphi, curved-field frozen-patch C4,
-  Boris C5 as a symplectic candidate, and the old unresolved branch/energy-kick
-  landing methods. Their implementation/settings/scans and dedicated programs
-  are gone. No new checks or tests reject outdated parameters. The scope and
-  evidence of each rejection are in the
-  [implementation ledger](DOC/spectre-rejected-interface-models.md#implementation-removal-ledger).
-
-- PR #526: Fortran configuration-file API with a thin Python layer, matching
-  executable initialization, API/docs cleanup and test pruning. The earlier
-  API session was superseded by this merged work; do not restart its cleanup.
-- PR #527: SPECTRE drift sign, relocated transmission ownership and fixture
-  corrections. PR #529: non-folding NCSX free-boundary fixture.
-- PR #531: remove rejected fixed-mu GC interface maps. This is included in
-  the ancestry of #530 and the current main baseline.
-- PR #530: symplectic GC in smooth volumes, RK45 full orbit near interior
-  sheets, event resolution, gyromotion bounds, gauge-consistent exit and
-  multi-volume Newton domain. SPECTRE Boris/layer controls and GC interface
-  maps were removed. Multi-volume levels 0/1 and GC-only RK45 are rejected.
-- `cbb4a7a`: trapping-parameter documentation. The separate session closed
-  issue #532 with a checked reconstruction of confined fractions from NetCDF;
-  the correct endpoint comparison is `times_lost >= t`.
-
-The rejection record and its symbolic verifier already live in
-`DOC/spectre-rejected-interface-models.md` and
-`concept/symplectic_sheet/proofs/verify_rejected_models.py`. Old symplectic
-crossing/reset constructions do not regain production status in this recovery.
-
-## Scientific interpretation, evidence and limits
-
-**Sharp sheet reference.** Integrate the Lorentz equation through the bounded
-field discontinuity, resolving events; particle position and velocity are
-continuous. A gyrophase-dependent decomposition into parallel speed and mu
-can jump. Conserving mu across a sheet narrower than a gyroradius imposes a
-false mirror barrier. Smooth-layer/GC and sharp-sheet/FO are different physical
-limits; an integrator comparison cannot decide which equilibrium model is
-appropriate for an unresolved physical current sheet.
-
-**NCSX losses.** Historical strong-interface runs lost 39/64 with full orbit
-everywhere and about 39–41/64 with the hybrid, versus 7/64 with the removed
-fixed-mu GC map. The final stopped-session RK45 repeat reported 39/64 at
-rho=1.95 (2359.1 s on a loaded host). This supports the sharp-sheet explanation
-of the excess relative to GC, not a universal accuracy guarantee. The old
-symplectic level-1 row also contained FO recovery excursions and is not a
-clean GC baseline. Raw rerun directories under the deleted jobs scratch area
-are unavailable; retained concept data and transcript summaries are identified
-as historical evidence. The 64 interface-seeded markers do not establish
-volume-averaged throughput or convergence with the number of equilibrium volumes.
-
-**Switch diagnosis revised by W1.** The strategy estimated an O(epsilon) kick
-for a zero-step round trip and inferred long-time random-walk drift. The actual
-diagnostic measured a zero-step rms relative mu defect about 2.4e-5 with order
-2, but an exit-phase-dependent amplitude about 6.9e-3 with order 1 (reference
-rho_L/R0 about 3.4e-3). Thus immediate round-trip error and finite-excursion
-phase error are distinct. The test asserts finite completion, not these fitted
-orders; its log is evidence, not a scaling acceptance gate. Dominance of switch
-noise over long times remains unproved. The proposed 20 ms GC comparison made
-rho=1 absorbing by forcing one volume: 50/64 reached it. That is not comparable
-to physical hybrid wall loss. The hybrid long run has no recovered final result.
-
-**Gauss2 decision.** A recorded comparison was 811 s versus 109 s for RK45,
-with roughly 12 times as many steps. Refined starts removed retained Newton
-stops and showed fourth-order reduction of the marker-20 energy envelope;
-these are useful concept results. Frozen entry parameters give a fixed-family
-symplectic theorem, but differentiating the state-selected entry parameters,
-exit time, GC conversion and re-entry adds terms outside that theorem.
-Gauss2 therefore remains concept-only, without a namelist option.
-
-**Higher-order GC.** The phase-complete first-order and second-order prototypes
-have retained finite-time reconstruction and canonical midpoint/Gauss tests.
-They preserve the gyrogauge connection using a radial primitive and angular
-connection tables, rather than changing H alone. This establishes a local
-canonical representation of a truncated model, not an arbitrary-order method,
-not production stellarator validation and not a sheet-crossing rule.
-
-## Collected work and provenance
-
-| Workstream / source | Collected location | Status at recovery |
-| --- | --- | --- |
-| GPT FLR research worker | `concept/flr_options/` | Original 23-page note source and algebra/local-map/citation scripts reconstructed from the saved GPT session. Exact planar sheet maps and cycle compression; curved-sheet and production claims remain open. |
-| GPT candidate comparison, `345bfa8`, SIMPLE-hybrid | `concept/interface_candidates/` | Historical marker data/manifests remain evidence. Main now retains only FO, C3 and resolved GL2 executable paths; rejected implementations/settings are removed by #533. C3 has no established speed gain or complete hybrid symplectic proof. |
-| GPT GC orders + canonical completion, SIMPLE-gcho `c9f23b1`, `957d5a8`, `598f041`; Opus rebase/trim, SIMPLE-gclie `24c625a` | `concept/gc_higher_order/` | Final rebased sources and compact results integrated. Kernels generated in build with pinned output hashes. Production untouched. |
-| GPT proof, SIMPLE-sproof/SIMPLE-derive `a27d1ec` | `concept/fo_symplectic_proof/` | Original Lean project, pinned predecessor, symbolic results and measurements retained; original explanatory text in `proof-foundation.md`. |
-| GPT Gauss2 task I and Opus demotion, SIMPLE-fo-gauss2 `12aaf7f`, `286dc20`, `d956968`, `3ddc30b` plus stopped edits | Same FO concept directory; registered test-only library and probes | Final concept-only layout integrated. Production files matched main after demotion. Original radial hybrid test was removed by that demotion; its prior form remains in worker history. |
-| Opus W1, SIMPLE-w1 `9b28f29` | `test/tests/field_can/test_spectre_switch_roundtrip.f90` | Diagnostic integrated and registered. Long-run comparison remains incomplete/non-equivalent. |
-| Opus W4, SIMPLE-w4 uncommitted | `concept/fo_logical_spline/` | Generator, emitted RHS, spline provider and benchmark source retained. All tracked production edits in `pending-integration.patch`; not enabled. The historical prototype is superseded by the validated PR #534 implementation; preserve the draft for provenance, not promotion. |
-| Opus GC proof, SIMPLE-gcproof uncommitted | `concept/gc_symplectic_proof/` | Lean/ideal-tableau results retained; numerical oracle and CMake delta preserved as drafts outside default tests. Stellarator L5 and source-to-theorem bridge unfinished. |
-| Opus derivations, SIMPLE-derive uncommitted | `concept/fo_gc_derivations/`; two additional FO Lean files | All nonignored A–E sources and available results recovered. See below. |
-| Cleanup worker, SIMPLE-remove `d2f5b44`, SIMPLE-mainclean `fc83a75` | Existing rejection docs/verifier and merged history | Already integrated upstream; do not reapply removed maps. |
-| SIMPLE-sympl `c91970f`; task-i-pre-rebase `89babb3` | Original history | Superseded/rejected implementations, not active candidates. |
-| SIMPLE-dependency-versions `aab1b38` | Merged PR #523 history | Shared dependency update already shipped. |
-
-The original worktrees are retained locally, including their staging state, as
-read-only recovery sources. Do not resume or merge their old tips over the
-cleanup: the authoritative continuation is this rebased recovery branch.
-The pre-cleanup integrated history is also published at
-`archive/spectre-session-20261014-pre-cleanup` (`87aa81f`), including the original
-worker commits. The first-parent recovery changes were replayed onto main;
-ancestry-only experimental production branches were not replayed.
-FortSym's consumer-required Lie/DAG/array-CSE work is `de7074c`, `2894087`,
-`1372fbd` on `lazy-fortran/fortsym:feat/lie-pullback`. It stays in its owning
-library and is published with this recovery; the SIMPLE concepts require that
-revision rather than assuming upstream main already contains those APIs.
-Build directories, Lean caches, virtual environments and temporary binaries are
-excluded. The deleted `~/.claude/jobs/ac5435ab/tmp` area was reconstructed where
-possible from the controller/agent JSONL records, including the strategy and
-last progress updates. Personal transcripts and raw process logs are not product
-files. This plan carries the durable decisions and recovery limits.
-
-## Proof and derivation ledger
-
-The proof chain has five separate obligations: L1 source correspondence,
-L2 exact symbolic identities, L3 exact mathematical map, L4 finite solve/
-arithmetic/domain bounds, L5 independent numerical behaviour. Completing one
-layer does not discharge the others.
-
-| Item | Result retained | Remaining obligation |
-| --- | --- | --- |
-| FO L2/L3 | Scalar-generated H and monitor; exact symbolic/readback checks; `Gauss2.lean` exact-stage theorem | Provider/domain hypotheses, regular stage branch, floating arithmetic and whole hybrid. |
-| A: entry-frozen parameters | `EntryFrozen.lean`: composition, leaf/Poisson and selection-defect results with standard axioms | Chain-rule/free-particle/switch examples remain in the explicitly unchecked draft; state-selected full map not certified. |
-| B: provider jets | Baseline 1149 exact identities; copied-source anchors and hashes | Final mutation did not apply; mutation outputs left one failed identity in the original JSON. Complete harness and W4 wiring/domain checks; baseline is rerun separately. |
-| C: inexact Newton | Written derivative/defect bounds, audited full-Newton stopping rules | Constants, domain bounds and machine/executable verification. A small accepted residual alone does not bound the derivative of the terminated map; previous rejected residual matters. |
-| D: canonical switch | First-order transform plus Newton inverse; seven-case retained study including three NCSX volumes | Portable dependency build, exact emitted-map identity checks, phase/frame and normalization audit, production wiring and long-run verification. |
-| D study | First-order mu-defect last-four exponents about 1.995–2.001 on NCSX, versus order 1 controls; round-trip state defect about 2.1e-13 | Absolute chart round trip about 1.0e-11 (relative 6.5e-14): define scaled acceptance, do not claim unqualified absolute 1e-12 for every representation. |
-| Generic Lie truncation | `LieTruncation.lean` generic polynomial/remainder statements | Establish its hypotheses for the concrete generated switch, including field derivatives and frame. |
-| E: GC2 prerequisites | Written connection, H2 and derivative-order analysis | Charge/orientation/units checks and exact derivation. Fourth magnetic derivatives for H2 Hessian and connection/metric table requirements are analysis, not completed machine proofs. |
-| All GC variants | Euler pair, midpoint/Gauss1, Gauss2–4, Lobatto3 exact PRK theorems; 22 standard-axiom results; coefficient audit | Source tie, field derivatives, radial inverse, extrapolation, terminated Newton and landing selections; stellarator map/energy oracle. |
-
-At the stop, the midpoint increment, Gauss Hessian index and omitted vpar
-term were source-audit leads. All three have now been independently reproduced
-and repaired as recorded above. A coefficient theorem alone still does not
-prove the remaining finite-solve/field/domain code paths.
-
-## Performance and run status, 2026-10-14 20:18 CEST
-
-Read-only Slurm queries found no jobs under the account on `acluster` and no
-SIMPLE/SPECTRE loss jobs on `scluster`. The latter still runs the separate ITER
-GVEC, VMEC, MEPHIT and NTV campaign; its launch commands/work directories were
-checked. No local SIMPLE loss tracer was running. No jobs were started or
-cancelled. Recovered Claude/Codex command logs contain no remote submissions
-for this SPECTRE study. These are status observations, not a monitoring service.
-
-The old eight-thread, 64-marker, 2 ms hybrid cases took 1848–3343 s on a loaded
-host (`concept/symplectic_sheet/README.md`). Linear marker-count scaling gives
-2.05–3.71 h for 256 markers with the same launch distribution and settings.
-The controller initially budgeted 2–4 h per configuration, or 52–104 h for
-26 configurations. This historical allowance is superseded by the direct
-16-thread volume-sampled measurements above and must not be used as the
-current ETA. The full entry/tolerance matrix and cluster capacity remain
-unmeasured; longer times and larger ensembles increase work, subject to loss.
-The 256-marker, 2 ms matrix is an initial comparison, not long-time validation.
-
-At the stopped-session checkpoint, W4 had no measured speedup. Its old
-pending patch calls `gc_map` after every
-accepted FO substep, and that routine calls `spectre_fo_field_locate` before
-checking exit. Thus it removes Cartesian inversion from RK stages but retains
-an iterative coordinate inversion in every accepted-step exit check. A fast
-implementation must also avoid this repeated reconstruction: retain logical
-FO state, use a conservative inexpensive exit screen, and reconstruct the GC
-only when needed for an actual transition or requested output. Small local
-metric solves are distinct from the expensive nonlinear coordinate inversion.
-
-## Focused performance implementation, 2026-10-14
-
-A separate branch, `perf/spectre-fo-logical-spline`, now implements the focused
-performance change against main `fe002a3`: [PR #534](https://github.com/itpplasma/SIMPLE/pull/534), commit `2e243d4`. It reuses W4's
-per-volume provider, without importing the recovery branch's other concepts or
-its draft canonical-momentum rewrite. RK45 advances logical position and
-Cartesian velocity; regular interface stages need no position inversion or raw
-spectral geometry/field evaluation. GC reconstruction retains a spline-only
-inverse. A Cartesian position chart remains below rho=0.05 in volume 1.
-
-The local short NCSX witness (32 markers per surface, RO=100 internally, ten
-reference 1 T gyroperiods, tolerance 1e-9) measured 5.1–5.5x faster tracing against
-main with the same workload. One/four-thread endpoints agree exactly as printed.
-These timings exclude setup and are not a measured 2 ms loss-study ETA. Default
-three-volume spline storage is about 1.27 GiB; measured setup was 1.92 s with one
-thread and 1.46 s with four. Shared field reinitialization releases old tables.
-Maximum sampled relative B-vector error was 2.42e-6 on the default 32/64/32 grid
-and 6.60e-5 on the coarse grid. Geometry/A errors were 6.17e-9/1.63e-7.
-
-Full native `make test CONFIG=Fast VERBOSE=1` passed 99/99. After final
-terminal-boundary/cache-lifecycle adjustments, the affected SPECTRE and Python
-API selection passed 19/19. Existing energy/momentum/event thresholds and stored
-golden records were not changed. PR #534 is a draft; CI was not awaited. The old 2–4 h budget above concerns the Cartesian
-implementation, not this candidate. Long-time stellarator loss agreement,
-spline-grid convergence of losses and the >=10x target remain open. The
-archived W4 patch is historical; do not apply it over this implementation.
-
-## Study execution record (through 2026-10-14)
-
-Execution is authorized through the stages below, with regular commits/pushes
-and final research plots published through slopbox. Do not wait for CI. Keep
-PR #534 focused; study sources and recovered research remain on this branch.
-
-Initial milestone: the native physical study driver builds and passes its
-8-marker, 0.2 microsecond NCSX smoke on main and the spline candidate. A
-detached baseline at `fe002a3` uses the identical measurement source and an
-accepted-FO-time diagnostic; no baseline solver equations are changed. Local
-16-marker, 2 microsecond, 3.5 keV paired sheet/volume pilots come first, followed
-by grid convergence, controlled throughput/profile measurements and a modest
-loss comparison. Keep physical loss, numerical stop and recovered holds
-separate. No production switch or symplectic proof is promoted by these runs.
-
-The first 32-case pilot exposed a driver defect: it omitted production's
-per-marker `set_spectre_volume_lock(0)` cleanup. The resulting hybrid starts
-depended on the preceding marker on a thread; marker 12's NCSX toroidal start
-shifted by 8.3e-4 rad and acquired a false FO excursion. A single-marker replay
-isolated this. Those results/plots are superseded, kept only in ignored build
-scratch, and must not be used as acceptance evidence. The driver now resets
-the lock before initialization and after each marker. The corrected 32-case
-matrix completed with no numerical stops, FO failures or warning holds.
-All paired loss statuses and sampled GC/FO representations agree with main.
-Initial GC angle round trips are at roundoff. Default-grid maximum paired FO
-position errors are 0.90 micrometers on NCSX and 0.0014 micrometers on G3V3L3Fi;
-the NCSX hybrid volume error is 0.20 micrometers. NCSX sheet FO errors decrease
-18.55 -> 0.219 -> 0.0319 micrometers on the 16/32/48 radial grids. NCSX volume
-losses are 3/16 for FO and 2/16 for the current hybrid; other pilot ensembles
-have no loss by 2 microseconds. These are short controls, not long-time model
-validation or a 256-marker acceptance study.
-
-Retained inputs, sparse traces, marker outcomes, source provenance, summaries
-and figures are in `concept/spectre_loss_study/results/pilot/`; reproduce plots
-with `python concept/spectre_loss_study/analyze.py
-concept/spectre_loss_study/results/pilot build/study/replot`. The default-grid
-short tracing improvement spans 3.7–6.1x across fields and modes; setup is
-excluded. At that initial checkpoint, the >=10x target and actual 2 ms throughput
-were unestablished; the later physical cost runs supersede the duration estimate.
-
-A 16-marker NCSX sheet FO profile at 200 microseconds completed without
-stops/holds/failures. Profiling attributed 67.7% of all sampled user CPU time
-(including setup) to the general batch first-derivative spline kernel; the
-remaining coordinate inversion is a smaller contributor. Filtering call
-chains to FO gives 8012/9264 samples (86.5%) in that kernel, with 2072 samples
-(22.4%, inclusive) passing through the spline inverse and 4988 (53.8%) through
-RK trials. Do not optimize an approximate exit screen before addressing this
-measured cost. Its profiled 7.02 s trace is not an uninstrumented throughput
-result. The endpoint-sample reuse change passed all 20 affected native tests in
-226.64 s, and all four NCSX/G3V3L3Fi physical volume replays (FO/hybrid) retain
-bitwise-identical sparse trajectory arrays. All 130 printed throughput endpoint
-records also match the pre-reuse implementation. The RO=100 witness now takes
-0.433/0.454 s on one thread and 0.117/0.123 s on four threads: about 1.35x faster
-than the previous spline implementation, or 6.8–7.4x faster than main in this
-short nonphysical witness. No field-order or transition-threshold change was
-introduced. This is pushed as `6bbdef0` on PR #534 and `f876d28` on this branch.
-
-The initial longer stage (before the axis repair) ran locally: 32 matched markers, 200 microseconds, 16
-physical cores, both equilibria and sampling sets, FO/current hybrid, main vs
-default/refined splines (24 cases). No cluster jobs were launched. FO tracing
-improves 5.5–7.3x; all paired loss statuses match. However, the NCSX volume
-hybrid is invalid: marker 31 has one FO locate failure and 4,666 held intervals
-on both spline grids, while main has none. Do not promote the matching loss
-counts as acceptance evidence or run the large hybrid matrix over this defect.
-
-The cause is established independently: evaluating polar spline derivatives
-over the vanishing axis Jacobian gives relative B error 49.0 at rho=1e-12.
-See ledger F7 and `concept/spectre_loss_study/results/axis-failure.json`.
-A regular xi/eta axis table now gives 4.21e-9 relative B error and resolves the
-pole-seeded inverse. The exact marker replay has one entry/exit, zero holds or
-failures, and advances to rho=0.2744 at 200 microseconds. All 21 affected native
-tests pass in 229.96 s, including the G3V3L3Fi axis limit and transition-region
-checks. This is pushed as `47d3fb0` on PR #534 / `9c62300` on this branch;
-the repaired longer controls are complete as recorded above. This fix
-retains cheap field evaluation without a raw fallback or a new setting.
-The study controller now includes the provider in its source hashes and refuses
-unresolved intervals as scientific acceptance. The later GC audit is complete to the stated source/numerical scope and
-collected here; its three verified repairs are isolated in PR #535. Builds
-were kept separate from the primary throughput measurements.
-`full.py` completed the 256-marker, 2 ms volume controls on 16 local cores,
-followed by both GC-fixed hybrid replays; see the current checkpoint above.
-This answers the actual cost question before the full entry/tolerance matrix.
-It is conditional on the current deterministic entry phase. In that retained
-snapshot FO uses particle position at the edge and GC segments use the centre.
-The 2026-10-15 wall repair supersedes this boundary convention for the
-multi-volume hybrid.
-Their loss difference therefore does not isolate interface physics or establish
-a coherent first-order switch. The later W2 acceptance matrix remains open.
-Generated PNGs follow the repository's ignore rule; their versioned NumPy data
-and plotting source reproduce them. The convergence plot was uploaded to
-`https://box.sloppy.at/1dcca.png` on 2026-10-14 (slopbox links expire in 3 days).
-
-## Remaining production and research plan, 2026-10-15
-
-1. **Review and promote the three focused production PRs.** Performance #534
-   and GC extrapolation #535 target main; particle-wall repair #536 is stacked
-   on #534. All three are ready for the required review. The
-   regular logical-position/Cartesian-velocity path is implemented and locally
-   checked, including longer NCSX/G3V3L3Fi trajectory/loss and two-grid controls.
-   Review the retained spatial/loss differences against the required accuracy
-   before promotion. Keep the existing physical transition criteria.
-   Profile the remaining spline-only GC reconstruction before introducing a
-   conservative exit screen. Measure end-to-end cost, including setup and FO
-   residence, under controlled load. The repaired 200 us tracing improvement is
-   5.8–7.4x; the >=10x per-step target is not established. Current main retains
-   its Cartesian path until a reviewed performance change is promoted.
-2. **W1/W3: validate and integrate the consistent switch.** Item D's native build, local identity checks,
-   regeneration and independent numerical pullback are complete. Implement
-   the extended canonical action/phase and gyrogauge connection tables, then
-   audit physical units and matching to production GC variables. Reuse the
-   recovered local Darboux completion; a gyrofrequency counter on fixed-mu
-   GC is insufficient. Phase-complete first-order evolution also needs the
-   consistent H2 frequency correction; investigate splining its coefficient
-   fields to keep tracing cheap, rather than evaluating high derivatives per
-   stage. These tables and the real-field six-dimensional model are not yet
-   implemented. Require scaled round-trip identity
-   at 1e-12, O(epsilon^2) mu defect and independent FO reconstruction. Replace
-   both entry and exit together with carried phase. Redesign the long-run
-   comparison so it distinguishes sheet physics, switch error and artificial
-   absorbing boundaries. A phase-carrying production switch remains unimplemented.
-3. **W2: paired volume-sampled benchmark.** At least 256 matched markers on
-   NCSX and G3V3L3Fi, 2 ms initially. Compare entry distances 1.5/2/3/4 rho_L,
-   tolerances 1e-7/1e-9/1e-11 and FO everywhere at 1e-9. Publish loss-time curves,
-   paired uncertainty, FO residence, excursion-length and cost distributions.
-   Control shared-host load before making timing decisions. No such acceptance
-   matrix was completed by the stopped session.
-4. **Finish the production GC proof bridge (three source repairs verified; uniform proof still open).** Map each of the eight variants'
-   actual equations and field/extrapolation operations to its theorem. The
-   stellarator one-step/100-step numerical checks pass; preserve their bounds
-   (1e-7/1e-5), spacing and negative controls. Quantify finite-Newton and field
-   errors and establish a suitable smooth-domain/time-step hypothesis for the
-   unresolved long-energy claim. Preserve the failed energy/domain evidence.
-5. **W5: encounter map concept, conditional on W2.** Exact velocity-continuity
-   reset, carried/flux-weighted phase and short planar return cycles. Stochastic
-   phase sampling is a modelling choice requiring ensemble validation, not a
-   proof of deterministic symplecticity. Require NCSX/G3V3L3Fi loss agreement
-   and a source-tied fixed-model energy proof before considering production.
-6. **W6: equilibrium-volume convergence.** Obtain valid NCSX equilibria with
-   2/4/8 volumes and repeat matched physical initial states. This determines
-   sensitivity to the two-volume jump; more integrator refinement cannot do it.
-7. **Eventual symplectic FO route.** A variational event integrator with crossing
-   time as an unknown was proposed, not implemented or proved. Reassess after
-   switch and cost evidence. Fixed-family Gauss2, unresolved splitting and
-   state-dependent landing do not close the current whole-map proof gap.
-8. **Parked concepts.** Keep higher-order GC, frozen-step and inexact-Newton
-   investigations available. Revisit GC2 production only after the derivative
-   provider, gyrogauge tables and actual stellarator benefit are established.
-
-## Recovery verification and publication (historical checkpoint)
-
-At the recovered `082bea4` checkpoint, production `src/` and `examples/`
-were identical to main `fe002a3`; this paragraph is historical, superseded by
-the active performance and GC changes above. Gauss2 is
-linked only into a test-only concept library. W4's replacement path and GC
-oracle registrations are preserved in patches, with explicit draft READMEs.
-
-Checks on this consolidated checkout are being recorded below before push.
-Historical tests are not promoted into fresh verification. The old final
-Gauss2 worktree full suite had a chartmap-pipeline timeout; the GC prototype
-worktree had Python-environment failures and timeouts (only some reruns passed).
-A local Gremlin status query returned a state-provider error; this recovery uses
-the repository's native make/CMake test authorities and starts no resident
-workers. No protected hosts were used. Full long-orbit research sweeps remain
-future work, not a condition for preserving this stopped state.
-
-- Native deterministic Fast build and `make test-fast CONFIG=Fast`: **87/87
-  passed** (286 s), including all fast FO stellarator map probes, the Gauss2
-  concept field/gauge tests, production event tests and W1 diagnostic. The
-  old chartmap-pipeline timeout passed here with its unchanged timeout.
-- Recovered Lean checks: **passed**, standard axioms only. GC checker requires
-  22 results; FO Gauss2, EntryFrozen and LieTruncation also checked. This does
-  not certify the separated unchecked draft or the actual hybrid map.
-- Provider-jet baseline: **1149/1149 exact**, no probes. Original rejection
-  verifier: **passed**. The unfinished mutation harness is still a recorded
-  limitation. Registered FO generated-source/readback check via `make test`: **1/1 passed**
-  (160 s), including regenerated leaves and exact readback identities.
-- Standalone candidate behavioural/symbolic checks: **passed**. GC concept
-  `test`, `canonical-test`, `canonical-check-results`: **passed**. FLR note:
-  **13 exact checks passed**; local-map checks passed (200-cycle discrepancy
-  8.0e-13, FD symplectic defect 1.9e-10). Existing generated-GC continuation
-  count warnings remain; no thresholds were relaxed.
-- FortSym clean build and registered Lie/products/CSE-DAG tests: **3/3 passed**.
-  Consumer generators and concept behavioural tests above also passed with it.
-- Source inventory: all surviving nonignored untracked files from derive,
-  gcproof and W4 are collected, with draft integrations preserved explicitly.
-  Production `src/` and `examples/` have no delta. Diff inspection retained
-  whitespace in literal patch context and unchanged generated EOF blanks so
-  archived patches and exact regeneration output stay intact. No active-source
-  whitespace finding remains. The full slow suite and long research sweeps
-  were not repeated; fresh coverage is the fast suite plus the focused native
-  generator test and standalone checks above.
-
-The cleanup is on main via #533 and this recovery branch is rebased onto it.
-The deleted implementations were not restored by replaying recovery commits.
-The original worker histories remain in the published pre-cleanup archive;
-the current branch carries the surviving concepts, proofs and unfinished drafts. The clean
-FortSym `feat/lie-pullback` dependency branch is pushed separately in its owning
-repository. PR #533 publishes the bounded failed-path cleanup on main; the remaining
-research concepts/drafts stay on this recovery branch.
-For continuation, start with item 1 above and update this ledger with results
-for the actual next revision; do not infer closure from a worker's last message.
-
-### Cleanup and rebase verification
-
-- Cleanup: full existing native `make test CONFIG=Fast`: **95/95 passed**,
-  including 15 slow tests (525 s). Existing standalone behavioural and symbolic
-  checks passed; the remaining original sheet studies built without warnings.
-- Five paired before/after ensembles, 256 markers each: FO A/B, carried-phase
-  C3 A/B (switches exercised), resolved GL2 A. Every recorded numerical value
-  matched exactly; wall-time metadata was excluded.
-- No tests or runtime checks were added for rejecting retired parameters.
-- Merged on explicit instruction without waiting for CI. GitHub required the
-  Build and Test status, so administrator merge was used; that check was still
-  running. Local verification above passed. Add/remove commits remain reachable
-  from main through a merge commit.
-- Rebased recovery focused native checks: the existing switch round-trip,
-  FO symplectic map and Gauss2 concept-field tests passed (3/3). Main's cleaned
-  concept trees, ledger, production sources and settings are retained verbatim.
-
-### Latest consolidated verification and promotion status
-
-- The native Fast sweep plus the repaired diagnostic rerun covers all 99 selected
-  checks, including the recovered FO proof controls, real-field first-order
-  switch checks, exact 132-identity suite and regeneration. The slow full suite
-  was not repeated after consolidation; the explicit long-energy failures
-  remain retained and are not enabled in the default suite.
-- Production source repairs remain isolated in PR #535 (`6970eff`, T3); the
-  field-performance change is PR #534 (`47d3fb0`, T4), and the stacked
-  particle-wall repair is PR #536 (`914544f`, T3). All three are ready for review.
-  Main is still `fe002a3`, already an ancestor of this branch; no further rebase
-  or history rewrite is needed. Recovery/archive refs and add/remove history
-  remain intact.
-- Main promotion requires domain review for T3 and senior review for T4 under
-  `docs/review-policy.md`. The focused branches are prepared for that review;
-  no merge approval is inferred from a passing local check. CI is not awaited.
-- The original add/remove cleanup history remains on main. The consolidated
-  research branch contains the recovered work and new results, while the
-  separate audit/switch branches retain their provenance. Cluster jobs were
-  not started or resumed; all new orbit runs were local.
+| G3V3L3Fi repaired hybrid | 52 | 1 | 52.65 / 67.09 |
+
+G3V3L3Fi's refined hybrid also loses 52 with identical final statuses.
+NCSX default/refined FO disagree on four statuses and some loss times by
+1.08 ms. G3V3L3Fi FO grids agree on every status, with maximum loss-time
+difference 2.14e-12 s. These finite ensembles do not establish population
+agreement or whole-hybrid accuracy.
+
+The latest hybrid timings are shared-host accuracy replays that overlapped
+other checks/builds. The separate 24-case, 32-marker, 200 us paired study
+measured 5.8–7.4x tracing speedups against main, excluding setup. All health
+counters were zero and paired loss statuses matched main in that study.
+NCSX sheet FO separation from main decreased from 26.3 cm at the default grid
+to 0.623 cm at the refined grid. No path-identity or >=10x claim is established.
+The earlier 2–4 h estimate is superseded for this measured workload.
+
+## What the 48-versus-53 discrepancy established
+
+The multi-volume hybrid excluded the outer edge from FO proximity entry.
+It absorbed the guiding centre there while the FO reference absorbed the
+particle. Applying the existing FO region to the outer edge recovers markers
+62, 124, 126 and 247: 48 becomes 52 on both spatial grids. An initially exterior
+launch particle is now an immediate physical loss, not an inversion failure.
+The separate single-volume GC model retains its GC-edge contract.
+
+Marker 129 remains unresolved. Sixteen FO launch phases at its fixed GC start
+span loss times 1.910–2.055 ms across the 2 ms cutoff. Finer FO tables and tighter
+Meiss construction leave the hybrid surviving through 2.125 ms. Microstep
+refinement preserves survival but does not establish trajectory convergence.
+Changing the entry distance changes its outcome; FO throughout the hybrid
+pipeline reproduces the same-grid phase-zero FO loss time to about 1e-16 s.
+Do not tune the entry distance to manufacture 53 or accept the residual as
+validated physical disagreement. NCSX's eight paired disagreements also remain
+open; the wall repair changes only marker 50 from loss to survival there.
+
+The [R&D report](concept/spectre_loss_study/RND.md) contains the marker controls,
+verification record, reproduction commands and plots. Results are retained in
+`concept/spectre_loss_study/results/full-wall-fixed/` and `results/loss-diagnosis/`.
+The earlier `full/` and `full-gc-fixed/` snapshots remain intact.
+
+## Ordered execution and decision gates
+
+### 1. Preserve and promote the verified baseline
+
+Complete required review of #534/#535 and stacked #536. Keep their scopes
+separate from new model development. Preserve the add/remove cleanup history,
+independent axis-field oracle, GC source regressions and physical wall witnesses.
+Use the repaired implementation for subsequent comparisons without treating
+its current hybrid as the selected solution.
+
+### 2. Build the shared canonical GC infrastructure
+
+Use the retained local Darboux completion in `concept/gc_higher_order/`.
+Carry gyroaction and phase, the radial phase primitive K and angular connection
+tables C_a. Audit charge/orientation, normalization, gyrogauge patches and
+matching to SIMPLE's canonical variables. Entry, evolution and exit must use
+the same representation. Phase-complete `1+` needs the consistent H2 frequency
+correction; `1+` and `GC2` therefore share substantial infrastructure.
+
+Construct connection and H2 coefficient fields offline and use per-volume
+splines in the tracing loop. Audit required derivatives before selecting the
+table representation. The GC2 prerequisites note's third-/fourth-derivative
+requirements are analysis, not completed machine proofs. Bound and measure
+canonical momentum inversion, axis/chart handling, table memory and setup cost.
+Do not restore raw spectral geometry or physical-coordinate inversion at
+every orbit stage. Do not add production selectors before a viable model exists.
+
+Gate: source-linked identities and independent field/derivative oracles,
+consistent physical units and local chart handling, scaled round trips at
+1e-12, and the expected reconstruction orders with temporal error separated.
+Local prototype checks do not discharge the real-field obligations.
+
+### 3. Compare 1+, GC2 and FO inside smooth stellarator volumes
+
+Implement both GC orders on the shared provider and test NCSX/G3V3L3Fi volume
+interiors before introducing sheet transitions. Start each model from the same
+physical particle position and velocity, using its own consistent inverse map.
+Equal numerical GC coordinates across orders are not matched particle states.
+
+Use an epsilon scan and step/grid refinement to distinguish GC truncation,
+phase error, field interpolation and time discretization. Check reconstruction,
+phase/action, invariants and nontrivial energy envelopes against tighter FO.
+Verify field-specific expected orders; do not infer a universal order from
+selected analytic examples. Measure total cost and memory at comparable error.
+
+Gate: real-field evidence that each implementation has its claimed accuracy
+and a usable cost. GC2 remains an active contender even while its production
+integration is deferred. If its extra order brings no measured benefit at the
+target parameters, retain the result and prefer the cheaper adequate model.
+
+### 4. Couple each viable GC order to the same resolved FO encounters
+
+Replace entry and exit together with consistent particle/GC maps and carried
+phase. Retain event-resolved FO at sharp sheets and the same particle absorbing
+outer edge for every multi-volume candidate. Resolve owner/gauge changes and
+phase-chart transitions coherently. A changed mu at a sharp sheet is physical;
+a fixed-mu reset is not an alternative crossing model.
+
+Gate: independent reconstruction through finite FO excursions, expected
+epsilon scaling, phase/gauge consistency, clean event/failure classification
+and step/entry-distance convergence. Marker 129 is a retained diagnostic,
+not a special case to tune or an acceptance criterion by itself.
+
+### 5. Run the matched loss and cost comparison, then select a model
+
+Compare FO everywhere, the present hybrid control, `1+` hybrid and `GC2` hybrid
+on NCSX/G3V3L3Fi. Begin with matched physical particle ensembles, at least
+256 markers and 2 ms. Keep deterministic paired phases and sampled phase
+ensembles distinct. Use the same physical boundary and equilibrium bytes.
+
+First compare the default settings with one step/grid/tolerance refinement.
+Then cover entry distances 1.5/2/3/4 radial gyroradii and FO tolerances
+1e-7/1e-9/1e-11, with FO-everywhere reference refinement. Declare accuracy
+criteria before looking at the results. Extend duration/ensemble size after
+the initial controls converge; a 2 ms result is not long-time validation.
+
+Publish loss-time curves, paired differences and uncertainty, reconstructed
+orbit/invariant errors, FO residence/excursion distributions, memory, setup
+and end-to-end cost. Keep numerical stops, recovered failures and warning
+holds separate from physical losses. Control host load for timing comparisons.
+Select on accuracy versus total cost; extra formal order or matching counts
+does not win automatically. No complete model-selection matrix exists yet.
+
+### 6. Pursue conditional acceleration and equilibrium checks
+
+If resolved FO encounters still dominate after the comparison, evaluate
+phase-carrying encounter maps/cycle compression against the same reference.
+Exact planar controls do not justify indefinite frozen curved-field patches.
+Stochastic phase models require a separate ensemble validation and do not
+supply deterministic reversibility or symplecticity.
+
+Obtain valid NCSX equilibria with 2/4/8 volumes and compare matched physical
+starts to assess equilibrium-volume sensitivity. Clipping to one volume creates
+an artificial absorber and is not an equivalent wall-loss comparison.
+Keep resolved smooth-layer GL2 as a distinct physical-limit control.
+Revisit variational symplectic FO if the accuracy, energy and cost evidence
+requires it; its crossing-time solve and whole-map proof remain unfinished.
+
+## Proof and verification obligations
+
+Proof work accompanies model development. It must distinguish source
+correspondence, exact algebra, ideal mathematical maps, finite solves/arithmetic
+and independent numerical behavior. One layer does not discharge the others.
+
+| Retained evidence | Remaining obligation |
+| --- | --- |
+| GC1+/GC2 analytic prototypes: reconstruction-order and canonical midpoint/Gauss checks | Real SPECTRE tables, units, chart/axis patches, production integration and comparable-cost evidence |
+| Local switch: 132 exact identities, regeneration, real-field Hessian/pullback checks, 10-case/seven-epsilon reconstruction study | Generic field hypotheses, extended canonical action/phase evolution and complete production entry/exit |
+| Three GC source repairs with independent closed-Hamiltonian RED/GREEN witnesses | Uniform finite-Newton, field/domain and source-to-theorem bounds |
+| Eight GC methods pass retained one-/100-step stellarator map checks | Long energy/domain acceptance; whole implemented map |
+| FO Gauss2/entry-frozen/Lie and GC tableau Lean results with standard axioms | State-selected parameters, landing/exit time, chart changes, terminated Newton and whole hybrid |
+| Provider-jet baseline: 1149 exact identities | Complete the recorded mutation/source-wiring and domain obligations |
+
+The long-energy acceptance remains open. QH Boozer passes all eight methods
+at both starts for 100,000 steps. NCSX trapped starts reach the chart boundary,
+including unresolved status 5 near it; do not relabel this physical loss.
+NCSX passing Gauss2 fails the original coarse-step envelope gate and passes
+an equal-time half-step control. Preserve both outcomes and original bounds.
+The known RED energy acceptance remains outside the default registered suite,
+with its sources, data and registration patch retained explicitly.
+
+Baseline verification is retained, not presented as a fresh full-suite pass:
+the consolidated Fast sweep passed 98/99, followed by the repaired diagnostic's
+passing rerun. The wall affected sweep passed 24/25; its single-volume scope
+failure was repaired and rerun with both wall regressions, 3/3. The isolated
+wall branch passed nine native checks plus that three-case scope rerun.
+The old wall exclusion makes both wall witnesses fail. See the R&D report
+and `results/loss-diagnosis/verification.json` for exact revisions and limits.
+
+Use native Make/CMake authorities for affected behavior. Gremlin previously
+returned `Gremlin state provider error: 2`; this is not a scientific result.
+Do not relax thresholds, erase failures or add tests merely to reject obsolete
+parameters. Do not wait for CI or repeat unaffected checks without a reason.
+
+## Rejected paths and retained provenance
+
+Ledger [F1–F8](DOC/spectre-rejected-interface-models.md) records fixed-mu sheet
+resets, phase-discarding reversible/symplectic claims, refreshed frozen patches,
+unresolved sharp stepping, energy-kick landing, Boris as a canonical guarantee,
+the polar-axis spline defect and the multi-volume GC-only wall absorber.
+Keep their failed implementations/settings retired. Higher-order smooth-volume
+GC, carried-phase switching and resolved FO are not rejected paths.
+
+| Recovered work | Authoritative location |
+| --- | --- |
+| Physical throughput/loss controls and current diagnosis | `concept/spectre_loss_study/` |
+| GC1+/GC2 derivation, canonical completion and measured analytic results | `concept/gc_higher_order/` |
+| Switch/provider/inexact-Newton/GC2 prerequisite work | `concept/fo_gc_derivations/`; local switch in `D_canonical_switch/` |
+| GC source audit, map tests and open energy acceptance | `concept/gc_symplectic_proof/` |
+| FO proofs and test-only Gauss2 | `concept/fo_symplectic_proof/` |
+| FLR/planar encounter derivations | `concept/flr_options/` |
+| Surviving candidate comparison and sharp-sheet controls | `concept/interface_candidates/`, `concept/symplectic_sheet/` |
+| Superseded W4 prototype and integration draft | `concept/fo_logical_spline/`; do not apply over #534 |
+
+The [previous full recovery ledger](https://github.com/itpplasma/SIMPLE/blob/fa913186ab29a0cfba3175d6a6b2c7a515f77a1f/PLAN.md)
+retains historical commands, timings, worker commits and verification details.
+Recovery is `recovery/spectre-session-20261014` at `082bea4`; the pre-cleanup
+archive is `archive/spectre-session-20261014-pre-cleanup` at `87aa81f`.
+The active branch integrates recovery (`8afaecb`), GC repair (`0993478`),
+switch work (`97fde90`, `060d17f`, `4d963cc`), wall repair (`535bc9e`, `5e88fe5`)
+and ledger F8 (`c957615`). Separate audit/switch branches retain provenance.
+Do not resume old agents or merge old worker tips over the cleaned sources.
+Generic Lie/code-generation support stays in FortSym, including the retained
+`feat/lie-pullback` dependency work; application physics stays in SIMPLE.
+
+All new measured runs were local. The last retained read-only cluster snapshot
+is 2026-10-14 20:18 CEST, not live monitoring. No protected-host work is
+authorized: do not run/schedule/install/resume on faepop* or faepcr* without
+an explicit request naming the host.
+
+Keep regular commits/pushes and update this plan at completed decision gates.
+Publish reproducible plots through slopbox and record expiring links in the
+R&D report. The external R&D destination remains unspecified; no chat post
+is claimed. Scratch data/build products stay outside product diffs.
