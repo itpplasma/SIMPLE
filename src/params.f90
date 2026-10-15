@@ -180,7 +180,9 @@ module params
     integer :: crossing_level = 3
     !> Full orbit near SPECTRE interfaces: entry distance in radial gyroradii
     !> and the relative tolerance of RK45 on the sharp per-volume field.
-    real(dp) :: spectre_fo_entry_larmor = 3.0_dp
+    !> 1.5 keeps the switch's p_zeta invariant as at 3 (entry 1 breaks it) at
+    !> about half the FO time (concept/spectre_loss_study/results/fo-residence).
+    real(dp) :: spectre_fo_entry_larmor = 1.5_dp
     real(dp) :: spectre_fo_tolerance = 1.0e-9_dp
     !> Per-volume FO spline points: rho, theta, zeta per field period.
     integer :: spectre_fo_grid(3) = (/32, 64, 32/)

@@ -977,7 +977,7 @@ detected automatically from `field_input`; see
 | `integ_coords` | int | -1000 | `6` selects the SPECTRE per-volume stacked-rho chart |
 | `integmode` | int | 0 | `0` = RK45 per volume; `> 0` = per-volume symplectic (builds the canonical construction) |
 | `crossing_level` | int | 3 | full orbit near interfaces (symplectic path); levels 0/1 are rejected |
-| `spectre_fo_entry_larmor` | real | 3 | Multi-volume `crossing_level = 3`: enter full orbit closer than this many radial gyroradii to an interface or the absorbing outer edge; leave one gyroradius farther out |
+| `spectre_fo_entry_larmor` | real | 1.5 | Multi-volume `crossing_level = 3`: enter full orbit closer than this many radial gyroradii to an interface or the absorbing outer edge; leave one gyroradius farther out |
 | `spectre_fo_tolerance` | real | `1e-9` | relative tolerance of sharp-field RK45 with exact crossings |
 | `spectre_fo_grid` | int(3) | `32,64,32` | FO spline points per volume in rho, theta and zeta per field period; axisymmetric zeta uses seven planes |
 | `spectre_ncon_r` | int | 48 | Meiss construction grid points in `r` (per volume) |
