@@ -28,6 +28,13 @@ program study_spectre_orbits
     character(len=16) :: study_mode
     real(dp), allocatable :: starts(:, :), records(:, :, :), result(:, :)
     integer, allocatable :: samples(:)
+    ! FO episodes per marker: entry/exit time, accepted FO time, particle rho at
+    ! entry, end kind (1 exit, 2 loss, 3 run end, 4 entered and left in one step).
+    integer, parameter :: episode_capacity = 8192
+    real(dp), allocatable :: episodes(:, :, :)
+    integer, allocatable :: n_episodes(:)
+    real(dp) :: fo_before, fo_start
+    logical :: was_active, episode_open
     real(dp) :: setup0, setup_s, trace0, trace_s, dt, begin_marker, elapsed
     real(dp) :: phase_offset
     real(dp) :: y(5), z(5), fraction, worst_shell, bmag, a(3), hc(3)
@@ -119,12 +126,18 @@ program study_spectre_orbits
     capacity = nsteps/stride + 3
     allocate (records(12, capacity, ntestpart), result(7, ntestpart))
     allocate (samples(ntestpart))
+    allocate (episodes(5, episode_capacity, ntestpart), n_episodes(ntestpart))
+    episodes = 0.0_dp
+    n_episodes = 0
     records = 0.0_dp
     result = 0.0_dp
     call sympl_landing_stats_reset
     trace0 = omp_get_wtime()
-    !$omp parallel do private(m, k, y, z, si, field, state, status, fraction, &
-    !$omp begin_marker, elapsed, worst_shell, rec, terminal)
+    ! Match production's one-marker dynamic chunks; FO-heavy markers are rare
+    ! and a static block would leave threads idle behind them.
+    !$omp parallel do schedule(dynamic, 1) private(m, k, y, z, si, field, &
+    !$omp state, status, fraction, begin_marker, elapsed, worst_shell, rec, &
+    !$omp terminal, fo_before, fo_start, was_active, episode_open)
     do m = 1, ntestpart
         begin_marker = omp_get_wtime()
         y = starts(:, m)
@@ -152,9 +165,29 @@ program study_spectre_orbits
         worst_shell = 0.0_dp
         terminal = SYMPL_SPECTRE_OK
         call sample_state(state, si, field, elapsed, records(:, rec, m))
+        episode_open = .false.
+        fo_start = 0.0_dp
         do k = 1, nsteps
+            was_active = state%fo%active
+            fo_before = state%fo_elapsed
             call orbit_microstep_sympl_spectre(state, si, field, status, fraction)
             elapsed = elapsed + dt*fraction
+            if (trim(study_mode) /= 'fo') then
+                if (.not. was_active .and. state%fo%active) then
+                    call open_episode(m, elapsed, state%fo%u(1))
+                    episode_open = .true.
+                    fo_start = fo_before
+                else if (was_active .and. .not. state%fo%active .and. &
+                         episode_open) then
+                    call close_episode(m, elapsed, state%fo_elapsed - fo_start, &
+                        merge(2, 1, status == SYMPL_SPECTRE_LOSS))
+                    episode_open = .false.
+                else if (.not. was_active .and. .not. state%fo%active .and. &
+                         state%fo_elapsed > fo_before) then
+                    call open_episode(m, elapsed, -1.0_dp)
+                    call close_episode(m, elapsed, state%fo_elapsed - fo_before, 4)
+                end if
+            end if
             if (state%fo%active) then
                 worst_shell = max(worst_shell, &
                     abs(sum(state%fo%v**2)/2 - starts(4, m)**2))
@@ -172,6 +205,8 @@ program study_spectre_orbits
                 exit
             end if
         end do
+        if (episode_open) call close_episode(m, elapsed, &
+            state%fo_elapsed - fo_start, merge(2, 3, terminal == SYMPL_SPECTRE_LOSS))
         samples(m) = rec
         result(:, m) = [elapsed, real(terminal, dp), &
             state%fo_elapsed*sqrt2/v0/max(elapsed, tiny(1.0_dp)), &
@@ -200,6 +235,14 @@ program study_spectre_orbits
         end do
     end do
     close (unit)
+    open (newunit=unit, file=trim(prefix)//'_episodes.csv', status='replace')
+    write (unit, '(a)') 'marker,t_enter_s,t_exit_s,fo_time_s,rho_enter,end_kind'
+    do m = 1, ntestpart
+        do j = 1, min(n_episodes(m), episode_capacity)
+            write (unit, '(i0,5(",",es24.16))') m, episodes(:, j, m)
+        end do
+    end do
+    close (unit)
     open (newunit=unit, file=trim(prefix)//'_summary.json', status='replace')
     write (unit, '(a)') '{'
     write (unit, '(a,i0,a)') '"markers":', ntestpart, ','
@@ -214,6 +257,9 @@ program study_spectre_orbits
     write (unit, '(a,i0,a)') '"fo_entries":', entries, ','
     write (unit, '(a,i0,a)') '"fo_exits":', exits, ','
     write (unit, '(a,i0,a)') '"fo_failures":', failures, ','
+    write (unit, '(a,i0,a)') '"fo_episodes":', sum(n_episodes), ','
+    write (unit, '(a,i0,a)') '"fo_episodes_unstored":', &
+        sum(max(0, n_episodes - episode_capacity)), ','
     write (unit, '(a,i0)') '"warning_hold_count":', nint(sum(result(6, :)))
     write (unit, '(a)') '}'
     close (unit)
@@ -225,6 +271,29 @@ program study_spectre_orbits
         error stop 'study contains unresolved intervals'
 
 contains
+
+    subroutine open_episode(marker, time, rho)
+        integer, intent(in) :: marker
+        real(dp), intent(in) :: time, rho
+        integer :: n
+
+        n_episodes(marker) = n_episodes(marker) + 1
+        n = n_episodes(marker)
+        if (n > episode_capacity) return
+        episodes(:, n, marker) = [time, -1.0_dp, 0.0_dp, rho, 0.0_dp]
+    end subroutine open_episode
+
+    subroutine close_episode(marker, time, fo_clock, kind)
+        integer, intent(in) :: marker, kind
+        real(dp), intent(in) :: time, fo_clock
+        integer :: n
+
+        n = n_episodes(marker)
+        if (n > episode_capacity) return
+        episodes(2, n, marker) = time
+        episodes(3, n, marker) = fo_clock*sqrt2/v0
+        episodes(5, n, marker) = real(kind, dp)
+    end subroutine close_episode
 
     subroutine rotate_launch(st, y_gc, phase)
         ! Research-only gyrophase control at the same prescribed GC start.
