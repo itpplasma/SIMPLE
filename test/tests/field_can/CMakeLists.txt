@@ -90,6 +90,18 @@ set_tests_properties(test_spectre_multivolume_init PROPERTIES
     ENVIRONMENT "OMP_NUM_THREADS=1"
     TIMEOUT 60)
 
+add_executable(test_spectre_outer_launch.x test_spectre_outer_launch.f90)
+target_link_libraries(test_spectre_outer_launch.x simple)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_outer_launch)
+add_test(NAME test_spectre_outer_launch
+    COMMAND $<TARGET_FILE:test_spectre_outer_launch.x>
+        ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_outer_launch)
+set_tests_properties(test_spectre_outer_launch PROPERTIES
+    LABELS "integration"
+    ENVIRONMENT "OMP_NUM_THREADS=1"
+    TIMEOUT 120)
+
 # Full orbit near SPECTRE interfaces (crossing_level = 3): GC <-> FO switching
 # on the axisymmetric current-sheet fixture, with the momentum shell and the
 # canonical toroidal momentum as witnesses.

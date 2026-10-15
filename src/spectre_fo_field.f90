@@ -390,6 +390,10 @@ contains
         if (it > 60) return
         if (v(1) > real(fo_field_mvol, dp) .or. &
             (own == 1 .and. v(1) <= 0.0_dp)) then
+            ! Preserve the converged exterior root so an entry map can
+            ! distinguish an initial particle outside the wall from failure.
+            u = v
+            owner = own
             status = 1
             return
         end if

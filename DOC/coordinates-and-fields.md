@@ -649,7 +649,14 @@ from the guiding-center stack below.
 `trace_orbit_spectre`), `src/samplers.f90` (`sample_spectre_surface`).
 
 `simple.x` traces multi-volume SPECTRE fields with `integmode > 0` and
-`crossing_level = 3` (default), using full orbit at interior interfaces.
+`crossing_level = 3` (default). The multi-volume hybrid uses full orbit at
+interior interfaces and near the absorbing outer boundary. The same radial-gyroradius entry/exit
+distances apply at both. Loss is localized when the particle reaches
+`rho_g = Mvol`; the guiding centre can still be inside. A launch whose Larmor
+offset already places the particle outside is an immediate physical loss
+(zero elapsed time), preserving that exterior particle position rather than
+reporting a coordinate-inversion failure. The separate single-volume GC model
+retains its guiding-centre edge convention; GC bulk motion remains unchanged.
 Levels 0/1 and their GC crossing-event log were removed without aliases; see
 [the rejection record](spectre-rejected-interface-models.md). Single-volume RK45
 and multi-volume field evaluation, geometry, diagnostics and sampling remain
@@ -966,7 +973,7 @@ detected automatically from `field_input`; see
 | `integ_coords` | int | -1000 | `6` selects the SPECTRE per-volume stacked-rho chart |
 | `integmode` | int | 0 | `0` = RK45 per volume; `> 0` = per-volume symplectic (builds the canonical construction) |
 | `crossing_level` | int | 3 | full orbit near interfaces (symplectic path); levels 0/1 are rejected |
-| `spectre_fo_entry_larmor` | real | 3 | `crossing_level = 3`: enter full orbit closer than this many radial gyroradii to an interface; leave one gyroradius farther out |
+| `spectre_fo_entry_larmor` | real | 3 | Multi-volume `crossing_level = 3`: enter full orbit closer than this many radial gyroradii to an interface or the absorbing outer edge; leave one gyroradius farther out |
 | `spectre_fo_tolerance` | real | `1e-9` | relative tolerance of sharp-field RK45 with exact crossings |
 | `spectre_fo_grid` | int(3) | `32,64,32` | FO spline points per volume in rho, theta and zeta per field period; axisymmetric zeta uses seven planes |
 | `spectre_ncon_r` | int | 48 | Meiss construction grid points in `r` (per volume) |
