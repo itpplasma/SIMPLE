@@ -251,7 +251,7 @@ GC, carried-phase switching and resolved FO are not rejected paths.
 | FO proofs and test-only Gauss2 | `concept/fo_symplectic_proof/` |
 | FLR/planar encounter derivations | `concept/flr_options/` |
 | Surviving candidate comparison and sharp-sheet controls | `concept/interface_candidates/`, `concept/symplectic_sheet/` |
-| Superseded W4 prototype and integration draft | `concept/fo_logical_spline/`; do not apply over #534 |
+| Superseded W4 implementation | `concept/fo_logical_spline/README.md` links its Git archive; unused code/patch removed during integration cleanup |
 
 The [previous full recovery ledger](https://github.com/itpplasma/SIMPLE/blob/fa913186ab29a0cfba3175d6a6b2c7a515f77a1f/PLAN.md)
 retains historical commands, timings, worker commits and verification details.
