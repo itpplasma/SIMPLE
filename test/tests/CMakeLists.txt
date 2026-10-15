@@ -1045,3 +1045,9 @@ set_tests_properties(test_chartmap_meiss_debug PROPERTIES
     LABELS "unit;chartmap"
     TIMEOUT 30
     FIXTURES_REQUIRED vmec_test_data)
+
+add_executable(test_gc_field_extrapolation.x test_gc_field_extrapolation.f90)
+target_link_libraries(test_gc_field_extrapolation.x simple)
+add_test(NAME test_gc_field_extrapolation COMMAND test_gc_field_extrapolation.x)
+set_tests_properties(test_gc_field_extrapolation PROPERTIES
+    LABELS "unit;integrator" TIMEOUT 30 ENVIRONMENT "OMP_NUM_THREADS=1")
