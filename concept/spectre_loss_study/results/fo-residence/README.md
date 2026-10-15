@@ -76,17 +76,49 @@ uncertainty of the loss fraction is about 0.03, so the loss curves for entries
 0.5–4 are statistically indistinguishable from FO. The earlier NCSX FO
 default-versus-refined-grid pair differed in four statuses, a lower bound on
 chaotic per-marker noise. Entry 0.01 differs in 17 statuses, the most of any
-case. A 1,024-marker comparison of FO, entry 1 and entry 3 is the next
-recorded result.
+case.
+
+With 1,024 matched NCSX markers (`summary_1024.json`; FO loses 418):
+
+| Entry | Losses | Final loss fraction minus FO, 95% bootstrap CI | Loss-curve max diff | FO time | Speedup vs FO |
+| ---: | ---: | --- | ---: | ---: | ---: |
+| 1 | 417 | -0.001 [-0.014, 0.013] | 0.007 | 10.6% | 7.1 |
+| 3 | 423 | +0.005 [-0.010, 0.019] | 0.009 | 28.3% | 3.3 |
+
+Both differ from FO in about 50 paired statuses (chaotic noise). G3V3L3Fi with
+256 markers (`summary_g3v3_256.json`; FO loses 53): entries 1 and 1.5 match all
+FO statuses at 5.3x and 4.0x; entry 3 differs only in marker 129 at 2.3x.
+Marker 129 was not a selection criterion and remains phase-sensitive (entry 6
+also loses it, entry 3 does not).
+
+## Invariant gate and the new default
+
+Loss statistics at this ensemble size do not resolve switch errors. The native
+`test_spectre_fo_interfaces_rk45` does: in axisymmetric tok2vol it bounds the
+relative spread of canonical p_zeta over all FO phases of a marker at 1e-5.
+
+| Entry | FO phases | Max p_zeta spread | Test |
+| ---: | ---: | ---: | --- |
+| 3 | 24 | 4.5e-8 | pass |
+| 2 | 27 | 7.6e-8 | pass |
+| 1.5 | 30 | 8.3e-8 | pass |
+| 1 | 38 | 1.2e-4 | fail |
+
+Below about 1.5 radial gyroradii the gyro-orbit at entry reaches the sheet,
+where the guiding-centre approximation no longer holds, and the switch error
+rises by three orders of magnitude. The production default
+`spectre_fo_entry_larmor` is therefore 1.5 (was 3): NCSX FO time 15% instead
+of 30% and cost 1.8x lower; G3V3L3Fi 2.0x lower. With the default 1.5, the
+affected native tests pass 24/25; `test_spectre_construction_grid` fails on
+macOS before and after this change because it reads Linux `/proc` VmHWM.
 
 ## Consequences
 
 - A gyro-orbit within about one gyroradius of a sheet intersects it; FO is
-  physically required there. Between about 1 and 3 gyroradii GC is valid in
-  principle, and the cost difference is a factor of 2.4 (entry 1 versus 3).
-- The phase-carrying switch (GC1+) is justified if it permits entry near
-  1 gyroradius with loss agreement that the current switch cannot attain.
-  If the current switch already agrees there, reduce the entry distance first.
+  physically required there. The invariant gate places the usable limit of the
+  present switch at 1.5 gyroradii, now the default.
+- A phase-carrying switch (GC1+) could at most move entry from 1.5 towards 1,
+  worth about 1.3x on NCSX. That no longer justifies it on cost.
 - Residual FO of 2.5–10% of particle time remains intrinsic; it costs 4–8x
   pure GC.
 

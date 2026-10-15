@@ -1,6 +1,6 @@
 # SPECTRE orbits: plan
 
-Updated 2026-10-15. Production repairs #534–#536 and research PR #537 are on
+Updated 2026-10-16. Production repairs #534–#536 and research PR #537 are on
 `main`, followed by the measured cost and residence records below. The frozen
 measurement baseline of the earlier loss study remains `fe002a3`. Recovery and
 archive history and all retained failed results remain available (see the end).
@@ -23,29 +23,31 @@ Cost is core-seconds per simulated particle-second.
 | --- | ---: | ---: | --- |
 | Boozer GC on the source VMEC, production default | 19.7 | 1 | [boozer-cost](concept/spectre_loss_study/results/boozer-cost/README.md) |
 | SPECTRE GC, midpoint `npoiper2=256` / 1024 | 106 / 390 | 5 / 20 | [fo-residence](concept/spectre_loss_study/results/fo-residence/README.md) |
-| Hybrid, entry 1 radial gyroradius | 1,591 | 81 | fo-residence |
-| Hybrid, entry 3 (default) | 3,862 | 196 | both |
+| Hybrid, entry 1.5 radial gyroradii (default since 2026-10-16) | 2,178 | 111 | fo-residence |
+| Hybrid, entry 3 (previous default) | 3,862 | 196 | both |
 | FO everywhere | 11,629 | 591 | both |
 
-- FO costs about 30x GC on the same field. At entry 3 the hybrid spends 30%
-  of particle time and about 90% of compute in FO.
-- 63% of FO time is in 35 episodes longer than 1 ms: particles residing in the
-  entry/exit band of a sheet. Crossings under 10 us hold about 1% and the outer
-  wall 0.1%.
-- FO time scales roughly linearly with the entry distance (2.5% at 0.01, 10% at
-  1, 30% at 3). At 256 markers, loss curves for entries 0.5–4 are statistically
-  indistinguishable from FO (binomial uncertainty about 0.03).
+- FO costs about 30x GC on the same field and dominates hybrid compute.
+- 63% of FO time (entry 3) is in episodes longer than 1 ms: particles residing
+  within the entry/exit band of a sheet. Crossings under 10 us hold about 1%
+  and the outer wall 0.1%. FO time scales roughly linearly with entry distance.
+- Loss statistics do not resolve the switch error: with 1,024 NCSX markers,
+  entries 1 and 3 both agree with FO within a 95% CI of about +-0.014 in final
+  loss fraction. G3V3L3Fi entries 1 and 1.5 match all 256 FO statuses.
+- The tok2vol p_zeta invariant does resolve it: spread 4.5e-8 at entry 3,
+  8.3e-8 at 1.5 and 1.2e-4 at 1 (tolerance 1e-5). Below about 1.5 gyroradii
+  the gyro-orbit reaches the sheet. The default is therefore 1.5: 1.8x
+  (NCSX) and 2.0x (G3V3L3Fi) cheaper than 3.
 - Midpoint at `npoiper2=256` (the example input) cuts GC cost 3.7x without a
   resolvable loss change but makes the switch chatter at interface 2.
   Euler1 chatters far more and doubles total cost.
 - The earlier 42–45% hybrid thread efficiency was the study driver's static
   schedule; production already uses dynamic scheduling, as the driver now does.
 
-Earlier checkpoint (Linux host, refined FO references): NCSX hybrid 97/256
-versus FO 99, eight paired status differences; G3V3L3Fi hybrid 52 versus 53.
-FO default and refined grids differ by four NCSX statuses. Marker 129's 16 FO
-launch phases span loss times 1.91–2.06 ms across the 2 ms cutoff. See the
-[R&D report](concept/spectre_loss_study/RND.md).
+Earlier checkpoint (Linux host, refined FO references, entry 3): NCSX hybrid
+97/256 versus FO 99, eight paired status differences; G3V3L3Fi hybrid 52 versus
+53. Marker 129's 16 FO launch phases span loss times 1.91–2.06 ms across the
+2 ms cutoff. See the [R&D report](concept/spectre_loss_study/RND.md).
 
 ## Working rule for iteration
 
@@ -56,26 +58,22 @@ same build for any comparison, and normalize cost per particle-second.
 
 ## Next steps
 
-1. **Resolve accuracy versus entry distance.** A 1,024-marker comparison of FO,
-   entry 1 and entry 3 is running. If entry 1 agrees with FO within
-   uncertainty, adopt a lower default entry with the present switch and record
-   the gain (about 2.4x). Use bootstrap confidence bands for loss-time curves
-   and keep phase-sampled ensembles separate from paired-phase runs.
-2. **Stop the switch chatter at the coarser GC step.** Characterize the
-   interface-2 episodes at `npoiper2=256` with short runs, then fix the
-   hysteresis or landing so that midpoint 256 keeps its 3.7x GC saving without
-   extra switching.
-3. **Phase-carrying GC switch (GC1+) only if step 1 shows a gap.** Its purpose
-   is to permit entry near one gyroradius with FO-level loss agreement. Build it
-   on the retained local Darboux completion in `concept/gc_higher_order/` with
-   per-volume spline tables; gate on scaled round trips at 1e-12, reconstruction
-   orders with temporal error separated, and the loss-curve comparison of step 1.
-4. **Longer and larger validation** at the chosen settings: longer durations,
-   G3V3L3Fi alongside NCSX, and more markers once the short controls agree.
+1. **Stop the switch chatter at the coarser GC step.** At `npoiper2=256`,
+   46–58 markers re-enter FO hundreds of times near interface 2 in episodes
+   under 1 us. Log the exit distance and owners per episode with short runs,
+   find the cause and fix it, so that midpoint 256 keeps its 3.7x GC saving.
+2. **Reduce the cost of resident FO.** At entry 1.5, NCSX still spends 15% of
+   particle time in FO, mostly in long episodes near sheets. Profile FO on
+   those orbits (spline evaluation held 86% of FO samples) and test cheaper
+   field evaluation or larger accepted RK steps against the same tolerance.
+3. **Longer and larger validation** at the new default: longer durations,
+   more markers, both fields; keep the invariant test as the switch gate.
 
 ## Deferred, not rejected
 
-Second-order GC (GC2), phase-carrying encounter maps and cycle compression,
+Phase-carrying GC switch (GC1+): it could at most move entry from 1.5 towards
+1, worth about 1.3x on NCSX, so cost no longer justifies it. Second-order GC
+(GC2), phase-carrying encounter maps and cycle compression,
 resolved smooth-layer GL2, variational symplectic FO, NCSX equilibria with
 2/4/8 volumes and further proof formalization stay retained in their concept
 directories. Reopen one when a measured cost or accuracy gap requires it.

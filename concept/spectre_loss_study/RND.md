@@ -78,6 +78,8 @@ below 1e-16 s. The discrepancy depends on the GC/FO decomposition. This evidence
 supports the existing switch/phase limitation; it does not establish that every
 remaining implementation path is bug-free. Matching 53 by widening the entry
 region is not a repair and the production distance remains three gyroradii.
+(Superseded 2026-10-16: the default is 1.5, selected by an invariant test and
+cost, not by marker 129; see `results/fo-residence/`.)
 
 The next scientific change is the coherent action/phase-carrying GC model and
 its entry/exit map, followed by joint step, entry-distance and phase controls.
