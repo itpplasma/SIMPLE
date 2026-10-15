@@ -52,7 +52,8 @@ retained data with identical numeric records and metadata.
 
 Production repair `535bc9e`, scope correction `5e88fe5` and ledger `c957615`
 are integrated here. The focused wall branch is
-`fix/spectre-particle-edge-loss`, based on performance PR #534. Its independent
+`fix/spectre-particle-edge-loss`, ready as [PR #536](https://github.com/itpplasma/SIMPLE/pull/536),
+based on performance PR #534. Its independent
 review scope excludes the GC source fix and recovered concepts. The integrated
 affected sweep passed 24/25 checks; the sole failure caught the unintended
 single-volume behavior change. After the scope correction, that unchanged test
@@ -430,7 +431,7 @@ implementation, not this candidate. Long-time stellarator loss agreement,
 spline-grid convergence of losses and the >=10x target remain open. The
 archived W4 patch is historical; do not apply it over this implementation.
 
-## Ordered continuation plan
+## Study execution record (through 2026-10-14)
 
 Execution is authorized through the stages below, with regular commits/pushes
 and final research plots published through slopbox. Do not wait for CI. Keep
@@ -467,7 +468,8 @@ and figures are in `concept/spectre_loss_study/results/pilot/`; reproduce plots
 with `python concept/spectre_loss_study/analyze.py
 concept/spectre_loss_study/results/pilot build/study/replot`. The default-grid
 short tracing improvement spans 3.7–6.1x across fields and modes; setup is
-excluded. The >=10x target and actual 2 ms throughput remain unestablished.
+excluded. At that initial checkpoint, the >=10x target and actual 2 ms throughput
+were unestablished; the later physical cost runs supersede the duration estimate.
 
 A 16-marker NCSX sheet FO profile at 200 microseconds completed without
 stops/holds/failures. Profiling attributed 67.7% of all sampled user CPU time
@@ -511,15 +513,21 @@ were kept separate from the primary throughput measurements.
 `full.py` completed the 256-marker, 2 ms volume controls on 16 local cores,
 followed by both GC-fixed hybrid replays; see the current checkpoint above.
 This answers the actual cost question before the full entry/tolerance matrix.
-It is conditional on the current deterministic entry phase. FO uses particle
-position at the outer edge; GC segments use the guiding-centre edge convention.
+It is conditional on the current deterministic entry phase. In that retained
+snapshot FO uses particle position at the edge and GC segments use the centre.
+The 2026-10-15 wall repair supersedes this boundary convention for the
+multi-volume hybrid.
 Their loss difference therefore does not isolate interface physics or establish
 a coherent first-order switch. The later W2 acceptance matrix remains open.
 Generated PNGs follow the repository's ignore rule; their versioned NumPy data
 and plotting source reproduce them. The convergence plot was uploaded to
 `https://box.sloppy.at/1dcca.png` on 2026-10-14 (slopbox links expire in 3 days).
 
-1. **W4 first: review and validate the focused performance PR above.** The
+## Remaining production and research plan, 2026-10-15
+
+1. **Review and promote the three focused production PRs.** Performance #534
+   and GC extrapolation #535 target main; particle-wall repair #536 is stacked
+   on #534. All three are ready for the required review. The
    regular logical-position/Cartesian-velocity path is implemented and locally
    checked, including longer NCSX/G3V3L3Fi trajectory/loss and two-grid controls.
    Review the retained spatial/loss differences against the required accuracy
@@ -529,13 +537,7 @@ and plotting source reproduce them. The convergence plot was uploaded to
    residence, under controlled load. The repaired 200 us tracing improvement is
    5.8–7.4x; the >=10x per-step target is not established. Current main retains
    its Cartesian path until a reviewed performance change is promoted.
-2. **Finish the production GC proof bridge (three source repairs verified; uniform proof still open).** Map each of the eight variants'
-   actual equations and field/extrapolation operations to its theorem. The
-   stellarator one-step/100-step numerical checks pass; preserve their bounds
-   (1e-7/1e-5), spacing and negative controls. Quantify finite-Newton and field
-   errors and establish a suitable smooth-domain/time-step hypothesis for the
-   unresolved long-energy claim. Preserve the failed energy/domain evidence.
-3. **W1/W3: validate and integrate the consistent switch.** Item D's native build, local identity checks,
+2. **W1/W3: validate and integrate the consistent switch.** Item D's native build, local identity checks,
    regeneration and independent numerical pullback are complete. Implement
    the extended canonical action/phase and gyrogauge connection tables, then
    audit physical units and matching to production GC variables. Reuse the
@@ -548,13 +550,19 @@ and plotting source reproduce them. The convergence plot was uploaded to
    at 1e-12, O(epsilon^2) mu defect and independent FO reconstruction. Replace
    both entry and exit together with carried phase. Redesign the long-run
    comparison so it distinguishes sheet physics, switch error and artificial
-   absorbing boundaries. No production switch change has yet been made.
-4. **W2: paired volume-sampled benchmark.** At least 256 matched markers on
+   absorbing boundaries. A phase-carrying production switch remains unimplemented.
+3. **W2: paired volume-sampled benchmark.** At least 256 matched markers on
    NCSX and G3V3L3Fi, 2 ms initially. Compare entry distances 1.5/2/3/4 rho_L,
    tolerances 1e-7/1e-9/1e-11 and FO everywhere at 1e-9. Publish loss-time curves,
    paired uncertainty, FO residence, excursion-length and cost distributions.
    Control shared-host load before making timing decisions. No such acceptance
    matrix was completed by the stopped session.
+4. **Finish the production GC proof bridge (three source repairs verified; uniform proof still open).** Map each of the eight variants'
+   actual equations and field/extrapolation operations to its theorem. The
+   stellarator one-step/100-step numerical checks pass; preserve their bounds
+   (1e-7/1e-5), spacing and negative controls. Quantify finite-Newton and field
+   errors and establish a suitable smooth-domain/time-step hypothesis for the
+   unresolved long-energy claim. Preserve the failed energy/domain evidence.
 5. **W5: encounter map concept, conditional on W2.** Exact velocity-continuity
    reset, carried/flux-weighted phase and short planar return cycles. Stochastic
    phase sampling is a modelling choice requiring ensemble validation, not a
@@ -650,8 +658,11 @@ for the actual next revision; do not infer closure from a worker's last message.
   was not repeated after consolidation; the explicit long-energy failures
   remain retained and are not enabled in the default suite.
 - Production source repairs remain isolated in PR #535 (`6970eff`, T3); the
-  field-performance change is PR #534 (`47d3fb0`, T4). Both have complete local
-  evidence and no reviews as of this checkpoint. Main is still `fe002a3`.
+  field-performance change is PR #534 (`47d3fb0`, T4), and the stacked
+  particle-wall repair is PR #536 (`914544f`, T3). All three are ready for review.
+  Main is still `fe002a3`, already an ancestor of this branch; no further rebase
+  or history rewrite is needed. Recovery/archive refs and add/remove history
+  remain intact.
 - Main promotion requires domain review for T3 and senior review for T4 under
   `docs/review-policy.md`. The focused branches are prepared for that review;
   no merge approval is inferred from a passing local check. CI is not awaited.
