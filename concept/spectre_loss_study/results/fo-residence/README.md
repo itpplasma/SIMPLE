@@ -32,6 +32,30 @@ chatter at interface 2 (4,118 episodes, median 0.06 us, plus 6,514 that enter
 and leave within one step), which costs little FO time. Euler1 chatters far more
 and doubles total cost; it is unsuitable for the SPECTRE hybrid.
 
+## Cause of the switch chatter at `npoiper2=256`
+
+Short runs (64 markers, 200 us, entry 1.5) with per-episode exit diagnostics
+and the new bulk-recovery counter (`sympl_bulk_recovery_stats`) show that the
+chatter is not interface switching. Most short episodes start with
+`iface = 0` deep inside a volume. They are FO recoveries after the GC
+microstep exhausts its 200-iteration cap (255 of 277 recoveries; 22 persistent
+teleports, no Newton failures). In those microsteps every rejection is the
+`step_teleported` energy-shell guard, `|H - p^2| > 5e-4 p^2`: midpoint at 256
+oscillates up to that band in some regions, so any substep raising the defect
+is rejected, the substep shrinks to 1e-4–1e-7 of the microstep and the cap is
+reached. FO recovery then resets the shell and exits almost at once through the
+legacy rule. The guard's absolute band is deliberate (source comment), so it
+is unchanged.
+
+| `npoiper2` | Bulk recoveries | FO entries | Pure-GC core-s/particle-s | Median shell error |
+| ---: | ---: | ---: | ---: | ---: |
+| 256 | 277 | 348 | 133 | 1.7e-4 |
+| 512 | 5 | 74 | 216 | 4.4e-5 |
+| 1024 | 1 | 71 | 429 | 1.1e-5 |
+
+`npoiper2=512` removes the chatter at half the GC cost of 1024. Because FO
+dominates, the hybrid total changes by only about 10%.
+
 ## Where FO time goes
 
 The driver now writes `study_episodes.csv`: one row per FO episode with

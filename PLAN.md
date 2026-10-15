@@ -58,10 +58,11 @@ same build for any comparison, and normalize cost per particle-second.
 
 ## Next steps
 
-1. **Stop the switch chatter at the coarser GC step.** At `npoiper2=256`,
-   46–58 markers re-enter FO hundreds of times near interface 2 in episodes
-   under 1 us. Log the exit distance and owners per episode with short runs,
-   find the cause and fix it, so that midpoint 256 keeps its 3.7x GC saving.
+1. **Done: switch chatter at `npoiper2=256`.** It is GC energy-shell guard
+   rejections (absolute band 5e-4) leading to the iteration cap and short FO
+   recoveries, not interface switching. `npoiper2=512` removes it at half the
+   GC cost of 1024; the guard is unchanged. Use 512 for SPECTRE runs; whether
+   the shell band should be an increment test instead is an open decision.
 2. **Reduce the cost of resident FO.** At entry 1.5, NCSX still spends 15% of
    particle time in FO, mostly in long episodes near sheets. Profile FO on
    those orbits (spline evaluation held 86% of FO samples) and test cheaper

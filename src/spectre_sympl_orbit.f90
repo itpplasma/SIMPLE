@@ -26,7 +26,7 @@ module spectre_sympl_orbit
     public :: sympl_spectre_state_t, sympl_spectre_reset, recanon_pphi, &
         orbit_microstep_sympl_spectre, sympl_landing_stats_reset, &
         sympl_landing_stats, sympl_landing_eval_stats
-    public :: sympl_fo_stats
+    public :: sympl_fo_stats, sympl_bulk_recovery_stats
     public :: SYMPL_SPECTRE_OK, SYMPL_SPECTRE_LOSS, SYMPL_SPECTRE_STOP
 
     integer, parameter :: SYMPL_SPECTRE_OK = 0
@@ -90,6 +90,10 @@ module spectre_sympl_orbit
     integer, allocatable :: n_landings(:), n_landing_evals(:), n_stops(:)
     integer, allocatable :: n_fo_entries(:), n_fo_exits(:), n_fo_losses(:)
     integer, allocatable :: n_fo_failures(:), n_fo_failure_status(:, :)
+    !> Bulk GC failures handed to FO recovery: iteration cap, persistent
+    !> teleport, persistent Newton failure at the minimum substep.
+    integer, parameter :: BULK_ITERS = 1, BULK_TELEPORT = 2, BULK_NEWTON = 3
+    integer, allocatable :: n_bulk_recover(:, :)
     real(dp), allocatable :: max_landing_resid(:)
 
 contains
@@ -194,6 +198,7 @@ contains
         do
             iters = iters + 1
             if (iters > max_iters) then
+                call count_bulk_recovery(BULK_ITERS)
                 call recover_local_error(state, si, f, STOP_STEP, budget, used, &
                     ierr, t_frac, resume_gc)
                 if (resume_gc) then
@@ -237,6 +242,7 @@ contains
                     end if
                     h_try = 0.5_dp*h_try
                     if (h_try >= h_min_frac*state%dt_std) cycle
+                    call count_bulk_recovery(BULK_TELEPORT)
                     call recover_local_error(state, si, f, STOP_TELEPORT, budget, &
                         used, ierr, t_frac, resume_gc)
                     if (resume_gc) then
@@ -264,6 +270,7 @@ contains
                     end if
                     h_try = 0.5_dp*h_try
                     if (h_try >= h_min_frac*state%dt_std) cycle
+                    call count_bulk_recovery(BULK_NEWTON)
                     call recover_local_error(state, si, f, STOP_STEP, budget, &
                         used, ierr, t_frac, resume_gc)
                     if (resume_gc) then
@@ -879,13 +886,14 @@ contains
             deallocate(n_landings, n_landing_evals, n_stops, &
                 n_fo_entries, n_fo_exits, &
                 n_fo_losses, n_fo_failures, n_fo_failure_status, &
-                max_landing_resid)
+                n_bulk_recover, max_landing_resid)
         end if
         allocate(n_landings(0:nthreads - 1), n_landing_evals(0:nthreads - 1), &
             n_stops(0:nthreads - 1), n_fo_entries(0:nthreads - 1), &
             n_fo_exits(0:nthreads - 1), n_fo_losses(0:nthreads - 1), &
             n_fo_failures(0:nthreads - 1), &
             n_fo_failure_status(5, 0:nthreads - 1), &
+            n_bulk_recover(3, 0:nthreads - 1), &
             max_landing_resid(0:nthreads - 1))
         n_landings = 0
         n_landing_evals = 0
@@ -895,6 +903,7 @@ contains
         n_fo_losses = 0
         n_fo_failures = 0
         n_fo_failure_status = 0
+        n_bulk_recover = 0
         max_landing_resid = 0.0_dp
     end subroutine sympl_landing_stats_reset
 
@@ -962,6 +971,21 @@ contains
             failure_status = sum(n_fo_failure_status, dim=2)
         end if
     end subroutine sympl_fo_stats
+
+    subroutine count_bulk_recovery(kind)
+        integer, intent(in) :: kind
+
+        if (allocated(n_bulk_recover)) n_bulk_recover(kind, stats_thread()) = &
+            n_bulk_recover(kind, stats_thread()) + 1
+    end subroutine count_bulk_recovery
+
+    subroutine sympl_bulk_recovery_stats(counts)
+        !> Bulk recoveries by cause: iteration cap, teleport, Newton.
+        integer, intent(out) :: counts(3)
+
+        counts = 0
+        if (allocated(n_bulk_recover)) counts = sum(n_bulk_recover, dim=2)
+    end subroutine sympl_bulk_recovery_stats
 
     integer function stats_thread()
         stats_thread = 0

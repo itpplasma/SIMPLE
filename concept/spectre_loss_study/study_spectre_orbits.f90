@@ -19,6 +19,7 @@ program study_spectre_orbits
     use orbit_symplectic_base, only: symplectic_integrator_t
     use spectre_sympl_orbit, only: sympl_spectre_state_t, sympl_spectre_reset, &
         orbit_microstep_sympl_spectre, sympl_landing_stats_reset, sympl_fo_stats, &
+        sympl_bulk_recovery_stats, &
         SYMPL_SPECTRE_OK, SYMPL_SPECTRE_LOSS
     use util, only: sqrt2, twopi
     implicit none
@@ -29,7 +30,8 @@ program study_spectre_orbits
     real(dp), allocatable :: starts(:, :), records(:, :, :), result(:, :)
     integer, allocatable :: samples(:)
     ! FO episodes per marker: entry/exit time, accepted FO time, particle rho at
-    ! entry, end kind (1 exit, 2 loss, 3 run end, 4 entered and left in one step).
+    ! entry, end kind (1 exit, 2 loss, 3 run end, 4 entered and left in one step),
+    ! interface, exit distance, GC rho and owner at entry and at exit.
     integer, parameter :: episode_capacity = 8192
     real(dp), allocatable :: episodes(:, :, :)
     integer, allocatable :: n_episodes(:)
@@ -44,7 +46,7 @@ program study_spectre_orbits
     type(sympl_spectre_state_t) :: state
     integer :: status, m, k, nsteps, stride, capacity, rec, unit, j, nfail
     integer :: entries, exits, losses, failures, counts(5), terminal, iface, side
-    integer :: requested_samples
+    integer :: requested_samples, bulk(3)
 
     call get_command_argument(1, fixture)
     call get_environment_variable('SIMPLE_SPECTRE_STUDY_INPUT', config_file)
@@ -126,7 +128,7 @@ program study_spectre_orbits
     capacity = nsteps/stride + 3
     allocate (records(12, capacity, ntestpart), result(7, ntestpart))
     allocate (samples(ntestpart))
-    allocate (episodes(5, episode_capacity, ntestpart), n_episodes(ntestpart))
+    allocate (episodes(11, episode_capacity, ntestpart), n_episodes(ntestpart))
     episodes = 0.0_dp
     n_episodes = 0
     records = 0.0_dp
@@ -174,18 +176,19 @@ program study_spectre_orbits
             elapsed = elapsed + dt*fraction
             if (trim(study_mode) /= 'fo') then
                 if (.not. was_active .and. state%fo%active) then
-                    call open_episode(m, elapsed, state%fo%u(1))
+                    call open_episode(m, elapsed, state%fo%u(1), state)
                     episode_open = .true.
                     fo_start = fo_before
                 else if (was_active .and. .not. state%fo%active .and. &
                          episode_open) then
                     call close_episode(m, elapsed, state%fo_elapsed - fo_start, &
-                        merge(2, 1, status == SYMPL_SPECTRE_LOSS))
+                        merge(2, 1, status == SYMPL_SPECTRE_LOSS), state)
                     episode_open = .false.
                 else if (.not. was_active .and. .not. state%fo%active .and. &
                          state%fo_elapsed > fo_before) then
-                    call open_episode(m, elapsed, -1.0_dp)
-                    call close_episode(m, elapsed, state%fo_elapsed - fo_before, 4)
+                    call open_episode(m, elapsed, -1.0_dp, state)
+                    call close_episode(m, elapsed, state%fo_elapsed - fo_before, 4, &
+                        state)
                 end if
             end if
             if (state%fo%active) then
@@ -206,7 +209,8 @@ program study_spectre_orbits
             end if
         end do
         if (episode_open) call close_episode(m, elapsed, &
-            state%fo_elapsed - fo_start, merge(2, 3, terminal == SYMPL_SPECTRE_LOSS))
+            state%fo_elapsed - fo_start, merge(2, 3, terminal == SYMPL_SPECTRE_LOSS), &
+            state)
         samples(m) = rec
         result(:, m) = [elapsed, real(terminal, dp), &
             state%fo_elapsed*sqrt2/v0/max(elapsed, tiny(1.0_dp)), &
@@ -236,10 +240,11 @@ program study_spectre_orbits
     end do
     close (unit)
     open (newunit=unit, file=trim(prefix)//'_episodes.csv', status='replace')
-    write (unit, '(a)') 'marker,t_enter_s,t_exit_s,fo_time_s,rho_enter,end_kind'
+    write (unit, '(a)') 'marker,t_enter_s,t_exit_s,fo_time_s,rho_enter,end_kind,'// &
+        'iface,exit_rho,gc_rho_enter,owner_enter,gc_rho_exit,owner_exit'
     do m = 1, ntestpart
         do j = 1, min(n_episodes(m), episode_capacity)
-            write (unit, '(i0,5(",",es24.16))') m, episodes(:, j, m)
+            write (unit, '(i0,11(",",es24.16))') m, episodes(:, j, m)
         end do
     end do
     close (unit)
@@ -258,6 +263,9 @@ program study_spectre_orbits
     write (unit, '(a,i0,a)') '"fo_exits":', exits, ','
     write (unit, '(a,i0,a)') '"fo_failures":', failures, ','
     write (unit, '(a,i0,a)') '"fo_episodes":', sum(n_episodes), ','
+    call sympl_bulk_recovery_stats(bulk)
+    write (unit, '(a,3(i0,a))') '"bulk_recoveries_iters_teleport_newton":[', &
+        bulk(1), ',', bulk(2), ',', bulk(3), '],'
     write (unit, '(a,i0,a)') '"fo_episodes_unstored":', &
         sum(max(0, n_episodes - episode_capacity)), ','
     write (unit, '(a,i0)') '"warning_hold_count":', nint(sum(result(6, :)))
@@ -272,20 +280,24 @@ program study_spectre_orbits
 
 contains
 
-    subroutine open_episode(marker, time, rho)
+    subroutine open_episode(marker, time, rho, st)
         integer, intent(in) :: marker
         real(dp), intent(in) :: time, rho
+        type(sympl_spectre_state_t), intent(in) :: st
         integer :: n
 
         n_episodes(marker) = n_episodes(marker) + 1
         n = n_episodes(marker)
         if (n > episode_capacity) return
-        episodes(:, n, marker) = [time, -1.0_dp, 0.0_dp, rho, 0.0_dp]
+        episodes(:, n, marker) = [time, -1.0_dp, 0.0_dp, rho, 0.0_dp, &
+            real(st%fo%iface, dp), st%fo%exit_rho, st%fo%entry_rho, &
+            real(st%fo%entry_owner, dp), 0.0_dp, 0.0_dp]
     end subroutine open_episode
 
-    subroutine close_episode(marker, time, fo_clock, kind)
+    subroutine close_episode(marker, time, fo_clock, kind, st)
         integer, intent(in) :: marker, kind
         real(dp), intent(in) :: time, fo_clock
+        type(sympl_spectre_state_t), intent(in) :: st
         integer :: n
 
         n = n_episodes(marker)
@@ -293,6 +305,10 @@ contains
         episodes(2, n, marker) = time
         episodes(3, n, marker) = fo_clock*sqrt2/v0
         episodes(5, n, marker) = real(kind, dp)
+        episodes(10, n, marker) = st%fo%last_y(1)
+        episodes(11, n, marker) = real(st%fo%owner, dp)
+        if (kind == 4) episodes(6:9, n, marker) = [real(st%fo%iface, dp), &
+            st%fo%exit_rho, st%fo%entry_rho, real(st%fo%entry_owner, dp)]
     end subroutine close_episode
 
     subroutine rotate_launch(st, y_gc, phase)
