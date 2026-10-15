@@ -80,6 +80,14 @@ NCSX sheet FO separation from main decreased from 26.3 cm at the default grid
 to 0.623 cm at the refined grid. No path-identity or >=10x claim is established.
 The earlier 2–4 h estimate is superseded for this measured workload.
 
+Against Boozer GC on the source VMEC field (same machine, 3.5 keV, 2 ms), cost
+per simulated particle-second is: SPECTRE GC about 20x the production Boozer
+default (2.7x at equal step and integrator), default hybrid about 200x, FO
+everywhere about 590x. FO costs about 30x GC on the same field and accounts for
+about 90% of hybrid compute; hybrid thread efficiency is only 42–45%. Reducing
+FO residence is the main cost lever. See
+[the Boozer cost comparison](concept/spectre_loss_study/results/boozer-cost/README.md).
+
 ## What the 48-versus-53 discrepancy established
 
 The multi-volume hybrid excluded the outer edge from FO proximity entry.

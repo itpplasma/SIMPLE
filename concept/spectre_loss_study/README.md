@@ -47,6 +47,9 @@ fields; `full_report.py INPUT OUTPUT` retains data and plots, and also replots a
 retained results directory. These use the current entry phase and boundary
 conventions, not a completed phase-consistent hybrid model.
 
+`boozer_cost.py` compares GC, hybrid and FO cost with Boozer GC on the
+source VMEC equilibrium; see [results/boozer-cost](results/boozer-cost/README.md).
+
 ## Targeted loss controls
 
 The outer-loss repair resolves particle-wall events with the existing FO
