@@ -306,7 +306,7 @@ contains
             end if
             call landed_state(si, f, real(iface, dp), direction, y_iface)
             if (state%level == 3 .and. iface >= 1 .and. &
-                iface < state%mvol) then
+                iface <= state%mvol) then
                 ! The guiding centre stepped onto the interface without passing
                 ! the proximity test: continue in full orbit from the landing.
                 used = used + h_land
@@ -538,7 +538,7 @@ contains
     end function shell_pitch
 
     subroutine interface_proximity(state, si, f, y, iface, exit_rho)
-        !> Nearest interior interface iface if the guiding centre is closer to
+        !> Nearest interface or absorbing outer edge if the GC is closer to
         !> it than spectre_fo_entry_larmor radial gyroradii, else iface = 0. y
         !> is the guiding-centre state and exit_rho the matching exit distance.
         type(sympl_spectre_state_t), intent(in) :: state
@@ -554,7 +554,7 @@ contains
         exit_rho = 0.0_dp
         call integrator_state(si, f, y)
         k = nint(y(1))
-        if (k < 1 .or. k >= state%mvol) return
+        if (k < 1 .or. k > state%mvol) return
         call spectre_fo_radial_larmor(y, nint(state%home_hi), ro0/sqrt2, rho_r, &
             status)
         if (status /= SPECTRE_FO_OK) return
@@ -598,6 +598,14 @@ contains
         owner_out = owner
         exited = .false.
         call spectre_fo_enter(state%fo, y, owner, iface, ro0/sqrt2, ierr)
+        if (ierr == SPECTRE_FO_LOSS) then
+            ! A GC initially inside the wall can map to a particle outside it.
+            ! This is an immediate physical loss, with no accepted FO time.
+            call count_fo_entry
+            if (allocated(n_fo_losses)) n_fo_losses(stats_thread()) = &
+                n_fo_losses(stats_thread()) + 1
+            return
+        end if
         if (ierr /= SPECTRE_FO_OK) then
             call count_fo_failure(ierr)
             return
