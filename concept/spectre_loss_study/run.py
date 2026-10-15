@@ -33,7 +33,8 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--starts", type=Path)
     parser.add_argument("--field", choices=["ncsx", "g3v3"], required=True)
-    parser.add_argument("--sampling", choices=["volume", "sheet"], default="volume")
+    parser.add_argument("--sampling", choices=["volume", "sheet", "phase"],
+                        default="volume")
     parser.add_argument("--mode", choices=["hybrid", "fo"], default="hybrid")
     parser.add_argument("--grid", type=int, nargs=3)
     parser.add_argument("--markers", type=int, default=16)
@@ -41,6 +42,12 @@ def main():
     parser.add_argument("--threads", type=int, default=8)
     parser.add_argument("--tolerance", type=float, default=1e-9)
     parser.add_argument("--entry", type=float, default=3)
+    parser.add_argument("--samples", type=int, default=65)
+    parser.add_argument("--phase", type=float, default=0,
+                        help="FO launch phase offset in radians (research only)")
+    parser.add_argument("--npoiper2", type=int, default=1024)
+    parser.add_argument("--macrosteps", type=int, default=64)
+    parser.add_argument("--construction-tolerance", type=float)
     args = parser.parse_args()
     args.root = args.root.resolve()
     args.output = args.output.resolve()
@@ -55,18 +62,23 @@ def main():
         "&config\n"
         f"field_input='{fixture}'\n"
         "integ_coords=6, integmode=3, crossing_level=3\n"
-        f"ntestpart={args.markers}, ntimstep=65, npoiper2=1024\n"
+        f"ntestpart={args.markers}, ntimstep={args.macrosteps + 1}, "
+        f"npoiper2={args.npoiper2}\n"
         f"facE_al=1000, trace_time={args.duration:.17e}, relerr=1d-12\n"
         f"spectre_fo_entry_larmor={1e6 if args.mode == 'fo' else args.entry}\n"
         f"spectre_fo_tolerance={args.tolerance:.17e}\n"
         + ("spectre_fo_grid=" + ",".join(map(str, args.grid)) + "\n"
            if args.grid else "")
+        + (f"spectre_ncon_ode_relerr={args.construction_tolerance:.17e}\n"
+           if args.construction_tolerance is not None else "")
         + "deterministic=.true., ran_seed=12345 /\n")
     env = dict(os.environ, OMP_NUM_THREADS=str(args.threads), OMP_DYNAMIC="FALSE",
                OPENBLAS_NUM_THREADS="1", OMP_PROC_BIND="close", OMP_PLACES="cores",
                SIMPLE_SPECTRE_STUDY_INPUT=str(config),
                SIMPLE_SPECTRE_STUDY_OUTPUT=str(args.output / "study"),
                SIMPLE_SPECTRE_STUDY_MODE=args.mode,
+               SIMPLE_SPECTRE_STUDY_SAMPLES=str(args.samples),
+               SIMPLE_SPECTRE_STUDY_PHASE=str(args.phase),
                SIMPLE_SPECTRE_STUDY_SAMPLING=args.sampling)
     env.pop("SIMPLE_SPECTRE_STUDY_STARTS", None)
     if args.starts:
