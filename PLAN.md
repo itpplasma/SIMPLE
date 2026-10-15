@@ -1,10 +1,11 @@
 # SPECTRE orbits: model comparison and execution plan
 
-Updated 2026-10-15. Integration target: `main`; the research branch is being
-retired after integration. Production PRs #534–#536 are merged, through
-`27e963c`. The frozen measurement baseline remains `fe002a3` (including #533);
-it is not the current main revision. Recovery/archive history and all retained
-failed results remain available.
+Updated 2026-10-15. Integrated on `main` through research PR
+[#537](https://github.com/itpplasma/SIMPLE/pull/537), after production PRs
+#534–#536 (`27e963c`). The completed integration branches are retired; pinned
+commit links preserve their provenance. The frozen measurement baseline remains
+`fe002a3` (including #533), distinct from current main. Recovery/archive
+history and all retained failed results remain available.
 
 ## Strategy and active choices
 
@@ -107,10 +108,12 @@ The earlier `full/` and `full-gc-fixed/` snapshots remain intact.
 
 ### 1. Preserve and promote the verified baseline
 
-Production PRs #534/#535/#536 are merged. Integrate the retained research,
-then retire the completed integration branches. Keep new model development
-separate. Preserve the add/remove cleanup history,
-independent axis-field oracle, GC source regressions and physical wall witnesses.
+Completed through #534–#537: production repairs and retained research are
+integrated, with the add/remove cleanup history, independent axis-field oracle,
+GC source regressions and physical wall witnesses preserved. New model
+development starts from main. The Sonnet review's pre-existing midpoint
+axis-chart concern needs a reproducible accepted crossing before a targeted
+repair; the retained loss studies do not exclude that concern.
 Use the repaired implementation for subsequent comparisons without treating
 its current hybrid as the selected solution.
 

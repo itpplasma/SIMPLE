@@ -13,7 +13,9 @@ The focused production changes are merged on main:
 They merged as `934d964`, `71ad9ae` and `27e963c`, respectively. The frozen
 measurement baseline remains `fe002a3`. Chris explicitly requested promotion;
 independent human domain/senior review was not performed and CI was not awaited.
-The requested [Sonnet reviews and adjudication](REVIEW.md) are advisory. They
+Retained research and the updated plan are integrated by
+[#537](https://github.com/itpplasma/SIMPLE/pull/537). The requested
+[Sonnet reviews and adjudication](REVIEW.md) are advisory. They
 found no confirmed new regression; the pre-existing midpoint axis-chart concern
 remains open and is not excluded by the retained loss controls.
 
