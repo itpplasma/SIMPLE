@@ -29,8 +29,9 @@ Cost is core-seconds per simulated particle-second.
 | **Hybrid, entry 1.5, exit check per radian + quintic spline kernel** | **657** | **33** | [profile](concept/spectre_loss_study/results/profile/README.md) |
 | **FO everywhere, same changes** | **2,280** | **116** | profile |
 
-The last two rows need libneo branch `perf/spline3d-der-o555` for the kernel
-(3.5x on FO); the exit-check part (1.5x) is in SIMPLE.
+The last two rows need [libneo #427](https://github.com/itpplasma/libneo/pull/427)
+for the kernel (3.5x on FO); the exit-check part (1.5x) is in SIMPLE. #427
+also makes Boozer GC 1.18x faster (19.7 to 16.7) with byte-identical output.
 
 - FO costs about 30x GC on the same field and dominates hybrid compute.
 - 63% of FO time (entry 3) is in episodes longer than 1 ms: particles residing
@@ -71,7 +72,7 @@ same build for any comparison, and normalize cost per particle-second.
 2. **Reduce the cost of resident FO.** Done in part: profiling showed the
    per-substep exit check at about 40% of FO time and copy overhead in the
    general spline kernel; fixing both made FO 5.1x and the hybrid 3.3–3.9x
-   cheaper. Next: merge the libneo kernel; then profile again (RK45 stages and
+   cheaper. Next: merge libneo #427; then profile again (RK45 stages and
    GC Meiss evaluations are the remaining spline users) and test larger
    accepted RK steps against the same tolerance.
 3. **Longer and larger validation** at the new default: longer durations,
