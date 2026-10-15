@@ -656,6 +656,31 @@ and multi-volume field evaluation, geometry, diagnostics and sampling remain
 supported. The home-volume lock pins implicit Newton trials and coordinate
 transforms to one volume; interior physical crossings use the full orbit.
 
+The FO provider in `src/spectre_fo_field.f90` splines R, Z, A_theta and A_zeta
+separately in each volume. All quantities retain the existing cm/G conventions
+inside the FO module. Basis/dual vectors and B are derived from the spline first
+derivatives, using libneo's positive metric Jacobian for the field. The regular
+FO path advances logical position with `du/dt = E^{-1} v` and Cartesian velocity
+with the Lorentz force, eliminating stage coordinate inversion. A Cartesian
+position chart remains near the volume-1 axis. GC reconstruction uses the spline
+inverse, and retains its original physical transform and exit conditions. The
+provider is constructed before parallel tracing and then shared read-only;
+field reinitialization releases the previous tables. Accepted endpoint samples
+are reused for GC reconstruction and the next RK first stage; a landed sheet
+refreshes the sample in the new owner's field. The first-volume magnetic axis
+uses a regular `(xi, eta) = rho_g*(cos(theta), sin(theta))` table of R, Z and all
+three potential components. This avoids amplifying polar spline derivative
+error by the vanishing polar Jacobian. Geometry and potential jets join the
+polar representation over `0.05 < rho_g < 0.1`, including derivatives of the
+joining weight before taking the curl. Axis coordinate inversion solves for
+xi/eta with a nonsingular Jacobian. No raw spectral fallback is used during
+tracing. The axis table uses `2*max(3, n_rho/4)+1` points in each transverse
+direction and the configured zeta grid. Default three-volume coefficient
+storage including this table is about 1.34 GiB. Reinitialization also releases
+the axis table.
+Spline-grid convergence is required alongside time-integration convergence;
+see [the interface description](spectre-interface-crossing.md).
+
 **Detection and loading**. `field_input` is detected as SPECTRE by a `.h5`
 extension or the HDF5 magic bytes (`field.is_spectre_file`), and loaded through
 libneo `create_spectre_field` (which builds the stacked-rho
@@ -943,6 +968,7 @@ detected automatically from `field_input`; see
 | `crossing_level` | int | 3 | full orbit near interfaces (symplectic path); levels 0/1 are rejected |
 | `spectre_fo_entry_larmor` | real | 3 | `crossing_level = 3`: enter full orbit closer than this many radial gyroradii to an interface; leave one gyroradius farther out |
 | `spectre_fo_tolerance` | real | `1e-9` | relative tolerance of sharp-field RK45 with exact crossings |
+| `spectre_fo_grid` | int(3) | `32,64,32` | FO spline points per volume in rho, theta and zeta per field period; axisymmetric zeta uses seven planes |
 | `spectre_ncon_r` | int | 48 | Meiss construction grid points in `r` (per volume) |
 | `spectre_ncon_th` | int | 48 | construction grid points in `theta` |
 | `spectre_ncon_phi` | int | -1 | construction grid points in `phi`; `-1` = automatic (32 with toroidal harmonics, `AXISYM_NPHI` for axisymmetric fields); a positive value forces that count |

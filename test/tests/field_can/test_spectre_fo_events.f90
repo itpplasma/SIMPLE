@@ -142,12 +142,52 @@ program test_spectre_fo_events
     if (status /= SPECTRE_FO_LOSS) error stop 'outer-domain retry did not find loss'
     if (used < 0.0_dp .or. used > dt) error stop 'invalid loss time budget'
     if (state%u(1) < 2.0_dp - 2.0e-12_dp) error stop 'unlocalized outer loss'
+    ! A particle already landed at the terminal sheet is lost at zero time,
+    ! without attempting to sample a nonexistent exterior volume.
+    call spectre_fo_advance_until_exit(state, dt, RO, used, y, owner, &
+        exited, status)
+    if (status /= SPECTRE_FO_LOSS .or. abs(used) > tiny(1.0_dp)) &
+        error stop 'terminal sheet did not retain zero-time loss'
     call zero_time_field_jump
     call inward_thin_volume
     call hidden_opposite_crossing
+    call axis_full_orbit
     print '(A)', 'PASS'
 
 contains
+
+    subroutine axis_full_orbit
+        ! The logical polar chart must not introduce a spurious stop for FO
+        ! recovery near the axis. Compare against physical Cartesian RK4.
+        type(spectre_fo_state_t) :: orbit
+        real(dp) :: point(3), xp(3), bp(3), bm, xr(3), vr(3), step, advanced
+        real(dp) :: mapped(5)
+        integer :: result, home
+        logical :: returned
+
+        call set_magfie_spectre_field(sf)
+        call spectre_fo_configure(1.0e-6_dp)
+        point = [0.01_dp, 0.0_dp, 0.0_dp]
+        call sample(point, xp, bp, bm)
+        orbit = spectre_fo_state_t()
+        orbit%x = xp
+        orbit%u = point
+        orbit%v = [0.0_dp, 0.0_dp, 1.0_dp]
+        orbit%owner = 1
+        orbit%active = .true.
+        orbit%exit_rho = 10.0_dp
+        xr = orbit%x
+        vr = orbit%v
+        step = 0.1_dp*RO/bm
+        call reference_trace(xr, vr, step, 10000)
+        call spectre_fo_advance_until_exit(orbit, step, RO, advanced, mapped, &
+            home, returned, result)
+        print '(a,es12.4)', 'axis FO velocity error against RK4: ', &
+            norm2(orbit%v - vr)
+        if (result /= SPECTRE_FO_OK .or. returned) &
+            error stop 'axis FO failed to complete'
+        if (norm2(orbit%v - vr) > 2.0e-6_dp) error stop 'axis FO force error'
+    end subroutine axis_full_orbit
 
     subroutine zero_time_field_jump
         ! A zero-time switch into a stronger field must recompute the gyro cap.
