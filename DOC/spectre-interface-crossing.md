@@ -16,7 +16,9 @@ arguments, symbolic verifier, recorded measurements, and code provenance.
 With `crossing_level = 3` and `integmode > 0`, the symplectic guiding-centre
 path switches to the full orbit (`spectre_fo_hybrid`) when the guiding centre
 comes within `spectre_fo_entry_larmor` radial gyroradii of an interior
-interface, and back when it is one gyroradius farther out. RK45 uses the sharp
+interface, and back when it is one gyroradius farther out. The exit distance
+is tested once per radian of gyration and at the end of each microstep, not
+after every RK45 substep. RK45 uses the sharp
 per-volume field and localizes interface crossings. Every trial stage's
 geometric owner is checked, including shortened
 bracketing and landing trials and ownership changes in both directions. A stage

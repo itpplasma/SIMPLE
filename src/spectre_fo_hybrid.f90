@@ -21,6 +21,10 @@ module spectre_fo_hybrid
     ! between stage samples has circular-orbit depth <= rho_L*(1-cos(0.05)),
     ! about 1.25e-3 rho_L; tolerance alone cannot bound a missed sheet force.
     real(dp), parameter :: RK_GYRO_ANGLE = 0.1_dp
+    !> Gyroangle between exit checks. The guiding-centre map costs about as much
+    !> as an RK45 substep, so it is not evaluated after every substep; an exit
+    !> is detected at most this angle late, and always at the end of a call.
+    real(dp), parameter :: EXIT_CHECK_ANGLE = 1.0_dp
     real(dp), parameter :: ENTRY_MOMENTUM_TOL = 1.0e-3_dp
     integer, parameter :: MAX_SUBSTEPS = 100000
     integer, parameter :: NPHASE = 64
@@ -150,7 +154,7 @@ contains
         !> recorded canonical-momentum defect and the measured return mu; the
         !> production path omits it.
         real(dp), intent(in), optional :: h_scale
-        real(dp) :: remaining, h, hfac
+        real(dp) :: remaining, h, hfac, angle
         type(spectre_fo_local_t) :: particle
         integer :: nstep, map_status
         dt_used = 0.0_dp
@@ -174,6 +178,7 @@ contains
         call synchronize_position(state, status)
         if (status /= SPECTRE_FO_OK) return
         remaining = dt
+        angle = 0.0_dp
         call spectre_fo_field_local(state%u, state%owner, particle)
         do nstep = 1, MAX_SUBSTEPS
             if (remaining <= epsilon(1.0_dp)*max(dt, 1.0_dp)) then
@@ -192,6 +197,10 @@ contains
             end if
             dt_used = dt_used + h
             remaining = remaining - h
+            angle = angle + h*particle%bmod/ro0_bar
+            if (angle < EXIT_CHECK_ANGLE .and. &
+                remaining > epsilon(1.0_dp)*max(dt, 1.0_dp)) cycle
+            angle = 0.0_dp
             call gc_map(state, particle, ro0_bar, y, owner, map_status, &
                 exited=exited)
             if (map_status == SPECTRE_FO_OK) then

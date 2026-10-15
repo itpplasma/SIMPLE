@@ -26,6 +26,11 @@ Cost is core-seconds per simulated particle-second.
 | Hybrid, entry 1.5 radial gyroradii (default since 2026-10-16) | 2,178 | 111 | fo-residence |
 | Hybrid, entry 3 (previous default) | 3,862 | 196 | both |
 | FO everywhere | 11,629 | 591 | both |
+| **Hybrid, entry 1.5, exit check per radian + quintic spline kernel** | **657** | **33** | [profile](concept/spectre_loss_study/results/profile/README.md) |
+| **FO everywhere, same changes** | **2,280** | **116** | profile |
+
+The last two rows need libneo branch `perf/spline3d-der-o555` for the kernel
+(3.5x on FO); the exit-check part (1.5x) is in SIMPLE.
 
 - FO costs about 30x GC on the same field and dominates hybrid compute.
 - 63% of FO time (entry 3) is in episodes longer than 1 ms: particles residing
@@ -63,10 +68,12 @@ same build for any comparison, and normalize cost per particle-second.
    recoveries, not interface switching. `npoiper2=512` removes it at half the
    GC cost of 1024; the guard is unchanged. Use 512 for SPECTRE runs; whether
    the shell band should be an increment test instead is an open decision.
-2. **Reduce the cost of resident FO.** At entry 1.5, NCSX still spends 15% of
-   particle time in FO, mostly in long episodes near sheets. Profile FO on
-   those orbits (spline evaluation held 86% of FO samples) and test cheaper
-   field evaluation or larger accepted RK steps against the same tolerance.
+2. **Reduce the cost of resident FO.** Done in part: profiling showed the
+   per-substep exit check at about 40% of FO time and copy overhead in the
+   general spline kernel; fixing both made FO 5.1x and the hybrid 3.3–3.9x
+   cheaper. Next: merge the libneo kernel; then profile again (RK45 stages and
+   GC Meiss evaluations are the remaining spline users) and test larger
+   accepted RK steps against the same tolerance.
 3. **Longer and larger validation** at the new default: longer durations,
    more markers, both fields; keep the invariant test as the switch gate.
 
