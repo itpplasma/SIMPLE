@@ -1,9 +1,10 @@
 # SPECTRE orbits: model comparison and execution plan
 
-Updated 2026-10-15. Active branch: `research/spectre-loss-study-20261014`.
-Main and the frozen measurement baseline are `fe002a3` (including PR #533).
-The active branch already contains that main revision. Recovery/archive
-history and all retained failed results remain available.
+Updated 2026-10-15. Integration target: `main`; the research branch is being
+retired after integration. Production PRs #534–#536 are merged, through
+`27e963c`. The frozen measurement baseline remains `fe002a3` (including #533);
+it is not the current main revision. Recovery/archive history and all retained
+failed results remain available.
 
 ## Strategy and active choices
 
@@ -41,13 +42,16 @@ evidence for continuous physics, the numerical map and its implementation.
 
 | Production change | Review branch / revision | State |
 | --- | --- | --- |
-| FO logical splines, endpoint reuse and regular axis chart | [#534](https://github.com/itpplasma/SIMPLE/pull/534), `perf/spectre-fo-logical-spline`, `47d3fb0` | Open, ready; T4 senior review required |
-| Three GC final-Newton extrapolation repairs | [#535](https://github.com/itpplasma/SIMPLE/pull/535), `fix/gc-field-extrapolation`, `6970eff` | Open, ready; T3 domain review required |
-| Multi-volume particle-wall loss repair | [#536](https://github.com/itpplasma/SIMPLE/pull/536), `fix/spectre-particle-edge-loss`, `914544f` | Open, ready; stacked on #534; T3 domain review required |
+| FO logical splines, endpoint reuse and regular axis chart | [#534](https://github.com/itpplasma/SIMPLE/pull/534), `perf/spectre-fo-logical-spline`, `47d3fb0` | Merged as `934d964`; owner-directed promotion |
+| Three GC final-Newton extrapolation repairs | [#535](https://github.com/itpplasma/SIMPLE/pull/535), `fix/gc-field-extrapolation`, `6970eff` | Merged as `71ad9ae`; owner-directed promotion |
+| Multi-volume particle-wall loss repair | [#536](https://github.com/itpplasma/SIMPLE/pull/536), `fix/spectre-particle-edge-loss`, `914544f` | Merged as `27e963c`; owner-directed promotion |
 
-All three changes are integrated on the active research branch. The GC repair
-is independent of the performance PR. Research can proceed while these changes
-undergo the review required by `docs/review-policy.md`; CI is not awaited.
+All three changes are integrated on main at Chris's explicit merge request.
+Independent human domain/senior review under `docs/review-policy.md` was not
+performed; the owner-directed promotion is recorded in the merge descriptions.
+Three requested read-only Claude Sonnet reviews are advisory, not that approval.
+Their [findings and adjudication](concept/spectre_loss_study/REVIEW.md) retain
+one unconfirmed pre-existing midpoint axis-chart concern. CI is not awaited.
 
 Latest physical controls use 3.5 keV alphas, 256 volume-sampled GC starts,
 2 ms and 16 local OpenMP threads. The hybrid replays have zero numerical stops,
@@ -103,8 +107,9 @@ The earlier `full/` and `full-gc-fixed/` snapshots remain intact.
 
 ### 1. Preserve and promote the verified baseline
 
-Complete required review of #534/#535 and stacked #536. Keep their scopes
-separate from new model development. Preserve the add/remove cleanup history,
+Production PRs #534/#535/#536 are merged. Integrate the retained research,
+then retire the completed integration branches. Keep new model development
+separate. Preserve the add/remove cleanup history,
 independent axis-field oracle, GC source regressions and physical wall witnesses.
 Use the repaired implementation for subsequent comparisons without treating
 its current hybrid as the selected solution.
@@ -217,7 +222,7 @@ at both starts for 100,000 steps. NCSX trapped starts reach the chart boundary,
 including unresolved status 5 near it; do not relabel this physical loss.
 NCSX passing Gauss2 fails the original coarse-step envelope gate and passes
 an equal-time half-step control. Preserve both outcomes and original bounds.
-The known RED energy acceptance remains outside the default registered suite,
+The known RED GC energy acceptance remains outside the default registered suite,
 with its sources, data and registration patch retained explicitly.
 
 Baseline verification is retained, not presented as a fresh full-suite pass:
@@ -257,7 +262,7 @@ The [previous full recovery ledger](https://github.com/itpplasma/SIMPLE/blob/fa9
 retains historical commands, timings, worker commits and verification details.
 Recovery is `recovery/spectre-session-20261014` at `082bea4`; the pre-cleanup
 archive is `archive/spectre-session-20261014-pre-cleanup` at `87aa81f`.
-The active branch integrates recovery (`8afaecb`), GC repair (`0993478`),
+The research integration preserves recovery (`8afaecb`), GC repair (`0993478`),
 switch work (`97fde90`, `060d17f`, `4d963cc`), wall repair (`535bc9e`, `5e88fe5`)
 and ledger F8 (`c957615`). Separate audit/switch branches retain provenance.
 Do not resume old agents or merge old worker tips over the cleaned sources.

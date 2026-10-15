@@ -6,12 +6,16 @@ four missed losses and gives **52/256 on both FO spline grids**. The remaining
 marker is sensitive to the current switch and phase model. It is not accepted
 as a validated physical difference or as evidence that the hybrid is converged.
 
-The focused production changes are ready for review:
+The focused production changes are merged on main:
 [FO performance #534](https://github.com/itpplasma/SIMPLE/pull/534),
 [GC extrapolation #535](https://github.com/itpplasma/SIMPLE/pull/535), and
 [particle-wall repair #536](https://github.com/itpplasma/SIMPLE/pull/536).
-The wall PR is stacked on #534; the GC repair is independent. Main remains
-`fe002a3`; no merge is claimed before the required domain/senior review.
+They merged as `934d964`, `71ad9ae` and `27e963c`, respectively. The frozen
+measurement baseline remains `fe002a3`. Chris explicitly requested promotion;
+independent human domain/senior review was not performed and CI was not awaited.
+The requested [Sonnet reviews and adjudication](REVIEW.md) are advisory. They
+found no confirmed new regression; the pre-existing midpoint axis-chart concern
+remains open and is not excluded by the retained loss controls.
 
 ## Boundary repair
 
