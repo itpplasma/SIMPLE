@@ -305,33 +305,29 @@ contains
                 cycle
             end if
             call landed_state(si, f, real(iface, dp), direction, y_iface)
-            if (state%level == 3 .and. iface >= 1 .and. &
-                iface <= state%mvol) then
-                ! The guiding centre stepped onto the interface without passing
-                ! the proximity test: continue in full orbit from the landing.
-                used = used + h_land
-                budget = state%dt_std - used
-                call update_landing_stats(resid)
-                call fo_exit_distance(state, y_iface, exit_rho)
-                call start_fo(state, si, f, y_iface, nint(state%home_hi), iface, &
-                    budget, used, y_out, fo_owner, fo_exited, ierr_fo, exit_rho)
-                if (ierr_fo /= SPECTRE_FO_OK) then
-                    if (recover_fo_failure(state, si, f, ierr_fo, fo_owner, &
-                        budget, used, ierr, t_frac)) exit
-                    call finish_fo_error(ierr_fo, used, state%dt_std, ierr, t_frac)
-                    exit
-                end if
-                if (.not. fo_exited .or. &
-                    budget <= budget_eps*state%dt_std) exit
-                h_try = budget
-                cycle
-            end if
-            ! The only remaining landed boundary is the physical outer edge.
             used = used + h_land
             call update_landing_stats(resid)
-            ierr = SYMPL_SPECTRE_LOSS
-            t_frac = used/state%dt_std
-            exit
+            if (state%mvol == 1) then
+                ! The separate single-volume GC model retains its GC edge.
+                ierr = SYMPL_SPECTRE_LOSS
+                t_frac = used/state%dt_std
+                exit
+            end if
+            ! A multi-volume hybrid resolves both sheets and its absorbing
+            ! particle boundary in FO if a GC step missed the proximity band.
+            budget = state%dt_std - used
+            call fo_exit_distance(state, y_iface, exit_rho)
+            call start_fo(state, si, f, y_iface, nint(state%home_hi), iface, &
+                budget, used, y_out, fo_owner, fo_exited, ierr_fo, exit_rho)
+            if (ierr_fo /= SPECTRE_FO_OK) then
+                if (recover_fo_failure(state, si, f, ierr_fo, fo_owner, &
+                    budget, used, ierr, t_frac)) exit
+                call finish_fo_error(ierr_fo, used, state%dt_std, ierr, t_frac)
+                exit
+            end if
+            if (.not. fo_exited .or. budget <= budget_eps*state%dt_std) exit
+            h_try = budget
+            cycle
 
         end do
 
@@ -553,6 +549,7 @@ contains
         iface = 0
         exit_rho = 0.0_dp
         call integrator_state(si, f, y)
+        if (state%mvol == 1) return
         k = nint(y(1))
         if (k < 1 .or. k > state%mvol) return
         call spectre_fo_radial_larmor(y, nint(state%home_hi), ro0/sqrt2, rho_r, &
