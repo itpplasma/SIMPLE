@@ -40,6 +40,7 @@ Inclusive shares of marker-loop time:
    produced coefficient copies that gfortran emitted as library `memmove`
    calls. The new kernel uses fixed degree and register recurrences and is
    bitwise identical to the general kernel with FMA contraction off.
+   Submitted as [libneo #427](https://github.com/itpplasma/libneo/pull/427).
 
 ## Results (256 markers, 2 ms)
 
@@ -59,5 +60,16 @@ alone gives 1.57x (FO) and 1.44x (hybrid); the kernel then adds 3.5x and 3.0x.
 
 Against production Boozer GC (19.7 core-s per particle-s, `../boozer-cost/`)
 the NCSX hybrid is now about 33x and FO everywhere about 116x.
+
+## Boozer GC
+
+A Boozer GC profile (production default) showed 27.5% in the generic-degree
+single-quantity `der2` kernel although libneo has a quintic `nq1_o555`
+kernel, and about 19% in heap allocation and copies from the single-point 1D
+`der2`/`der3` wrappers. libneo #427 routes both to direct paths. With 2,560
+markers and 2 ms, Boozer GC goes from 19.7 to 16.7 core-s per particle-s
+(1.18x; midpoint with `npoiper2=1024`: 142.8 to 124.5, 1.15x). `times_lost.dat`
+and `confined_fraction.dat` are byte-identical. Against the faster Boozer
+baseline the NCSX hybrid is about 39x and FO everywhere about 137x.
 `summary_fast_fo.json` and `summary_g3_fo.json` hold the cases; the G3V3L3Fi
 FO reference timing predates both changes.
