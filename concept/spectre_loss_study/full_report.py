@@ -12,6 +12,8 @@ import numpy as np
 parser = argparse.ArgumentParser(__doc__)
 parser.add_argument("input", type=Path)
 parser.add_argument("output", type=Path)
+parser.add_argument("--particle-boundary", action="store_true",
+                    help="Hybrid cases include the outer-boundary FO repair")
 args = parser.parse_args()
 args.output.mkdir(parents=True, exist_ok=True)
 cases, arrays = {}, {}
@@ -41,6 +43,8 @@ for field in ["ncsx", "g3v3"]:
         if any(case[k] for k in ["numerical_stops", "fo_failures", "warning_hold_count"]):
             raise RuntimeError(f"Unresolved physical control: {name}")
         cases[name] = case
+particle_boundary = args.particle_boundary or bool(
+    retained and retained.get("particle_boundary", False))
 comparisons = {}
 for field in ["ncsx", "g3v3"]:
     reference = arrays[field + "_fo_fine_markers"]
@@ -57,11 +61,13 @@ for field in ["ncsx", "g3v3"]:
                 markers["time_s"][both] - reference["time_s"][both]))) if both.any() else None),
             zero_mismatch_95_percent_upper_bound=(1 - 0.05**(1/len(markers))
                                                   if not difference.any() else None))
-summary = dict(cases=cases, comparisons=comparisons,
+boundary_scope = ("FO entry resolves the particle absorbing outer edge in the hybrid."
+                  if particle_boundary else "FO stops at the particle edge; GC "
+                  "segments use the guiding-centre edge convention.")
+summary = dict(cases=cases, comparisons=comparisons, particle_boundary=particle_boundary,
                scope="Current hybrid controls, not a phase-consistent or symplectic proof; "
                      "volume-sampled GC starts with 0.1 <= rho <= Mvol-0.05 and the "
-                     "deterministic production entry phase. FO stops at the particle "
-                     "edge; GC segments use the guiding-centre edge convention.")
+                     "deterministic production entry phase. " + boundary_scope)
 (args.output / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
 np.savez_compressed(args.output / "traces.npz", **arrays)
 plt.rcParams.update({"font.size": 11, "axes.spines.top": False,
@@ -94,7 +100,9 @@ for ax, field in zip(axes, ["ncsx", "g3v3"]):
     ax.legend(fontsize=8)
 first = next(iter(cases.values()))
 fig.suptitle(f"3.5 keV · {first['markers']} matched volume-sampled GC starts\n"
-             "Current switch and entry phase; GC-centre / FO-particle edge conventions",
+             + ("Current switch and entry phase; particle absorbing outer edge"
+                if particle_boundary else
+                "Current switch and entry phase; GC-centre / FO-particle edge conventions"),
              fontsize=12)
 fig.savefig(args.output / "losses.png")
 plt.close(fig)
