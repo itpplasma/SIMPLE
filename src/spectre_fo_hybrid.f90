@@ -70,6 +70,7 @@ contains
         integer, intent(out) :: status
         real(dp) :: x_gc(3), b(3), e1(3), e2(3), eperp(3), e_zeta(3)
         real(dp) :: acov(3), bmod, vpar, vperp, target, alpha
+        integer :: locate_status
         state = spectre_fo_state_t()
         if (ro0_bar <= 0.0_dp .or. y(4) <= 0.0_dp) then
             status = SPECTRE_FO_INVALID_STATE
@@ -98,8 +99,16 @@ contains
         eperp = cos(alpha)*e1 + sin(alpha)*e2
         state%v = vpar*b + vperp*eperp
         state%x = x_gc + (ro0_bar/bmod)*cross(b, vperp*eperp)
-        call locate_cart(state%x, state%u, state%owner, status)
-        if (status /= SPECTRE_FO_OK) return
+        call spectre_fo_field_locate(state%x, state%u, state%owner, locate_status)
+        if (locate_status /= 0) then
+            status = SPECTRE_FO_LOCATE_FAIL
+            if (locate_status == 1 .and. &
+                state%u(1) > real(spectre_field%data%Mvol, dp)) then
+                state%active = .true.
+                status = SPECTRE_FO_LOSS
+            end if
+            return
+        end if
         if (axisymmetric()) then
             call phase_residual(alpha, x_gc, y(1:3), owner, b, e1, e2, vpar, &
                 vperp, target, ro0_bar, state%entry_pzeta_defect, status)
