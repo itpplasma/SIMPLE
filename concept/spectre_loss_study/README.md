@@ -10,7 +10,8 @@ the most recent reconstructed GC pitch, not instantaneous particle pitch.
 The FO reference explicitly enters every marker before stepping and disables
 return to GC with a large exit distance. Enlarging the interface-entry distance
 alone is insufficient: the production proximity screen excludes points whose
-nearest integer is the magnetic axis or the outer edge.
+nearest integer is the magnetic axis. Before the outer-loss repair it also
+excluded the outer edge, giving the hybrid a GC-centre absorber there.
 
 From a configured native checkout:
 
@@ -45,3 +46,23 @@ paired controls. `full.py` then measures 256-marker, 2 ms volume controls on bot
 fields; `full_report.py INPUT OUTPUT` retains data and plots, and also replots a
 retained results directory. These use the current entry phase and boundary
 conventions, not a completed phase-consistent hybrid model.
+
+## Targeted loss controls
+
+The outer-loss repair resolves particle-wall events with the existing FO
+entry/exit distances. `results/full-gc-fixed/` retains the earlier GC-edge
+snapshot; the subsequent particle-edge replay is separate. The initial five
+G3V3L3Fi disagreements are markers 62, 124, 126, 129 and 247. Subset starts
+must be renumbered consecutively for the driver; retain their original IDs
+in the report.
+
+Research controls accept `--samples` for denser diagnostics, `--npoiper2` for
+GC step refinement, and `--construction-tolerance` for the existing Meiss ODE
+tolerance. `--duration .002125 --macrosteps 68` extends the original 2 ms /
+64-macrostep case while keeping its microstep exactly unchanged. `--phase`
+rotates the initial perpendicular velocity and Larmor offset together around
+the launch field, preserving the prescribed GC start and speed. FO mode with
+`--sampling phase` applies offsets `phase + 2*pi*(marker-1)/markers`; repeat
+the same GC start across markers for a launch-phase sweep. These are research
+driver controls, not new production namelist settings or a phase-preserving
+hybrid. Do not use them to tune the hybrid until a loss count matches.

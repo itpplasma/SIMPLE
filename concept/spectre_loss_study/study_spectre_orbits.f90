@@ -14,6 +14,8 @@ program study_spectre_orbits
     use field_can_spectre, only: spectre_mvol, set_spectre_volume_lock
     use parmot_mod, only: ro0
     use spectre_fo_hybrid, only: spectre_fo_enter, SPECTRE_FO_OK
+    use spectre_fo_field, only: spectre_fo_field_local, spectre_fo_field_locate, &
+        spectre_fo_local_t
     use orbit_symplectic_base, only: symplectic_integrator_t
     use spectre_sympl_orbit, only: sympl_spectre_state_t, sympl_spectre_reset, &
         orbit_microstep_sympl_spectre, sympl_landing_stats_reset, sympl_fo_stats, &
@@ -27,6 +29,7 @@ program study_spectre_orbits
     real(dp), allocatable :: starts(:, :), records(:, :, :), result(:, :)
     integer, allocatable :: samples(:)
     real(dp) :: setup0, setup_s, trace0, trace_s, dt, begin_marker, elapsed
+    real(dp) :: phase_offset
     real(dp) :: y(5), z(5), fraction, worst_shell, bmag, a(3), hc(3)
     real(dp) :: g(3, 3), gi(3, 3), jac, radial_larmor, u(3)
     type(symplectic_integrator_t) :: si
@@ -34,6 +37,7 @@ program study_spectre_orbits
     type(sympl_spectre_state_t) :: state
     integer :: status, m, k, nsteps, stride, capacity, rec, unit, j, nfail
     integer :: entries, exits, losses, failures, counts(5), terminal, iface, side
+    integer :: requested_samples
 
     call get_command_argument(1, fixture)
     call get_environment_variable('SIMPLE_SPECTRE_STUDY_INPUT', config_file)
@@ -41,6 +45,12 @@ program study_spectre_orbits
     call get_environment_variable('SIMPLE_SPECTRE_STUDY_STARTS', starts_file)
     call get_environment_variable('SIMPLE_SPECTRE_STUDY_SAMPLING', sampling)
     call get_environment_variable('SIMPLE_SPECTRE_STUDY_MODE', study_mode)
+    phase_offset = 0.0_dp
+    requested_samples = 65
+    call get_environment_variable('SIMPLE_SPECTRE_STUDY_PHASE', message)
+    if (len_trim(message) > 0) read (message, *) phase_offset
+    call get_environment_variable('SIMPLE_SPECTRE_STUDY_SAMPLES', message)
+    if (len_trim(message) > 0) read (message, *) requested_samples
     call get_environment_variable('OMP_NUM_THREADS', message)
     if (len_trim(message) == 0) call omp_set_num_threads(8)
     if (len_trim(prefix) == 0) prefix = 'study'
@@ -105,7 +115,7 @@ program study_spectre_orbits
     close (unit)
     dt = dtaumin/v0
     nsteps = nint(trace_time/dt)
-    stride = max(1, ceiling(real(nsteps, dp)/64))
+    stride = max(1, ceiling(real(nsteps, dp)/max(1, requested_samples - 1)))
     capacity = nsteps/stride + 3
     allocate (records(12, capacity, ntestpart), result(7, ntestpart))
     allocate (samples(ntestpart))
@@ -129,6 +139,12 @@ program study_spectre_orbits
                 min(spectre_mvol, int(y(1)) + 1), nint(y(1)), &
                 ro0/sqrt2, status)
             if (status /= SPECTRE_FO_OK) error stop 'FO reference launch'
+            if (trim(sampling) == 'phase') then
+                call rotate_launch(state, y, phase_offset + &
+                    twopi*real(m - 1, dp)/real(ntestpart, dp))
+            else if (phase_offset /= 0.0_dp) then
+                call rotate_launch(state, y, phase_offset)
+            end if
             state%fo%exit_rho = 1.0e6_dp
         end if
         rec = 1
@@ -209,6 +225,36 @@ program study_spectre_orbits
         error stop 'study contains unresolved intervals'
 
 contains
+
+    subroutine rotate_launch(st, y_gc, phase)
+        ! Research-only gyrophase control at the same prescribed GC start.
+        ! Rotate v_perp around B and apply the same leading-order Larmor map
+        ! as production entry; the orbit integrator itself is unchanged.
+        type(sympl_spectre_state_t), intent(inout) :: st
+        real(dp), intent(in) :: y_gc(5), phase
+        type(spectre_fo_local_t) :: loc
+        real(dp) :: vp(3), rotated(3), bxv(3), parallel
+        integer :: ierr
+
+        call spectre_fo_field_local(y_gc(1:3), st%fo%entry_owner, loc)
+        parallel = dot_product(st%fo%v, loc%b)
+        vp = st%fo%v - parallel*loc%b
+        bxv = cross_product(loc%b, vp)
+        rotated = cos(phase)*vp + sin(phase)*bxv
+        st%fo%v = parallel*loc%b + rotated
+        st%fo%x = loc%x + ro0/sqrt2/loc%bmod*cross_product(loc%b, rotated)
+        st%fo%u = y_gc(1:3)
+        st%fo%owner = st%fo%entry_owner
+        call spectre_fo_field_locate(st%fo%x, st%fo%u, st%fo%owner, ierr)
+        if (ierr /= 0) error stop 'phase-control launch outside field'
+    end subroutine rotate_launch
+
+    pure function cross_product(a, b) result(c)
+        real(dp), intent(in) :: a(3), b(3)
+        real(dp) :: c(3)
+        c = [a(2)*b(3) - a(3)*b(2), a(3)*b(1) - a(1)*b(3), &
+            a(1)*b(2) - a(2)*b(1)]
+    end function cross_product
 
     subroutine sample_state(st, integrator, f, time, row)
         type(sympl_spectre_state_t), intent(in) :: st
