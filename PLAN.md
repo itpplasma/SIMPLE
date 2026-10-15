@@ -1,6 +1,6 @@
 # SPECTRE orbit programme: recovered status and plan
 
-Updated 2026-10-14. Active study: `research/spectre-loss-study-20261014`.
+Updated 2026-10-15. Active study: `research/spectre-loss-study-20261014`.
 Recovery branch: `recovery/spectre-session-20261014`.
 Production baseline: `origin/main` at `fe002a3`, including cleanup PR #533.
 Measurement baseline remains pinned to this revision even if main advances.
@@ -9,7 +9,66 @@ Opus and nested derivation workers. It records unfinished research rather
 than claiming the scientific programme is complete. No previous worker is
 running or being resumed by this recovery.
 
-## Current measured checkpoint
+## Latest loss diagnosis and branch status, 2026-10-15
+
+The 48-versus-53 G3V3L3Fi comparison exposed a real boundary inconsistency:
+the multi-volume hybrid excluded the outer edge from FO entry and absorbed
+the guiding centre, while the reference absorbed the particle. The repair
+uses the existing FO entry/exit distances at the outer edge and recovers
+markers 62, 124, 126 and 247. Both default and refined hybrid grids now lose
+**52/256**, with identical statuses and zero stops, FO failures or holds.
+The old multi-volume GC-only absorber is removed and recorded as ledger F8;
+no new production setting selects it. The separate single-volume GC boundary
+contract is preserved, with its original tests and thresholds unchanged.
+
+Marker 129 remains a switch-model discrepancy, not an accepted physical
+difference. Sixteen FO launch phases at its fixed GC start span loss times
+1.910–2.055 ms across the 2 ms cutoff. Default/finer hybrid fields and tighter
+Meiss construction retain survival through 2.125 ms. Hybrid microstep controls
+also retain survival but do not establish trajectory convergence. Changing
+the entry distance changes its outcome; FO throughout the hybrid pipeline
+reproduces the same-grid phase-zero reference to about 1e-16 s in loss time.
+Do not tune the entry distance to manufacture 53 losses. Coherent action/phase
+transport and joint step/entry-distance controls remain scientific work.
+
+| Latest model, 256 markers / 2 ms | Losses | Differences from refined FO | Trace / end-to-end [s] |
+| --- | ---: | ---: | ---: |
+| NCSX repaired hybrid | 97 | 8 | 238.37 / 258.19 |
+| NCSX refined FO | 99 | reference | 440.55 / 458.70 |
+| G3V3L3Fi repaired hybrid | 52 | 1 | 52.65 / 67.09 |
+| G3V3L3Fi refined FO | 53 | reference | 109.02 / 128.60 |
+
+NCSX changes only marker 50 from loss to survival versus its previous hybrid
+(98 losses). Its eight disagreements remain open. Both replays have zero
+health flags; these shared-host accuracy timings overlap local checks/builds
+and do not replace the controlled 5.8–7.4x tracing comparison below.
+The four unchanged FO references retain their own source provenance.
+
+The scientific report and plots are in
+[`concept/spectre_loss_study/RND.md`](concept/spectre_loss_study/RND.md).
+New retained data are `results/loss-diagnosis/` and `results/full-wall-fixed/`
+under that study. Earlier snapshots remain intact. Both reports replot from
+retained data with identical numeric records and metadata.
+
+Production repair `535bc9e`, scope correction `5e88fe5` and ledger `c957615`
+are integrated here. The focused wall branch is
+`fix/spectre-particle-edge-loss`, based on performance PR #534. Its independent
+review scope excludes the GC source fix and recovered concepts. The integrated
+affected sweep passed 24/25 checks; the sole failure caught the unintended
+single-volume behavior change. After the scope correction, that unchanged test
+and both wall regressions pass, 3/3; the other 22 results are reused. The isolated
+wall branch passes nine native checks plus its three-case scope rerun. Restoring
+the old outer exclusion makes both wall regressions fail. No obsolete-parameter
+rejection tests, acceptance relaxations or compatibility settings were added.
+
+Remaining order: required review/promotion of the focused production PRs;
+coherent action/phase model and switch integration; joint physical convergence
+and the full loss matrix; whole-implementation energy/symplectic obligations.
+The larger research programme remains open. CI is not awaited, and no protected
+host was used. R&D publication outside the repository needs the destination:
+the connected Zulip has no `rnd` stream or existing SPECTRE thread.
+
+## Pre-wall-repair measurement checkpoint (retained)
 
 The repaired 24-case controls are complete: 32 matched markers, 200 us,
 16 local threads, NCSX/G3V3L3Fi, sheet/volume starts, FO/current hybrid,
@@ -593,10 +652,9 @@ for the actual next revision; do not infer closure from a worker's last message.
 - Production source repairs remain isolated in PR #535 (`6970eff`, T3); the
   field-performance change is PR #534 (`47d3fb0`, T4). Both have complete local
   evidence and no reviews as of this checkpoint. Main is still `fe002a3`.
-- Main promotion is awaiting Chris's response to the required review decision.
-  `docs/review-policy.md` specifies domain review for T3 and senior review for
-  T4. CI is not awaited. No further main-dependent production integration is
-  promoted while that decision is pending.
+- Main promotion requires domain review for T3 and senior review for T4 under
+  `docs/review-policy.md`. The focused branches are prepared for that review;
+  no merge approval is inferred from a passing local check. CI is not awaited.
 - The original add/remove cleanup history remains on main. The consolidated
   research branch contains the recovered work and new results, while the
   separate audit/switch branches retain their provenance. Cluster jobs were

@@ -51,7 +51,8 @@ conventions, not a completed phase-consistent hybrid model.
 
 The outer-loss repair resolves particle-wall events with the existing FO
 entry/exit distances. `results/full-gc-fixed/` retains the earlier GC-edge
-snapshot; the subsequent particle-edge replay is separate. The initial five
+snapshot; `results/full-wall-fixed/` retains the particle-edge replay.
+The diagnosis and current plot links are in [RND.md](RND.md). The initial five
 G3V3L3Fi disagreements are markers 62, 124, 126, 129 and 247. Subset starts
 must be renumbered consecutively for the driver; retain their original IDs
 in the report.
