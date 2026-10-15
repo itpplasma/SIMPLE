@@ -142,6 +142,18 @@ foreach(threads IN ITEMS 1 4)
         TIMEOUT 120)
 endforeach()
 
+add_executable(study_spectre_orbits.x
+    ${CMAKE_SOURCE_DIR}/concept/spectre_loss_study/study_spectre_orbits.f90)
+target_link_libraries(study_spectre_orbits.x simple)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_study)
+add_test(NAME study_spectre_orbits
+    COMMAND $<TARGET_FILE:study_spectre_orbits.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/../data/ncsx_freeboundary.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_study)
+set_tests_properties(study_spectre_orbits PROPERTIES
+    LABELS "performance;research"
+    RUN_SERIAL TRUE TIMEOUT 7200)
+
 add_executable(test_spectre_fo_spline.x test_spectre_fo_spline.f90)
 target_link_libraries(test_spectre_fo_spline.x simple)
 foreach(fixture IN ITEMS tok2vol ncsx_freeboundary)
@@ -161,6 +173,21 @@ add_test(NAME test_spectre_fo_spline_g3v3
 set_tests_properties(test_spectre_fo_spline_g3v3 PROPERTIES
     LABELS "integration" ENVIRONMENT "OMP_NUM_THREADS=4"
     RUN_SERIAL TRUE TIMEOUT 120)
+
+# Diagnostic: zeroth-order GC -> FO -> GC switch round trip at NCSX interface
+# points, without an FO step and over the exit gyrophase of a short full orbit;
+# records d(mu)/mu, d(v_par), d(x_gc) and their gyroradius scaling. Asserts
+# only completion and finite defects.
+add_executable(test_spectre_switch_roundtrip.x test_spectre_switch_roundtrip.f90)
+target_link_libraries(test_spectre_switch_roundtrip.x simple)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_switch_roundtrip)
+add_test(NAME test_spectre_switch_roundtrip
+    COMMAND $<TARGET_FILE:test_spectre_switch_roundtrip.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/../data/ncsx_freeboundary.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_switch_roundtrip)
+set_tests_properties(test_spectre_switch_roundtrip PROPERTIES
+    LABELS "integration"
+    TIMEOUT 300)
 
 # Analytic magfie_spectre drift derivatives (bder, hcurl) must equal the central-
 # difference algorithm they replaced to the FD truncation floor, at interior
@@ -183,3 +210,15 @@ add_test(NAME test_magfie_spectre_analytic_stell
 set_tests_properties(test_magfie_spectre_analytic_stell PROPERTIES
     LABELS "integration"
     TIMEOUT 120)
+
+add_executable(test_spectre_fo_gauss2.x test_spectre_fo_gauss2.f90)
+target_link_libraries(test_spectre_fo_gauss2.x PRIVATE fo_gauss2_concept)
+add_test(NAME test_spectre_fo_gauss2 COMMAND test_spectre_fo_gauss2.x
+    ${CMAKE_SOURCE_DIR}/test/tests/data/tok2vol.h5 field)
+set_tests_properties(test_spectre_fo_gauss2 PROPERTIES LABELS "integration" TIMEOUT 120)
+# A non-exact interface gauge jump must be rejected during configuration.
+add_test(NAME test_spectre_fo_gauss2_incompatible_gauge COMMAND test_spectre_fo_gauss2.x
+    ${CMAKE_SOURCE_DIR}/test/tests/data/tok2vol.h5 incompatible)
+set_tests_properties(test_spectre_fo_gauss2_incompatible_gauge PROPERTIES
+    LABELS "unit" TIMEOUT 60
+    PASS_REGULAR_EXPRESSION "interface normal fields disagree")

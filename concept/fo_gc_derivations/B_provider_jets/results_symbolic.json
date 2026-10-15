@@ -1,0 +1,24 @@
+{
+  "suite": "L1 provider-jet identities",
+  "total": 1149,
+  "proved_exact": 1149,
+  "by_probe": 0,
+  "failed": 0,
+  "sections": {
+    "spline_horner_symbolic_degree": 7,
+    "spline_der2_nq1_general_all_orders": 270,
+    "spline_der3_basis_all_orders": 557,
+    "spline_affine_chain_and_slots": 9,
+    "gram_cartesian_embedding": 54,
+    "gram_cylindrical_3ddc30b": 129,
+    "blend_potential_3ddc30b": 13,
+    "blend_embedding_leibniz_3ddc30b": 4,
+    "blend_metric_convexity": 1,
+    "switch_der_3ddc30b": 15,
+    "gauge_projection_3ddc30b": 4,
+    "spectral_radial_recurrences_libneo": 44,
+    "spectral_fourier_modes_libneo": 10,
+    "spectral_volume_chain_3ddc30b": 12,
+    "spectral_geometry_fourier_3ddc30b": 20
+  }
+}

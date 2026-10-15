@@ -687,6 +687,10 @@ storage including this table is about 1.34 GiB. Reinitialization also releases
 the axis table.
 Spline-grid convergence is required alongside time-integration convergence;
 see [the interface description](spectre-interface-crossing.md).
+The switch round-trip diagnostic constructs its phase sweep from this same
+owning-volume interpolant. Its strict entry identity measures switch
+consistency; independent raw-field comparisons remain in the spline-field
+tests, rather than counting interpolation differences as switch defects.
 
 **Detection and loading**. `field_input` is detected as SPECTRE by a `.h5`
 extension or the HDF5 magic bytes (`field.is_spectre_file`), and loaded through
