@@ -69,6 +69,8 @@ module spectre_sympl_orbit
         integer :: mode = 0
         integer :: level = 3
         real(dp) :: dt_std = 0.0_dp
+        !> Accepted FO clock, in the same units as dt_std; study diagnostic.
+        real(dp) :: fo_elapsed = 0.0_dp
         !> An exhausted warning-mode recovery holds one unresolved interval.
         !> The next microstep retries guiding-centre advancement from the last
         !> valid state. A later identical failure consumes one unresolved
@@ -627,6 +629,7 @@ contains
 
         call spectre_fo_advance_until_exit(state%fo, budget, ro0/sqrt2, &
             dt_used, y_out, owner_out, exited, ierr)
+        state%fo_elapsed = state%fo_elapsed + dt_used
         used = used + dt_used
         budget = state%dt_std - used
         if (ierr /= SPECTRE_FO_OK) then
