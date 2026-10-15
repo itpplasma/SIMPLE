@@ -421,7 +421,8 @@ selectable methods. F1–F5 are formulation/domain failures or measured failures
 of the named implementation. F6 is retirement from the requested symplectic
 target; it is not a claim that every Boris calculation is wrong. F7 records a
 numerical chart failure in the later performance candidate, not a rejection of
-full-orbit physics.
+full-orbit physics. F8 records an inconsistent absorbing boundary in the
+multi-volume hybrid.
 
 | ID | Failed contract and decisive evidence | Removed implementation/settings |
 | --- | --- | --- |
@@ -448,6 +449,29 @@ pole-seeded inverse passes. A replay of marker 31 has one FO entry/exit and
 zero holds/failures. The retained initial condition and failure counters are
 in `concept/spectre_loss_study/results/axis-failure.json` on the study branch.
 Larger ensemble reruns and the existing invariant/event checks still apply.
+
+F8: the multi-volume hybrid excluded `rho_g = Mvol` from FO proximity entry
+and otherwise absorbed its guiding centre there. The FO reference absorbs the
+particle, which can reach that same surface while its centre remains inside.
+The matched 256-marker, 2 ms G3V3L3Fi replay lost 48 hybrid versus 53 FO markers.
+Entering FO at the outer edge with the existing entry/exit distances recovers
+markers 62, 124, 126 and 247, giving 52 losses on both default and refined
+grids, with zero numerical stops, FO failures or warning holds. The old
+multi-volume GC-only absorber is removed, without a compatibility setting.
+The single-volume GC model retains its separate GC-edge contract.
+An independent direct-FO wall witness has an interior guiding centre at the
+particle's terminal event; raw boundary geometry also verifies immediate
+loss for exterior launch particles. Both regressions fail with the old outer
+exclusion and pass after repair. Source history retains the previous path.
+
+The remaining marker 129 is not accepted as a physical hybrid/FO difference.
+FO launch phases span loss times 1.910–2.055 ms across the 2 ms cutoff.
+Field-grid and construction refinement do not remove its discrepancy;
+GC-step controls do not establish trajectory convergence. Keeping FO active
+throughout the hybrid pipeline recovers the reference loss time to about
+1e-16 s. This supports the existing F2 switch/phase limitation and does not
+justify tuning the entry distance until counts agree. Retained evidence is
+`concept/spectre_loss_study/results/loss-diagnosis/` on the research branch.
 
 Current comparison executables accept only FO, C3 (phase-carrying concept), and
 GL2 (resolved smooth-layer control). The retired candidate dispatches and their settings are absent; no compatibility
