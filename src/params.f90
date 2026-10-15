@@ -182,6 +182,8 @@ module params
     !> and the relative tolerance of RK45 on the sharp per-volume field.
     real(dp) :: spectre_fo_entry_larmor = 3.0_dp
     real(dp) :: spectre_fo_tolerance = 1.0e-9_dp
+    !> Per-volume FO spline points: rho, theta, zeta per field period.
+    integer :: spectre_fo_grid(3) = (/32, 64, 32/)
     logical :: spectre_sbeg_is_toroidal_flux = .false.
 
     !> SPECTRE per-volume Meiss construction grid (n_r, n_th, n_phi). Each volume
@@ -227,7 +229,7 @@ module params
         densi1, densi2, tempi1, tempi2, tempe, &
         batch_size, ran_seed, reuse_batch, field_input, coord_input, &
         wall_input, wall_units, chart_boundary_kind, integ_coords, crossing_level, &
-        spectre_fo_entry_larmor, spectre_fo_tolerance, &
+        spectre_fo_entry_larmor, spectre_fo_tolerance, spectre_fo_grid, &
         spectre_sbeg_is_toroidal_flux, spectre_ncon_r, spectre_ncon_th, &
         spectre_ncon_phi, spectre_ncon_order, spectre_ncon_ode_max_steps, &
         spectre_ncon_ode_relerr, &

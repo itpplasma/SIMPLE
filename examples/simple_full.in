@@ -147,6 +147,7 @@ crossing_level = 3               ! full orbit near interfaces (integmode > 0);
 spectre_fo_entry_larmor = 3d0    ! crossing_level 3: enter full orbit closer than
 !                                  this many radial gyroradii to an interface
 spectre_fo_tolerance = 1d-9      ! relative tolerance of the 'rk45' full orbit
+spectre_fo_grid = 32, 64, 32     ! per-volume FO spline points: rho, theta, zeta
 spectre_sbeg_is_toroidal_flux = .false. ! startmode 1: .true. reads sbeg(1) as normalized
 !                                  toroidal flux, .false. as rho_g
 spectre_ncon_r = 48              ! per-volume Meiss construction grid, radial (integmode > 0)

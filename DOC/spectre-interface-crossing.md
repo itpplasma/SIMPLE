@@ -27,8 +27,36 @@ intermediate volume. The remaining time is integrated in the new owner.
 Starts on a sheet use the outgoing normal velocity; a later return is
 bracketed at positive time. Repeated grazing reduces/retries and eventually
 reports `SPECTRE_FO_STEP_LIMIT`, rather than committing an unlocalized step.
-The Cartesian radial residual refines near-sheet inverse coordinates that
-would otherwise snap both bracket ends onto the sheet.
+Away from the polar axis, RK45 advances logical position and Cartesian velocity.
+The sheet is directly `rho_g = integer`, so stages and landing trials require no
+Cartesian-to-logical coordinate inversion. Within `rho_g < 0.05` in volume 1,
+Cartesian position provides a regular axis chart; this recovery region still
+uses spline coordinate inversions. Its provider uses a regular xi/eta chart
+with a nonsingular geometry Jacobian, including at the axis. Polar spline
+derivatives divided by a vanishing Jacobian are not used for the axis field.
+
+`spectre_fo_field` constructs a separate quintic spline of R, Z, A_theta and
+A_zeta for each volume. The embedding derivatives give the basis and its dual;
+derivatives of A give B with libneo's Jacobian convention. Shared sheet geometry
+uses the same interface samples, while A retains the two one-sided volume
+gauges. Raw spectral geometry and field evaluation occur during construction,
+not during FO integration. The grid is `spectre_fo_grid = 32,64,32` points in
+rho per volume, theta and zeta per field period; axisymmetric fields use seven
+identical toroidal planes. This interpolates the equilibrium: reducing the RK
+tolerance does not remove field interpolation error. Refine this grid as well
+as the RK tolerance for loss convergence.
+
+The additional first-volume axis table holds R, Z, A_xi, A_eta and A_zeta.
+Its geometry and potential jets join the polar representation over
+`0.05 < rho_g < 0.1`, before constructing B. This joins two numerical
+representations of the same smooth volume; the physical sheets remain sharp.
+Both construction and coordinate recovery use the existing grid controls.
+
+GC reconstruction retains its nonlinear coordinate solve, now using only the
+spline geometry and a local displacement prediction. Particle and GC field
+samples are reused in the existing exit test. The switch transform and exit
+criteria are unchanged; no whole-hybrid symplectic claim follows from this
+performance change.
 
 RK45 also caps each trial at `h |B| / ro0_bar <= 0.1` rad, about 1/63 of a
 gyro-period. This cap is rechecked against each trial's initial field, including
