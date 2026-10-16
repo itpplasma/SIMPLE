@@ -2064,6 +2064,66 @@ end subroutine advance_symplectic_with_boundary
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
+subroutine reconstruct_gauss_endpoint(si, f, status)
+  ! The Gauss update advances (theta, phi, p_theta, p_phi). Its last
+  ! collocation radius and field cache are not the physical endpoint.
+  ! Invert p_theta(r, theta_end, phi_end, p_phi_end) at fixed updated
+  ! canonical momenta, then refresh endpoint values and first derivatives. Second derivatives
+  ! are refreshed by the next Newton evaluation, as for the existing steppers.
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
+  integer, intent(out) :: status
+  type(field_can_t) :: endpoint_field
+  integer, parameter :: max_iterations = 32
+  real(dp) :: target_pth, radius, residual, slope, correction, next_radius
+  real(dp) :: radial_tolerance
+  integer :: iteration
+
+  target_pth = f%pth
+  radius = si%z(1)
+  ! Absolute tolerance in the normalized radial chart (Gauss tolref(1)=1).
+  radial_tolerance = max(si%atol, si%rtol)
+  status = SYMPLECTIC_STEP_MAXITER
+  do iteration = 1, max_iterations
+    if (.not. finite_newton_iterate([radius])) return
+    if (radius < 0d0) return ! Let the established retry/axis recovery handle it.
+    if (radius > sympl_rmax) then
+      status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+      return
+    end if
+    endpoint_field = f
+    call eval_field(endpoint_field, radius, si%z(2), si%z(3), 0)
+    call get_derivatives(endpoint_field, si%z(4))
+    residual = endpoint_field%pth - target_pth
+    slope = endpoint_field%dpth(1)
+    if (.not. finite_newton_iterate([residual, slope])) return
+    if (abs(slope) <= tiny(1d0)) then
+      status = SYMPLECTIC_STEP_LINEAR_SOLVE
+      return
+    end if
+    correction = residual/slope
+    if (abs(correction) <= radial_tolerance) then
+      si%z(1) = radius
+      f = endpoint_field
+      f%pth = target_pth ! Preserve the canonical Gauss update exactly.
+      status = SYMPLECTIC_STEP_OK
+      return
+    end if
+    next_radius = radius - correction
+    if (next_radius > sympl_rmax) then
+      if (radius == sympl_rmax) then
+        status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+        return
+      end if
+      ! Test the boundary before classifying an outward Newton proposal.
+      ! A physical crossing enters the existing fractional-step event solve.
+      next_radius = sympl_rmax
+    end if
+    radius = next_radius
+  end do
+end subroutine reconstruct_gauss_endpoint
+
+
 recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
   !
   type(symplectic_integrator_t), intent(inout) :: si
@@ -2194,6 +2254,14 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
       si%z(3) = si%z(3)+si%dt*b(l)*(fs(l)%vpar-Hprime(l)*fs(l)%hth)/fs(l)%hph
       si%z(4) = si%z(4) - si%dt*b(l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))
     end do
+
+    call reconstruct_gauss_endpoint(si, f, newton_status)
+    if (newton_status /= SYMPLECTIC_STEP_OK) then
+      si = accepted_integrator
+      f = accepted_field
+      ierr = newton_status
+      return
+    end if
 
     ktau = ktau+1
   enddo
