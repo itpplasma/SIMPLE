@@ -73,3 +73,48 @@ and `confined_fraction.dat` are byte-identical. Against the faster Boozer
 baseline the NCSX hybrid is about 39x and FO everywhere about 137x.
 `summary_fast_fo.json` and `summary_g3_fo.json` hold the cases; the G3V3L3Fi
 FO reference timing predates both changes.
+
+## Other field types (VMEC NCSX, 201 surfaces)
+
+`test/test_data/wout_ncsx.nc`, 3.5 keV alphas, 2,560 markers, 10 ms, production
+defaults (Euler1, `npoiper2=256`), sampled for 12 s during tracing. Inclusive
+shares of `trace_orbit`:
+
+| Field | Wall [s] | RK recoveries | Symplectic steps | RK recovery | Spline evaluation |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Canonical flux (0) | 71 | 7,349 | 83% | 9% | 70% |
+| Boozer (2) | 47 | 552 | 90% | 1% | 59% |
+| Meiss (3) | 147 | 57,491 | 19% | 75% | 76% |
+| Albert (4) | 109 | 36,918 | 6% | 79% | 62% |
+
+Meiss and Albert spend three quarters of their tracing time in the RK45
+recovery that follows failed symplectic steps (`orbit_timestep_recovery`),
+about 100x more recoveries than Boozer. On the 16-surface
+`wout_li383_low_res_reference.nc` the counts are higher still (163,061 and
+144,691 for 2,560 markers and 20 ms). This is the largest remaining cost for
+these coordinates and is not a spline problem; its cause is open.
+
+Spline kernels: canonical flux and Boozer use the quintic single-quantity
+`der2` kernel, Meiss and Albert the new quintic first-derivative kernel.
+
+## gfortran IEEE save/restore
+
+Every profile also showed `_gfortran_ieee_procedure_entry`/`_exit` with
+`get/set_fpu_except_flags` (4% Boozer to 17% Albert of samples). gfortran
+adds this save/restore to each procedure that accesses an IEEE intrinsic
+module, including through a procedure-local `USE` of any module whose
+dependencies import one at module scope (minimal reproduction: a procedure
+with `use m, only: helper`, where `m` imports `ieee_arithmetic`). Module-scope
+`USE` does not trigger it. Through fortio, libneo's `boozer_chartmap_io` and
+SIMPLE's own modules, 96 modules carried an IEEE import, and `velo_can`,
+`eval_field_can`, `validate_rk_state` and `integ_to_ref_albert` paid it on
+every call.
+
+SIMPLE now uses `finite_check` (`is_finite` by exponent bits, `quiet_nan`)
+instead of the IEEE module; fortio#75 and libneo#428 move their imports into
+the procedures that need them. Afterwards no tracing procedure carries the
+hooks. Unprofiled A/B (16-surface equilibrium, 2,560 markers, 2 ms, three runs
+each on a loaded host): Albert wall 31.4 to 27.1 s (about 1.2x in tracing),
+canonical flux, Boozer and Meiss within noise. The profiler attribution
+overstated the cost except for Albert, whose coordinate transform runs in
+the inner loop. All outputs are byte-identical.

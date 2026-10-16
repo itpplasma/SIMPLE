@@ -377,6 +377,11 @@ add_test(NAME test_config_reference
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_config_reference PROPERTIES LABELS "unit")
 
+add_executable(test_finite_check.x test_finite_check.f90)
+target_link_libraries(test_finite_check.x simple)
+add_test(NAME test_finite_check COMMAND test_finite_check.x)
+set_tests_properties(test_finite_check PROPERTIES LABELS "unit")
+
 add_executable (test_profiles.x test_profiles.f90)
 target_link_libraries(test_profiles.x simple)
 add_test(NAME test_profiles COMMAND test_profiles.x)
