@@ -2372,7 +2372,7 @@ contains
             field_period, expected_momentum, z, event_fraction, ierr, &
             reference_boundary)
         real(dp), intent(in) :: z_start(5), z_candidate(5), field_period
-        real(dp), intent(in) :: expected_momentum
+        real(dp), intent(in), optional :: expected_momentum
         real(dp), intent(inout) :: z(5)
         real(dp), intent(out) :: event_fraction
         integer, intent(inout) :: ierr
@@ -2531,9 +2531,13 @@ contains
                 if (ierr_orbit == 0) then
                     call to_standard_z_coordinates(anorb, z)
                     z_step_end = z
+                    ! z(4) is reconstructed from H, which the map conserves
+                    ! only to O(dt^order), already within one step; the RK
+                    ! momentum-drift gate does not apply to symplectic steps.
                     call validate_rk_step_or_reference_boundary(z_step_start, &
-                        z_step_end, anorb%fper, si_step_start%pabs, z, &
-                        loss_fraction, ierr_orbit, reference_boundary)
+                        z_step_end, anorb%fper, z=z, &
+                        event_fraction=loss_fraction, ierr=ierr_orbit, &
+                        reference_boundary=reference_boundary)
                     if (reference_boundary .and. ierr_orbit == 1) then
                         call integ_to_ref(z(1:3), u_event)
                         anorb%si%last_step_fraction = loss_fraction
@@ -2561,8 +2565,11 @@ contains
                     ! symplectic state. Keep this marker on RK while it remains
                     ! in the failing axis/edge region; generic failures use an
                     ! exponentially backed-off probe interval.
+                    ! Recover from the reference momentum, not the H-derived
+                    ! z(4) of the symplectic state, so that RK, validation and
+                    ! LCFS interpolation share one start state.
+                    z_step_start(4) = si_step_start%pabs
                     z = z_step_start
-                    z(4) = si_step_start%pabs
                     call orbit_timestep_recovery(anorb%fo, z, dtaumin, relerr, &
                         si_step_start%pabs, ierr_orbit, recovery_method)
                     z_step_end = z
@@ -2838,9 +2845,13 @@ contains
                 if (ierr_orbit == 0) then
                     call to_standard_z_coordinates(anorb, z)
                     z_step_end = z
+                    ! z(4) is reconstructed from H, which the map conserves
+                    ! only to O(dt^order), already within one step; the RK
+                    ! momentum-drift gate does not apply to symplectic steps.
                     call validate_rk_step_or_reference_boundary(z_step_start, &
-                        z_step_end, anorb%fper, si_step_start%pabs, z, &
-                        boundary_fraction, ierr_orbit, reference_boundary)
+                        z_step_end, anorb%fper, z=z, &
+                        event_fraction=boundary_fraction, ierr=ierr_orbit, &
+                        reference_boundary=reference_boundary)
                     if (reference_boundary .and. ierr_orbit == 1) then
                         anorb%si%last_step_fraction = boundary_fraction
                         anorb%si%last_event_fraction_width = 1.d0
@@ -2877,8 +2888,11 @@ contains
                 end if
                 if (ierr_orbit .ne. 0 .and. &
                     symplectic_newton_warning_mode) then
+                    ! Recover from the reference momentum, not the H-derived
+                    ! z(4) of the symplectic state, so that RK, validation and
+                    ! LCFS interpolation share one start state.
+                    z_step_start(4) = si_step_start%pabs
                     z = z_step_start
-                    z(4) = si_step_start%pabs
                     call orbit_timestep_recovery(anorb%fo, z, dtaumin, relerr, &
                         si_step_start%pabs, ierr_orbit, recovery_method)
                     z_step_end = z

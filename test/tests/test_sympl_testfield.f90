@@ -42,6 +42,7 @@ program test_sympl_testfield
         locate_validated_lcfs, macrostep, macrostep_with_wall_check, &
         recovery_state_has_valid_phase_space, recovery_state_is_physical, &
         rk_recovery_state_t, validate_rk_state, &
+        validate_rk_step_or_reference_boundary, &
         activate_rk_recovery, should_resume_symplectic, &
         normalized_flux_from_reference_radial, &
         should_classify_numerically_confined
@@ -107,6 +108,7 @@ program test_sympl_testfield
     call test_fo_lcfs_location
     call test_validated_rk_lcfs_location
     call test_rk_state_validation
+    call test_symplectic_step_validation
     call test_recovery_state_validation
     call test_reseed_momentum_reference
 
@@ -511,6 +513,38 @@ contains
             error stop 'invalid adaptive-RK state was committed'
         end if
     end subroutine test_rk_state_validation
+
+    subroutine test_symplectic_step_validation
+        real(dp), parameter :: z_before(5) = [0.2_dp, 0.2_dp, 0.3_dp, 1.0_dp, &
+            -0.5_dp]
+        real(dp) :: z_after(5), z(5), event_fraction
+        integer :: step_error
+        logical :: reference_boundary
+
+        ! Without a reference momentum (symplectic steps), the O(dt) energy
+        ! error of the map is accepted; impossible phase space is not.
+        z_after = [0.21_dp, 0.4_dp, 0.5_dp, 1.015_dp, -0.49_dp]
+        step_error = 0
+        call validate_rk_step_or_reference_boundary(z_before, z_after, &
+            1.0_dp, z=z, event_fraction=event_fraction, ierr=step_error, &
+            reference_boundary=reference_boundary)
+        if (step_error /= 0 .or. any(z /= z_after)) &
+            error stop 'symplectic energy error was rejected as RK drift'
+
+        step_error = 0
+        call validate_rk_step_or_reference_boundary(z_before, z_after, &
+            1.0_dp, 1.0_dp, z, event_fraction, step_error, reference_boundary)
+        if (step_error /= 2) &
+            error stop 'RK momentum drift gate no longer applies'
+
+        z_after(5) = 2.0_dp
+        step_error = 0
+        call validate_rk_step_or_reference_boundary(z_before, z_after, &
+            1.0_dp, z=z, event_fraction=event_fraction, ierr=step_error, &
+            reference_boundary=reference_boundary)
+        if (step_error /= 2 .or. any(z /= z_before)) &
+            error stop 'invalid symplectic phase space was committed'
+    end subroutine test_symplectic_step_validation
 
     subroutine test_recovery_state_validation
         real(dp) :: z(5)
