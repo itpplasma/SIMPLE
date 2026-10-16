@@ -19,6 +19,7 @@ module field_can_spectre
     use field_base, only: magnetic_field_t
     use field_spectre, only: spectre_field_t
     use field_can_base, only: field_can_t, n_field_evaluations, twopi
+    use finite_check, only: is_finite
     use field_can_meiss, only: meiss_volume_t, init_meiss, get_meiss_coordinates, &
                                harvest_meiss_volume, cleanup_meiss
     use coordinate_scaling, only: identity_scaling_t
@@ -71,16 +72,6 @@ module field_can_spectre
 
 contains
 
-    elemental logical function ieee_is_finite(value)
-        real(dp), intent(in) :: value
-
-        integer(int64), parameter :: exponent_mask = &
-            int(z'7FF0000000000000', int64)
-        integer(int64) :: bits
-
-        bits = transfer(value, bits)
-        ieee_is_finite = iand(bits, exponent_mask) /= exponent_mask
-    end function ieee_is_finite
 
     subroutine set_spectre_volume_lock(lvol)
         !> lvol > 0 pins field evaluation to that volume; 0 restores dispatch on
@@ -344,7 +335,7 @@ contains
         real(dp) :: x(3), y(2), dy(3, 2), phi, phi_next, target
         real(dp) :: residual, correction, best_phi, best_residual, denom
 
-        if (.not. all(ieee_is_finite(xref))) then
+        if (.not. all(is_finite(xref))) then
             xinteg = xref
             call count_event(EVT_SPECTRE_INVALID_STATE)
             return
@@ -363,8 +354,8 @@ contains
                  modulo(phi, twopi)]
             call evaluate_batch_splines_3d_der(spectre_volumes(lvol)%spl_transform, &
                                                x, y, dy)
-            if (.not. ieee_is_finite(y(1)) .or. &
-                .not. ieee_is_finite(dy(3, 1))) exit
+            if (.not. is_finite(y(1)) .or. &
+                .not. is_finite(dy(3, 1))) exit
             residual = modulo(phi + y(1) - target + 0.5_dp*twopi, twopi) - &
                 0.5_dp*twopi
             if (abs(residual) < best_residual) then
@@ -375,7 +366,7 @@ contains
             if (abs(denom) <= 100.0_dp*epsilon(1.0_dp)) exit
             correction = max(-0.5_dp*twopi, min(0.5_dp*twopi, residual/denom))
             phi_next = phi - correction
-            if (.not. ieee_is_finite(phi_next)) exit
+            if (.not. is_finite(phi_next)) exit
             phi = phi_next
             if (abs(correction) < TOL) then
                 xinteg(3) = phi + twopi*anint((xref(3) - phi)/twopi)

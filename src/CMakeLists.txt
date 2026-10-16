@@ -1,6 +1,7 @@
     set(SOURCES
         ${CMAKE_BINARY_DIR}/version.f90
         lapack_interfaces.f90
+        finite_check.f90
         sorting_mod.f90
         wall/chartmap_metadata.f90
         wall/stl_wall_intersection.F90

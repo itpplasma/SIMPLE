@@ -106,11 +106,11 @@ module simple_main
 contains
 
     logical function recovery_state_has_valid_phase_space(z)
-        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+        use finite_check, only: is_finite
 
         real(dp), intent(in) :: z(5)
 
-        recovery_state_has_valid_phase_space = all(ieee_is_finite(z)) .and. &
+        recovery_state_has_valid_phase_space = all(is_finite(z)) .and. &
             z(4) > 0.0_dp .and. &
             abs(z(5)) <= 1.0_dp + 100.0_dp*epsilon(1.0_dp)
     end function recovery_state_has_valid_phase_space
@@ -888,7 +888,7 @@ contains
         ! https://arxiv.org/abs/2606.19523.
         ! path deliberately excludes the separate continuous fast-classifier
         ! campaign (J_parallel and rotation only) and all unsupported physics.
-        use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+        use finite_check, only: quiet_nan
         use simple, only: init_sympl
         use simple_gpu, only: trace_orbits_gpu_landreman, trace_orbits_gpu_method
         use field_can_boozer, only: eval_field_booz
@@ -1092,7 +1092,7 @@ contains
             zend(5, i) = f_gpu(i)%vpar/(si_gpu(i)%pabs*sqrt2)
 
             if (loss_step(i) < 0) then
-                times_lost(i) = ieee_value(0.0_dp, ieee_quiet_nan)
+                times_lost(i) = quiet_nan()
                 orbit_exit_code(i) = ORBIT_EXIT_NUMERICAL_EVENT
             else if (loss_time_normalized(i) < total_time_normalized - &
                     16.0_dp*epsilon(1.0_dp)*max(total_time_normalized, 1.0_dp)) then
@@ -1820,7 +1820,7 @@ contains
     pure logical function should_classify_numerically_confined(exit_code, &
             model, mode, warning_mode, collisions_enabled, recovery_active, &
             normalized_flux_s)
-        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+        use finite_check, only: is_finite
 
         integer, intent(in) :: exit_code, model, mode
         logical, intent(in) :: warning_mode, collisions_enabled, recovery_active
@@ -1830,7 +1830,7 @@ contains
             exit_code == ORBIT_EXIT_NUMERICAL_MAXITER .and. &
             warning_mode .and. .not. collisions_enabled .and. &
             model == ORBIT_GC .and. mode > 0 .and. recovery_active .and. &
-            ieee_is_finite(normalized_flux_s) .and. &
+            is_finite(normalized_flux_s) .and. &
             normalized_flux_s >= 0.0_dp .and. &
             normalized_flux_s < NUMERICAL_CONFINED_S_MAX
     end function should_classify_numerically_confined
@@ -1841,7 +1841,7 @@ contains
             write_classification_results
         use magfie_sub, only: SPECTRE
         use orbit_symplectic_base, only: symplectic_spectre_newton_warning_factor
-        use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+        use finite_check, only: quiet_nan
 
         type(tracer_t), intent(inout) :: anorb
         integer, intent(in) :: ipart
@@ -1866,8 +1866,8 @@ contains
         hold_streak = 0
         rk_recovery = rk_recovery_state_t()
         exit_step = -1d0
-        orbit_traj = ieee_value(0.0d0, ieee_quiet_nan)
-        orbit_times = ieee_value(0.0d0, ieee_quiet_nan)
+        orbit_traj = quiet_nan()
+        orbit_times = quiet_nan()
 
         if (swcoll) call reset_seed_if_deterministic
 
@@ -2008,8 +2008,8 @@ contains
         ! Fill remaining timesteps with NaN if particle left domain early
         if (it_final < ntimstep) then
             do it = it_final + 1, ntimstep
-                orbit_traj(:, it) = ieee_value(0.0d0, ieee_quiet_nan)
-                orbit_times(it) = ieee_value(0.0d0, ieee_quiet_nan)
+                orbit_traj(:, it) = quiet_nan()
+                orbit_times(it) = quiet_nan()
             end do
         end if
 
@@ -2021,7 +2021,7 @@ contains
         else if (numerically_confined) then
             times_lost(ipart) = trace_time
         else if (faulted) then
-            times_lost(ipart) = ieee_value(0.0d0, ieee_quiet_nan)
+            times_lost(ipart) = quiet_nan()
         else
             times_lost(ipart) = kt*dtaumin/v0
         end if
@@ -2037,7 +2037,7 @@ contains
             SYMPL_SPECTRE_STOP
         use field_can_spectre, only: spectre_mvol, set_spectre_volume_lock
         use params, only: crossing_level
-        use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+        use finite_check, only: quiet_nan
 
         type(tracer_t), intent(inout) :: anorb
         integer, intent(in) :: ipart
@@ -2106,8 +2106,8 @@ contains
 
         if (it_final < ntimstep) then
             do it = it_final + 1, ntimstep
-                orbit_traj(:, it) = ieee_value(0.0d0, ieee_quiet_nan)
-                orbit_times(it) = ieee_value(0.0d0, ieee_quiet_nan)
+                orbit_traj(:, it) = quiet_nan()
+                orbit_times(it) = quiet_nan()
             end do
         end if
 
@@ -2115,7 +2115,7 @@ contains
             t_stop = real(kt, dp)*dtaumin/v0
             orbit_exit_code(ipart) = ORBIT_EXIT_COMPLETED
         else if (ierr_orbit /= SYMPL_SPECTRE_LOSS) then
-            t_stop = ieee_value(0.0_dp, ieee_quiet_nan)
+            t_stop = quiet_nan()
         else
             t_stop = (real(kt, dp) + t_frac)*dtaumin/v0
         end if
@@ -2141,7 +2141,7 @@ contains
             spectre_state_reset, orbit_timestep_spectre, &
             SPECTRE_OK, SPECTRE_BOUNDARY, SPECTRE_FAULT
         use magfie_sub, only: spectre_field
-        use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+        use finite_check, only: quiet_nan
 
         integer, intent(in) :: ipart
         real(dp), intent(inout) :: z(5)
@@ -2203,15 +2203,15 @@ contains
 
         if (it_final < ntimstep) then
             do it = it_final + 1, ntimstep
-                orbit_traj(:, it) = ieee_value(0.0d0, ieee_quiet_nan)
-                orbit_times(it) = ieee_value(0.0d0, ieee_quiet_nan)
+                orbit_traj(:, it) = quiet_nan()
+                orbit_times(it) = quiet_nan()
             end do
         end if
 
         if (ierr_orbit == SPECTRE_BOUNDARY) then
             t_stop = (real(kt, dp) + event%t_frac)*dtaumin/v0
         else if (ierr_orbit /= SPECTRE_OK) then
-            t_stop = ieee_value(0.0_dp, ieee_quiet_nan)
+            t_stop = quiet_nan()
         else
             t_stop = real(kt, dp)*dtaumin/v0
             orbit_exit_code(ipart) = ORBIT_EXIT_COMPLETED
@@ -2248,14 +2248,14 @@ contains
 
     subroutine locate_validated_lcfs(z_start, z_end, field_period, z_event, &
             event_fraction, ierr)
-        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+        use finite_check, only: is_finite
 
         real(dp), intent(in) :: z_start(5), z_end(5), field_period
         real(dp), intent(out) :: z_event(5), event_fraction
         integer, intent(inout) :: ierr
 
-        if (.not. all(ieee_is_finite(z_start)) .or. &
-            .not. all(ieee_is_finite(z_end))) then
+        if (.not. all(is_finite(z_start)) .or. &
+            .not. all(is_finite(z_end))) then
             z_event = z_start
             event_fraction = 0.0_dp
             ierr = 2
@@ -2264,7 +2264,7 @@ contains
 
         call locate_linear_lcfs(z_start, z_end, field_period, z_event, &
             event_fraction)
-        if (all(ieee_is_finite(z_event)) .and. &
+        if (all(is_finite(z_event)) .and. &
             event_fraction >= 0.0_dp .and. event_fraction <= 1.0_dp .and. &
             recovery_state_is_physical(z_event, z_start(4))) return
 
@@ -2278,25 +2278,25 @@ contains
     end subroutine locate_validated_lcfs
 
     logical function crosses_reference_boundary(z_start, z_end)
-        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+        use finite_check, only: is_finite
 
         real(dp), intent(in) :: z_start(5), z_end(5)
         real(dp) :: u_start(3), u_end(3)
 
         crosses_reference_boundary = .false.
-        if (.not. all(ieee_is_finite(z_start)) .or. &
-            .not. all(ieee_is_finite(z_end))) return
+        if (.not. all(is_finite(z_start)) .or. &
+            .not. all(is_finite(z_end))) return
         call integ_to_ref(z_start(1:3), u_start)
         call integ_to_ref(z_end(1:3), u_end)
-        if (.not. all(ieee_is_finite(u_start)) .or. &
-            .not. all(ieee_is_finite(u_end))) return
+        if (.not. all(is_finite(u_start)) .or. &
+            .not. all(is_finite(u_end))) return
         crosses_reference_boundary = u_start(1) < 1.0_dp .and. &
             u_end(1) >= 1.0_dp
     end function crosses_reference_boundary
 
     subroutine locate_reference_crossing(z_start, z_end, field_period, &
             z_event, event_fraction, found)
-        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+        use finite_check, only: is_finite
 
         real(dp), intent(in) :: z_start(5), z_end(5), field_period
         real(dp), intent(out) :: z_event(5), event_fraction
@@ -2308,12 +2308,12 @@ contains
         found = .false.
         z_event = z_start
         event_fraction = 0.0_dp
-        if (.not. all(ieee_is_finite(z_start)) .or. &
-            .not. all(ieee_is_finite(z_end))) return
+        if (.not. all(is_finite(z_start)) .or. &
+            .not. all(is_finite(z_end))) return
         call integ_to_ref(z_start(1:3), u_start)
         call integ_to_ref(z_end(1:3), u_end)
-        if (.not. all(ieee_is_finite(u_start)) .or. &
-            .not. all(ieee_is_finite(u_end))) return
+        if (.not. all(is_finite(u_start)) .or. &
+            .not. all(is_finite(u_end))) return
         if (u_start(1) >= 1.0_dp .or. u_end(1) < 1.0_dp) return
 
         delta = z_end - z_start
@@ -2326,7 +2326,7 @@ contains
             fraction_mid = 0.5_dp*(fraction_low + fraction_high)
             z_trial = z_start + fraction_mid*delta
             call integ_to_ref(z_trial(1:3), u_trial)
-            if (.not. all(ieee_is_finite(u_trial))) return
+            if (.not. all(is_finite(u_trial))) return
             if (u_trial(1) >= 1.0_dp) then
                 fraction_high = fraction_mid
             else
@@ -2336,13 +2336,13 @@ contains
         event_fraction = fraction_high
         z_event = z_start + event_fraction*delta
         call integ_to_ref(z_event(1:3), u_trial)
-        if (.not. all(ieee_is_finite(u_trial))) return
+        if (.not. all(is_finite(u_trial))) return
         if (abs(u_trial(1) - 1.0_dp) > 0.05_dp) return
         found = .true.
     end subroutine locate_reference_crossing
 
     subroutine validate_rk_state(z_start, z_end, ierr, expected_momentum)
-        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+        use finite_check, only: is_finite
 
         real(dp), intent(in) :: z_start(5)
         real(dp), intent(inout) :: z_end(5)
@@ -2360,7 +2360,7 @@ contains
                 MOMENTUM_SANITY_FRACTION* &
                 max(abs(momentum_reference), tiny(1.0_dp))
         end if
-        if (all(ieee_is_finite(z_end)) .and. z_end(4) > 0.0_dp .and. &
+        if (all(is_finite(z_end)) .and. z_end(4) > 0.0_dp .and. &
             abs(z_end(5)) <= 1.0_dp + 100.0_dp*epsilon(1.0_dp) .and. &
             momentum_valid) return
 
@@ -3094,7 +3094,7 @@ contains
         !> point. Confined fractions are conditional on the numerically resolved
         !> population at each time. Particles not yet finished (for example in an
         !> explicitly requested partial write) keep times_lost = -1.
-        use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+        use finite_check, only: quiet_nan
 
         integer :: i, num_lost, resolved_count, unit
         real(dp) :: inverse_times_lost_sum, norm, pass_fraction, trap_fraction
@@ -3111,7 +3111,7 @@ contains
         inverse_times_lost_sum = 0.0d0
         do i = 1, ntestpart
             if (orbit_exit_code(i) >= ORBIT_EXIT_NUMERICAL_DOMAIN) then
-                times_lost(i) = ieee_value(0.0_dp, ieee_quiet_nan)
+                times_lost(i) = quiet_nan()
             end if
             write (unit, *) i, times_lost(i), trap_par(i), zstart(1, i), &
                 perp_inv(i), zend(:, i)
@@ -3152,8 +3152,8 @@ contains
                 pass_fraction = confpart_pass(i)/real(resolved_count, dp)
                 trap_fraction = confpart_trap(i)/real(resolved_count, dp)
             else
-                pass_fraction = ieee_value(0.0_dp, ieee_quiet_nan)
-                trap_fraction = ieee_value(0.0_dp, ieee_quiet_nan)
+                pass_fraction = quiet_nan()
+                trap_fraction = quiet_nan()
             end if
             write (unit, *) dble(kt_macro(i))*dtaumin/v0, pass_fraction, &
                 trap_fraction, resolved_count

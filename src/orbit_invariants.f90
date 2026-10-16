@@ -1,6 +1,6 @@
 module orbit_invariants
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    use finite_check, only: is_finite
     use field_can_mod, only: evaluate_field => evaluate, integ_to_ref
     use parmot_mod, only: rho0 => ro0
     use simple, only: tracer_t, encode_symplectic_state
@@ -67,7 +67,7 @@ contains
 
         invariants = guiding_center_invariants_t()
         status = INVARIANT_INVALID_INPUT
-        if (.not. all(ieee_is_finite(state))) return
+        if (.not. all(is_finite(state))) return
         if (rho0 <= 0.0_dp) return
         if (state(4) <= 0.0_dp) return
         if (abs(state(5)) > 1.0_dp) return
@@ -130,9 +130,9 @@ contains
         result%status = INVARIANT_INVALID_INPUT
         if (allocated(result%starts)) deallocate (result%starts)
         allocate (result%starts(0))
-        if (.not. ieee_is_finite(invariants%h0)) return
-        if (.not. ieee_is_finite(invariants%j_perp)) return
-        if (.not. ieee_is_finite(invariants%p_phi)) return
+        if (.not. is_finite(invariants%h0)) return
+        if (.not. is_finite(invariants%j_perp)) return
+        if (.not. is_finite(invariants%p_phi)) return
         if (rho0 <= 0.0_dp) return
         if (invariants%h0 <= 0.0_dp) return
         if (invariants%j_perp < 0.0_dp) return

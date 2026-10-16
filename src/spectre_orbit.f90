@@ -3,7 +3,7 @@ module spectre_orbit
     !> and reflection before the singular coordinate axis.
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    use finite_check, only: is_finite
     use odeint_allroutines_sub, only: odeint_allroutines, odeint_has_failed
     use alpha_lifetime_sub, only: velo_can
 
@@ -215,7 +215,7 @@ contains
         z_out = z_in
         if (tau <= 0.0_dp) return
         call odeint_allroutines(z_out, ndim, 0.0_dp, tau, relerr, velo_can_clamped)
-        if (.not. odeint_has_failed() .and. all(ieee_is_finite(z_out))) return
+        if (.not. odeint_has_failed() .and. all(is_finite(z_out))) return
 
         z_out = z_in
         ierr = SPECTRE_FAULT

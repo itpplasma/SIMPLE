@@ -3,7 +3,7 @@ module spectre_sympl_orbit
     !> Interior sheets are crossed only by the full orbit; no fixed-mu map.
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    use finite_check, only: is_finite
     !$ use omp_lib, only: omp_get_max_threads, omp_get_thread_num
     use util, only: twopi, sqrt2
     use parmot_mod, only: ro0
@@ -700,12 +700,12 @@ contains
         type(field_can_t), intent(in) :: f
         logical :: bad
 
-        bad = .not. all(ieee_is_finite(si%z)) .or. &
-            .not. ieee_is_finite(si%pabs) .or. &
-            .not. ieee_is_finite(f%Bmod) .or. &
-            .not. ieee_is_finite(f%vpar) .or. &
-            .not. ieee_is_finite(f%mu) .or. &
-            .not. ieee_is_finite(f%H)
+        bad = .not. all(is_finite(si%z)) .or. &
+            .not. is_finite(si%pabs) .or. &
+            .not. is_finite(f%Bmod) .or. &
+            .not. is_finite(f%vpar) .or. &
+            .not. is_finite(f%mu) .or. &
+            .not. is_finite(f%H)
         if (bad) return
         bad = abs(si%z(1) - si0%z(1)) > max_step_dr
         if (bad) return
