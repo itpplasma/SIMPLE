@@ -1,6 +1,6 @@
 module netcdf_orbit_output
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_quiet_nan, ieee_value
+    use finite_check, only: is_finite, quiet_nan
     use netcdf
     implicit none
 
@@ -101,7 +101,7 @@ contains
             error stop 'init_orbit_netcdf: already initialized'
         end if
 
-        fill_value = ieee_value(0.0d0, ieee_quiet_nan)
+        fill_value = quiet_nan()
         call configure_cylindrical_output(cart_units, coordinate_type, &
                                           radial_coordinate)
 
@@ -288,7 +288,7 @@ contains
             theta_array(it) = xref(2)
             phi_array(it) = xref(3)
             if (cylindrical_output) then
-                if (all(ieee_is_finite(xref))) then
+                if (all(is_finite(xref))) then
                     call ref_coords%evaluate_cyl(xref, xcyl)
                     r_array(it) = xcyl(1)
                     z_array(it) = xcyl(3)
