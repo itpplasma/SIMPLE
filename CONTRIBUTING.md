@@ -61,6 +61,16 @@ it before running tests:
 source .venv/bin/activate
 ```
 
+The default setup also builds and installs `pysimple` and selects OpenBLAS.
+Install OpenBLAS first. With Homebrew, make its installation visible to CMake:
+
+```bash
+brew install openblas
+CMAKE_PREFIX_PATH="$(brew --prefix openblas)" FC=gfortran ./setup-venv.sh
+```
+
+Use `./setup-venv.sh --no-pysimple` to install only the Python dependencies.
+
 Without this environment the Python tests fail with `ModuleNotFoundError`; use
 `make test-nopy` to exclude tests labelled `python`. Some remaining test
 wrappers still use the Python standard library.
