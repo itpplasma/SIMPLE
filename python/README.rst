@@ -145,7 +145,7 @@ Collisional comparisons additionally pass the same flat 10 keV DT
 
     python examples/imas_benchmark.py --case circular --collisions \
         --species alpha --energy 3500000 --dense --copies 20 \
-        --duration 1e-3 --step 5e-7 --output /tmp/ids-collisions
+        --duration 1e-4 --step 1e-8 --output /tmp/ids-collisions
 
 Copies retain the total source weight and use independent native marker
 streams. Reported Monte Carlo errors use variance between copies of each
