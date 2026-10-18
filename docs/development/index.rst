@@ -1,10 +1,9 @@
 Development
 ===========
 
-SIMPLE is developed on GitHub at https://github.com/itpplasma/SIMPLE. The
-contribution guidelines are in ``CONTRIBUTING.md`` in the repository root
-(https://github.com/itpplasma/SIMPLE/blob/main/CONTRIBUTING.md). Pull requests
-follow the review policy below and fill ``.github/pull_request_template.md``.
+SIMPLE is developed on GitHub at https://github.com/itpplasma/SIMPLE. Pull
+requests follow the review policy below and fill
+``.github/pull_request_template.md``.
 
 .. toctree::
    :maxdepth: 1

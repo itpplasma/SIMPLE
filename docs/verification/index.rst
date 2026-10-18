@@ -7,7 +7,7 @@ Verification and benchmarks
 
    This page will hold a verification report generated from the test suite
    and the benchmark cases. Until it is added, the page summarises the
-   published benchmarks and the tests that run with every change.
+   published benchmarks and the available automated tests.
 
 Published benchmarks
 --------------------
@@ -43,8 +43,10 @@ The full references are in :doc:`/reference/publications`.
 Automated tests
 ---------------
 
-Every pull request runs the test suite on GitHub Actions. ``make test``
-runs it locally (:doc:`/development/index`). It contains
+GitHub Actions runs the native test jobs for non-draft pull requests and
+pushes to ``main``; draft pull requests skip these jobs. ``make test`` runs
+the non-regression suite locally (:doc:`/development/index`). Test coverage
+includes
 
 * unit tests of splines, coordinate transformations, field evaluation,
   canonical constructions and the STL intersection,
@@ -52,8 +54,8 @@ runs it locally (:doc:`/development/index`). It contains
   invariant-conservation checks on analytic fields,
 * Python tests that compare ``pysimple`` with ``simple.x`` and test the
   examples,
-* golden-record tests, which compare the output of the current version with
-  a reference version for a set of cases (``test/golden_record``,
+* separately invoked golden-record tests, which compare the current output
+  with a reference version for a set of cases (``test/golden_record``,
   ``make test-golden-main``).
 
 The review policy (:doc:`/review-policy`) defines which evidence

@@ -23,7 +23,7 @@ number of threads with ``OMP_NUM_THREADS``; on machines with several sockets,
 cores. The field setup before the tracing is partly serial and takes a few
 seconds to a minute, depending on the field source and resolution. The log
 reports the time of each phase. GPU runs are described in :doc:`gpu`, and
-cluster job scripts for Perlmutter, aCluster and sCluster are in ``RUN/``.
+cluster job examples are in ``RUN/``.
 
 Time and particle settings
 --------------------------

@@ -12,32 +12,46 @@ Prerequisites
 * CMake 3.22 or newer and Ninja
 * GNU Fortran (gfortran) and Git
 * NetCDF-C and NetCDF-Fortran
-* LAPACK and BLAS
+* LAPACK and BLAS (OpenBLAS for ``setup-venv.sh``)
 * OpenMP (part of gfortran)
-* Python 3.9 or newer with ``venv``, for ``pysimple`` and the tools
+* Python 3.10 or newer with ``venv``, for ``pysimple`` and the tools
 
 On common systems:
 
 .. code-block:: bash
 
    # Arch Linux
-   sudo pacman -S gcc-fortran cmake ninja netcdf netcdf-fortran lapack blas
+   sudo pacman -S gcc-fortran cmake ninja netcdf netcdf-fortran lapack openblas
 
    # Ubuntu or Debian
    sudo apt install gfortran cmake ninja-build libnetcdf-dev libnetcdff-dev \
-       liblapack-dev libblas-dev python3-venv
+       liblapack-dev libopenblas-dev python3-venv
 
    # macOS with Homebrew
-   brew install gcc cmake ninja netcdf netcdf-fortran lapack
+   brew install gcc cmake ninja netcdf netcdf-fortran lapack openblas
+
+On macOS, select the Homebrew GNU toolchain before the first configuration
+if other compilers are installed. This also avoids requiring OpenMP support
+from Apple Clang. Expose the Homebrew headers and libraries to the compiler:
+
+.. code-block:: bash
+
+   export FC=gfortran
+   export CC="gcc-$(gfortran -dumpversion | cut -d. -f1)"
+   export CXX="g++-$(gfortran -dumpversion | cut -d. -f1)"
+   export CPATH="$(brew --prefix)/include${CPATH:+:$CPATH}"
+   export LIBRARY_PATH="$(brew --prefix)/lib${LIBRARY_PATH:+:$LIBRARY_PATH}"
 
 The build downloads further dependencies with CMake ``FetchContent``:
 `libneo <https://github.com/itpplasma/libneo>`_ (field, spline and
 coordinate routines), `fortnum <https://github.com/lazy-fortran/fortnum>`_
 (root finders and ODE integrators), fortio (scientific file I/O, through
 libneo) and `fortplot <https://github.com/lazy-fortran/fortplot>`_ (plots).
-The pinned revisions are in ``cmake/dependency_versions.json`` and in
-libneo. The build machine therefore needs network access to GitHub on the
-first configuration.
+The fortnum and fortplot revisions are pinned in
+``cmake/dependency_versions.json``. Unless ``LIBNEO_REF`` is set, libneo
+follows the matching SIMPLE branch when it exists in libneo, otherwise
+libneo's ``main`` branch. The build machine therefore needs network access
+to GitHub on the first configuration.
 
 Get the source
 --------------
@@ -94,7 +108,7 @@ Useful CMake options:
      - Disable fast-math for bitwise reproducible results
        (``make build-deterministic``).
    * - ``LIBNEO_REF`` / ``LIBNEO_SOURCE_DIR``
-     - pinned
+     - matching branch or main
      - Select a libneo branch or use a local checkout
        (``make LIBNEO_REF=...`` or ``make LIBNEO_PATH=...``).
 
