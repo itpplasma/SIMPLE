@@ -25,6 +25,152 @@ local densities and temperatures in `src/collis_alphas.f90`; it does not
 prescribe a universal energy-versus-time curve. Heat-load estimates use the
 speed recorded at each particle's exit.
 
+## Collisions with an STL wall
+
+Build with `SIMPLE_ENABLE_CGAL=ON`. Set `swcoll = .true.` and supply both
+`wall_input` (an STL file) and `coord_input` (a chartmap covering the plasma
+and the wall). The field must remain valid throughout that chart, for example
+by splining a coil field onto an extended chartmap. Set `wall_units = 'm'` or
+`'mm'` to match the STL. A wall outside the LCFS needs an extended chart;
+reaching the chart boundary alone does not establish an STL hit.
+
+The same input file contains the background plasma profiles, in eV and m$^{-3}$:
+
+```fortran
+&config
+  swcoll = .true.
+  field_input = 'coils.simple'
+  coord_input = 'wall.chartmap.nc'
+  wall_input = 'wall.stl'
+  wall_units = 'm'
+  isw_field_type = 5  ! Reference-coordinate field
+  integmode = 0      ! RK guiding-center integration
+  facE_al = 1        ! Birth energy 3.5 MeV
+  contr_pp = -1d10   ! Trace strongly passing markers too
+  trace_time = 0.1
+  deterministic = .true.
+  ran_seed = 541
+  output_results_netcdf = .true.
+/
+&profiles
+  profile_type = 'power_series'
+  Te_scale = 1d4
+  Ti1_scale = 1d4
+  Ti2_scale = 1d4
+  ni1_scale = 5d19
+  ni2_scale = 5d19
+/
+```
+
+The default constant coefficients make these flat profiles. Choose
+`trace_time` relative to the slowing-down time of the supplied profiles:
+`trace_time << tau_s` measures prompt losses with little slowing down;
+times comparable to `tau_s` resolve losses at reduced energy. Check the
+birth momentum slowing rate (`params::slowrate`, in s$^{-1}$, computed at
+collision initialization); its inverse
+is a local momentum relaxation scale, not a universal stopping time. Energy
+diffusion and the spatial profiles preclude a single deterministic energy law
+for all markers. Resolve collision kicks with the microstep size and check
+convergence when changing the density, temperature, or trace time.
+
+Each microstep first advances the guiding center and checks the Cartesian
+segment for its first STL intersection. A hit retains momentum and pitch
+from that drift, including collision kicks from preceding microsteps. The
+code does not apply the full next collision kick after an already detected
+hit, or a fractional kick on the final segment. Thus hit energy has the
+time resolution of the drift/kick splitting. `times_lost` is interpolated
+along the intersecting segment. `wall_hit_angle_rad` is the angle between
+the segment and the wall normal (0 is normal incidence), not a full-orbit
+velocity incidence angle.
+
+Use `wall_hit == 1` to select actual STL intersections; `class_lost` is a
+classifier flag and does not select STL hits in ordinary tracing. Heat-load
+weights use the recorded
+`zend(4)**2 = E_hit/E0`, with `E0 = 3.5 MeV / facE_al`. Energy transferred
+to the background before impact is not deposited in the wall bin. Thermal
+diffusion can increase individual energies, so `p < 1` is an ensemble
+slowing-down expectation rather than a strict bound for every marker.
+
+The current `WallHeatMap.from_netcdf` reader selects `class_lost`, so ordinary
+STL tracing results need direct selection with `wall_hit` for heat-load
+post-processing. The regression CSV supplies the hit energy weights directly.
+
+The registered `test_collisional_stl_wall` case uses 192 helium-4 markers at
+35 keV (`facE_al = 100`) and a test-only copy of the public NCSX coils with
+currents multiplied by 3.3. Scaling the current preserves the vacuum field-line
+geometry. Lowering the marker energy keeps the gyroradius small without an
+unrealistically large field: direct Biot–Savart evaluation at the VMEC axis
+at toroidal angle zero gives 5.228 T. With the fixture's VMEC minor radius
+$a = 0.3226$ m, the worst-pitch birth gyroradius is 5.17 mm,
+$\rho_L/a = 0.0160$. The 0.528 T `bmod00` printed during VMEC sampling belongs
+to the auxiliary equilibrium, rather than the scaled coil field used for tracing.
+
+The STL comes from the map2disc chart extended by 0.1 m, contracted 5% toward
+the chart axis to leave a field-domain buffer around its planar facets. Starts
+use the chart-grid ring near $\rho = 0.25$; this geometric radius is not a flux
+label. An independent VMEC Fourier-boundary check verifies all 33 poloidal
+points on all 33 toroidal slices lie inside the LCFS, with at least 4.13 cm
+clearance. Markers sample only those checked grid points. The seeded birth pitch is uniform
+in $[-0.2, 0.2]$, selecting trapped orbits rather than prompt passing losses.
+
+The stored collisionless reference is 21 hits (tolerance two markers), with
+mean hit time 237.55 $\mu$s (3% tolerance). Reference hits span 81.40 to
+420.45 $\mu$s, beyond ten birth-speed reference transits. The finite-density
+reference gives 24 hits from 96.13 to 467.19 $\mu$s; 23 hits after twenty
+reference transits have mean $E_\mathrm{hit}/E_0 = 0.29369$.
+
+The fixture profiles and time scales are:
+
+| Quantity | Value |
+|----------|-------|
+| Flat electron, deuterium and tritium temperatures | 1 keV each |
+| Flat deuterium and tritium densities | $2.5\times10^{20}$ m$^{-3}$ each |
+| Electron density from quasineutrality | $5\times10^{20}$ m$^{-3}$ |
+| Birth momentum drag `slowrate` | 774.27 s$^{-1}$ |
+| Birth relaxation scale $\tau_s = 1/\mathrm{slowrate}$ | 1.292 ms |
+| Trace time | 0.5 ms, or $0.387\tau_s$ |
+| Reference toroidal transit time $2\pi R_0/v_0$ | about 7 $\mu$s |
+
+The rate uses the implemented collision coefficients at $p=1$, including both
+ion species and electrons. Constant power-series coefficients make it uniform
+throughout the chart. A fraction of the birth relaxation time resolves slowing
+down with finite-energy wall losses; the trace spans about 71 reference
+transit times. Hits must occur after ten reference transit times, and the
+slowing-down check selects hits after twenty. These reference times use the
+birth speed, rather than each marker's pitch-dependent bounce period. This is
+a guiding-centre regression fixture, not a reactor prediction. When both ion
+densities are exactly zero, the collision coefficients and rates are zero;
+this preserves a true vacuum instead of applying the positive-density floor.
+
+Cylindrical chartmaps must retain the full toroidal angle in Cartesian
+positions and bases. The fix in [libneo #429](https://github.com/itpplasma/libneo/pull/429)
+prevents a field-period seam from creating a vessel-length segment and a false
+wall hit. The CGAL CI job pins that fix; use the same revision below.
+The adaptive RK tolerance remains $10^{-9}$. There are 64 wall-check and
+collision-kick intervals per reference transit (about 0.11 $\mu$s per kick,
+less than $10^{-4}\tau_s$). A 128-interval collisionless subset checks hit-time
+and position convergence independently of the stored collisionless reference.
+
+With Python tools,
+map2disc, NumPy and netCDF4 available, run (the exercised map2disc environment
+used NumPy 2.2.6 and SciPy 1.16.3):
+
+```sh
+CMAKE_BUILD_PARALLEL_LEVEL=8 make test CONFIG=Fast \
+  FLAGS='-DSIMPLE_ENABLE_CGAL=ON -DENABLE_PYTHON_INTERFACE=ON -DSIMPLE_ENABLE_PYTHON_TOOLS=ON -DLIBNEO_REF=a816f928b8dcf2211db81e710b92f0f3d10fe0b5' \
+  TEST=test_collisional_stl_wall
+```
+
+CTest generates the chartmap fixture automatically. The test checks the
+collisionless momentum invariant, the exact zero-density collision limit over
+the full 0.5 ms trace, reduced
+energy on delayed wall hits, and identical particle results in two seeded
+one-thread runs. It writes `build/test/tests/collisional_stl_wall/wall_hits.csv`
+with mode, marker, hit energy fraction, hit time in seconds, and incidence
+angle in radians, alongside per-run `results.nc` and `run.log`. The fixed
+thread count is `OMP_NUM_THREADS=1`; multithread stream independence and
+scheduling-dependent reproducibility remain tracked in #42.
+
 ## Monte Carlo Heat Flux Calculation
 
 SIMPLE traces $N$ test particles representing the alpha population. Each particle carries a fraction of total alpha power:
@@ -164,10 +310,12 @@ The NetCDF results file from SIMPLE contains:
 
 | Variable | Shape | Description |
 |----------|-------|-------------|
-| `zend` | (N, 5) | Final phase space: s, theta, zeta, p=v/v0, lambda |
+| `zend` | (N, 5) | Final reference phase space: radial coordinate (rho for chartmaps), theta, zeta, p=v/v0, lambda |
 | `xend_cart` | (N, 3) | Final Cartesian position (x, y, z) |
-| `class_lost` | (N,) | Loss flag populated by classification runs only |
+| `class_lost` | (N,) | Classifier loss flag; use wall_hit to select STL intersections |
 | `orbit_exit_code` | (N,) | 1 for LCFS loss, 2 for wall loss; other outcomes have separate codes |
+| `wall_hit` | (N,) | 1 for a confirmed STL intersection |
+| `wall_hit_angle_rad` | (N,) | Segment incidence angle relative to wall normal (rad) |
 | `times_lost` | (N,) | Loss time, trace time if confined, -1 if skipped, NaN if unresolved |
 
 These are the array shapes seen from Python. The velocity ratio `zend[:, 3]`
