@@ -157,6 +157,7 @@ module params
     integer :: ierr
 
     integer :: batch_size = 2000000000  ! Initialize large so batch mode is not default
+    integer :: particle_index_offset = 0
     integer :: ran_seed = 42
     integer :: num_surf = 1
     logical :: reuse_batch = .False.
@@ -230,7 +231,8 @@ module params
         axis_healing, s_axis_heal, axis_healing_polyfit_degree, &
         am1, am2, Z1, Z2, &
         densi1, densi2, tempi1, tempi2, tempe, &
-        batch_size, ran_seed, reuse_batch, field_input, coord_input, &
+        batch_size, ran_seed, particle_index_offset, reuse_batch, &
+        field_input, coord_input, &
         wall_input, wall_units, chart_boundary_kind, integ_coords, crossing_level, &
         spectre_fo_entry_larmor, spectre_fo_tolerance, spectre_fo_grid, &
         spectre_sbeg_is_toroidal_flux, spectre_ncon_r, spectre_ncon_th, &
@@ -550,71 +552,76 @@ contains
 	    end function to_lower
 
     subroutine init_batch
-        integer :: iostat, i, n
-        real :: ran_tmp
-        character, dimension(:), allocatable :: batch_file
+        integer :: unit, status, source_index, selected, source_count, seedsize
+        integer, allocatable :: batch_seed(:)
+        real(dp) :: draw
         logical :: old_batch
 
-        !See if batch is wanted, if yes find random or re-use from previous file.
-        if (ntestpart > batch_size) then
-            if (reuse_batch) then
-                inquire (file="batch.dat", exist=old_batch)
-
-                if (old_batch) then
-                    allocate (batch_file(batch_size))
-                    allocate (idx(batch_size))
-                    open (1, file='batch.dat', recl=batch_size, iostat=iostat)
-                    if (iostat /= 0) goto 666
-
-                    do i = 1, batch_size
-                        read (1, iostat=iostat) batch_file(i)
-                        if (iostat /= 0) goto 667
-                        idx(i) = ichar(batch_file(i))
-                    end do
-                    deallocate (batch_file)
-                    close (1)
-                else !old_batch
-                    ! no old batch file found, so we pretend the user knew this and
-                    ! set the flag to .False.
-                    reuse_batch = .False.
-                end if !old_batch
-            end if !reuse_batch
-
-            if (.not. reuse_batch) then
-                !Create a random list(batch_size) of indices using ran_seed.
-                allocate (idx(batch_size))
-
-                call srand(ran_seed)
-
-                do i = 1, batch_size
-                    call random_number(ran_tmp)
-                    ! Create randomized indices from the amount available, leaving out
-                    ! the upper 1% as margin for later sorting and replacing of
-                    ! duplicates (relevant for smaller batches).
-                    idx(i) = floor(ceiling((ntestpart - (ntestpart*0.01)))*ran_tmp)
-                end do
-
-                call sort_idx(idx, batch_size)
-
-                open (1, file='batch.dat', recl=batch_size*2, iostat=iostat)
-
-                do n = 1, batch_size
-                    write (1, *) idx(n)
-                end do
-                close (1)
-            end if !reuse_batch again
-
-            !Set ntestpart to batch_size for rest of the run.
-            ntestpart = batch_size
-        end if !batches wanted
-
-        return
-
-666     print *, iostat
-        error stop
-667     print *, iostat
-        error stop
+        if (allocated(idx)) deallocate (idx)
+        if (particle_index_offset < 0) &
+            error stop 'particle_index_offset must be nonnegative'
+        if (batch_size < 1) error stop 'batch_size must be positive'
+        if (ntestpart <= batch_size) return
+        source_count = ntestpart
+        allocate (idx(batch_size))
+        inquire (file='batch.dat', exist=old_batch)
+        if (reuse_batch .and. old_batch) then
+            open (newunit=unit, file='batch.dat', status='old', action='read')
+            do selected = 1, batch_size
+                read (unit, *, iostat=status) idx(selected)
+                if (status /= 0) error stop 'Invalid batch.dat index list'
+                if (idx(selected) < 1 .or. idx(selected) > source_count) &
+                    error stop 'Batch index outside start.dat source range'
+                if (selected > 1) then
+                    if (idx(selected) <= idx(selected - 1)) &
+                        error stop 'Batch indices must be strictly increasing'
+                end if
+            end do
+            close (unit)
+        else
+            reuse_batch = .false.
+            call random_seed(size=seedsize)
+            allocate (batch_seed(seedsize))
+            batch_seed = ran_seed
+            call random_seed(put=batch_seed)
+            selected = 0
+            ! Sequential sampling without replacement gives sorted, one-based
+            ! source rows without allocating the complete source population.
+            do source_index = 1, source_count
+                call random_number(draw)
+                if (draw*real(source_count - source_index + 1, dp) < &
+                    real(batch_size - selected, dp)) then
+                    selected = selected + 1
+                    idx(selected) = source_index
+                    if (selected == batch_size) exit
+                end if
+            end do
+            open (newunit=unit, file='batch.dat', status='replace', action='write')
+            do selected = 1, batch_size
+                write (unit, *) idx(selected)
+            end do
+            close (unit)
+        end if
+        ntestpart = batch_size
     end subroutine init_batch
+
+    integer function particle_stream_id(local_index) result(global_index)
+        integer, intent(in) :: local_index
+        integer :: source_index
+
+        source_index = local_index
+        if (startmode == 4 .and. allocated(idx)) then
+            if (local_index < 1 .or. local_index > size(idx)) &
+                error stop 'Particle index outside selected batch'
+            source_index = idx(local_index)
+        end if
+        if (source_index < 1 .or. particle_index_offset < 0) &
+            error stop 'Particle stream identity must be positive'
+        if (int(particle_index_offset, int64) > &
+            2147483646_int64 - int(source_index, int64)) &
+            error stop 'Particle stream identity exceeds integer range'
+        global_index = particle_index_offset + source_index
+    end function particle_stream_id
 
     subroutine reallocate_arrays
         integer :: npoi
@@ -773,15 +780,30 @@ contains
         end if
     end subroutine apply_config_aliases
 
-    subroutine reset_seed_if_deterministic
+    subroutine reset_seed_if_deterministic(stream_id)
         ! for run with fixed random seed
-        integer :: seedsize
+        integer, intent(in), optional :: stream_id
+        integer :: seedsize, i, stream
         integer, allocatable :: seed(:)
+        integer(int64) :: state
+        integer(int64), parameter :: modulus = 2147483647_int64
 
         if (deterministic) then
             call random_seed(size=seedsize)
             if (.not. allocated(seed)) allocate (seed(seedsize))
-            seed = ran_seed
+            if (.not. present(stream_id)) then
+                seed = ran_seed
+                call random_seed(put=seed)
+                return
+            end if
+            stream = stream_id
+            state = modulo(int(ran_seed, int64) + 104729_int64*int(stream, int64), &
+                           modulus - 1_int64) + 1_int64
+            do i = 1, seedsize
+                state = modulo(48271_int64*state + 7919_int64*int(i, int64), &
+                               modulus - 1_int64) + 1_int64
+                seed(i) = int(state)
+            end do
             call random_seed(put=seed)
         end if
     end subroutine reset_seed_if_deterministic

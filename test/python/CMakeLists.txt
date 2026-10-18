@@ -29,6 +29,7 @@ add_pytest(test_coil_clearance "engineering" 120)
 add_pytest(test_plotting "plotting" 120)
 add_pytest(test_cli "plotting" 120)
 add_pytest(test_golden_orbit_results "golden" 120)
+add_pytest(test_golden_collision_results "golden;collisions" 120)
 add_pytest(test_step_convergence "tools" 120)
 add_pytest(test_imas "imas;slow" 600 -s)
 

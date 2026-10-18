@@ -131,6 +131,7 @@ debug = .false.                  ! per-particle diagnostic output; only in build
 batch_size = 2000000000          ! if < ntestpart: trace a random subset of batch_size
 !                                  particles (indices in batch.dat); ntestpart = batch_size
 ran_seed = 42                    ! seed of the batch index draw and of deterministic runs
+particle_index_offset = 0       ! original rows before a contiguous external shard
 reuse_batch = .false.            ! .true.: reuse the batch indices from batch.dat if present
 restart = .false.                ! .true.: resume from times_lost.dat and orbit_exit_code.dat;
 !                                  particles that reached trace_time are not traced again

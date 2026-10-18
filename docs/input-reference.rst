@@ -25,7 +25,7 @@ and ``DOC/config.md`` for additional usage, units and option interactions.
 &config
 -------
 
-Source: ``src/params.f90:213``.
+Source: ``src/params.f90:214``.
 
 .. list-table::
    :header-rows: 1
@@ -504,6 +504,12 @@ Source: ``src/params.f90:213``.
      - ``default``
      - ``scalar``
      - ``42``
+     -
+   * - ``particle_index_offset``
+     - ``integer``
+     - ``default``
+     - ``scalar``
+     - ``0``
      -
    * - ``reuse_batch``
      - ``logical``
