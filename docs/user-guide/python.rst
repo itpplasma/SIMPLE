@@ -4,8 +4,9 @@ Python interface
 ``pysimple`` is a thin Python layer over SIMPLE's Fortran library interface
 ``src/simple_api.f90``. It exposes the phases used by ``simple.x``; parity of
 runs configured from a ``simple.in`` file is tested in
-``test/python/test_simple_api.py``. The sampling caveat below applies at this
-revision. Installation is described in :doc:`/getting-started/installation`.
+``test/python/test_simple_api.py``. That parity test can fail because of the
+sampling defect below; equivalence is not guaranteed at this revision.
+Installation is described in :doc:`/getting-started/installation`.
 
 Typical use:
 
@@ -49,9 +50,10 @@ inside an optimisation loop.
    from uninitialised memory: ``simple_sample`` reallocates the start-surface
    arrays (``src/simple_api.f90``, ``allocate_particles``) but skips the
    field-line integration that fills them when the surface has not changed
-   (``use_sampling_field``). Check that ``start[0]`` equals the requested
-   surface, as :doc:`/tutorials/optimisation-loop` does, or use a surface
-   different from ``sbeg`` in ``sample_surface``.
+   (``use_sampling_field``). Use a surface different from ``sbeg`` in
+   ``sample_surface``, as :doc:`/tutorials/optimisation-loop` does. Checking
+   only ``start[0]`` is insufficient: the radial coordinate can be correct
+   while the sampled angles are corrupted.
 
 Fortran programs use the same interface through ``use simple_api``: set
 ``params`` variables or call ``simple_read_config``, then ``simple_init``,

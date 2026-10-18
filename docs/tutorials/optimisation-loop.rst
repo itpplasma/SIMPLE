@@ -36,9 +36,14 @@ candidates.
 surface :math:`s` = ``S_START``. With ``deterministic=True`` the random
 generator is reseeded in every ``init``. Two calls with the same equilibrium
 therefore use the same start points, and two similar equilibria use nearly the
-same ones. This technique of common random numbers removes most of the sampling
-noise from the *difference* of two objective values, which is what an
-optimiser compares.
+same ones. This technique of common random numbers can reduce the sampling
+noise in the *difference* of two objective values, which is what an
+optimiser compares. The reduction depends on the correlation between outcomes.
+
+The example samples at ``s=0.6``, different from the initial default
+``sbeg=0.5``, to avoid the sampling defect described in
+:doc:`/user-guide/python`. Keep those surfaces different when changing the
+settings; the radial-coordinate assertion alone cannot detect that defect.
 
 ``trace_parallel`` traces all particles with OpenMP and returns the loss time
 of each one: ``trace_time`` if it stayed confined, ``NaN`` if the orbit could
@@ -74,8 +79,11 @@ Is a change significant?
 ------------------------
 
 The standard error :math:`\sqrt{f(1-f)/N}` holds for one evaluation. For a
-difference between two equilibria with common random numbers the error is
-smaller, because the same particles are compared. In an optimisation:
+difference between two equilibria with common random numbers, estimate the
+error from the paired particle outcomes; it is smaller only when their
+correlation is positive. At zero observed losses, the displayed plug-in error
+of zero is not an upper bound: use a binomial interval as described in
+:doc:`loss-fraction`. In an optimisation:
 
 * use a fixed seed (``deterministic=True``) and the same ``N`` for all
   evaluations,
@@ -93,9 +101,10 @@ A cheaper proxy: orbit classification
 -------------------------------------
 
 The classifiers of Albert et al. (2023) decide after a few bounce periods
-whether a trapped orbit is regular (confined without collisions) or chaotic
+whether a trapped orbit is regular or chaotic
 (:doc:`/model/classification`). ``classify_fast`` stops after ``nturns``
-recurrences of the banana tip:
+recurrences of the banana tip. Regular motion implies confinement only when
+the orbit's invariant torus lies inside the loss boundary:
 
 .. literalinclude:: scripts/classify_proxy.py
    :language: python
