@@ -188,7 +188,7 @@ See `docs/boozer-chartmap-schema.rst` for the NetCDF schema and scaling rules.
 To compare numerical output with a reference revision:
 
 ```bash
-make test-golden-main
+make test-regression TEST=golden_record_
 ```
 
 The golden-record scripts build the selected reference and compare its output

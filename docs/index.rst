@@ -14,6 +14,7 @@ docstrings of ``pysimple`` and the examples are the scripts in ``examples/``.
    api/index
    examples
    boozer-chartmap-schema
+   contributing
 
 Indices and tables
 ------------------
