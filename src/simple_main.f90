@@ -1375,6 +1375,7 @@ contains
     end subroutine read_profiles_config
 
     subroutine init_collisions
+        use profile_radius, only: init_profile_radius
         use params, only: am1, am2, Z1, Z2, facE_al, dchichi, slowrate, &
             dchichi_norm, slowrate_norm, v0
         use simple_profiles, only: Te_scale, Ti1_scale, Ti2_scale, &
@@ -1399,6 +1400,7 @@ contains
         end if
 
         call init_collision_profiles(am1, am2, Z1, Z2, ealpha, v0)
+        call init_profile_radius
     end subroutine init_collisions
 
     subroutine sample_particles(xstart_is_integ_coords)
@@ -3148,11 +3150,12 @@ contains
     end subroutine update_momentum
 
     subroutine collide(z, dt, ierr_coll)
+        use profile_radius, only: profile_s
         real(dp), intent(inout) :: z(5)
         real(dp), intent(in) :: dt
         integer, intent(out) :: ierr_coll
 
-        call stost(z, dt, 1, ierr_coll)
+        call stost(z, dt, 1, ierr_coll, s_profile=profile_s(z(1:3)))
         if (ierr_coll /= 0) then
             print *, 'Error in stost: ', ierr_coll, 'z = ', z, 'dtaumin = ', dtaumin
         end if
