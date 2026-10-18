@@ -142,7 +142,7 @@ were 7/41 with wall times 929/409 s; the retained reference and GC timings were
 920/565 s and 15/25 s. These historical timings use different thread counts,
 so they are not a direct speed comparison with the corrected runs. Setup and
 full timing evidence are retained in
-[`concept/symplectic_sheet/README.md`](../concept/symplectic_sheet/README.md#simple-on-ncsx-loss-fractions-against-full-orbit-everywhere).
+[`concept/symplectic_sheet/README.md`](https://github.com/itpplasma/SIMPLE/blob/main/concept/symplectic_sheet/README.md#simple-on-ncsx-loss-fractions-against-full-orbit-everywhere).
 
 `mu` conservation through a zero-width sheet is a modeling convention: the
 Buechner-Zelenyi adiabaticity parameter vanishes for an ideal
