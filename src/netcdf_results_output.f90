@@ -54,7 +54,8 @@ contains
                           isw_field_type, swcoll, deterministic, ran_seed, &
                           max_consecutive_warning_holds, &
                           netcdffile, field_input, coord_input, &
-            wall_input, wall_units, wall_hit, wall_hit_cart, &
+            wall_input, wall_units, wall_hit, wall_hit_triangle, &
+            wall_hit_cart, &
             wall_query_rho_lcfs, &
             chart_boundary_kind, chart_boundary_kind_effective, &
                           wall_hit_normal_cart, wall_hit_cos_incidence, &
@@ -78,7 +79,7 @@ contains
         integer :: var_zstart, var_zend, var_xstart_cart, var_xend_cart
         integer :: var_iclass, var_class_lost, var_wall_hit, var_wall_hit_cart
         integer :: var_wall_hit_normal_cart, var_wall_hit_cos_incidence
-        integer :: var_wall_hit_angle_rad
+        integer :: var_wall_hit_angle_rad, var_wall_hit_triangle
         integer :: i
         real(dp), allocatable :: xstart_cart(:, :), xend_cart(:, :)
         integer(int8), allocatable :: class_lost_i8(:)
@@ -255,6 +256,20 @@ contains
         status = nf90_put_att(ncid, var_wall_hit, 'description', &
                               'Wall hit flag (1=hit wall_input STL, 0=no hit)')
         call check_nc(status, 'put_att wall_hit description')
+
+        if (len_trim(wall_input) > 0) then
+            status = nf90_def_var(ncid, 'wall_hit_triangle', nf90_int, &
+                                  [dim_particle], var_wall_hit_triangle)
+            call check_nc(status, 'def_var wall_hit_triangle')
+            status = nf90_put_att(ncid, var_wall_hit_triangle, 'description', &
+                'STL facet index in file order; -1 means no wall hit')
+            call check_nc(status, 'put_att wall_hit_triangle description')
+            status = nf90_put_att(ncid, var_wall_hit_triangle, 'start_index', 0)
+            call check_nc(status, 'put_att wall_hit_triangle start_index')
+            status = nf90_put_att(ncid, var_wall_hit_triangle, 'stl_file', &
+                                  trim(wall_input))
+            call check_nc(status, 'put_att wall_hit_triangle stl_file')
+        end if
 
         status = nf90_def_var(ncid, 'wall_hit_cart', nf90_double, &
                               [dim_xyz, dim_particle], var_wall_hit_cart)
@@ -448,6 +463,11 @@ contains
 
         status = nf90_put_var(ncid, var_wall_hit, wall_hit)
         call check_nc(status, 'put_var wall_hit')
+
+        if (len_trim(wall_input) > 0) then
+            status = nf90_put_var(ncid, var_wall_hit_triangle, wall_hit_triangle)
+            call check_nc(status, 'put_var wall_hit_triangle')
+        end if
 
         status = nf90_put_var(ncid, var_wall_hit_cart, wall_hit_cart)
         call check_nc(status, 'put_var wall_hit_cart')

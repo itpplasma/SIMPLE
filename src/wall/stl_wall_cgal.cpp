@@ -20,10 +20,9 @@
 #include <CGAL/number_utils.h>
 // Support both CGAL 5.x and 4.x APIs
 #if CGAL_VERSION_MAJOR >= 5
-#include <CGAL/boost/graph/IO/polygon_mesh_io.h>
+#include <CGAL/IO/STL.h>
 #else
 #include <CGAL/IO/STL_reader.h>
-#include <CGAL/Polygon_mesh_processing/polygon_soup_to_polygon_mesh.h>
 #endif
 #include <CGAL/squared_distance_3.h>
 #include <CGAL/Surface_mesh.h>
@@ -128,33 +127,27 @@ extern "C" void* stl_wall_create(const char* filename, double scale_to_m) {
             return nullptr;
         }
 
+        // Read the polygon soup, preserving STL facet order. Independent
+        // vertices prevent mesh repair/orientation from reordering facets.
         SurfaceMesh mesh;
-#if CGAL_VERSION_MAJOR >= 5
-        if (!CGAL::IO::read_polygon_mesh(filename, mesh)) {
-            return nullptr;
-        }
-#else
-        // CGAL 4.x API for reading STL
-        std::vector<std::array<double, 3>> points;
-        std::vector<std::array<int, 3>> triangles;
+        std::vector<Point> points;
+        std::vector<std::array<std::size_t, 3>> triangles;
         std::ifstream input(filename, std::ios::binary);
+#if CGAL_VERSION_MAJOR >= 5
+        if (!input || !CGAL::IO::read_STL(input, points, triangles)) {
+#else
         if (!input || !CGAL::read_STL(input, points, triangles)) {
+#endif
             return nullptr;
         }
-        std::vector<Point> pts;
-        pts.reserve(points.size());
-        for (const auto& p : points) {
-            pts.emplace_back(p[0], p[1], p[2]);
-        }
-        std::vector<std::vector<std::size_t>> faces;
-        faces.reserve(triangles.size());
         for (const auto& t : triangles) {
-            faces.push_back({static_cast<std::size_t>(t[0]),
-                           static_cast<std::size_t>(t[1]),
-                           static_cast<std::size_t>(t[2])});
+            const auto a = mesh.add_vertex(points[t[0]]);
+            const auto b = mesh.add_vertex(points[t[1]]);
+            const auto c = mesh.add_vertex(points[t[2]]);
+            if (mesh.add_face(a, b, c) == SurfaceMesh::null_face()) {
+                return nullptr;
+            }
         }
-        CGAL::Polygon_mesh_processing::polygon_soup_to_polygon_mesh(pts, faces, mesh);
-#endif
         if (num_faces(mesh) == 0 || num_vertices(mesh) == 0) {
             return nullptr;
         }
@@ -234,7 +227,10 @@ extern "C" int stl_wall_first_hit_segment(void* h, const double p0_m[3],
 extern "C" int stl_wall_first_hit_segment_with_normal(void* h, const double p0_m[3],
                                                       const double p1_m[3],
                                                       double hit_m[3],
-                                                      double normal[3]) {
+                                                      double normal[3], int* triangle) {
+    if (triangle != nullptr) {
+        *triangle = -1;
+    }
     if (h == nullptr || p0_m == nullptr || p1_m == nullptr || hit_m == nullptr ||
         normal == nullptr) {
         return 0;
@@ -297,5 +293,8 @@ extern "C" int stl_wall_first_hit_segment_with_normal(void* h, const double p0_m
     normal[0] = n_unit[0];
     normal[1] = n_unit[1];
     normal[2] = n_unit[2];
+    if (triangle != nullptr) {
+        *triangle = static_cast<int>(best_face.idx());
+    }
     return 1;
 }

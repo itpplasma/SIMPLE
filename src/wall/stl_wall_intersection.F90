@@ -42,7 +42,7 @@ module stl_wall_intersection
         end function stl_wall_first_hit_segment_c
 
         function stl_wall_first_hit_segment_with_normal_c( &
-            h, p0_m, p1_m, hit_m, normal) &
+            h, p0_m, p1_m, hit_m, normal, triangle) &
             bind(C, name="stl_wall_first_hit_segment_with_normal") result(hit)
             import :: c_ptr, c_double, c_int
             type(c_ptr), value, intent(in) :: h
@@ -50,6 +50,7 @@ module stl_wall_intersection
             real(c_double), intent(in) :: p1_m(3)
             real(c_double), intent(out) :: hit_m(3)
             real(c_double), intent(out) :: normal(3)
+            integer(c_int), intent(out) :: triangle
             integer(c_int) :: hit
         end function stl_wall_first_hit_segment_with_normal_c
     end interface
@@ -132,15 +133,18 @@ contains
     end subroutine stl_wall_first_hit_segment
 
     subroutine stl_wall_first_hit_segment_with_normal(wall, p0_m, p1_m, hit, hit_m, &
-                                                      normal)
+                                                      normal, triangle)
         type(stl_wall_t), intent(in) :: wall
         real(dp), intent(in) :: p0_m(3)
         real(dp), intent(in) :: p1_m(3)
         logical, intent(out) :: hit
         real(dp), intent(out) :: hit_m(3)
         real(dp), intent(out) :: normal(3)
+        integer, intent(out), optional :: triangle
 
-        integer(c_int) :: hit_i
+        integer(c_int) :: hit_i, triangle_i
+
+        if (present(triangle)) triangle = -1
 
 #ifdef SIMPLE_ENABLE_CGAL
         if (.not. c_associated(wall%handle)) then
@@ -149,8 +153,9 @@ contains
         hit_i = stl_wall_first_hit_segment_with_normal_c(wall%handle, &
                                                          real(p0_m, c_double), &
                                                          real(p1_m, c_double), &
-                                                         hit_m, normal)
+                                                         hit_m, normal, triangle_i)
         hit = (hit_i /= 0)
+        if (present(triangle)) triangle = int(triangle_i)
 #else
         associate (dummy_wall => wall, dummy_p0 => p0_m, dummy_p1 => p1_m)
         end associate

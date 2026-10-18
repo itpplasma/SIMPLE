@@ -21,7 +21,8 @@ module simple_main
         zend, trap_par, perp_inv, sbeg, ntimstep, should_skip, &
         reset_seed_if_deterministic, field_input, isw_field_type, reuse_batch, &
         max_consecutive_warning_holds, &
-        coord_input, wall_input, wall_units, wall_hit, wall_hit_cart, &
+        coord_input, wall_input, wall_units, wall_hit, wall_hit_triangle, &
+            wall_hit_cart, &
         wall_query_rho_lcfs, &
         chart_boundary_kind, chart_boundary_kind_effective, &
         wall_hit_normal_cart, wall_hit_cos_incidence, wall_hit_angle_rad, &
@@ -2690,17 +2691,18 @@ contains
         real(dp) :: x_hit_m(3), x_hit(3), normal_m(3), vhat(3)
         real(dp) :: segment_length, hit_distance, hit_fraction, cos_inc
         real(dp) :: u_hit(3), theta_delta, phi_delta
-        integer :: ierr_from_cart
+        integer :: ierr_from_cart, triangle
 
         hit = .false.
         hit_step = start_step + segment_steps
         if (wall_query_rho_lcfs >= 0.0_dp .and. &
             u_end(1) <= wall_query_rho_lcfs) return
         call stl_wall_first_hit_segment_with_normal( &
-            wall, x_start_m, x_end_m, hit, x_hit_m, normal_m)
+            wall, x_start_m, x_end_m, hit, x_hit_m, normal_m, triangle)
         if (.not. hit) return
 
         x_hit = x_hit_m/chartmap_cart_scale_to_m
+        wall_hit_triangle(ipart) = triangle
         wall_hit(ipart) = 1_int8
         wall_hit_cart(:, ipart) = x_hit
         wall_hit_normal_cart(:, ipart) = normal_m
