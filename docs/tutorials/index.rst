@@ -1,11 +1,9 @@
 Tutorials
 =========
 
-The tutorials are written for physicists who know stellarator equilibria and
-alpha-particle physics but have not used SIMPLE before. Each tutorial runs on
-public input data in a few minutes on a workstation. Commands are run from
-the repository root unless stated otherwise, after building SIMPLE as
-described in :doc:`/getting-started/installation`.
+Three worked examples on public equilibria, each a few minutes on a
+workstation. Build SIMPLE first (:doc:`/getting-started/installation`); run
+commands from the repository root unless a step says otherwise.
 
 .. toctree::
    :maxdepth: 1
@@ -14,8 +12,6 @@ described in :doc:`/getting-started/installation`.
    wall-heat-loads
    optimisation-loop
 
-The numbers printed on these pages come from runs on a 32-thread Linux
-workstation with a Release build and a fixed random seed
-(``deterministic = .true.``). Another compiler, CPU or build type changes the
-rounding, so individual orbits and loss times can differ. Loss fractions then
-agree within their statistical error.
+Printed numbers come from a Release build with ``deterministic = .true.``.
+Another compiler, CPU or build type changes the rounding and hence individual
+chaotic orbits; loss fractions then agree within their statistical error.
