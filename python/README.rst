@@ -176,13 +176,24 @@ must support ``grid_kind=6`` (tested revision
 ``2f2d2802011ab895bfad8c188ca652ca5b7222c6``).
 
 The runner generates circular flux surfaces at aspect ratios 10 and 100,
-or downloads the following public inputs using immutable URLs and SHA256
-checksums in its ``SOURCES`` table:
+or downloads published, openly licensed example equilibria on first use. Each
+input is pinned to an immutable repository revision and verified against the
+SHA256 checksum and COCOS in its ``SOURCES`` table:
 
-* ASDEX Upgrade shot 26884 at 4.3 s, from GORILLA's public test equilibrium.
-* ITER 10 MA design equilibrium, from SCOREC's Fusion_Public examples.
-* SPARC equilibrium-library case 1300, from CFS SPARCPublic. This scan case
-  has 0.2 MA current and is not the nominal SPARC reference discharge.
+* ``diii-d``: DIII-D shot 145419 at 2100 ms (EFIT, COCOS 1), OMAS sample
+  data, MIT licence. A lower-single-null equilibrium of ASDEX Upgrade size
+  (R = 1.68 m, a = 0.59 m, B0 = 1.86 T, 1.5 MA).
+* ``iter-hybrid``: ITER hybrid scenario (CRONOS/CHEASE; Citrin et al. 2010,
+  Nucl. Fusion 50, 115007), COCOS 17, 11.8 MA, from TORAX's third-party data
+  under the MIT ``LICENSE_PINT``.
+* ``sparc``: SPARC equilibrium-library case 1300 (COCOS 3), CFS SPARCPublic,
+  MIT licence. This scan case has 0.2 MA current and is not the nominal SPARC
+  reference discharge.
+
+The ITER case is a published simulation of an ITER scenario, not an ITER
+Organization equilibrium release, and its fixed CHEASE boundary has no
+X-point. No openly licensed ASDEX Upgrade equilibrium was found, so DIII-D is
+the medium-size single-null tokamak case.
 
 The original files remain in ``~/.cache/simple/imas-benchmarks``. Choose a
 new output directory outside the repository for each run; repository-local
@@ -196,13 +207,13 @@ The full suite runs 30 cases, with separate field/timestep refinements,
 fast-alpha losses and 1080-marker collision ensembles. ``suite.json`` records
 every exit status, including failures. Individual cases can be run with::
 
-    python examples/imas_benchmark.py --case aug --output /tmp/ids-aug-r48 \
+    python examples/imas_benchmark.py --case diii-d --output /tmp/ids-diii-d-r48 \
         --gorilla /path/to/GORILLA
-    python examples/imas_benchmark.py --case aug --resolution 96 --step 5e-9 \
-        --output /tmp/ids-aug-r96 --gorilla /path/to/GORILLA
+    python examples/imas_benchmark.py --case diii-d --resolution 96 --step 5e-9 \
+        --output /tmp/ids-diii-d-r96 --gorilla /path/to/GORILLA
 
-Use ``--case circular``, ``large-aspect``, ``iter`` or ``sparc`` for the other
-toroidal cases. The default markers are 10 keV deuterium ions, spanning
+Use ``--case circular``, ``large-aspect``, ``iter-hybrid`` or ``sparc`` for
+the other toroidal cases. The default markers are 10 keV deuterium ions, spanning
 trapped/passing pitches at three starting radii. ``--species alpha --energy
 3500000 --dense --duration 1e-4`` covers 54 fast-alpha starts through the
 near-axis, core and edge regions. Repeat with smaller ASCOT timesteps and
