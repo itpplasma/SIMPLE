@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plot marker scaling and paired CPU/GPU throughput from raw repeated timings."""
+"""Plot marker scaling and optional paired CPU/GPU throughput from raw repeated timings."""
 import argparse
 from pathlib import Path
 
@@ -12,14 +12,16 @@ import numpy as np
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--cpu', nargs='+', type=Path, required=True)
-    parser.add_argument('--gpu', type=Path, required=True)
+    parser.add_argument('--gpu', type=Path)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     rows = np.concatenate([np.atleast_1d(np.genfromtxt(
         path, delimiter=',', names=True, dtype=None, encoding='utf-8'))
         for path in args.cpu])
-    gpu = np.atleast_1d(np.genfromtxt(
-        args.gpu, delimiter=',', names=True, dtype=None, encoding='utf-8'))
+    gpu = None
+    if args.gpu:
+        gpu = np.atleast_1d(np.genfromtxt(
+            args.gpu, delimiter=',', names=True, dtype=None, encoding='utf-8'))
     rows = rows[rows['threads'] == 16]
     counts = np.unique(rows['markers'])
     groups = [rows[rows['markers'] == n] for n in counts]
@@ -32,14 +34,21 @@ def main():
     axes[0].legend(fontsize=8)
     axes[0].set_xscale('log', base=2)
     axes[0].set_xticks(counts, labels=[str(n) for n in counts])
-    largest = counts[-1]
-    if not np.all(gpu['markers'] == largest):
-        raise ValueError('GPU and largest CPU marker counts must match')
-    gpu_wall = np.mean(gpu['wall_s'])
-    axes[1].bar(['CPU 16 threads', 'CUDA 1 GPU'],
-                [largest / wall[-1], largest / gpu_wall],
-                color=['#0072B2', '#E69F00'], hatch=['', '//'], edgecolor='black')
-    axes[1].set(ylabel='Markers / total wall second', title=f'{largest} identical starts')
+    if gpu is not None:
+        largest = counts[-1]
+        if not np.all(gpu['markers'] == largest):
+            raise ValueError('GPU and largest CPU marker counts must match')
+        gpu_wall = np.mean(gpu['wall_s'])
+        axes[1].bar(['CPU 16 threads', 'CUDA 1 GPU'],
+                    [largest / wall[-1], largest / gpu_wall],
+                    color=['#0072B2', '#E69F00'], hatch=['', '//'], edgecolor='black')
+        axes[1].set(ylabel='Markers / total wall second', title=f'{largest} identical starts')
+    else:
+        axes[1].plot(counts, counts / wall, 'o-', color='#0072B2')
+        axes[1].set(xlabel='Markers', ylabel='Markers / total wall second',
+                    title='CPU throughput, including setup')
+        axes[1].set_xscale('log', base=2)
+        axes[1].set_xticks(counts, labels=[str(n) for n in counts])
     for axis in axes:
         axis.grid(axis='y', alpha=.25)
         axis.set_axisbelow(True)
