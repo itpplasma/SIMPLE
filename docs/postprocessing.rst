@@ -44,8 +44,9 @@ counted as physical losses; inspect ``unresolved_fraction.dat`` separately.
 Classes, wall hits and Poincare sections
 ----------------------------------------
 
-``classes`` reads ``class_parts.dat`` (index, initial s, perpendicular invariant,
-three class codes), or falls back to ``iclass`` in ``results.nc``. Three panels
+``classes`` reads ``class_parts.dat`` (index, initial reference radial coordinate,
+perpendicular invariant, three class codes), or falls back to ``iclass`` in
+``results.nc``. Three panels
 count the J_parallel, topology and fractal codes, including 0 (unclassified).
 Class codes are shown as written by SIMPLE; a NetCDF run with classification
 disabled can contain only zeros.
@@ -68,7 +69,10 @@ are field-line sections, distinct from orbit-class statistics.
 
 Each subcommand reports missing files or required variables with an error and
 exit status 2. It reads no input configuration. For reference,
-``times_lost.dat`` contains index, loss time, trapping parameter, initial s,
-perpendicular invariant and the five final phase-space components;
-``start.dat`` contains the five initial components ``(s, theta, phi, v/v0,
-v_par/v)``. Neither is required for current four-column confinement output.
+``times_lost.dat`` contains index, loss time, trapping parameter, initial
+reference radial coordinate, perpendicular invariant and the five final
+phase-space components; ``start.dat`` contains the five initial components
+``(u1, theta, phi, v/v0, v_par/v)`` in reference coordinates. Here ``u1`` is
+``s`` for VMEC and ``rho = sqrt(s)`` for Boozer chartmaps; other reference
+charts retain their native radial coordinate. Neither file is required for
+current four-column confinement output.
