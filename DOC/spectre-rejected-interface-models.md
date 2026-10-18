@@ -21,7 +21,7 @@ with this premise. Derivatives of $A$, not its matched trace, jump.
 All crossing theorems below concern isolated transversal events, finitely many
 on a bounded time interval, with no grazing or simultaneous boundary events.
 Algebra is checked exactly by
-[`verify_rejected_models.py`](../concept/symplectic_sheet/proofs/verify_rejected_models.py).
+[`verify_rejected_models.py`](https://github.com/itpplasma/SIMPLE/blob/main/concept/symplectic_sheet/proofs/verify_rejected_models.py).
 Analytic estimates, physical ordering assumptions, recorded measurements, and
 cited backward-error theorems are justified separately; SymPy does not prove them.
 

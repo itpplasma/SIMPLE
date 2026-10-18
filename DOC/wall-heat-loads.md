@@ -19,16 +19,11 @@ For a 3 GW fusion reactor: $P_\alpha \approx 600$ MW.
 
 ## Alpha Particle Slowing Down
 
-Alphas are born at $E_0 = 3.5$ MeV and slow down via Coulomb collisions with background electrons and ions. The characteristic slowing-down time is:
-
-$$\tau_s = \frac{3(2\pi)^{3/2} \epsilon_0^2 m_\alpha}{e^4 Z_\alpha^2 n_e \ln\Lambda} \left(\frac{T_e}{m_e}\right)^{3/2}$$
-
-For typical reactor parameters ($n_e = 10^{20}$ m$^{-3}$, $T_e = 10$ keV), $\tau_s \approx 0.1-1$ s.
-
-The implemented operator includes momentum drag, momentum diffusion and
-pitch scattering. Its energy histories depend on the supplied temperature
-and density profiles; the characteristic time is a guide for choosing the
-trace duration, not an exact stopping law for each marker.
+Alphas are born at $E_0 = 3.5$ MeV and slow down via Coulomb collisions with
+background electrons and ions. SIMPLE computes drag and diffusion from the
+local densities and temperatures in `src/collis_alphas.f90`; it does not
+prescribe a universal energy-versus-time curve. Heat-load estimates use the
+speed recorded at each particle's exit.
 
 ## Collisions with an STL wall
 
@@ -215,22 +210,13 @@ The **energy loss fraction** accounts for slowing down:
 
 $$f_\text{energy} = \frac{1}{N} \sum_{i \in \text{lost}} p_i^2$$
 
-For an ensemble dominated by slowing down, typically
-$f_\text{energy} \leq f_\text{particle}$. Stochastic energy diffusion does not
-impose $p_i^2 \leq 1$ on every individual marker.
+When all escaping particles have $p_i^2 \leq 1$,
+$f_\text{energy} \leq f_\text{particle}$. This is conditional: energy
+diffusion can also increase a particle's energy.
 
 The lost power is:
 
 $$P_\text{lost} = f_\text{energy} \cdot P_\alpha$$
-
-## Typical Values
-
-| Configuration | Peak Heat Flux | Reference |
-|--------------|----------------|-----------|
-| Infinity Two | ~2.5 MW/m$^2$ | Albert et al. (2024) |
-| ARIES-CS | 5-18 MW/m$^2$ | Ku & Boozer (2008) |
-| W7-X (experiments) | 0.1-1 MW/m$^2$ | Lazerson et al. (2021) |
-| Material limits | 5-10 MW/m$^2$ | Engineering constraint |
 
 ## Wall Area Calculation
 
@@ -242,7 +228,8 @@ For quick estimates, the code defaults to a simple torus:
 
 $$A = 4\pi^2 R_0 a$$
 
-where $R_0$ is major radius and $a$ is minor radius. This underestimates stellarator wall area by 1.5-2x due to 3D shaping.
+where $R_0$ is major radius and $a$ is minor radius. The error depends on the
+three-dimensional geometry; use the actual surface for quantitative results.
 
 ### Actual Geometry from Chartmap
 
@@ -272,12 +259,12 @@ Consider reducing n_theta/n_zeta or using a finer chartmap.
 
 For 3.5 MeV alpha particles in a ~5 T field:
 
-$$\rho_\alpha = \frac{m_\alpha v_\perp}{Z_\alpha e B} \approx 5-10\,\text{cm}$$
+$$\rho_\alpha = \frac{m_\alpha v_\perp}{Z_\alpha e B} \lesssim 5.4\,\text{cm}$$
 
 This means:
-- Heat load patterns are smeared by ~10 cm
+- Particle impact points can differ from guiding-centre hits by a gyroradius
 - Fine-scale wall features are not resolved
-- Peak flux may be underestimated due to averaging
+- Peak flux and its location can change when gyromotion is resolved
 
 For high-resolution wall load studies (e.g., limiter tile design), finite Larmor radius effects should be added by:
 1. Adding a gyroradius offset in the direction perpendicular to B
@@ -285,7 +272,12 @@ For high-resolution wall load studies (e.g., limiter tile design), finite Larmor
 
 ## Code Implementation
 
-The `WallHeatMap` class in `pysimple.engineering` implements this calculation:
+The `WallHeatMap` class in `pysimple.engineering` implements this calculation.
+At this revision, however, `from_netcdf` assumes the wrong array order and
+selects losses using `class_lost`, which is only filled in classification
+runs. The example below illustrates its API; use the script in Tutorial 2
+(`docs/tutorials/scripts/lcfs_heat_flux.py`) for standard-run results until
+these reader defects are fixed.
 
 ```python
 from pysimple.engineering import WallHeatMap, compute_wall_area_from_chartmap
@@ -318,30 +310,26 @@ The NetCDF results file from SIMPLE contains:
 
 | Variable | Shape | Description |
 |----------|-------|-------------|
-| `zend` | (5, N) | Final reference phase space: radial coordinate (rho for chartmaps), theta, zeta, p=v/v0, lambda |
-| `xend_cart` | (3, N) | Final Cartesian position (x, y, z) |
+| `zend` | (N, 5) | Final reference phase space: radial coordinate (rho for chartmaps), theta, zeta, p=v/v0, lambda |
+| `xend_cart` | (N, 3) | Final Cartesian position (x, y, z) |
 | `class_lost` | (N,) | Classifier loss flag; use wall_hit to select STL intersections |
+| `orbit_exit_code` | (N,) | 1 for LCFS loss, 2 for wall loss; other outcomes have separate codes |
 | `wall_hit` | (N,) | 1 for a confirmed STL intersection |
 | `wall_hit_angle_rad` | (N,) | Segment incidence angle relative to wall normal (rad) |
-| `times_lost` | (N,) | Time of wall impact (s) |
+| `times_lost` | (N,) | Loss time, trace time if confined, -1 if skipped, NaN if unresolved |
 
-The velocity ratio `zend[3]` = $p = v/v_0$ is crucial for energy weighting.
+These are the array shapes seen from Python. The velocity ratio `zend[:, 3]`
+= $p = v/v_0$ is crucial for energy weighting.
 
 ## References
 
-1. **Lazerson, S.A., et al.** (2021). "Modeling of energetic particle transport in optimized stellarators." *Plasma Physics and Controlled Fusion* 63, 125033.
-   https://doi.org/10.1088/1361-6587/ac2b38
+1. **Albert, C.G., et al.** (2026). "Symplectic methods for optimization of wall heat loads by fusion alpha particles in stellarator reactors." *Nuclear Materials and Energy* 48, 102200.
+   https://doi.org/10.1016/j.nme.2026.102200
 
-2. **Albert, C.G., et al.** (2024). "Alpha particle confinement in Infinity Two." *Journal of Plasma Physics*.
-   https://doi.org/10.1017/S0022377824000163
-
-3. **Ku, L.P. & Boozer, A.H.** (2008). "Stellarator alpha particle loss calculations for ARIES-CS." *Fusion Science and Technology* 54, 673-693.
-   https://doi.org/10.13182/FST08-A1891
-
-4. **Drevlak, M., et al.** (2014). "Fast particle confinement with optimized coil currents in the W7-X stellarator." *Nuclear Fusion* 54, 073002.
+2. **Drevlak, M., et al.** (2014). "Fast particle confinement with optimized coil currents in the W7-X stellarator." *Nuclear Fusion* 54, 073002.
    https://doi.org/10.1088/0029-5515/54/7/073002
 
-5. **BEAMS3D code documentation**: https://princetonuniversity.github.io/STELLOPT/BEAMS3D
+3. **BEAMS3D code documentation**: https://princetonuniversity.github.io/STELLOPT/BEAMS3D
 
 ## Heat loads on STL triangles
 

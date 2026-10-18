@@ -3,8 +3,8 @@
 Working notes on adding a Boris/VPA or symplectic full-orbit (Lorentz) pusher
 alongside the existing symplectic guiding-center tracer. Records what the switch
 costs, where it breaks across coordinate systems, and how ASCOT5 and VENUS-LEVIS
-handle the stellarator-boundary problem. Source references are to the local trees
-`/Users/ert/code/SIMPLE` and `/Users/ert/code/ascot5` and to the cited papers.
+handle the stellarator-boundary problem. Source paths are relative to the SIMPLE
+and ASCOT5 repositories, respectively, and references also include the cited papers.
 
 ## 1. What SIMPLE integrates now
 
@@ -187,12 +187,12 @@ Numerical methods:
   Canonical symplectic PIC; implicit, fast local solve.
 - R. Zhang et al., Phys. Plasmas (2018). DOI 10.1063/1.5012767. Explicit canonical
   symplectic via generating functions.
-- Y. Xiao, H. Qin, Comput. Phys. Commun. (2019). DOI 10.1016/j.cpc.2019.04.003.
+- J. Xiao, H. Qin, Comput. Phys. Commun. (2019). DOI 10.1016/j.cpc.2019.04.003.
   Gauge-independent explicit symplectic.
 
 Codes:
 - E. Hirvijoki et al., ASCOT5; full orbit via VPA. Source
-  `/Users/ert/code/ascot5/src/simulate/step/step_fo_vpa.c`, field
+  `src/simulate/step/step_fo_vpa.c` in ASCOT5, field
   `src/Bfield/B_STS.*`, wall `src/wall/wall_3d.*`. Overview arXiv:1908.02482.
 - D. Pfefferle, W.A. Cooper, J.P. Graves, C. Misev, Comput. Phys. Commun. 185, 3127
   (2014). DOI 10.1016/j.cpc.2014.08.007. VENUS-LEVIS spline-Fourier field, full

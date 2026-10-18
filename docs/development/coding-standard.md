@@ -15,7 +15,7 @@ unchanged).
   Fortran. Code on the OpenACC paths must also build with NVIDIA Fortran
   (`make nvfortran`, `make nvfortran-acc`). Native CUDA requires the CUDA
   toolkit and either GNU or NVIDIA Fortran; see
-  [the GPU build instructions](../../README.md#gpu-quickstart).
+  [the GPU build instructions](../user-guide/gpu.rst).
 - All Fortran sources pass through the preprocessor (`-cpp`), whatever the
   file extension.
 - The GNU build uses `-Wall -Wextra -Wimplicit-interface` and rejects lines
