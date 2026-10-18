@@ -1,0 +1,10 @@
+&config
+trace_time = 1d-5
+ntimstep = 20
+sbeg = 0.3d0
+ntestpart = 8
+deterministic = .true.
+ran_seed = 42
+netcdffile = 'wout.nc'
+isw_field_type = 2
+/
