@@ -187,9 +187,12 @@ Module                 Role
 ``equilibrium.py``     equilibrium IDS to COCOS 3 G-EQDSK, then libneo
                        ``convert_eqdsk_to_chartmap`` in a child Python process
 ``plasma.py``          ``core_profiles`` to a ``(6, n)`` table and collision settings
-``wall.py``            GGD or limiter wall to an ASCII STL in metres
 ``actor.py``           ``run``, ``run_entry`` and the ``simple-imas`` entry point
 =====================  ===============================================================
+
+A wall IDS is rejected by ``run`` and ``run_entry`` before any tracing: the
+equilibrium chartmap ends at the LCFS, so a wall would never be queried. Wall
+tracing for IDS input needs a chartmap beyond ``rho_lcfs`` first.
 
 ``run`` converts the equilibrium once, then per population calls
 ``pysimple.init`` with the actor-owned keys and ``plasma_profiles=table``,

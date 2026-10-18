@@ -15,7 +15,7 @@ Installation and versions
 of DD 3.x and 4.x are read; all IDS of one run must have the same DD version.
 ``run`` writes the DD version of its marker IDS; ``run_entry`` and
 ``simple-imas`` read and write ``dd_version`` (default 4.1.1) and let
-IMAS-Python convert. Walls need SIMPLE built with ``-DSIMPLE_ENABLE_CGAL=ON``.
+IMAS-Python convert.
 
 Running
 -------
@@ -56,11 +56,11 @@ From IDS objects in memory, here with markers built in Python:
 ``duration`` [s]             tracing time (``trace_time``); required
 ``source_interval`` [s]      required for ``distribution_sources``, forbidden otherwise
 ``time`` [s]                 initial time; default: first marker slice. Every IDS needs
-                             a slice at exactly this time (static walls excepted)
+                             a slice at exactly this time
 ``marker_ids``               ``distribution_sources`` (default) or ``distributions``;
                              ``occurrence`` (0) selects the marker occurrence
-``core_profiles``, ``wall``  IDS objects (``run``) or ``True`` to read them; collisions
-                             are on whenever ``core_profiles`` is given
+``core_profiles``            IDS object (``run``) or ``True`` to read it; collisions
+                             are on whenever it is given
 ``conversion``               libneo resolution, integers ≥ 8: ``nrho`` (50), ``ntheta``
                              (48), ``nstep`` (3600), ``nlabel``, ``ntheta_int`` (500),
                              ``nsurfmax`` (10000), ``nsurf`` (2000)
@@ -105,10 +105,6 @@ IDS field (DD 4 names)                                SIMPLE quantity
 ``.ion[i].density_thermal`` (or ``density``)          :math:`n_i` [m\ :sup:`-3`]
 ``.ion[i].element[0].a``, ``.z_ion``                  ``am1``/``am2``, ``Z1``/``Z2``
 ``.electrons.density``                                must equal :math:`\sum_i Z_i n_i`
-**wall**
-``.description_ggd[0]`` ... ``space[0]``              X, Y, Z nodes [m], one-based triangles
-``.description_2d[0].limiter.unit[0]``                closed :math:`(R,Z)` outline revolved
-                                                      into 128 toroidal sections
 ====================================================  ====================================================
 
 DD 3 stores equilibria in COCOS 11, DD 4 in COCOS 17. SIMPLE writes the COCOS 3
@@ -142,7 +138,9 @@ Output and weights
 the loss. The chartmap made from an equilibrium IDS ends at the LCFS
 (``rho_lcfs = 1``) and SIMPLE queries the wall only beyond ``rho_lcfs``
 (:doc:`wall-heat-loads`), so these markers end at the LCFS with code 1; code 2
-needs a ``field=`` chartmap that extends to the wall. The weights are
+needs a ``field=`` chartmap that extends to the wall.
+Wall-intersection tracing is not yet supported for IDS equilibria: a wall IDS
+(``wall=``, ``--wall``) raises an error before tracing, so omit it. The weights are
 
 .. math::
 
@@ -182,7 +180,7 @@ ASCOT5 compatibility
 SIMPLE reads the IDS fields that ASCOT5's ``a5py`` IMAS interface reads for
 guiding-centre markers (identifiers 4, 5, 3, 301, 403; weights in particles/s),
 axisymmetric equilibria (rectangular ``profiles_2d``, the same COCOS 11/17 to
-COCOS 3 flux mapping) and GGD walls (one-based node indices). Both take
+COCOS 3 flux mapping). Both take
 :math:`\lambda` relative to :math:`\mathbf B` and :math:`\varphi` in radians
 from the IDS. Differences:
 
@@ -192,6 +190,6 @@ from the IDS. Differences:
   (0.7 % heavier for alphas) and ``z_ion``.
 * ASCOT5 maps ``core_profiles`` to :math:`\rho_\text{pol}`, uses one ion
   temperature for all ions and accepts rotation.
-* ASCOT5 uses ``description_2d`` as a 2D wall; SIMPLE revolves it into 3D.
+* ASCOT5 reads the wall IDS; SIMPLE rejects it (see above).
 * ASCOT5 writes histogram moments to ``distributions.profiles_2d``; SIMPLE
   writes marker snapshots.
