@@ -18,12 +18,7 @@
 #include <CGAL/AABB_tree.h>
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/number_utils.h>
-// Support both CGAL 5.x and 4.x APIs
-#if CGAL_VERSION_MAJOR >= 5
 #include <CGAL/IO/STL.h>
-#else
-#include <CGAL/IO/STL_reader.h>
-#endif
 #include <CGAL/squared_distance_3.h>
 #include <CGAL/Surface_mesh.h>
 
@@ -41,9 +36,20 @@ struct Wall {
     Tree tree;
 
     explicit Wall(SurfaceMesh&& mesh_in)
-        : mesh(std::move(mesh_in)),
-          tree(faces(mesh).begin(), faces(mesh).end(), mesh) {
-        tree.accelerate_distance_queries();
+        : mesh(std::move(mesh_in)) {
+        // Keep every facet in the mesh for file-order IDs, but exclude
+        // zero-area primitives from CGAL queries (which require triangles).
+        std::vector<SurfaceMesh::Face_index> query_faces;
+        for (auto f : mesh.faces()) {
+            const auto h = halfedge(f, mesh);
+            if (!CGAL::collinear(mesh.point(source(h, mesh)),
+                                 mesh.point(target(h, mesh)),
+                                 mesh.point(target(next(h, mesh), mesh)))) {
+                query_faces.push_back(f);
+            }
+        }
+        tree.insert(query_faces.begin(), query_faces.end(), mesh);
+        if (!tree.empty()) tree.accelerate_distance_queries();
     }
 };
 
@@ -133,11 +139,7 @@ extern "C" void* stl_wall_create(const char* filename, double scale_to_m) {
         std::vector<Point> points;
         std::vector<std::array<std::size_t, 3>> triangles;
         std::ifstream input(filename, std::ios::binary);
-#if CGAL_VERSION_MAJOR >= 5
         if (!input || !CGAL::IO::read_STL(input, points, triangles)) {
-#else
-        if (!input || !CGAL::read_STL(input, points, triangles)) {
-#endif
             return nullptr;
         }
         for (const auto& t : triangles) {
@@ -167,6 +169,11 @@ extern "C" void stl_wall_destroy(void* h) {
     }
     auto* wall = static_cast<Wall*>(h);
     delete wall;
+}
+
+extern "C" int stl_wall_facet_count(void* h) {
+    return h == nullptr ? 0 : static_cast<int>(
+        num_faces(static_cast<const Wall*>(h)->mesh));
 }
 
 extern "C" int stl_wall_first_hit_segment(void* h, const double p0_m[3],

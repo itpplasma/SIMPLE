@@ -14,6 +14,7 @@ module stl_wall_intersection
 
     type :: stl_wall_t
         type(c_ptr) :: handle = c_null_ptr
+        integer :: facet_count = 0
     end type stl_wall_t
 
 #ifdef SIMPLE_ENABLE_CGAL
@@ -30,6 +31,12 @@ module stl_wall_intersection
             import :: c_ptr
             type(c_ptr), value, intent(in) :: h
         end subroutine stl_wall_destroy
+
+        function stl_wall_facet_count(h) bind(C) result(count)
+            import :: c_ptr, c_int
+            type(c_ptr), value, intent(in) :: h
+            integer(c_int) :: count
+        end function stl_wall_facet_count
 
         function stl_wall_first_hit_segment_c(h, p0_m, p1_m, hit_m) &
             bind(C, name="stl_wall_first_hit_segment") result(hit)
@@ -85,6 +92,7 @@ contains
         if (.not. c_associated(wall%handle)) then
             error stop "stl_wall_init: failed to create STL wall (CGAL)"
         end if
+        wall%facet_count = int(stl_wall_facet_count(wall%handle))
 #else
         associate (dummy => wall)
         end associate
@@ -103,6 +111,7 @@ contains
         end if
 #endif
         wall%handle = c_null_ptr
+        wall%facet_count = 0
     end subroutine stl_wall_finalize
 
     subroutine stl_wall_first_hit_segment(wall, p0_m, p1_m, hit, hit_m)

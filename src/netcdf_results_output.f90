@@ -34,7 +34,7 @@ contains
         end if
     end subroutine check_nc
 
-    subroutine write_results_netcdf(filename)
+    subroutine write_results_netcdf(filename, wall_facet_count)
         !> Write all particle results to NetCDF file.
         !>
         !> Computes Cartesian positions from reference coordinates and writes
@@ -70,6 +70,7 @@ contains
             symplectic_spectre_newton_warning_factor
 
         character(len=*), intent(in) :: filename
+        integer, intent(in), optional :: wall_facet_count
 
         integer :: event_id, ncid, status
         character(:), allocatable :: diagnostic_name
@@ -269,6 +270,11 @@ contains
             status = nf90_put_att(ncid, var_wall_hit_triangle, 'stl_file', &
                                   trim(wall_input))
             call check_nc(status, 'put_att wall_hit_triangle stl_file')
+            if (.not. present(wall_facet_count)) &
+                error stop 'STL output requires the initialized wall facet count'
+            status = nf90_put_att(ncid, var_wall_hit_triangle, &
+                                  'stl_facet_count', wall_facet_count)
+            call check_nc(status, 'put_att wall_hit_triangle stl_facet_count')
         end if
 
         status = nf90_def_var(ncid, 'wall_hit_cart', nf90_double, &

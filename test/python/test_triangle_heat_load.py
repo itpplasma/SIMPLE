@@ -2,6 +2,8 @@
 import os
 from pathlib import Path
 import struct
+import subprocess
+import sys
 
 import netCDF4 as nc
 import numpy as np
@@ -17,7 +19,7 @@ TRIANGLES = np.array([[[0, 0, 0], [1, 0, 0], [0, 1, 0]],
 
 def write_stl(path, triangles=TRIANGLES, binary=False):
     if binary:
-        # A binary STL header may start with 'solid'; size determines the format.
+        # CGAL tries ASCII first, then falls back to binary for this header.
         with path.open('wb') as f:
             f.write(b'solid binary fixture'.ljust(80, b'\0'))
             f.write(struct.pack('<I', len(triangles)))
@@ -43,6 +45,7 @@ def write_results(path, *, index=(1, 0, 1, -1), momentum=(1, 1, 1, 1),
         v = ds.createVariable('wall_hit_triangle', 'i4', ('particle',))
         v.stl_file = 'wall.stl'
         v.start_index = 0
+        v.stl_facet_count = 2
         v[:] = index
         ds.createVariable('wall_hit', 'i1', ('particle',))[:] = np.array(index) >= 0
         ds.createVariable('wall_hit_angle_rad', 'f8', ('particle',))[:] = [
@@ -65,7 +68,7 @@ def inputs(tmp_path):
 
 
 @pytest.mark.parametrize('binary', [False, True])
-@pytest.mark.parametrize('units,scale', [('m', 1), ('cm', 100), ('mm', 1000)])
+@pytest.mark.parametrize('units,scale', [('m', 1), ('mm', 1000), (' M ', 1), (' MM ', 1000)])
 def test_conservation_and_known_bins(tmp_path, binary, units, scale):
     stl, results = tmp_path / 'wall.stl', tmp_path / 'results.nc'
     write_stl(stl, TRIANGLES * scale, binary=binary)
@@ -144,7 +147,7 @@ def test_inconsistent_index(inputs, index, flag):
         TriangleHeatLoad.from_netcdf(results, stl, 1)
 
 
-def test_mesh_identity_and_degenerate_area(inputs):
+def test_mesh_identity_and_degenerate_hit(inputs):
     results, stl = inputs
     with nc.Dataset(results, 'a') as ds:
         ds['wall_hit_triangle'].stl_file = 'other.stl'
@@ -154,6 +157,93 @@ def test_mesh_identity_and_degenerate_area(inputs):
     write_stl(stl, np.zeros_like(TRIANGLES))
     with pytest.raises(ValueError, match='degenerate'):
         TriangleHeatLoad.from_netcdf(results, stl, 1)
+
+
+def test_facet_count_mismatch(inputs):
+    results, stl = inputs
+    write_stl(stl, np.concatenate([TRIANGLES, TRIANGLES[:1]]))
+    with pytest.raises(ValueError, match='facet count'):
+        TriangleHeatLoad.from_netcdf(results, stl, 1)
+
+
+def test_legacy_results_without_facet_count(inputs):
+    results, stl = inputs
+    with nc.Dataset(results, 'a') as ds:
+        ds['wall_hit_triangle'].delncattr('stl_facet_count')
+    assert TriangleHeatLoad.from_netcdf(results, stl, 1).n_hits == 3
+
+
+def test_degenerate_unhit_facet_and_exports(inputs, tmp_path):
+    results, stl = inputs
+    write_stl(stl, np.concatenate([TRIANGLES, np.zeros((1, 3, 3))]))
+    with nc.Dataset(results, 'a') as ds:
+        ds['wall_hit_triangle'].stl_facet_count = 3
+    load = TriangleHeatLoad.from_netcdf(results, stl, 1)
+    np.testing.assert_array_equal(load.hit_count, [1, 2, 0])
+    np.testing.assert_allclose(load.power_density_W_m2, [500000, 250000, 0])
+    np.testing.assert_allclose(load.power_density_per_MW, [500000, 250000, 0])
+    assert load.deposited_power_W == 750000
+    assert load.p95_W_m2 == load.peak_W_m2 == 500000
+    assert load.wetted_area_m2() == 2.5
+    exported, sidecar = load.to_stl(tmp_path / 'degenerate.stl')
+    with nc.Dataset(sidecar) as ds:
+        np.testing.assert_allclose(ds['vertices'][:], load.triangles_m)
+        np.testing.assert_allclose(ds['power_W'][:], [250000, 500000, 0])
+    # Round-trip includes the zero-area facet and a finite zero normal.
+    from pysimple.wall_heat_load import _read_stl
+    np.testing.assert_allclose(_read_stl(exported), load.triangles_m)
+    record = struct.unpack_from('<12fH', exported.read_bytes(), 84 + 2 * 50)
+    np.testing.assert_array_equal(record[:3], [0, 0, 0])
+
+
+def test_all_degenerate_no_hits(inputs):
+    results, stl = inputs
+    write_stl(stl, np.zeros_like(TRIANGLES))
+    write_results(results, index=[-1] * 4)
+    load = TriangleHeatLoad.from_netcdf(results, stl, 1)
+    assert load.deposited_power_W == load.peak_W_m2 == load.p95_W_m2 == 0
+
+
+def test_unsupported_wall_units(inputs):
+    results, stl = inputs
+    write_results(results, units='cm')
+    with pytest.raises(ValueError, match='unsupported wall_units'):
+        TriangleHeatLoad.from_netcdf(results, stl, 1)
+
+
+@pytest.mark.parametrize('header', [b'solid binary fixture', b'binary fixture'])
+def test_binary_trailing_bytes(inputs, header):
+    results, stl = inputs
+    write_stl(stl, binary=True)
+    raw = stl.read_bytes()
+    stl.write_bytes(header.ljust(80, b'\0') + raw[80:] + b'\xff\xfe')
+    np.testing.assert_array_equal(
+        TriangleHeatLoad.from_netcdf(results, stl, 1).hit_count, [1, 2])
+
+
+def test_postprocessing_without_backend():
+    # A subprocess prevents an already imported backend from hiding coupling.
+    code = """
+import importlib.abc
+import sys
+class NoBackend(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname in ('simple_backend', '_simple_backend'):
+            raise ModuleNotFoundError('backend intentionally unavailable', name=fullname)
+sys.meta_path.insert(0, NoBackend())
+from pysimple.wall_heat_load import TriangleHeatLoad
+assert 'simple_backend' not in sys.modules
+assert TriangleHeatLoad.__name__ == 'TriangleHeatLoad'
+import pysimple
+try:
+    pysimple.init
+except ImportError as exc:
+    assert 'SIMPLE Python bindings not found' in str(exc)
+else:
+    raise AssertionError('tracer requires compiled backend')
+"""
+    subprocess.run([sys.executable, '-c', code], check=True, capture_output=True,
+                   text=True)
 
 
 @pytest.mark.parametrize('power', [0, -1, np.inf, np.nan])
@@ -200,6 +290,7 @@ def test_recorded_wall_fixture():
     load = TriangleHeatLoad.from_netcdf(root / 'tetra_wall_results.nc',
                                        root / 'tetra_m.stl', 1)
     with nc.Dataset(root / 'tetra_wall_results.nc') as ds:
+        assert ds['wall_hit_triangle'].stl_facet_count == 4
         assert load.n_hits == np.count_nonzero(ds['wall_hit'][:]) == 4
         np.testing.assert_array_equal(ds['wall_hit_triangle'][:], [0, 1, 2, 3, -1])
         # Independent geometry oracle: each recorded point is in its STL plane.
@@ -210,3 +301,20 @@ def test_recorded_wall_fixture():
     np.testing.assert_allclose(residual, 0, atol=1e-12)
     np.testing.assert_array_equal(load.hit_count, [1, 1, 1, 1])
     assert load.deposited_power_W == pytest.approx(800000, rel=1e-14)
+
+
+@pytest.mark.parametrize('binary', [False, True])
+def test_recorded_facet_order_fixture(binary):
+    fixture = os.environ.get('SIMPLE_WALL_FIXTURE')
+    if fixture is None:
+        pytest.skip('requires CGAL wall fixture')
+    root = Path(fixture)
+    stl = 'wall_facet_order_binary.stl' if binary else 'wall_facet_order.stl'
+    results = ('facet_order_binary_results.nc' if binary
+               else 'facet_order_ascii_results.nc')
+    load = TriangleHeatLoad.from_netcdf(root / results, root / stl, 1)
+    np.testing.assert_array_equal(load.hit_count, [0, 0, 0, 0, 1])
+    assert len(load.area_m2) == 5
+    assert load.area_m2[0] == load.power_density_W_m2[0] == 0
+    assert load.deposited_power_W == pytest.approx(200000, rel=1e-14)
+    np.testing.assert_allclose(load.power_density_W_m2, [0, 0, 0, 0, 400000])

@@ -22,6 +22,10 @@ program test_stl_wall_intersection
     real(dp) :: normal(3), dotx
     real(dp) :: z(5), z_start(5), z_end(5), hit_step
     real(dp) :: u_start(3), u_end(3)
+    character(len=32), parameter :: order_mesh(2) = [character(len=32) :: &
+        'wall_facet_order.stl', 'wall_facet_order_binary.stl']
+    character(len=32), parameter :: order_results(2) = [character(len=32) :: &
+        'facet_order_ascii_results.nc', 'facet_order_binary_results.nc']
 
     errors = 0
     call write_tetra_stl_m("tetra_m.stl")
@@ -161,8 +165,39 @@ program test_stl_wall_intersection
     call check(.not. hit .and. triangle == -1, "no-hit query index", errors)
     wall_input = "tetra_m.stl"
     wall_units = "m"
-    call write_results_netcdf("tetra_wall_results.nc")
+    call write_results_netcdf("tetra_wall_results.nc", main_wall%facet_count)
     call stl_wall_finalize(main_wall)
+
+    ! Facets 0..3 are degenerate, duplicate and non-manifold, before the
+    ! isolated target at index 4. Neither repairs nor filtering may shift IDs.
+    do j = 1, 2
+        wall_input = order_mesh(j)
+        call stl_wall_init(main_wall, trim(wall_input), 1.0_dp)
+        call check(main_wall%facet_count == 5, "original facet count", errors)
+        p0 = [0.5_dp, 0.25_dp, 0.25_dp]
+        p1 = [2.0_dp, 0.25_dp, 0.25_dp]
+        call stl_wall_first_hit_segment_with_normal( &
+            main_wall, p0, p1, hit, hit_p, normal, triangle)
+        call check(hit, "facet-order target missed", errors)
+        call check(triangle == 4, "facet-order regression index", errors)
+        call check_close_vec(hit_p, [1.0_dp, 0.25_dp, 0.25_dp], &
+            1.0e-12_dp, "facet-order hit point", errors)
+        call check_close_vec(normal, [1.0_dp, 0.0_dp, 0.0_dp], &
+            1.0e-12_dp, "normal must follow STL winding", errors)
+        wall_hit = 0_int8
+        wall_hit_triangle = -1
+        z_start = [100.0_dp*p0, 1.0_dp, 0.0_dp]
+        z_end = [100.0_dp*p1, 1.0_dp, 0.0_dp]
+        zstart(:, 1) = z_start
+        z = z_end
+        call locate_wall_segment(z, z_start, z_end, 1, p0, z_start(1:3), &
+            p1, z_end(1:3), 6.0_dp, 0.0_dp, 1.0_dp, hit, hit_step)
+        call check(hit, "facet-order locator missed", errors)
+        call check(wall_hit_triangle(1) == 4, "stored facet-order index", errors)
+        zend(:, 1) = z
+        call write_results_netcdf(trim(order_results(j)), main_wall%facet_count)
+        call stl_wall_finalize(main_wall)
+    end do
     if (errors /= 0) error stop 1
 contains
 

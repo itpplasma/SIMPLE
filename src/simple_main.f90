@@ -3100,7 +3100,7 @@ contains
         call write_results
 
         if (output_results_netcdf) then
-            call write_results_netcdf('results.nc')
+            call write_results_netcdf('results.nc', wall%facet_count)
         end if
     end subroutine write_output
 

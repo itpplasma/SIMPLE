@@ -11,16 +11,33 @@ import numpy as np
 def _read_stl(path: Path) -> np.ndarray:
     """Read ASCII/binary STL without welding or reordering triangles."""
     raw = path.read_bytes()
-    count = struct.unpack_from('<I', raw, 80)[0] if len(raw) >= 84 else 0
-    if len(raw) == 84 + 50 * count:
-        dtype = np.dtype([('normal', '<f4', 3), ('vertices', '<f4', (3, 3)),
-                          ('attribute', '<u2')])
-        triangles = np.frombuffer(raw, dtype=dtype, offset=84)['vertices'].copy()
-    else:
+
+    def ascii_triangles():
         vertices = [list(map(float, row.split()[1:]))
                     for row in raw.decode('ascii').splitlines()
                     if row.split()[:1] == ['vertex']]
-        triangles = np.asarray(vertices, dtype=float).reshape(-1, 3, 3)
+        return np.asarray(vertices, dtype=float).reshape(-1, 3, 3)
+
+    # Match CGAL: try ASCII for a 'solid' prefix, then binary on failure.
+    prefix = raw.lstrip(b' \t\r\n\v\f')
+    triangles = np.empty((0, 3, 3))
+    if prefix[:5] == b'solid' and prefix[5:6] in (b' ', b'\r', b'\n'):
+        try:
+            triangles = ascii_triangles()
+        except (UnicodeDecodeError, ValueError):
+            pass
+    if triangles.size == 0:
+        count = struct.unpack_from('<I', raw, 80)[0] if len(raw) >= 84 else 0
+        if count > 0 and len(raw) >= 84 + 50 * count:
+            dtype = np.dtype([('normal', '<f4', 3), ('vertices', '<f4', (3, 3)),
+                              ('attribute', '<u2')])
+            triangles = np.frombuffer(raw, dtype=dtype, count=count,
+                                      offset=84)['vertices'].copy()
+        else:
+            try:
+                triangles = ascii_triangles()
+            except (UnicodeDecodeError, ValueError) as exc:
+                raise ValueError('invalid or truncated STL') from exc
     if triangles.size == 0 or not np.isfinite(triangles).all():
         raise ValueError('STL must contain finite triangles')
     return triangles.astype(float)
@@ -65,8 +82,8 @@ class TriangleHeatLoad:
 
         Use ``marker_weight(particle)`` if present, otherwise equal weights.
         Explicit ``marker_weights`` override that variable. STL identification
-        is checked by basename to allow relocating a results/mesh pair; the
-        caller must supply the original mesh with unchanged facet order.
+        is checked by basename and, when recorded, facet count. The caller
+        must supply the original mesh with unchanged facet order.
         """
         import netCDF4 as nc
 
@@ -80,11 +97,14 @@ class TriangleHeatLoad:
                 raise ValueError('STL identification does not match results')
             if index_var.getncattr('start_index') != 0:
                 raise ValueError('wall_hit_triangle must be 0-based')
-            units = ds.getncattr('wall_units')
-            scales = {'m': 1.0, 'cm': 0.01, 'mm': 0.001}
+            units = ds.getncattr('wall_units').strip().lower()
+            scales = {'m': 1.0, 'mm': 0.001}
             if units not in scales:
                 raise ValueError(f'unsupported wall_units: {units}')
             triangles = _read_stl(stl_file) * scales[units]
+            if 'stl_facet_count' in index_var.ncattrs():
+                if index_var.stl_facet_count != len(triangles):
+                    raise ValueError('STL facet count does not match results')
             index = _particle_array(ds, 'wall_hit_triangle')
             flags = _particle_array(ds, 'wall_hit')
             if not np.isin(flags, [0, 1]).all():
@@ -127,14 +147,18 @@ class TriangleHeatLoad:
 
         area = np.linalg.norm(np.cross(triangles[:, 1] - triangles[:, 0],
                                        triangles[:, 2] - triangles[:, 0]), axis=1) / 2
-        if np.any(area <= 0) or not np.isfinite(area).all():
-            raise ValueError('STL contains degenerate triangles')
+        if not np.isfinite(area).all():
+            raise ValueError('STL contains nonfinite triangle areas')
+        if np.any(area[index[hit]] == 0):
+            raise ValueError('recorded hit on a degenerate STL triangle')
         fractions = weights[hit] / weights.sum() * momentum[hit] ** 2
         total_W = float(total_alpha_power_MW) * 1e6
         count = np.bincount(index[hit], minlength=len(area))
         fraction = np.bincount(index[hit], weights=fractions, minlength=len(area))
+        flux_per_MW = np.divide(fraction * 1e6, area,
+                               out=np.zeros_like(area), where=area > 0)
         return cls(triangles, area, count, fraction * total_W,
-                   fraction * total_W / area, fraction * 1e6 / area,
+                   flux_per_MW * float(total_alpha_power_MW), flux_per_MW,
                    angles, fractions * total_W, total_W, n, stl_file.name)
 
     @property
@@ -239,7 +263,8 @@ class TriangleHeatLoad:
         path = Path(path)
         normals = np.cross(self.triangles_m[:, 1] - self.triangles_m[:, 0],
                            self.triangles_m[:, 2] - self.triangles_m[:, 0])
-        normals /= (2 * self.area_m2[:, None])
+        np.divide(normals, 2 * self.area_m2[:, None], out=normals,
+                  where=self.area_m2[:, None] > 0)
         with path.open('wb') as out:
             out.write(b'SIMPLE wall heat load; coordinates in m'.ljust(80, b'\0'))
             out.write(struct.pack('<I', len(self.area_m2)))
