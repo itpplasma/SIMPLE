@@ -1,6 +1,6 @@
 module simple_main
     use, intrinsic :: iso_fortran_env, only: int8
-    !$ use omp_lib
+!$  use omp_lib
     use timing, only: get_wtime
     use util, only: sqrt2, twopi
     use simple, only: init_vmec, init_sympl, init_fo, orbit_timestep_fo, &
@@ -874,7 +874,7 @@ contains
                 !$omp critical
                 kpart = kpart + 1
                 debug_thread = 0
-                !$ debug_thread = omp_get_thread_num()
+!$              debug_thread = omp_get_thread_num()
                 print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', &
                     debug_thread
                 !$omp end critical
@@ -1350,7 +1350,7 @@ contains
                 !$omp critical
                 kpart = kpart + 1
                 debug_thread = 0
-                !$ debug_thread = omp_get_thread_num()
+!$              debug_thread = omp_get_thread_num()
                 print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', &
                     debug_thread
                 !$omp end critical

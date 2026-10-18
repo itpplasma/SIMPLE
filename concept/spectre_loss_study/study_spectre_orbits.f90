@@ -4,7 +4,7 @@ program study_spectre_orbits
     ! separate outputs; a numerical failure never counts as physical loss.
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-    !$ use omp_lib, only: omp_get_max_threads, omp_set_num_threads
+!$  use omp_lib, only: omp_get_max_threads, omp_set_num_threads
     use timing, only: get_wtime
     use simple_api, only: simple_read_config, simple_init, simple_sample_volume
     use simple, only: init_sympl
@@ -62,9 +62,9 @@ program study_spectre_orbits
     call get_environment_variable('SIMPLE_SPECTRE_STUDY_SAMPLES', message)
     if (len_trim(message) > 0) read (message, *) requested_samples
     call get_environment_variable('OMP_NUM_THREADS', message)
-    !$ if (len_trim(message) == 0) call omp_set_num_threads(8)
+!$  if (len_trim(message) == 0) call omp_set_num_threads(8)
     nthreads = 1
-    !$ nthreads = omp_get_max_threads()
+!$  nthreads = omp_get_max_threads()
     if (len_trim(prefix) == 0) prefix = 'study'
     if (len_trim(sampling) == 0) sampling = 'volume'
     if (len_trim(config_file) == 0) then
@@ -217,7 +217,7 @@ program study_spectre_orbits
         samples(m) = rec
         result(:, m) = [elapsed, real(terminal, dp), &
             state%fo_elapsed*sqrt2/v0/max(elapsed, tiny(1.0_dp)), &
-            worst_shell, get_wtime() - begin_marker, &
+                        worst_shell, get_wtime() - begin_marker, &
             real(state%warning_hold_count, dp), real(min(k, nsteps), dp)]
         call set_spectre_volume_lock(0)
     end do
