@@ -391,7 +391,9 @@ if (ENABLE_COVERAGE)
         
         # Create interface library for coverage flags to scope them to specific targets
         add_library(coverage_flags INTERFACE)
-        target_compile_options(coverage_flags INTERFACE --coverage -fprofile-arcs -ftest-coverage)
+        # OpenMP workers must not race when updating gcov counters.
+        target_compile_options(coverage_flags INTERFACE
+            --coverage -fprofile-arcs -ftest-coverage -fprofile-update=atomic)
         target_link_options(coverage_flags INTERFACE --coverage -lgcov)
         # Apply to SIMPLE targets declared below, after external dependencies.
         # Coverage must not depend on Debug-only initialization/trap options.
