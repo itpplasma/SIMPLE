@@ -334,14 +334,8 @@ if (ENABLE_OPENMP)
         TIMEOUT 120)
     add_executable (test_sympl_testfield.x test_sympl_testfield.f90)
     target_link_libraries(test_sympl_testfield.x simple)
-    if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
-        target_compile_options(test_sympl_testfield.x PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-Mpreprocess>)
-    else()
-        target_compile_options(test_sympl_testfield.x PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-cpp>)
-    endif()
-    target_compile_definitions(test_sympl_testfield.x PRIVATE WOUT_FILE="${WOUT_FILE}")
     add_test(NAME test_sympl_testfield
-        COMMAND test_sympl_testfield.x
+        COMMAND test_sympl_testfield.x "${WOUT_FILE}"
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
     add_executable(test_orbit_frequencies.x test_orbit_frequencies.f90)
