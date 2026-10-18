@@ -45,3 +45,11 @@ reviewer acceptance under `docs/review-policy.md`. There is no predetermined
 sign for movement caused by stream decorrelation. The low-momentum correction
 must be explained separately using its analytic weak-moment/convergence evidence.
 No reference patch, global tolerance change or skipped-case exception is used.
+
+The native Slurm comparison at `a641676` (GNU Fortran 12.2, deterministic
+Release, libneo `3a520885a756651ec52344b944e6eae3b06bf795`) retained zero
+losses and zero unresolved histories in both 32-marker runs. Mean resolved
+p² changed from 1.00292646275 to 0.999875612299, a difference of
+−0.00305085045623. The original runtime comparison passed with no performance
+regression. This is the measured movement for scientific review, not a fitted
+physical tolerance or an uncertainty estimate for those correlated old paths.

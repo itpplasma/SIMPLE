@@ -11,6 +11,7 @@ requests follow the review policy below and fill
    /contributing
    coding-standard
    /review-policy
+   /collision-golden-contract
    /reference/design-notes
    /performance/non_soa_cpu_regression
    changelog
