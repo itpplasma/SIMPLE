@@ -11,6 +11,11 @@ on:
         description: libneo branch, tag or commit to build against
         required: false
         default: ''
+      experimental_compilers:
+        description: run non-blocking Intel ifx and LLVM flang smoke tests
+        type: boolean
+        required: false
+        default: false
       full:
         description: run the full suite (fast + slow + regression); set by the libneo full-ci gate
         required: false
@@ -35,6 +40,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -225,7 +231,7 @@ jobs:
       contents: read
     name: Intel ifx smoke tests (non-blocking)
     runs-on: ubuntu-24.04
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.experimental_compilers
     continue-on-error: true
     timeout-minutes: 30
     container:
@@ -240,7 +246,7 @@ jobs:
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            git make python3-pip \
+            git make python3-venv \
             cmake \
             ninja-build \
             pkg-config \
@@ -258,7 +264,9 @@ jobs:
         shell: bash
         run: |
           source /opt/intel/oneapi/setvars.sh
-          python3 -m pip install --break-system-packages numpy
+          python3 -m venv .venv
+          source .venv/bin/activate
+          python -m pip install numpy
           make clean
           make test-smoke CONFIG=Fast \
             FLAGS='-DSIMPLE_DETERMINISTIC_FP=OFF -DCMAKE_Fortran_COMPILER=ifx -DCMAKE_C_COMPILER=icx -DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF'
@@ -268,7 +276,7 @@ jobs:
       contents: read
     name: LLVM flang smoke tests (non-blocking)
     runs-on: ubuntu-24.04
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.experimental_compilers
     continue-on-error: true
     timeout-minutes: 30
 
@@ -346,7 +354,7 @@ jobs:
       - name: Install minimal Python dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install numpy netCDF4
+          python -m pip install numpy
 
       - name: Run CGAL Wall Unit Tests (CGAL enabled, minimal)
         run: |

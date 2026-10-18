@@ -124,8 +124,8 @@ cmake --build build --target coverage
 lcov --summary build/coverage_filtered.info
 ```
 
-The `CI` workflow's **Run workflow** (`workflow_dispatch`) also offers
-non-blocking Intel ifx and LLVM flang smoke jobs. These reuse the Make/CMake
+The `CI` workflow's **Run workflow** (`workflow_dispatch`) offers optional
+non-blocking Intel ifx and LLVM flang smoke jobs via `experimental_compilers`. These reuse the Make/CMake
 build with Python integration and GNU-only deterministic options disabled;
 compiler portability failures remain visible for investigation. The additional
 GCC jobs run on manual dispatch only when `full` is `true`, preserving the small
