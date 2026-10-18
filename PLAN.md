@@ -24,17 +24,56 @@ obligations referenced from `concept/*/README.md` are in the
 - Midpoint axis chart switch (this branch, `fix/spectre`): after
   `(r, theta) -> (|r|, theta + pi)` the field is evaluated fresh instead of
   extrapolating `p_theta` from old-chart jets; `test_axis_crossing_midpoint`
-  defect 1.6e-3 before, 0 after; 150/150 non-regression tests pass.
+  defect 1.6e-3 before, 0 after; 150/150 non-regression tests pass. The
+  crossing that this test produces is a warning-mode acceptance, not a
+  converged root (item 1).
 
 ## Remaining items, in order
 
-1. **Midpoint Newton failure next to the axis.** The start of
-   `test_axis_crossing_midpoint` (QA Boozer, `r = 1e-5`, `dtau = 2 pi R/64`)
-   returns `SYMPLECTIC_STEP_MAXITER` one step after its crossing, at
-   `r = 4.6e-7`. With the `test_axis_crossing` starts scaled to 1% radius, two
-   more fail the same way without a crossing. Accept: trace the
-   non-convergence to its source line; that scaled ensemble runs with
-   `MIDPOINT` at `dtau = 2 pi R/64` without loss and with bounded energy.
+1. **Midpoint step across the axis: needs a regular near-axis chart
+   (decision for Chris).** Traced on `fix/spectre` 047da79. The probes and
+   the near-axis ensemble test are kept outside the repository with the
+   handoff.
+   - Verified: every failing solve has the same 2-cycle. The failing solves
+     are the `test_axis_crossing_midpoint` start, identical to 1%-radius
+     `test_axis_crossing` start 3, at step 156, and scaled starts 4 and 6 at
+     steps 1255 and 2. The first Newton update lands at `r < 0`, the floor
+     `if(x(1) < 0.0) x(1) = 0.01` (`src/orbit_symplectic.f90:827-828`) moves
+     the iterate to `r = 0.01`, where the radial residual is 1.8e5, and the
+     next update lands at `r < 0` again. Angles and `p_phi` converge for
+     that floored radius; `r` never does.
+   - Verified: the accepted crossing in `test_axis_crossing_midpoint` is not
+     a root of the midpoint equations. `accept_warning_axis_crossing`
+     (`:89-110`, called at `:875`) checks only components 2-4 and accepts the
+     update from the floored iterate (`xlast(1) = 0.01`, final
+     `x(1) = -4.64e-7`). The next step then fails. The #503 unit test
+     `test_newton_solver_status` encodes exactly this floored state as an
+     accepted crossing.
+   - Verified (multi-start numerics, not a proof): the failing steps have no
+     root with `r_end, r_mid > 1e-11`. Seeds tried: 3072 for the first start,
+     covering all theta_end in pi/32 steps, `r_end` from 1e-8 to 8e-5 and
+     `r_mid` from 1e-8 to 4e-5, with positivity-damped Newton; 3072 each for
+     the other two failing steps. Euler1 fails at the same three steps.
+     Retry subdivision to depth 8 still fails on start 6 and accepts 41
+     warning-mode crossings, with `max|dH|/H` up to 6e-4.
+   - Hypothesis (mechanism): in the `(s, theta)` chart,
+     `dB/ds = (dB/drho)/(2 rho)` (libneo `boozer_converter.F90:337`; it
+     evaluates at `abs(r)`, `:304`). The midpoint theta residual therefore becomes singular as `r_mid -> 0`, and
+     a step whose chord passes the axis closer than about one step length
+     has no discrete solution. This is a property of the chart, not of
+     Newton conditioning or tolerances.
+   - Rejected: damping the step so that `r` stays positive. It drives `r` to
+     about 1e-20, where the absolute radial tolerance (`tolref(1) = 1`)
+     accepts collapsed non-roots.
+   - Options: (a) take the symplectic step near the axis in a regular
+     canonical chart (`X, Y = sqrt(2 p_theta) (cos, sin) theta`), a new
+     scheme; or (b) reject the floor-cycle state, so that the step returns
+     MAXITER and the production RK axis recovery (`orbit_timestep_axis`,
+     regular chart) takes over. Option (b) reverses the #503 acceptance and
+     can change near-axis golden markers.
+   - Accept: with the chosen option, the 1%-radius ensemble runs with
+     `MIDPOINT` at `dtau = 2 pi R/64` with no loss or fabricated crossing and
+     with bounded energy, and the golden records stay unchanged.
 2. **GC energy-shell guard.** Chatter at `npoiper2=256` comes from the absolute
    shell band (5e-4); `npoiper2=512` removes it. Decide between keeping the
    absolute band (then set 512 in SPECTRE examples and tests that trace) and an
