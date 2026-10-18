@@ -19,7 +19,8 @@ program test_magfie_refcoords_splines
     use field_vmec, only: vmec_field_t, create_vmec_field
     use field_splined, only: splined_field_t, create_splined_field
     use reference_coordinates, only: init_reference_coordinates, ref_coords
-    use magfie_sub, only: init_magfie, magfie, REFCOORDS, set_magfie_refcoords_field
+    use magfie_sub, only: init_magfie, magfie, REFCOORDS, BOOZER, &
+                          set_magfie_refcoords_field, axis_radial_coordinate
     use libneo_coordinates, only: coordinate_system_t
 
     implicit none
@@ -47,7 +48,8 @@ program test_magfie_refcoords_splines
     real(dp), parameter :: tol_hcurl_abs = 1.0e-12_dp
 
     real(dp) :: phi_period
-    integer :: n_failed, i
+    integer :: n_failed, i, axis_error
+    logical :: radial_is_rho
 
     n_failed = 0
 
@@ -59,6 +61,15 @@ program test_magfie_refcoords_splines
 
     call set_magfie_refcoords_field(f)
     call init_magfie(REFCOORDS)
+    call axis_radial_coordinate(radial_is_rho, axis_error)
+    if (axis_error /= 0 .or. .not. radial_is_rho) &
+        error stop 'splined VMEC RK chart must use rho'
+    ! Retained reference storage must not select the chart of another backend.
+    call init_magfie(BOOZER)
+    call axis_radial_coordinate(radial_is_rho, axis_error)
+    if (axis_error /= 0 .or. radial_is_rho) &
+        error stop 'inactive reference field changed the RK axis chart'
+    call init_magfie(REFCOORDS)
 
     phi_period = twopi/real(nper, dp)
 
@@ -68,6 +79,9 @@ program test_magfie_refcoords_splines
 
     call create_vmec_field(vmec_field)
     call set_magfie_refcoords_field(vmec_field)
+    call axis_radial_coordinate(radial_is_rho, axis_error)
+    if (axis_error /= 0 .or. radial_is_rho) &
+        error stop 'unsplined VMEC RK chart must use flux'
     do i = 1, 20
         call check_unsplined_hcurl(i, phi_period, vmec_field, n_failed)
     end do
