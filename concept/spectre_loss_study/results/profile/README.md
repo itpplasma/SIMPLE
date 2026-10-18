@@ -92,7 +92,19 @@ recovery that follows failed symplectic steps (`orbit_timestep_recovery`),
 about 100x more recoveries than Boozer. On the 16-surface
 `wout_li383_low_res_reference.nc` the counts are higher still (163,061 and
 144,691 for 2,560 markers and 20 ms). This is the largest remaining cost for
-these coordinates and is not a spline problem; its cause is open.
+these coordinates and is not a spline problem.
+
+Cause: the recoveries were not Newton failures. The 0.5% momentum-drift gate
+for RK recovery states also ran on converged symplectic steps, where z(4) is
+reconstructed from H, which Euler1 conserves only to O(dt) (up to 2% at
+`npoiper2=256`; rejections scale away at 1024). Symplectic steps now keep the
+phase-space checks without that gate, and recovery starts from the reference
+momentum so RK, validation and LCFS interpolation share one state. NCSX,
+2,560 markers, 10 ms, 16 threads, matched starts: recoveries 34,084 to 1
+(Meiss) and 33,471 to 1 (Albert); tracing 25-29 s to 18 s and 23-25 s to
+17-19 s (four runs each, libneo f6090e8).
+Losses 674/691 become 653/664 against 650 for Boozer, and paired status
+differences against Boozer fall from 112/95 to 67/52.
 
 Spline kernels: canonical flux and Boozer use the quintic single-quantity
 `der2` kernel, Meiss and Albert the new quintic first-derivative kernel.

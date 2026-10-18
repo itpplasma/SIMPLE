@@ -205,6 +205,19 @@ compare_cases() {
                 echo "  ✗ FAILED"
                 failed_cases=$((failed_cases + 1))
             fi
+        elif [ "$CASE" = "collision" ] && [ "${GOLDEN_RECORD_STOCHASTIC_COLLISION:-0}" = "1" ]; then
+            # The original fixture still runs; only its historical pathwise
+            # assertion is replaced. The performance check below remains active.
+            python "$SCRIPT_DIR/compare_collision_results.py" \
+                "$REFERENCE_DIR/$CASE" "$CURRENT_DIR/$CASE" \
+                --rtol "$GOLDEN_RECORD_RTOL" --atol "$GOLDEN_RECORD_ATOL"
+            if [ $? -eq 0 ]; then
+                echo "  ✓ PASSED (collision integrity; independent physics tests required)"
+                passed_cases=$((passed_cases + 1))
+            else
+                echo "  ✗ FAILED"
+                failed_cases=$((failed_cases + 1))
+            fi
         else
             # Original single-file comparison for other test cases
             REF_FILE="$REFERENCE_DIR/$CASE/times_lost.dat"

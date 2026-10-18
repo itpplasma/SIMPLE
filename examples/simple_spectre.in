@@ -1,8 +1,9 @@
 &config
 ! Generate starting points on the committed multi-volume tokamak field.
 ! Copy test/tests/data/tok2vol.h5 next to this input and run
-! ./build/simple.x simple_spectre.in. Multi-volume orbit tracing is disabled
-! pending PR #530; see DOC/spectre-rejected-interface-models.md.
+! ./build/simple.x simple_spectre.in. This input samples start points only.
+! Set generate_start_only = .False. for multi-volume hybrid orbit tracing;
+! see DOC/spectre-interface-crossing.md for its requirements and limits.
 generate_start_only = .True.
 field_input = 'tok2vol.h5'   ! SPECTRE HDF5 equilibrium (VMEC-free)
 integ_coords = 6             ! SPECTRE per-volume stacked-rho chart

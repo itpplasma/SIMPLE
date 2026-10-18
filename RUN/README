@@ -1,1 +1,0 @@
-Example MPI run: sbatch -t 03:00:00 -N 16 ../submit_mpi.slurm

@@ -73,6 +73,7 @@ class TestNetCDFResultsOutput:
                 assert 'perp_inv' in ds.variables
                 assert 'iclass' in ds.variables
                 assert 'class_lost' in ds.variables
+                assert 'wall_hit_triangle' not in ds.variables
                 assert np.all(np.isin(ds.variables['orbit_exit_code'][:], [0, 1, 2, 3]))
                 exit_codes = ds.variables['orbit_exit_code'][:]
                 event_residual = ds.variables['boundary_event_radial_residual'][:]
@@ -84,6 +85,17 @@ class TestNetCDFResultsOutput:
                 assert 'ntestpart' in ds.ncattrs()
                 assert 'trace_time' in ds.ncattrs()
                 assert ds.ntestpart == 8
+
+            # Smoke-test the post-processing command on the real short-run output.
+            pytest.importorskip("matplotlib")
+            from matplotlib import pyplot as plt
+            from pysimple import cli
+
+            for command in ("losses", "classes"):
+                image = tmp_path / f"{command}.png"
+                assert cli.main([command, str(tmp_path), "-o", str(image)]) == 0
+                assert image.stat().st_size > 0
+            plt.close("all")
 
         finally:
             os.chdir(original_dir)

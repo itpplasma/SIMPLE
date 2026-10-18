@@ -14,11 +14,14 @@ startmode = 1                    ! initial conditions, see the list below
 !   4 = random batch of start.dat (see batch_size, reuse_batch)
 !   5 = uniform random s in the range set by num_surf, random angles
 !   6 = read start.dat with positions in integration coordinates (e.g. Boozer)
-!   Modes 1 and 5 write the sampled starts to start.dat. Random pitch v_par/v in [-1, 1].
+!   7 = D-T fusion births from &profiles and the volume Jacobian; see docs/alpha-birth.md
+!   Modes 1, 5 and 7 write start.dat. Random pitch v_par/v in [-1, 1].
+fusion_grid = 128, 32, 32        ! mode 7 midpoint cells: s, poloidal, toroidal (full torus)
 sbeg = 1024*0.5d0                ! start surfaces: normalized toroidal flux s (SPECTRE: rho_g
 !                                  unless spectre_sbeg_is_toroidal_flux; TEST field: r/a)
-num_surf = 1                     ! startmode 5 range: 0 = s in [0,1], 1 = [0,sbeg(1)],
-!                                  2 = [sbeg(1),sbeg(2)]; s >= 0.01. /= 1: Bmin/Bmax per surface
+num_surf = 1                     ! startmode 5/7 range: 0 = [0,1], 1 = [0,sbeg(1)],
+!                                  2 = [sbeg(1),sbeg(2)]; mode 5 clamps s >= 0.01.
+!                                  /= 1: Bmin/Bmax per surface
 phibeg = 0d0                     ! toroidal angle of the start field line, rad (startmode 1)
 thetabeg = 0d0                   ! poloidal angle of the start field line, rad (startmode 1)
 nper = 1000                      ! field periods followed along the start field line
@@ -128,6 +131,7 @@ debug = .false.                  ! per-particle diagnostic output; only in build
 batch_size = 2000000000          ! if < ntestpart: trace a random subset of batch_size
 !                                  particles (indices in batch.dat); ntestpart = batch_size
 ran_seed = 42                    ! seed of the batch index draw and of deterministic runs
+particle_index_offset = 0       ! original rows before a contiguous external shard
 reuse_batch = .false.            ! .true.: reuse the batch indices from batch.dat if present
 restart = .false.                ! .true.: resume from times_lost.dat and orbit_exit_code.dat;
 !                                  particles that reached trace_time are not traced again
@@ -188,7 +192,8 @@ macrostep_log_ratio = 1d3
 /
 
 &profiles
-! Radial profiles f(s) of the collision background plasma, s = normalized toroidal flux.
+! Radial profiles f(s) for collisions and mode 7 births; s = normalized toroidal flux.
+! Mode 7: species 1 = deuterium, species 2 = tritium.
 profile_type = 'power_series'    ! 'power_series' or 'two_power'; other values = power_series
 Te_scale = 1d4                   ! electron temperature scale, eV
 Ti1_scale = 1d4                  ! ion species 1 temperature scale, eV

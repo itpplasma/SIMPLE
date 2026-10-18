@@ -57,6 +57,15 @@ if(TARGET fortplot::fortplot)
         LABELS "unit;integration" TIMEOUT 120)
 endif()
 
+# Reporting helpers have no dependency on the optional pysimple backend.
+if(SIMPLE_ENABLE_PYTHON_TOOLS)
+    add_test(NAME test_verification_report
+        COMMAND ${Python3_EXECUTABLE} -m pytest
+            ${CMAKE_SOURCE_DIR}/test/python/test_verification_report.py -q)
+    set_tests_properties(test_verification_report PROPERTIES
+        LABELS "unit;python" TIMEOUT 30)
+endif()
+
 set(BOOZER_CHARTMAP_PYTHON "${Python3_EXECUTABLE}")
 if(EXISTS "${CMAKE_SOURCE_DIR}/.venv/bin/python")
     set(BOOZER_CHARTMAP_PYTHON "${CMAKE_SOURCE_DIR}/.venv/bin/python")
@@ -202,6 +211,22 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS AND SIMPLE_HAVE_MAP2DISC)
         TIMEOUT 600
         FIXTURES_SETUP chartmap_ncsx_map2disc_wall)
 
+    if(SIMPLE_ENABLE_CGAL)
+        add_test(NAME test_collisional_stl_wall
+            COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/test_collisional_stl_wall.py
+                $<TARGET_FILE:simple.x>
+                ${CHARTMAP_NCSX_MAP2DISC_WALL_FILE}
+                ${CMAKE_CURRENT_BINARY_DIR}/coils.simple
+                ${CMAKE_CURRENT_BINARY_DIR}/wout_ncsx.nc
+            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+        set_tests_properties(test_collisional_stl_wall PROPERTIES
+            LABELS "integration;python;wall"
+            TIMEOUT 1200
+            PROCESSORS 1
+            FIXTURES_REQUIRED chartmap_ncsx_map2disc_wall)
+    endif()
+
     add_test(NAME test_chartmap_ncsx_map2disc_wall_offset
         COMMAND ${CMAKE_COMMAND} -E env
             PYTHONPATH=${LIBNEO_PYTHON_DIR}:${LIBNEO_PYTHON_BINARY_DIR}
@@ -318,14 +343,8 @@ if (ENABLE_OPENMP)
         TIMEOUT 120)
     add_executable (test_sympl_testfield.x test_sympl_testfield.f90)
     target_link_libraries(test_sympl_testfield.x simple)
-    if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
-        target_compile_options(test_sympl_testfield.x PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-Mpreprocess>)
-    else()
-        target_compile_options(test_sympl_testfield.x PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-cpp>)
-    endif()
-    target_compile_definitions(test_sympl_testfield.x PRIVATE WOUT_FILE="${WOUT_FILE}")
     add_test(NAME test_sympl_testfield
-        COMMAND test_sympl_testfield.x
+        COMMAND test_sympl_testfield.x "${WOUT_FILE}"
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
     add_executable(test_orbit_frequencies.x test_orbit_frequencies.f90)
@@ -377,15 +396,85 @@ add_test(NAME test_config_reference
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_config_reference PROPERTIES LABELS "unit")
 
+add_test(NAME test_input_reference
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/generate_input_reference.py
+        --root ${CMAKE_SOURCE_DIR} --libneo-source ${libneo_SOURCE_DIR} --check)
+set_tests_properties(test_input_reference PROPERTIES LABELS "unit;python"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+add_test(NAME test_input_validation
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/test_input_validation.py)
+set_tests_properties(test_input_validation PROPERTIES LABELS "unit;python"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 add_executable(test_finite_check.x test_finite_check.f90)
 target_link_libraries(test_finite_check.x simple)
 add_test(NAME test_finite_check COMMAND test_finite_check.x)
 set_tests_properties(test_finite_check PROPERTIES LABELS "unit")
 
+add_executable(test_particle_rng.x test_particle_rng.f90)
+target_link_libraries(test_particle_rng.x simple)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/particle_rng)
+add_test(NAME test_particle_rng COMMAND test_particle_rng.x)
+set_tests_properties(test_particle_rng PROPERTIES
+    LABELS "unit;collisions" TIMEOUT 30
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/particle_rng
+    ENVIRONMENT "OMP_DYNAMIC=FALSE")
+
+add_executable(test_collision_substeps.x test_collision_substeps.f90)
+target_link_libraries(test_collision_substeps.x simple)
+add_test(NAME test_collision_substeps COMMAND test_collision_substeps.x)
+set_tests_properties(test_collision_substeps PROPERTIES
+    LABELS "unit;collisions;physics" TIMEOUT 180)
+
 add_executable (test_profiles.x test_profiles.f90)
 target_link_libraries(test_profiles.x simple)
 add_test(NAME test_profiles COMMAND test_profiles.x)
 set_tests_properties(test_profiles PROPERTIES LABELS "unit")
+
+add_executable(test_fusion_source.x test_fusion_source.f90)
+target_link_libraries(test_fusion_source.x simple)
+foreach(case IN ITEMS flat peaked power negative_density zero_source invalid_bounds
+        invalid_grid hot_profile nonfinite)
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/fusion_${case})
+    add_test(NAME test_fusion_${case} COMMAND test_fusion_source.x ${case})
+    set_tests_properties(test_fusion_${case} PROPERTIES LABELS "unit"
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/fusion_${case})
+endforeach()
+set_tests_properties(test_fusion_negative_density PROPERTIES
+    PASS_REGULAR_EXPRESSION "fusion source: negative profiles")
+set_tests_properties(test_fusion_zero_source PROPERTIES
+    PASS_REGULAR_EXPRESSION "fusion source: total birth rate must be finite and positive")
+set_tests_properties(test_fusion_invalid_bounds PROPERTIES
+    PASS_REGULAR_EXPRESSION "fusion source: require 0 <= s_inner < s_outer <= 1")
+set_tests_properties(test_fusion_invalid_grid PROPERTIES
+    PASS_REGULAR_EXPRESSION "fusion source: grid dimensions must be in")
+set_tests_properties(test_fusion_hot_profile PROPERTIES
+    PASS_REGULAR_EXPRESSION "fusion source: ion temperature outside")
+set_tests_properties(test_fusion_nonfinite PROPERTIES
+    PASS_REGULAR_EXPRESSION "fusion source: nonfinite profiles")
+
+add_executable(test_fusion_birth_equilibrium.x test_fusion_birth_equilibrium.f90)
+target_link_libraries(test_fusion_birth_equilibrium.x simple)
+add_dependencies(test_fusion_birth_equilibrium.x generate_test_boozer_chartmap)
+set(fusion_equilibrium_cases vmec vmec_peaked chartmap annulus interior trace bad_energy)
+if(ENABLE_OPENMP)
+    list(APPEND fusion_equilibrium_cases vmec_parallel chartmap_parallel)
+endif()
+foreach(case IN LISTS fusion_equilibrium_cases)
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/fusion_${case})
+    set(fusion_input ${WOUT_FILE})
+    if(case MATCHES "^chartmap")
+        set(fusion_input ${CMAKE_CURRENT_BINARY_DIR}/test_boozer_chartmap.nc)
+    endif()
+    add_test(NAME test_fusion_${case}
+        COMMAND test_fusion_birth_equilibrium.x ${fusion_input} ${case})
+    set_tests_properties(test_fusion_${case} PROPERTIES LABELS "integration"
+        TIMEOUT 120 ENVIRONMENT "OMP_NUM_THREADS=1"
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/fusion_${case})
+endforeach()
+set_tests_properties(test_fusion_bad_energy PROPERTIES
+    PASS_REGULAR_EXPRESSION "fusion births require 3.5 MeV alphas")
 
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/start_integration_coordinates)
 add_executable(test_start_integration_coordinates.x
@@ -569,10 +658,15 @@ add_test(NAME test_stencil_utils COMMAND test_stencil_utils.x)
 
 
     if(SIMPLE_ENABLE_CGAL)
+        configure_file(${CMAKE_SOURCE_DIR}/test/fixtures/wall_facet_order.stl
+            wall_facet_order.stl COPYONLY)
+        configure_file(${CMAKE_SOURCE_DIR}/test/fixtures/wall_facet_order_binary.stl
+            wall_facet_order_binary.stl COPYONLY)
         add_executable(test_stl_wall_intersection.x test_stl_wall_intersection.f90)
         target_link_libraries(test_stl_wall_intersection.x simple testing_utils)
         add_test(NAME test_stl_wall_intersection COMMAND test_stl_wall_intersection.x)
-        set_tests_properties(test_stl_wall_intersection PROPERTIES LABELS "unit;wall")
+        set_tests_properties(test_stl_wall_intersection PROPERTIES
+            LABELS "unit;wall" FIXTURES_SETUP stl_wall_hits)
     endif()
 
 add_executable(test_sorting.x test_sorting.f90)
@@ -1025,6 +1119,12 @@ foreach(CASE ${GOLDEN_RECORD_TEST_CASES})
         LABELS "golden_record;regression"
         ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record;GOLDEN_RECORD_RTOL=1.5e-7"
     )
+    if(CASE STREQUAL "collision")
+        # Intentional stream/operator correction: preserve the run and timing;
+        # analytic collision tests supply the physical distribution oracles.
+        set_property(TEST golden_record_${CASE} APPEND PROPERTY ENVIRONMENT
+            "GOLDEN_RECORD_STOCHASTIC_COLLISION=1")
+    endif()
 endforeach()
 
 # Golden record sanity test: tests the comparison system itself

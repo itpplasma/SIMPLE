@@ -1,170 +1,109 @@
-# SPECTRE orbit interface status
+# SPECTRE interface crossing
 
-Multi-volume SPECTRE orbit tracing requires `integmode > 0` and
-`crossing_level = 3` (the default). Levels 0/1 were removed without
-compatibility aliases; requesting either is a configuration error. Single-volume
-RK45 guiding-centre tracing and sampling-only initialization remain supported.
+How SIMPLE traces markers through the current sheets of a multi-volume
+SPECTRE equilibrium: when it leaves the guiding-centre (GC) model, how the
+full orbit (FO) is integrated and mapped back, and which settings control
+accuracy. The model overview is in `docs/model/extensions.rst`; why GC maps
+across a sheet are not used is derived in
+`DOC/spectre-rejected-interface-models.md`.
 
-The conserved-magnetic-moment guiding-centre crossing maps were removed because
-a sharp sheet changes the physical magnetic moment by a gyrophase-dependent
-amount and the maps produce spurious confinement. The
-[rejection record](spectre-rejected-interface-models.md) retains the mathematical
-arguments, symbolic verifier, recorded measurements, and code provenance.
+## Configuration
 
-## Full orbit near interfaces (`crossing_level = 3`)
+Multi-volume tracing requires `integmode > 0` and `crossing_level = 3`
+(the only accepted value); otherwise initialization stops with a message
+pointing to the rejected-model note. Single-volume RK45 GC tracing and
+sampling-only runs are unrestricted.
 
-With `crossing_level = 3` and `integmode > 0`, the symplectic guiding-centre
-path switches to the full orbit (`spectre_fo_hybrid`) when the guiding centre
-comes within `spectre_fo_entry_larmor` radial gyroradii of an interior
-interface, and back when it is one gyroradius farther out. The exit distance
-is tested once per radian of gyration and at the end of each microstep, not
-after every RK45 substep. RK45 uses the sharp
-per-volume field and localizes interface crossings. Every trial stage's
-geometric owner is checked, including shortened
-bracketing and landing trials and ownership changes in both directions. A stage
-that crosses and returns before the endpoint causes rejection and step halving;
-a changed endpoint is localized on the first sheet leaving the initial
-owner (`owner - 1` inward, `owner` outward), including trials that span a thin
-intermediate volume. The remaining time is integrated in the new owner.
-Starts on a sheet use the outgoing normal velocity; a later return is
-bracketed at positive time. Repeated grazing reduces/retries and eventually
-reports `SPECTRE_FO_STEP_LIMIT`, rather than committing an unlocalized step.
-Away from the polar axis, RK45 advances logical position and Cartesian velocity.
-The sheet is directly `rho_g = integer`, so stages and landing trials require no
-Cartesian-to-logical coordinate inversion. Within `rho_g < 0.05` in volume 1,
-Cartesian position provides a regular axis chart; this recovery region still
-uses spline coordinate inversions. Its provider uses a regular xi/eta chart
-with a nonsingular geometry Jacobian, including at the axis. Polar spline
-derivatives divided by a vanishing Jacobian are not used for the axis field.
+| Key | Default | Meaning |
+|---|---|---|
+| `spectre_fo_entry_larmor` | `1.5` | enter FO closer than this many radial gyroradii to a sheet or the outer boundary |
+| `spectre_fo_tolerance` | `1d-9` | relative tolerance of the FO RK45 |
+| `spectre_fo_grid` | `32, 64, 32` | FO spline points per volume in $\rho_g$, $\vartheta$, $\zeta$ (per field period) |
 
-`spectre_fo_field` constructs a separate quintic spline of R, Z, A_theta and
-A_zeta for each volume. The embedding derivatives give the basis and its dual;
-derivatives of A give B with libneo's Jacobian convention. Shared sheet geometry
-uses the same interface samples, while A retains the two one-sided volume
-gauges. Raw spectral geometry and field evaluation occur during construction,
-not during FO integration. The grid is `spectre_fo_grid = 32,64,32` points in
-rho per volume, theta and zeta per field period; axisymmetric fields use seven
-identical toroidal planes. This interpolates the equilibrium: reducing the RK
-tolerance does not remove field interpolation error. Refine this grid as well
-as the RK tolerance for loss convergence.
+## Switching rule
 
-The additional first-volume axis table holds R, Z, A_xi, A_eta and A_zeta.
-Its geometry and potential jets join the polar representation over
-`0.05 < rho_g < 0.1`, before constructing B. This joins two numerical
-representations of the same smooth volume; the physical sheets remain sharp.
-Both construction and coordinate recovery use the existing grid controls.
+In volume $k$ the GC is advanced by the symplectic integrator in that
+volume's Meiss chart (`src/spectre_sympl_orbit.f90`). After each microstep,
+`interface_proximity` takes the nearest integer $k' = \mathrm{nint}(\rho_g)$
+(an interior sheet or the outer boundary $M_\text{vol}$) and the radial
+gyroradius
 
-GC reconstruction retains its nonlinear coordinate solve, now using only the
-spline geometry and a local displacement prediction. Particle and GC field
-samples are reused in the existing exit test. The switch transform and exit
-criteria are unchanged; no whole-hybrid symplectic claim follows from this
-performance change.
+$$
+\rho_r = \frac{\bar\rho_0\,\bar v_\perp}{B}\,|\nabla\rho_g|,
+$$
 
-RK45 also caps each trial at `h |B| / ro0_bar <= 0.1` rad, about 1/63 of a
-gyro-period. This cap is rechecked against each trial's initial field, including
-zero-time owner changes. Stage checks cannot exclude arbitrarily shallow
-excursions between samples. In the local uniform-field, planar-sheet approximation,
-a circular cross-and-return within this entire step has depth at most
-`rho_L (1 - cos(0.05))`, approximately `1.25e-3 rho_L`; interface curvature
-and field variation limit this estimate. This bounds the geometric scale of
-the remaining unresolved-grazing risk, rather than claiming that the RK error
-estimate detects a force jump. The optional `h_scale` reduces this cap for
-convergence studies. Failed trial stages halve the step without reading an
-uncomputed error estimate. A location failure near the outer edge is numerical
-failure, not by itself a physical loss; loss requires a located terminal point,
-whose state and elapsed substep time are retained.
+and enters FO if $|\rho_g - k'| < \ell_e\rho_r$ with
+$\ell_e = $ `spectre_fo_entry_larmor`. It leaves FO when the reconstructed
+GC satisfies $|\rho_g - k'| > (\ell_e + 1)\rho_r$ and the field at the
+particle and at the GC agree, $|B_p - B_{gc}| \le 0.05\,B_{gc}$ and
+$|\mathbf b_p - \mathbf b_{gc}| \le 0.05$. The exit test runs once per radian
+of gyration and at the end of each call.
 
-Each volume's vector potential has its own gauge (it vanishes on the volume's
-inner boundary). Both the axisymmetric entry residual and exit mapping convert
-momenta with the same summed interface jumps of `A_zeta`. A trial particle in
-another volume is translated back to the entry gauge before comparison. If
-there is no gyrophase root, entry accepts the closest sampled phase only when
-`abs(delta P_zeta) <= 1e-3 max(abs(P_zeta_entry), 1)` in internal momentum
-units; otherwise it reports `SPECTRE_FO_GYROPHASE_FAIL`. The signed accepted
-defect is exposed as `spectre_fo_state_t%entry_pzeta_defect`. No gyroradius-squared
-error estimate is asserted for this fallback. RK45 can drift in energy.
-The unchanged long-trace bounds remain shell defect below `1e-4` and relative
-momentum spread below `1e-5`. The integration tests use public `simple_api`
-initialization and require every marker to complete and enter FO, with
-round-trip witnesses and invariant samples in every visited volume. A focused
-near-tangent test compares against independent geometric-field RK4 and the
-axisymmetric momentum
-invariant. The prototype in `concept/symplectic_sheet` documents the analysis.
+## GC to FO
 
-The GC crossing-event log was removed with the rejected maps. For level-3
-loss accounting use `times_lost.dat` (column 2: `0 < t < trace_time` is a loss);
-FO loss counters cover only FO phases.
-FO configuration is applied in shared SPECTRE field initialization, before
-parallel tracing, identically for `simple.x` and `simple_api`/`pysimple`.
+`spectre_fo_enter` (`src/spectre_fo_hybrid.f90`) places the particle at
 
-## Warning: guiding-centre maps at strong interface jumps
+$$
+\mathbf x = \mathbf X + \frac{\bar\rho_0}{B}\,\mathbf b\times\bar{\mathbf v}_\perp(\alpha),
+\qquad \bar{\mathbf v} = \bar v_\parallel\mathbf b + \bar{\mathbf v}_\perp(\alpha).
+$$
 
-Guiding-centre (GC) crossing maps (`crossing_level = 0` or `1`) are not
-valid where the field direction or `|B|` jumps strongly. Conservation of
-energy and `mu` by a map does not establish its physical validity. For a
-local sheet `B = B(z)(cos alpha(z), sin alpha(z), 0)`,
-`h . curl h = -alpha'(z)`, so the GC parallel Jacobian is
+In an axisymmetric field the gyrophase $\alpha$ is chosen so that the
+particle's toroidal canonical momentum
+$\bar p_\zeta = \bar{\mathbf v}\cdot\mathbf e_\zeta + A_\zeta/\bar\rho_0$
+equals the GC value: 64 phases are sampled and a sign change is refined by
+bisection. If no root exists (strongly passing markers), the best phase is
+accepted only if $|\Delta\bar p_\zeta| \le 10^{-3}\max(|\bar p_\zeta|, 1)$;
+otherwise the step fails with `SPECTRE_FO_GYROPHASE_FAIL`. The accepted
+defect is kept in `spectre_fo_state_t%entry_pzeta_defect`.
 
-    B*_par = B(1 - rho_par alpha'),   rho_par = m c v_par / (e B).
+## FO integration
 
-At a finite direction jump compressed into width `w`, `alpha' ~ [[alpha]]/w`;
-for nonzero parallel gyroradius the GC ordering fails as `w -> 0`, and the
-GC equations have no regular direction-jump limit. A strong magnitude jump
-also violates the slow-field-variation ordering and can scatter `mu`. The
-full-orbit equations remain well defined through the sharp sheet.
+The FO is advanced by RK45 in logical position $(\rho_g,\vartheta,\zeta)$
+and Cartesian velocity in the sharp field of the owning volume. Each trial
+step is capped at a gyro-angle $h B/\bar\rho_0 \le 0.1$, about 1/63 of a
+gyro-period. In a uniform field near a planar sheet, a cross-and-return
+excursion hidden inside such a step has depth at most
+$\rho_L(1 - \cos 0.05) \approx 1.25\times10^{-3}\rho_L$.
 
-The NCSX free-boundary outer interface has direction jumps up to 0.32 rad
-and magnitude jumps of -25 to +38 %. Recorded losses for 64 markers at
-3.5 keV, traced for 2 ms from each interface, are:
+Every stage's owning volume is checked. A stage that crosses a sheet and
+returns before the step end rejects the step and halves it. A step whose
+end lies in another volume is shortened until it lands on the first sheet
+left by the initial owner ($k-1$ inward, $k$ outward); the rest of the step
+continues in the new owner. Starts on a sheet use the sign of the normal
+velocity. Repeated grazing ends with `SPECTRE_FO_STEP_LIMIT`. Because a
+sheet is $\rho_g = $ integer, stage locations need no Cartesian-to-logical
+inversion, except in $\rho_g < 0.05$ of volume 1, where Cartesian position
+and a regular $(\xi,\eta)$ axis chart are used.
 
-| model | interface 1 (`rho_g = 0.95`) | interface 2 (`rho_g = 1.95`) |
-|---|---:|---:|
-| full orbit everywhere, RK45 (reference) | 6 | 39 |
-| level 3, RK45 (corrected events) | 5 | 39 |
-| level 3, Boris (layer 0.2, rotation 0.0125) | 5 | 48 |
-| level 1, symplectic GC | 7 | 29 |
-| level 1, RK45 GC | 1 | 7 |
+## Field for FO
 
-At the strong outer interface the GC maps give spurious confinement;
-level 3 with RK45 agrees with the reference loss fractions within counting
-uncertainty (about 2 and 4 markers at the two interfaces). Boris on the
-0.2-gyroradius layer overestimates the outer-interface losses. These are
-ensemble comparisons; individual fates differ even between full-orbit runs.
+`src/spectre_fo_field.f90` builds per volume a quintic spline of $R$, $Z$,
+$A_\vartheta$ and $A_\zeta$ on `spectre_fo_grid`, from which the basis, its
+dual and $\mathbf B = \nabla\times\mathbf A$ follow. Volumes share the sheet
+geometry samples; $\mathbf A$ keeps each volume's gauge (zero on its inner
+boundary). Axisymmetric fields use seven identical toroidal planes. Volume 1
+has an additional axis table of $R, Z, A_\xi, A_\eta, A_\zeta$, blended with
+the polar representation over $0.05 < \rho_g < 0.1$. This is an
+interpolation of the equilibrium: refine `spectre_fo_grid` together with
+`spectre_fo_tolerance` in loss-convergence studies.
 
-Use `crossing_level = 3`, `integmode > 0`, and
-RK45 at such interfaces. This resolves gyromotion
-and costs far more than the GC maps. The corrected-event hybrid RK45 reruns
-took 3343/1848 s at interfaces 1/2,
-using two concurrent runs with eight OpenMP threads each, deterministic seed
-12345, and `relerr = 1e-12`. Both loss counts agree with the retained full-orbit
-references within the stated counting uncertainty. The earlier hybrid counts
-were 7/41 with wall times 929/409 s; the retained reference and GC timings were
-920/565 s and 15/25 s. These historical timings use different thread counts,
-so they are not a direct speed comparison with the corrected runs. Setup and
-full timing evidence are retained in
-[`concept/symplectic_sheet/README.md`](../concept/symplectic_sheet/README.md#simple-on-ncsx-loss-fractions-against-full-orbit-everywhere).
+## FO to GC
 
-`mu` conservation through a zero-width sheet is a modeling convention: the
-Buechner-Zelenyi adiabaticity parameter vanishes for an ideal
-discontinuity, and real crossings scatter `mu` (quasi-adiabatic regime).
-The MRxMHD sheet stands in for a thin finite relaxed layer; full-orbit
-comparisons quantify the scatter and bound the domain of validity of the
-conserved-mu map.
+`spectre_fo_to_gc` removes the Larmor vector,
+$\mathbf X = \mathbf x - (\bar\rho_0/B)\,\mathbf b\times\bar{\mathbf v}_\perp$,
+locates $\mathbf X$, and sets $v/v_0 = |\bar{\mathbf v}|/\sqrt2$ and
+$J_\perp = \bar v_\perp^2/(2B_{gc})$. In an axisymmetric field
+$\bar v_\parallel = (\bar p_\zeta - A_\zeta/\bar\rho_0)/h_\zeta$ with the
+entry $\bar p_\zeta$ moved to the exit volume's gauge by the summed sheet
+jumps of $A_\zeta$, so FO excursions conserve $\bar p_\zeta$ exactly;
+otherwise $\bar v_\parallel = \bar{\mathbf v}\cdot\mathbf b_{gc}$.
 
-## Removal of the smoothed-layer Boris option
+## Losses and limits
 
-The SPECTRE Boris integrator and its integrator/layer/rotation configuration
-keys were removed without aliases. A finite smoothed layer changes the magnetic
-field and therefore the physics; it does not integrate exactly the sharp-sheet
-Hamiltonian. RK45 with exact crossings reproduces the retained full-orbit-everywhere
-reference loss fractions within counting uncertainty (table above).
-See [the symbolic rejection record](spectre-rejected-interface-models.md#t2-a-boris-smoothing-layer-changes-the-target-problem)
-for the model distinction. Historical measurements above are evidence, not
-available configurations. The last revision containing the removed code is
-[`afec0c9`](https://github.com/itpplasma/SIMPLE/commit/afec0c9ccc5a90350ec71755a611450c23623083).
-
-`spectre_fo_entry_larmor`, radial-gradient evaluation and exit-distance state
-remain necessary for GC/RK45 switching. The fixed 0.1-rad RK45 gyro-angle bound
-and `h_scale` still bound trial excursions; neither is a Boris rotation option.
-The standalone study's analytic layer width also remains for its non-Boris
-Gauss/Poincare convergence experiments.
+A marker is lost only at a located terminal point beyond $M_\text{vol}$; a
+location failure near the edge is a numerical failure. RK45 is not
+symplectic and can drift in energy over long FO phases. Losses are read
+from `times_lost.dat` (column 2, $0 < t <$ `trace_time`); FO loss counters
+cover only FO phases. The FO settings are applied during shared SPECTRE
+field initialization, identically for `simple.x` and `simple_api`/`pysimple`.
