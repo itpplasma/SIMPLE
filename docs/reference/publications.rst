@@ -24,7 +24,6 @@ Method papers
    F. Warmer, Symplectic methods for optimization of wall heat loads by
    fusion alpha particles in stellarator reactors, *Nucl. Mater. Energy* 48,
    102200 (2026), https://doi.org/10.1016/j.nme.2026.102200
-
 #. C. G. Albert, G. S. Grassler, S. V. Kasilov, M. Markl, J. Schatzlmayr,
    Symplectic integration of guiding-center equations in canonical
    coordinates for general toroidal fields, arXiv:2503.15278 (2025),
@@ -37,6 +36,15 @@ Related work used by SIMPLE
   particles, *Phys. Fluids B* 2, 2563 (1990), https://doi.org/10.1063/1.859380
 * R. G. Littlejohn, Variational principles of guiding centre motion,
   *J. Plasma Phys.* 29, 111 (1983), https://doi.org/10.1017/S002237780000060X
+* H.-S. Bosch, G. M. Hale, Improved formulas for fusion cross-sections and
+  thermal reactivities, *Nucl. Fusion* 32, 611 (1992),
+  https://doi.org/10.1088/0029-5515/32/4/I07 (D-T reactivity of
+  ``startmode = 7``)
+* J. D. Huba, NRL Plasma Formulary, NRL/PU/6790--19-640, Naval Research
+  Laboratory (2019) (Coulomb logarithms of the collision operator)
+* E. Hairer, C. Lubich, G. Wanner, *Geometric Numerical Integration*,
+  2nd ed., Springer (2006), https://doi.org/10.1007/3-540-30666-8
+  (backward-error analysis of the symplectic schemes)
 * M. Landreman, M. Czekanski, A. Giuliani, B. Jang, R. Conlin, Bayesian
   optimization of stellarator alpha-particle confinement using data-informed
   parameter spaces and dimensionality reduction, arXiv:2606.19523 (2026),
