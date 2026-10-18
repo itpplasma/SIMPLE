@@ -65,13 +65,11 @@ contains
     subroutine simple_reference_info(length_to_m, radial_kind, status)
         use reference_coordinates, only: ref_coords
         use libneo_coordinates, only: chartmap_coordinate_system_t
-        use chartmap_metadata, only: chartmap_metadata_t, read_chartmap_metadata
-        use params, only: coord_input
+        use simple_main, only: chartmap_cart_scale_to_m
         use magfie_sub, only: SPECTRE
 
         real(dp), intent(out) :: length_to_m
         integer, intent(out) :: radial_kind, status
-        type(chartmap_metadata_t) :: metadata
 
         length_to_m = 0.01_dp
         radial_kind = 1
@@ -80,8 +78,8 @@ contains
         if (.not. allocated(ref_coords)) return
         select type (cs => ref_coords)
         class is (chartmap_coordinate_system_t)
-            call read_chartmap_metadata(coord_input, metadata)
-            length_to_m = metadata%cart_scale_to_m
+            length_to_m = chartmap_cart_scale_to_m
+            if (length_to_m <= 0.0_dp) return
             radial_kind = 2
         class default
             continue

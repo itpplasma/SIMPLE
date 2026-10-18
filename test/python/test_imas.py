@@ -196,6 +196,10 @@ def test_database_actor_and_core_profiles(tmp_path):
     assert np.all(np.isfinite(positions))
     assert np.all(np.asarray(positions)[:, 3] > 0)
     assert output_path.is_file()
+    # The actor's temporary field file is gone; the loaded physical map must
+    # remain usable without reopening its metadata on every coordinate call.
+    import pysimple
+    assert np.all(np.isfinite(pysimple.reference_to_cylindrical([.5, 0, 0])))
 
 
 def test_wall_ids_cartesian_order_and_one_based_triangles(tmp_path):
