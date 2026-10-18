@@ -257,7 +257,23 @@ def ascot_run(equilibrium, markers, path, duration, step, plasma=None):
     import unyt
 
     a = Ascot(str(path), create=True)
-    a.data.create_input("imas b2ds", equilibrium_ids=equilibrium)
+    bfield = a.data.create_input("imas b2ds", equilibrium_ids=equilibrium, dryrun=True)
+    # ASCOT maps psi to rho = sqrt((psi - psi0)/(psi1 - psi0)) and aborts a
+    # marker where this is negative (B_field.c, ERR_INPUT_UNPHYSICAL). The IMAS
+    # importer copies psi_axis, which can lie inside the extremum of ASCOT's
+    # own psi spline, so collisional markers reaching the axis aborted. Use
+    # ASCOT's numerical axis value, as its G-EQDSK importer does, padded away
+    # from psi1. input_findpsi0 pads by the sign of psi1 instead, which moves
+    # psi0 inside the extremum when psi1 = 0 (SPARC), so pad here explicitly.
+    a.input_init(bfield=bfield)
+    bfield["axisr"], bfield["axisz"], psi0 = a.input_findpsi0(
+        bfield["psi1"], manual_pad=0.0
+    )
+    psi0 = float(np.ravel(psi0.to_value("Wb"))[0])
+    psi1 = float(np.ravel(bfield["psi1"])[0])
+    bfield["psi0"] = psi0 + (1e-9 if psi1 < psi0 else -1e-9)
+    a.input_free()
+    a.data.create_input("B_2DS", **bfield)
     m = a.data.create_input(
         "imas marker", distribution_sources_ids=markers, dryrun=True
     )
@@ -287,9 +303,18 @@ def ascot_run(equilibrium, markers, path, duration, step, plasma=None):
         # grid point, aborting markers that step across rho = 1 instead of
         # ending them with RHOMAX. Hold the edge values constant outside the
         # IDS grid, as ASCOT's slowing-down tutorial does with rho in [0, 2].
+        # Likewise plasma_1D rejects rho below its first grid point, which the
+        # rho_tor -> rho_pol mapping can place just off the axis.
+        keys = ["vtor", "edensity", "etemperature", "itemperature", "idensity"]
+        if float(profiles["rho"][0]) > 0:
+            profiles["rho"] = np.insert(profiles["rho"], 0, 0.0)
+            profiles["nrho"] += 1
+            for key in keys:
+                values = np.asarray(profiles[key])
+                profiles[key] = np.concatenate((values[:1], values), axis=0)
         profiles["rho"] = np.append(profiles["rho"], 2.0)
         profiles["nrho"] += 1
-        for key in ["vtor", "edensity", "etemperature", "itemperature", "idensity"]:
+        for key in keys:
             values = np.asarray(profiles[key])
             profiles[key] = np.concatenate((values, values[-1:]), axis=0)
         a.data.create_input("plasma_1D", **profiles)
@@ -1014,6 +1039,30 @@ def main():
         if not ascot_unresolved.any()
         else "Not computed: unresolved or aborted ASCOT markers",
     }
+    if args.collisions and args.copies > 1 and not ascot_unresolved.any():
+        # Copies share their start, so between-copy errors measure only the
+        # collision noise. Deterministic orbit-phase differences between the
+        # codes vary from start to start; compare paired per-start means.
+        start = np.arange(len(positions)) // args.copies
+        confined = (simple_codes == 0) & ascot_finished
+        paired = np.array(
+            [
+                np.mean(ascot[start == k, 4] - simple[start == k, 4])
+                for k in range(len(positions) // args.copies)
+                if confined[start == k].all()
+            ]
+        )
+        report["paired_confined_pitch_difference"] = {
+            "definition": "ASCOT5 - SIMPLE, mean over starts whose copies all stay "
+            "confined in both codes",
+            "starts": len(paired),
+            "mean": float(paired.mean()) if len(paired) else None,
+            "between_start_standard_error": float(
+                paired.std(ddof=1) / np.sqrt(len(paired))
+            )
+            if len(paired) > 1
+            else None,
+        }
     np.savetxt(
         output / "states.csv",
         np.column_stack((positions, simple, ascot)),
