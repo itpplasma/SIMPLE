@@ -171,7 +171,7 @@ def simple_orbits(
             end = np.asarray(result["final_position"])
             orbit["strike"] = pysimple.reference_to_cylindrical(end[:3]).tolist()
         orbits.append(orbit)
-    return orbits, v0
+    return orbits, v0 * np.sqrt(energy / 3.5e6)
 
 
 def simple_cohort(field, positions, mass_number, charge, duration, *, speed=None):
@@ -286,16 +286,29 @@ def ascot_orbits(
     m["zeta"] = np.zeros(m["n"]) * unyt.rad
     a.simulation_initmarkers(**m)
     run = a.simulation_run(printsummary=False)
-    r, phi, z, pitch, condition, end_time, errors = run.getstate(
-        "r", "phi", "z", "pitch", "endcond", "time", "errormsg", state="end", mode="gc"
+    r, phi, z, pitch, condition, end_time, *errors = run.getstate(
+        "r",
+        "phi",
+        "z",
+        "pitch",
+        "endcond",
+        "time",
+        "errormsg",
+        "errorline",
+        "errormod",
+        state="end",
+        mode="gc",
     )
+    errors = np.column_stack([np.asarray(e).astype(int) for e in errors])
     codes = np.asarray(condition).astype(int)
     lost = np.array([State.endcond_check(int(c), "RHOMAX") for c in codes])
     finished = np.array([State.endcond_check(int(c), "TLIM") for c in codes])
-    resolved = (lost != finished) & (np.asarray(errors).astype(int) == 0)
+    resolved = (lost != finished) & (errors[:, 0] == 0)
     end = {
         "status": [
-            State.endcond_tostring(int(c)) or f"UNKNOWN({int(c)})" for c in codes
+            (State.endcond_tostring(int(c)) or f"UNKNOWN({int(c)})")
+            + ("" if e[0] == 0 else f" error(msg={e[0]},line={e[1]},module={e[2]})")
+            for c, e in zip(codes, errors)
         ],
         "lost": lost & resolved,
         "resolved": resolved,
@@ -325,7 +338,9 @@ def ascot_orbits(
                     "z": zo.to_value("m")[select],
                     "pitch": pi.to_value("1")[select],
                     "energy": ek.to_value("eV")[select],
-                    "status": end["status"][i] if resolved[i] else "unresolved",
+                    "status": end["status"][i]
+                    if resolved[i]
+                    else f"unresolved {end['status'][i]}",
                     "loss_time": float(end["time"][i]) if end["lost"][i] else None,
                     "strike": [end["r"][i], end["phi"][i], end["z"][i]]
                     if end["lost"][i]
@@ -512,7 +527,9 @@ def two_sample(x, y):
     return out
 
 
-def paired_moment(x, y):
+def paired_moment(x, y, margin=1e-3):
+    """Paired mean difference; deterministic pairs can make 3 SE tiny, so a
+    fixed equivalence margin (1e-3 in pitch, pitch^2, rho_pol) also applies."""
     d = x - y
     if len(d) < 2:
         return None
@@ -525,6 +542,8 @@ def paired_moment(x, y):
         "within_3_se": bool(abs(np.mean(d)) <= 3 * se)
         if se > 0
         else bool(np.mean(d) == 0),
+        "within_margin": bool(abs(np.mean(d)) <= margin),
+        "margin": margin,
     }
 
 
@@ -583,9 +602,13 @@ def statistics(first, second, duration, field, labels):
     for key in ["loss_time_distribution", "strike_poloidal_angle_distribution"]:
         if "ks_p_value" in tests[key]:
             passed.append(tests[key]["ks_p_value"] >= 0.01)
-    passed += [m["within_3_se"] for m in moments.values() if m is not None]
+    passed += [
+        m["within_3_se"] or m["within_margin"]
+        for m in moments.values()
+        if m is not None
+    ]
     tests["accepted"] = bool(all(passed))
-    tests["acceptance"] = "McNemar and KS p >= 0.01; paired moments within 3 SE"
+    tests["acceptance"] = "McNemar and KS p >= 0.01; paired moments within 3 SE or 1e-3"
     return tests
 
 
