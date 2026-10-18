@@ -1,7 +1,7 @@
 module field_can_test
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
-use field_can_base, only: count_field_evaluation, field_can_t
+    use field_can_base, only: count_field_evaluation, field_can_t
 
 implicit none
 
@@ -15,7 +15,7 @@ subroutine evaluate_test(f, r, th_c, ph_c, mode_secders)
 
     call eval_field_test(f, r, th_c, ph_c, mode_secders)
 
-    call count_field_evaluation(mode_secders)
+        call count_field_evaluation(mode_secders)
 end subroutine evaluate_test
 
 

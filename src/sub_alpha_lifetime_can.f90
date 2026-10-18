@@ -351,7 +351,7 @@ contains
         !
         use parmot_mod, only : rmu,ro0
         use magfie_sub, only : magfie
-        use field_can_base, only : count_field_evaluation
+        use field_can_base, only: count_field_evaluation
         !
         implicit none
         !
