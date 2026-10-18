@@ -15,13 +15,6 @@ symplectic methods in canonical coordinates, which improve long-time
 behaviour at suitable time steps. Regular and chaotic
 orbits can be classified early, which shortens the computation further.
 
-.. figure:: /_static/figures/front.png
-   :alt: Guiding-centre orbits of fusion alpha particles in a stellarator and
-         the resulting loss pattern on the plasma boundary.
-   :width: 90%
-
-   Front figure of SIMPLE.
-
 SIMPLE is written in Fortran with OpenMP parallelisation, an optional CUDA
 backend for GPUs and a Python interface, ``pysimple``. It reads VMEC
 equilibria, Boozer chartmaps (also from GVEC and booz_xform), coil files and

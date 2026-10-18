@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate docs/_static/figures/front.png from a real SIMPLE run.
+"""Generate a local loss plot from a real SIMPLE run.
 
 Configuration: the public Landreman & Paul (2022) precise quasi-axisymmetric
 equilibrium scaled to reactor size, as shipped in the simsopt test data and
@@ -285,7 +285,7 @@ def main() -> None:
     parser.add_argument("--simple-exe", type=Path, default=REPO / "build" / "simple.x")
     parser.add_argument("--workdir", type=Path, default=REPO / "build" / "figures" / "front")
     parser.add_argument("--out", type=Path,
-                        default=REPO / "docs" / "_static" / "figures" / "front.png")
+                        default=REPO / "build" / "figures" / "front.png")
     parser.add_argument("--plot-only", action="store_true",
                         help="reuse an existing run in --workdir")
     args = parser.parse_args()

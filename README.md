@@ -9,8 +9,6 @@ magnetic fields to compute fusion alpha-particle losses in stellarators.
 Symplectic integration and early orbit classification make it suitable for
 configuration studies and stellarator optimization.
 
-![Alpha-particle orbits and losses on the plasma boundary](docs/_static/figures/front.png)
-
 - VMEC equilibria, Boozer chartmaps from GVEC and booz_xform, coil fields,
   and SPECTRE equilibria.
 - Loss statistics, orbit classification, collisions and STL wall intersections;
