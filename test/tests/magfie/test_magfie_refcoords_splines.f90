@@ -7,13 +7,16 @@ program test_magfie_refcoords_splines
     !> - sqrtg, ginv: finite differences of coordinate_system_t%evaluate_cart
     !>
     !> Target:
-    !> - magfie_refcoords (via init_magfie(REFCOORDS))
+    !> - magfie_refcoords (via init_magfie(REFCOORDS)) for a splined field, and
+    !>   hcurl of its finite-difference path for the unsplined VMEC field
+    !>   against the curl definition
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use simple, only: init_vmec
     use util, only: twopi
     use new_vmec_stuff_mod, only: nper
     use field_coils, only: coils_field_t, create_coils_field
+    use field_vmec, only: vmec_field_t, create_vmec_field
     use field_splined, only: splined_field_t, create_splined_field
     use reference_coordinates, only: init_reference_coordinates, ref_coords
     use magfie_sub, only: init_magfie, magfie, REFCOORDS, set_magfie_refcoords_field
@@ -23,6 +26,7 @@ program test_magfie_refcoords_splines
 
     type(coils_field_t) :: raw_coils
     type(splined_field_t) :: f
+    type(vmec_field_t) :: vmec_field
     real(dp) :: dummy
 
     integer, parameter :: n_points = 240
@@ -60,6 +64,12 @@ program test_magfie_refcoords_splines
 
     do i = 1, n_points
         call check_point(i, phi_period, f, n_failed)
+    end do
+
+    call create_vmec_field(vmec_field)
+    call set_magfie_refcoords_field(vmec_field)
+    do i = 1, 20
+        call check_unsplined_hcurl(i, phi_period, vmec_field, n_failed)
     end do
 
     if (n_failed > 0) then
@@ -142,6 +152,44 @@ contains
             dh(k, :) = (-hp2 + 8.0_dp*hp1 - 8.0_dp*hm1 + hm2)/(12.0_dp*step)
         end do
     end subroutine oracle_field_fd
+
+
+    subroutine check_unsplined_hcurl(i, phi_period, fld, n_failed)
+        !> hcurl^i = eps^ijk d_j h_k / sqrt(g) spelled out with central
+        !> differences of the field's own evaluate, so the oracle shares no
+        !> index convention with magfie.
+        integer, intent(in) :: i
+        real(dp), intent(in) :: phi_period
+        type(vmec_field_t), intent(in) :: fld
+        integer, intent(inout) :: n_failed
+
+        real(dp), parameter :: h_fd = 1.0e-5_dp
+        real(dp) :: x(3), xp(3), xm(3), Acov(3), hp(3), hm(3), bp, bm
+        real(dp) :: bmod, sqrtg, bder(3), hcov(3), hctr(3), hcurl(3)
+        real(dp) :: dh(3, 3), hcurl_fd(3)
+        integer :: j
+
+        x(1) = 0.25_dp + 0.5_dp*real(mod(13*i, 97), dp)/97.0_dp
+        x(2) = 0.1_dp + (twopi - 0.2_dp)*real(mod(29*i, 89), dp)/89.0_dp
+        x(3) = 0.1_dp + (phi_period - 0.2_dp)*real(mod(31*i, 83), dp)/83.0_dp
+
+        call magfie(x, bmod, sqrtg, bder, hcov, hctr, hcurl)
+        do j = 1, 3
+            xp = x
+            xm = x
+            xp(j) = x(j) + h_fd
+            xm(j) = x(j) - h_fd
+            call fld%evaluate(xp, Acov, hp, bp)
+            call fld%evaluate(xm, Acov, hm, bm)
+            dh(:, j) = (hp - hm)/(2.0_dp*h_fd)  ! dh(k, j) = d h_k / d x_j
+        end do
+        hcurl_fd(1) = (dh(3, 2) - dh(2, 3))/sqrtg
+        hcurl_fd(2) = (dh(1, 3) - dh(3, 1))/sqrtg
+        hcurl_fd(3) = (dh(2, 1) - dh(1, 2))/sqrtg
+
+        call check_vec('hcurl unsplined', x, hcurl, hcurl_fd, tol_hcurl_abs, &
+                       1.0e-4_dp, n_failed)
+    end subroutine check_unsplined_hcurl
 
 
     subroutine eval_shift(f, x, k, m, phi_period, Bmod, hcov)

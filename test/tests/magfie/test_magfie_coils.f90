@@ -87,15 +87,8 @@ program test_magfie_coils
         n_failed = n_failed + 1
     end if
 
-    ! Test 5: hcov should be normalized (|h| ~ 1 since h = B/|B|)
-    print *, 'Test 5: hcov normalization'
-    if (abs(sqrt(sum(hcov**2)) - 1.0_dp) > 0.1_dp) then
-        print *, '  FAILED: vmec_field hcov not normalized, |h| = ', sqrt(sum(hcov**2))
-        n_failed = n_failed + 1
-    end if
-
-    ! Test 6: magfie_vmec consistency
-    print *, 'Test 6: magfie_vmec evaluation'
+    ! Test 5: magfie_vmec consistency (unit vector h_i h^i = 1)
+    print *, 'Test 5: magfie_vmec evaluation'
     call test_magfie(n_failed)
 
     if (n_failed == 0) then
@@ -142,9 +135,18 @@ contains
             n_failed = n_failed + 1
         end if
 
-        ! sqrtg (Jacobian) must be positive for proper orientation
-        if (sqrtg <= 0.0_dp) then
-            print *, '  FAILED: magfie_vmec sqrtg must be positive, got ', sqrtg
+        ! sqrtg is the signed VMEC Jacobian (negative for left-handed
+        ! VMEC files, see test_jacobian_conventions_vmec); it must not vanish.
+        if (abs(sqrtg) <= 0.0_dp) then
+            print *, '  FAILED: magfie_vmec sqrtg must be nonzero, got ', sqrtg
+            n_failed = n_failed + 1
+        end if
+
+        ! h = B/|B| is a unit vector: covariant times contravariant components
+        ! must contract to one.
+        if (abs(dot_product(hcovar, hctrvr) - 1.0_dp) > 1.0e-10_dp) then
+            print *, '  FAILED: magfie_vmec h_i h^i /= 1, got ', &
+                dot_product(hcovar, hctrvr)
             n_failed = n_failed + 1
         end if
     end subroutine test_magfie

@@ -4,6 +4,8 @@ module failed_symplectic_step_backend
 
     implicit none
 
+    integer :: successful_drift_calls = 0
+
 contains
 
     subroutine fail_symplectic_step(si, f, ierr)
@@ -32,16 +34,32 @@ contains
         ierr = SYMPLECTIC_STEP_BOUNDARY
     end subroutine locate_lcfs_step
 
+    subroutine successful_drift_step(si, f, ierr)
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        integer, intent(out) :: ierr
+
+        successful_drift_calls = successful_drift_calls + 1
+        si%z(1) = si%z(1) + 0.01d0
+        f%Bmod = 1.0d0
+        f%mu = si%pabs**2
+        f%vpar = 0.0d0
+        f%H = si%pabs**2
+        ierr = 0
+    end subroutine successful_drift_step
+
 end module failed_symplectic_step_backend
 
 program test_sympl_testfield
     use, intrinsic :: iso_fortran_env, only : dp => real64, int64
-    use failed_symplectic_step_backend, only: fail_symplectic_step, locate_lcfs_step
+    use failed_symplectic_step_backend, only: fail_symplectic_step, &
+                         locate_lcfs_step, successful_drift_step, successful_drift_calls
     use classification, only: classify_classifier_exit
     use simple_main, only : classify_orbit_exit, init_field, locate_linear_lcfs, &
         locate_validated_lcfs, macrostep, macrostep_with_wall_check, &
         recovery_state_has_valid_phase_space, recovery_state_is_physical, &
         rk_recovery_state_t, validate_rk_state, &
+        validate_rk_step_or_reference_boundary, &
         activate_rk_recovery, should_resume_symplectic, &
         normalized_flux_from_reference_radial, &
         should_classify_numerically_confined
@@ -62,10 +80,15 @@ program test_sympl_testfield
     implicit none
 
     type(tracer_t) :: norb
-    character(*), parameter :: vmec_file = WOUT_FILE
+    character(len=:), allocatable :: vmec_file
     integer, parameter :: ans_s = 5, ans_tp = 5, amultharm = 5
-    integer :: ierr
+    integer :: ierr, path_length
     real(dp) :: initial_si_z(4)
+
+    call get_command_argument(1, length=path_length)
+    if (path_length < 1) error stop 'Expected VMEC fixture path'
+    allocate (character(len=path_length) :: vmec_file)
+    call get_command_argument(1, vmec_file)
 
     ! Configure symplectic GC with TEST field to ensure initialization succeeds
     isw_field_type = TEST
@@ -101,12 +124,14 @@ program test_sympl_testfield
 
     call test_macrostep_lcfs_event
     call test_failed_step_preserves_state
+    call test_collision_failure_propagation
     call test_rk_recovery_regions
     call test_exit_classification
     call test_numerically_confined_classification
     call test_fo_lcfs_location
     call test_validated_rk_lcfs_location
     call test_rk_state_validation
+    call test_symplectic_step_validation
     call test_recovery_state_validation
     call test_reseed_momentum_reference
 
@@ -216,6 +241,108 @@ contains
             error stop 'repeated wall failure changed the last accepted state'
         end if
     end subroutine test_failed_step_preserves_state
+
+    subroutine test_collision_failure_propagation
+        use collis_alp, only: efcolf_grid, velrat_grid, enrat_grid, stost
+        use parmot_mod, only: ro0
+        use finite_check, only: is_finite
+        use reference_coordinates, only: ref_coords
+        use libneo_coordinates, only: coordinate_system_t
+        use cartesian_coordinates, only: cartesian_coordinate_system_t
+        use field_can_mod, only: field_can_t
+        use orbit_symplectic_base, only: symplectic_integrator_t, &
+                                         SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
+        use params, only: dtaumin, wall_query_rho_lcfs
+        type(tracer_t) :: local_orbit
+        class(coordinate_system_t), allocatable :: saved_ref_coords
+        type(symplectic_integrator_t) :: saved_si
+        type(field_can_t) :: saved_field
+        real(dp), parameter :: initial(5) = [0.2_dp, 1.0_dp, 0.2_dp, &
+                                             1.0_dp, 0.0_dp]
+        real(dp) :: z(5), x_previous(3), saved_wall_gate, saved_ro0, saved_dtaumin
+        integer(int64) :: kt
+        integer :: warning, wall_path, step_error, hold_streak
+        logical :: numerical_hold
+
+        ! A real stost failure, not a mock collision callback: negative
+        ! diffusion coefficients must be rejected by the production operator.
+        saved_ro0 = ro0
+        saved_dtaumin = dtaumin
+        ro0 = 1.0_dp ! TEST field uses explicit normalized finite units.
+        efcolf_grid = -1.0_dp
+        velrat_grid = 1.0_dp
+        enrat_grid = 1.0_dp
+        dtaumin = 1.0e-3_dp
+        saved_wall_gate = wall_query_rho_lcfs
+        ! TEST field initialization supplies no reference coordinate object.
+        ! Use the production Cartesian implementation for the wall path.
+        call move_alloc(ref_coords, saved_ref_coords)
+        allocate (cartesian_coordinate_system_t :: ref_coords)
+        wall_query_rho_lcfs = huge(1.0_dp)
+        orbit_model = ORBIT_GC
+        integmode = 3
+        swcoll = .true.
+        z = initial
+        call stost(z, dtaumin, 1, step_error)
+        if (step_error /= 1 .or. any(z /= initial)) &
+            error stop 'Collision rejection fixture did not reject bad diffusion'
+        do warning = 0, 1
+            symplectic_newton_warning_mode = warning == 1
+            do wall_path = 0, 1
+                local_orbit = norb
+                call init_sympl(local_orbit%si, local_orbit%f, initial, &
+                                1.0e-3_dp, 1.0e-3_dp, 1.0e-12_dp, 3)
+                if (.not. all(is_finite(local_orbit%si%z)) .or. &
+                    .not. all(is_finite([local_orbit%f%H, &
+                                         local_orbit%f%mu, local_orbit%f%vpar]))) &
+                    error stop 'Collision caller fixture initialized nonfinite state'
+                if (abs(local_orbit%f%H - initial(4)**2) > 1.0e-12_dp) &
+                    error stop 'Collision caller fixture initialized wrong energy'
+                saved_si = local_orbit%si
+                saved_field = local_orbit%f
+                orbit_timestep_sympl => successful_drift_step
+                successful_drift_calls = 0
+                z = initial
+                x_previous = [1.0_dp, 2.0_dp, 3.0_dp]
+                kt = 7_int64
+                hold_streak = 0
+                if (wall_path == 0) then
+                    call macrostep(local_orbit, z, kt, step_error, 1, &
+                             hold_streak=hold_streak, numerical_hold_any=numerical_hold)
+                else
+                    call macrostep_with_wall_check(local_orbit, z, kt, &
+                                step_error, 1, 1, x_previous, hold_streak=hold_streak, &
+                                                   numerical_hold_any=numerical_hold)
+                end if
+                if (successful_drift_calls /= 1) &
+                    error stop 'Collision caller fixture did not complete its drift'
+                if (step_error /= SYMPLECTIC_STEP_EVENT_NOT_CONVERGED) &
+                    error stop 'Collision failure did not terminate microstep'
+                if (classify_orbit_exit(step_error, ORBIT_GC, integmode, &
+                                       ORBIT_EXIT_LCFS) /= ORBIT_EXIT_NUMERICAL_EVENT) &
+                    error stop 'Collision failure was classified as physical'
+                if (kt /= 7_int64 .or. any(z /= initial)) &
+                    error stop 'Collision failure committed drift or elapsed time'
+                if (hold_streak /= 0 .or. numerical_hold) &
+                    error stop 'Collision failure was consumed as warning hold'
+                if (any(local_orbit%si%z /= saved_si%z) .or. &
+                    local_orbit%si%pabs /= saved_si%pabs .or. &
+                    local_orbit%f%H /= saved_field%H .or. &
+                    local_orbit%f%mu /= saved_field%mu .or. &
+                    local_orbit%f%Bmod /= saved_field%Bmod) &
+                    error stop 'Collision failure changed accepted hidden state'
+                if (any(x_previous /= [1.0_dp, 2.0_dp, 3.0_dp])) &
+                    error stop 'Collision failure committed wall segment origin'
+            end do
+        end do
+        wall_query_rho_lcfs = saved_wall_gate
+        deallocate (ref_coords)
+        call move_alloc(saved_ref_coords, ref_coords)
+        ro0 = saved_ro0
+        dtaumin = saved_dtaumin
+        efcolf_grid = 0.0_dp
+        swcoll = .false.
+    end subroutine test_collision_failure_propagation
 
     subroutine test_rk_recovery_regions
         type(rk_recovery_state_t) :: recovery
@@ -511,6 +638,38 @@ contains
             error stop 'invalid adaptive-RK state was committed'
         end if
     end subroutine test_rk_state_validation
+
+    subroutine test_symplectic_step_validation
+        real(dp), parameter :: z_before(5) = [0.2_dp, 0.2_dp, 0.3_dp, 1.0_dp, &
+            -0.5_dp]
+        real(dp) :: z_after(5), z(5), event_fraction
+        integer :: step_error
+        logical :: reference_boundary
+
+        ! Without a reference momentum (symplectic steps), the O(dt) energy
+        ! error of the map is accepted; impossible phase space is not.
+        z_after = [0.21_dp, 0.4_dp, 0.5_dp, 1.015_dp, -0.49_dp]
+        step_error = 0
+        call validate_rk_step_or_reference_boundary(z_before, z_after, &
+            1.0_dp, z=z, event_fraction=event_fraction, ierr=step_error, &
+            reference_boundary=reference_boundary)
+        if (step_error /= 0 .or. any(z /= z_after)) &
+            error stop 'symplectic energy error was rejected as RK drift'
+
+        step_error = 0
+        call validate_rk_step_or_reference_boundary(z_before, z_after, &
+            1.0_dp, 1.0_dp, z, event_fraction, step_error, reference_boundary)
+        if (step_error /= 2) &
+            error stop 'RK momentum drift gate no longer applies'
+
+        z_after(5) = 2.0_dp
+        step_error = 0
+        call validate_rk_step_or_reference_boundary(z_before, z_after, &
+            1.0_dp, z=z, event_fraction=event_fraction, ierr=step_error, &
+            reference_boundary=reference_boundary)
+        if (step_error /= 2 .or. any(z /= z_before)) &
+            error stop 'invalid symplectic phase space was committed'
+    end subroutine test_symplectic_step_validation
 
     subroutine test_recovery_state_validation
         real(dp) :: z(5)

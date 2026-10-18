@@ -1,0 +1,5408 @@
+[
+  {
+    "config": {
+      "method": "FO",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-07,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_000.csv.gz",
+    "stdout": "FO T-A v=  0.010 aout=  0.300 wall=     6.01 lost=8 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_001.csv.gz",
+    "stdout": "FO T-A v=  0.010 aout=  0.300 wall=     9.23 lost=8 failed=0"
+  },
+  {
+    "config": {
+      "method": "C1L0",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_002.csv.gz",
+    "stdout": "C1L0 T-A v=  0.010 aout=  0.300 wall=     2.37 lost=8 failed=3"
+  },
+  {
+    "config": {
+      "method": "C1L1",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_003.csv.gz",
+    "stdout": "C1L1 T-A v=  0.010 aout=  0.300 wall=     2.22 lost=8 failed=3"
+  },
+  {
+    "config": {
+      "method": "C2fixed",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_004.csv.gz",
+    "stdout": "C2fixed T-A v=  0.010 aout=  0.300 wall=     9.80 lost=8 failed=0"
+  },
+  {
+    "config": {
+      "method": "C2pphi",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_005.csv.gz",
+    "stdout": "C2pphi T-A v=  0.010 aout=  0.300 wall=     9.93 lost=8 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_006.csv.gz",
+    "stdout": "C3 T-A v=  0.010 aout=  0.300 wall=    10.24 lost=8 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_007.csv.gz",
+    "stdout": "C3 T-A v=  0.010 aout=  0.300 wall=    10.13 lost=8 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_008.csv.gz",
+    "stdout": "C3 T-A v=  0.010 aout=  0.300 wall=     8.93 lost=8 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_009.csv.gz",
+    "stdout": "C3 T-A v=  0.010 aout=  0.300 wall=     9.36 lost=8 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_010.csv.gz",
+    "stdout": "C3 T-A v=  0.010 aout=  0.300 wall=    16.68 lost=8 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_011.csv.gz",
+    "stdout": "C3 T-A v=  0.010 aout=  0.300 wall=    13.71 lost=8 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_012.csv.gz",
+    "stdout": "C3 T-A v=  0.010 aout=  0.300 wall=    10.27 lost=8 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_013.csv.gz",
+    "stdout": "C3 T-A v=  0.010 aout=  0.300 wall=     9.72 lost=8 failed=0"
+  },
+  {
+    "config": {
+      "method": "C4",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_014.csv.gz",
+    "stdout": "C4 T-A v=  0.010 aout=  0.300 wall=     2.19 lost=5 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.025,
+      "width": 0.2,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_015.csv.gz",
+    "stdout": "C5 T-A v=  0.010 aout=  0.300 wall=     6.01 lost=8 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-07,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_016.csv.gz",
+    "stdout": "FO T-A v=  0.020 aout=  0.300 wall=     2.73 lost=94 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_017.csv.gz",
+    "stdout": "FO T-A v=  0.020 aout=  0.300 wall=     5.35 lost=94 failed=0"
+  },
+  {
+    "config": {
+      "method": "C1L0",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_018.csv.gz",
+    "stdout": "C1L0 T-A v=  0.020 aout=  0.300 wall=     1.34 lost=93 failed=3"
+  },
+  {
+    "config": {
+      "method": "C1L1",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_019.csv.gz",
+    "stdout": "C1L1 T-A v=  0.020 aout=  0.300 wall=     1.38 lost=93 failed=3"
+  },
+  {
+    "config": {
+      "method": "C2fixed",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_020.csv.gz",
+    "stdout": "C2fixed T-A v=  0.020 aout=  0.300 wall=     6.00 lost=94 failed=0"
+  },
+  {
+    "config": {
+      "method": "C2pphi",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_021.csv.gz",
+    "stdout": "C2pphi T-A v=  0.020 aout=  0.300 wall=     5.61 lost=94 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_022.csv.gz",
+    "stdout": "C3 T-A v=  0.020 aout=  0.300 wall=     5.55 lost=94 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_023.csv.gz",
+    "stdout": "C3 T-A v=  0.020 aout=  0.300 wall=     5.28 lost=94 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_024.csv.gz",
+    "stdout": "C3 T-A v=  0.020 aout=  0.300 wall=     4.91 lost=94 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_025.csv.gz",
+    "stdout": "C3 T-A v=  0.020 aout=  0.300 wall=     4.48 lost=94 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_026.csv.gz",
+    "stdout": "C3 T-A v=  0.020 aout=  0.300 wall=     8.14 lost=94 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_027.csv.gz",
+    "stdout": "C3 T-A v=  0.020 aout=  0.300 wall=     7.03 lost=94 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_028.csv.gz",
+    "stdout": "C3 T-A v=  0.020 aout=  0.300 wall=     4.37 lost=94 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_029.csv.gz",
+    "stdout": "C3 T-A v=  0.020 aout=  0.300 wall=     4.50 lost=94 failed=0"
+  },
+  {
+    "config": {
+      "method": "C4",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_030.csv.gz",
+    "stdout": "C4 T-A v=  0.020 aout=  0.300 wall=     1.06 lost=101 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.025,
+      "width": 0.2,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_031.csv.gz",
+    "stdout": "C5 T-A v=  0.020 aout=  0.300 wall=     2.47 lost=94 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-07,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_032.csv.gz",
+    "stdout": "FO T-A v=  0.040 aout=  0.300 wall=     1.22 lost=156 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_033.csv.gz",
+    "stdout": "FO T-A v=  0.040 aout=  0.300 wall=     2.24 lost=156 failed=0"
+  },
+  {
+    "config": {
+      "method": "C1L0",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_034.csv.gz",
+    "stdout": "C1L0 T-A v=  0.040 aout=  0.300 wall=     0.58 lost=153 failed=3"
+  },
+  {
+    "config": {
+      "method": "C1L1",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_035.csv.gz",
+    "stdout": "C1L1 T-A v=  0.040 aout=  0.300 wall=     0.66 lost=153 failed=3"
+  },
+  {
+    "config": {
+      "method": "C2fixed",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_036.csv.gz",
+    "stdout": "C2fixed T-A v=  0.040 aout=  0.300 wall=     2.52 lost=156 failed=0"
+  },
+  {
+    "config": {
+      "method": "C2pphi",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_037.csv.gz",
+    "stdout": "C2pphi T-A v=  0.040 aout=  0.300 wall=     3.09 lost=156 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_038.csv.gz",
+    "stdout": "C3 T-A v=  0.040 aout=  0.300 wall=     3.10 lost=156 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_039.csv.gz",
+    "stdout": "C3 T-A v=  0.040 aout=  0.300 wall=     2.75 lost=156 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_040.csv.gz",
+    "stdout": "C3 T-A v=  0.040 aout=  0.300 wall=     2.50 lost=156 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_041.csv.gz",
+    "stdout": "C3 T-A v=  0.040 aout=  0.300 wall=     2.52 lost=156 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_042.csv.gz",
+    "stdout": "C3 T-A v=  0.040 aout=  0.300 wall=     4.99 lost=156 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_043.csv.gz",
+    "stdout": "C3 T-A v=  0.040 aout=  0.300 wall=     3.41 lost=156 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_044.csv.gz",
+    "stdout": "C3 T-A v=  0.040 aout=  0.300 wall=     2.48 lost=156 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_045.csv.gz",
+    "stdout": "C3 T-A v=  0.040 aout=  0.300 wall=     3.05 lost=156 failed=0"
+  },
+  {
+    "config": {
+      "method": "C4",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_046.csv.gz",
+    "stdout": "C4 T-A v=  0.040 aout=  0.300 wall=     0.61 lost=155 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "A",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.025,
+      "width": 0.2,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_047.csv.gz",
+    "stdout": "C5 T-A v=  0.040 aout=  0.300 wall=     1.62 lost=156 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-07,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_048.csv.gz",
+    "stdout": "FO T-A v=  0.010 aout=  0.750 wall=     6.33 lost=1 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_049.csv.gz",
+    "stdout": "FO T-A v=  0.010 aout=  0.750 wall=    10.92 lost=1 failed=0"
+  },
+  {
+    "config": {
+      "method": "C1L0",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_050.csv.gz",
+    "stdout": "C1L0 T-A v=  0.010 aout=  0.750 wall=     2.59 lost=1 failed=8"
+  },
+  {
+    "config": {
+      "method": "C1L1",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_051.csv.gz",
+    "stdout": "C1L1 T-A v=  0.010 aout=  0.750 wall=     2.62 lost=1 failed=8"
+  },
+  {
+    "config": {
+      "method": "C2fixed",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_052.csv.gz",
+    "stdout": "C2fixed T-A v=  0.010 aout=  0.750 wall=    11.99 lost=1 failed=0"
+  },
+  {
+    "config": {
+      "method": "C2pphi",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_053.csv.gz",
+    "stdout": "C2pphi T-A v=  0.010 aout=  0.750 wall=    13.52 lost=1 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_054.csv.gz",
+    "stdout": "C3 T-A v=  0.010 aout=  0.750 wall=    12.55 lost=1 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_055.csv.gz",
+    "stdout": "C3 T-A v=  0.010 aout=  0.750 wall=    11.56 lost=1 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_056.csv.gz",
+    "stdout": "C3 T-A v=  0.010 aout=  0.750 wall=     9.78 lost=1 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_057.csv.gz",
+    "stdout": "C3 T-A v=  0.010 aout=  0.750 wall=     9.99 lost=1 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_058.csv.gz",
+    "stdout": "C3 T-A v=  0.010 aout=  0.750 wall=    16.21 lost=1 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_059.csv.gz",
+    "stdout": "C3 T-A v=  0.010 aout=  0.750 wall=    12.68 lost=1 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_060.csv.gz",
+    "stdout": "C3 T-A v=  0.010 aout=  0.750 wall=    10.71 lost=1 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_061.csv.gz",
+    "stdout": "C3 T-A v=  0.010 aout=  0.750 wall=    11.51 lost=1 failed=0"
+  },
+  {
+    "config": {
+      "method": "C4",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_062.csv.gz",
+    "stdout": "C4 T-A v=  0.010 aout=  0.750 wall=     1.44 lost=0 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.025,
+      "width": 0.2,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_063.csv.gz",
+    "stdout": "C5 T-A v=  0.010 aout=  0.750 wall=     6.25 lost=1 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-07,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_064.csv.gz",
+    "stdout": "FO T-A v=  0.020 aout=  0.750 wall=     3.09 lost=41 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_065.csv.gz",
+    "stdout": "FO T-A v=  0.020 aout=  0.750 wall=     5.61 lost=41 failed=0"
+  },
+  {
+    "config": {
+      "method": "C1L0",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_066.csv.gz",
+    "stdout": "C1L0 T-A v=  0.020 aout=  0.750 wall=     1.42 lost=35 failed=9"
+  },
+  {
+    "config": {
+      "method": "C1L1",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_067.csv.gz",
+    "stdout": "C1L1 T-A v=  0.020 aout=  0.750 wall=     1.37 lost=36 failed=9"
+  },
+  {
+    "config": {
+      "method": "C2fixed",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_068.csv.gz",
+    "stdout": "C2fixed T-A v=  0.020 aout=  0.750 wall=     5.67 lost=41 failed=0"
+  },
+  {
+    "config": {
+      "method": "C2pphi",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_069.csv.gz",
+    "stdout": "C2pphi T-A v=  0.020 aout=  0.750 wall=     5.23 lost=41 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_070.csv.gz",
+    "stdout": "C3 T-A v=  0.020 aout=  0.750 wall=     5.20 lost=41 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_071.csv.gz",
+    "stdout": "C3 T-A v=  0.020 aout=  0.750 wall=     5.03 lost=41 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_072.csv.gz",
+    "stdout": "C3 T-A v=  0.020 aout=  0.750 wall=     5.14 lost=41 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_073.csv.gz",
+    "stdout": "C3 T-A v=  0.020 aout=  0.750 wall=     5.27 lost=41 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_074.csv.gz",
+    "stdout": "C3 T-A v=  0.020 aout=  0.750 wall=     7.36 lost=41 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_075.csv.gz",
+    "stdout": "C3 T-A v=  0.020 aout=  0.750 wall=     6.48 lost=41 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_076.csv.gz",
+    "stdout": "C3 T-A v=  0.020 aout=  0.750 wall=     5.34 lost=41 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_077.csv.gz",
+    "stdout": "C3 T-A v=  0.020 aout=  0.750 wall=     5.48 lost=41 failed=0"
+  },
+  {
+    "config": {
+      "method": "C4",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_078.csv.gz",
+    "stdout": "C4 T-A v=  0.020 aout=  0.750 wall=     0.62 lost=40 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.025,
+      "width": 0.2,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_079.csv.gz",
+    "stdout": "C5 T-A v=  0.020 aout=  0.750 wall=     2.78 lost=41 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-07,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_080.csv.gz",
+    "stdout": "FO T-A v=  0.040 aout=  0.750 wall=     1.31 lost=142 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_081.csv.gz",
+    "stdout": "FO T-A v=  0.040 aout=  0.750 wall=     2.49 lost=142 failed=0"
+  },
+  {
+    "config": {
+      "method": "C1L0",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_082.csv.gz",
+    "stdout": "C1L0 T-A v=  0.040 aout=  0.750 wall=     0.78 lost=138 failed=9"
+  },
+  {
+    "config": {
+      "method": "C1L1",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_083.csv.gz",
+    "stdout": "C1L1 T-A v=  0.040 aout=  0.750 wall=     0.59 lost=137 failed=9"
+  },
+  {
+    "config": {
+      "method": "C2fixed",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_084.csv.gz",
+    "stdout": "C2fixed T-A v=  0.040 aout=  0.750 wall=     2.67 lost=142 failed=0"
+  },
+  {
+    "config": {
+      "method": "C2pphi",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_085.csv.gz",
+    "stdout": "C2pphi T-A v=  0.040 aout=  0.750 wall=     2.62 lost=142 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_086.csv.gz",
+    "stdout": "C3 T-A v=  0.040 aout=  0.750 wall=     2.99 lost=142 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_087.csv.gz",
+    "stdout": "C3 T-A v=  0.040 aout=  0.750 wall=     2.64 lost=142 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_088.csv.gz",
+    "stdout": "C3 T-A v=  0.040 aout=  0.750 wall=     2.71 lost=142 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_089.csv.gz",
+    "stdout": "C3 T-A v=  0.040 aout=  0.750 wall=     2.84 lost=142 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_090.csv.gz",
+    "stdout": "C3 T-A v=  0.040 aout=  0.750 wall=     5.07 lost=142 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_091.csv.gz",
+    "stdout": "C3 T-A v=  0.040 aout=  0.750 wall=     3.52 lost=142 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_092.csv.gz",
+    "stdout": "C3 T-A v=  0.040 aout=  0.750 wall=     2.98 lost=142 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_093.csv.gz",
+    "stdout": "C3 T-A v=  0.040 aout=  0.750 wall=     2.92 lost=142 failed=0"
+  },
+  {
+    "config": {
+      "method": "C4",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_094.csv.gz",
+    "stdout": "C4 T-A v=  0.040 aout=  0.750 wall=     0.35 lost=143 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "A",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.025,
+      "width": 0.2,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_095.csv.gz",
+    "stdout": "C5 T-A v=  0.040 aout=  0.750 wall=     1.64 lost=142 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-07,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_096.csv.gz",
+    "stdout": "FO T-A v=  0.010 aout=  2.000 wall=     7.05 lost=0 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_097.csv.gz",
+    "stdout": "FO T-A v=  0.010 aout=  2.000 wall=    13.08 lost=0 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-11,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_098.csv.gz",
+    "stdout": "FO T-A v=  0.010 aout=  2.000 wall=    26.74 lost=0 failed=0"
+  },
+  {
+    "config": {
+      "method": "C1L0",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_099.csv.gz",
+    "stdout": "C1L0 T-A v=  0.010 aout=  2.000 wall=     2.63 lost=0 failed=22"
+  },
+  {
+    "config": {
+      "method": "C1L1",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_100.csv.gz",
+    "stdout": "C1L1 T-A v=  0.010 aout=  2.000 wall=     2.61 lost=0 failed=22"
+  },
+  {
+    "config": {
+      "method": "C2fixed",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_101.csv.gz",
+    "stdout": "C2fixed T-A v=  0.010 aout=  2.000 wall=    13.12 lost=0 failed=0"
+  },
+  {
+    "config": {
+      "method": "C2pphi",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_102.csv.gz",
+    "stdout": "C2pphi T-A v=  0.010 aout=  2.000 wall=    12.50 lost=0 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_103.csv.gz",
+    "stdout": "C3 T-A v=  0.010 aout=  2.000 wall=    12.64 lost=0 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_104.csv.gz",
+    "stdout": "C3 T-A v=  0.010 aout=  2.000 wall=    12.56 lost=0 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_105.csv.gz",
+    "stdout": "C3 T-A v=  0.010 aout=  2.000 wall=    11.96 lost=0 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_106.csv.gz",
+    "stdout": "C3 T-A v=  0.010 aout=  2.000 wall=    11.57 lost=0 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_107.csv.gz",
+    "stdout": "C3 T-A v=  0.010 aout=  2.000 wall=    17.88 lost=0 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_108.csv.gz",
+    "stdout": "C3 T-A v=  0.010 aout=  2.000 wall=    13.11 lost=0 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_109.csv.gz",
+    "stdout": "C3 T-A v=  0.010 aout=  2.000 wall=    11.13 lost=0 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_110.csv.gz",
+    "stdout": "C3 T-A v=  0.010 aout=  2.000 wall=    11.70 lost=0 failed=0"
+  },
+  {
+    "config": {
+      "method": "C4",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_111.csv.gz",
+    "stdout": "C4 T-A v=  0.010 aout=  2.000 wall=     1.38 lost=0 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.025,
+      "width": 0.2,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_112.csv.gz",
+    "stdout": "C5 T-A v=  0.010 aout=  2.000 wall=     7.05 lost=0 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-07,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_113.csv.gz",
+    "stdout": "FO T-A v=  0.020 aout=  2.000 wall=     3.59 lost=11 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_114.csv.gz",
+    "stdout": "FO T-A v=  0.020 aout=  2.000 wall=     7.06 lost=11 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-11,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_115.csv.gz",
+    "stdout": "FO T-A v=  0.020 aout=  2.000 wall=    12.67 lost=11 failed=0"
+  },
+  {
+    "config": {
+      "method": "C1L0",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_116.csv.gz",
+    "stdout": "C1L0 T-A v=  0.020 aout=  2.000 wall=     1.16 lost=10 failed=22"
+  },
+  {
+    "config": {
+      "method": "C1L1",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_117.csv.gz",
+    "stdout": "C1L1 T-A v=  0.020 aout=  2.000 wall=     1.27 lost=10 failed=22"
+  },
+  {
+    "config": {
+      "method": "C2fixed",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_118.csv.gz",
+    "stdout": "C2fixed T-A v=  0.020 aout=  2.000 wall=     5.24 lost=11 failed=0"
+  },
+  {
+    "config": {
+      "method": "C2pphi",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_119.csv.gz",
+    "stdout": "C2pphi T-A v=  0.020 aout=  2.000 wall=     5.71 lost=11 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_120.csv.gz",
+    "stdout": "C3 T-A v=  0.020 aout=  2.000 wall=     5.22 lost=11 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_121.csv.gz",
+    "stdout": "C3 T-A v=  0.020 aout=  2.000 wall=     5.28 lost=11 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_122.csv.gz",
+    "stdout": "C3 T-A v=  0.020 aout=  2.000 wall=     4.93 lost=11 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_123.csv.gz",
+    "stdout": "C3 T-A v=  0.020 aout=  2.000 wall=     4.62 lost=11 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_124.csv.gz",
+    "stdout": "C3 T-A v=  0.020 aout=  2.000 wall=     7.45 lost=11 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_125.csv.gz",
+    "stdout": "C3 T-A v=  0.020 aout=  2.000 wall=     5.35 lost=11 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_126.csv.gz",
+    "stdout": "C3 T-A v=  0.020 aout=  2.000 wall=     4.49 lost=11 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_127.csv.gz",
+    "stdout": "C3 T-A v=  0.020 aout=  2.000 wall=     4.78 lost=11 failed=0"
+  },
+  {
+    "config": {
+      "method": "C4",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_128.csv.gz",
+    "stdout": "C4 T-A v=  0.020 aout=  2.000 wall=     0.82 lost=3 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.025,
+      "width": 0.2,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_129.csv.gz",
+    "stdout": "C5 T-A v=  0.020 aout=  2.000 wall=     2.11 lost=12 failed=0"
+  },
+  {
+    "config": {
+      "method": "C4",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 1.0,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_130.csv.gz",
+    "stdout": "C4 T-A v=  0.020 aout=  2.000 wall=     0.37 lost=7 failed=0"
+  },
+  {
+    "config": {
+      "method": "C4",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.5,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_131.csv.gz",
+    "stdout": "C4 T-A v=  0.020 aout=  2.000 wall=     0.50 lost=6 failed=0"
+  },
+  {
+    "config": {
+      "method": "C4",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.125,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_132.csv.gz",
+    "stdout": "C4 T-A v=  0.020 aout=  2.000 wall=     1.16 lost=13 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.0125,
+      "width": 0.2,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_133.csv.gz",
+    "stdout": "C5 T-A v=  0.020 aout=  2.000 wall=     4.25 lost=11 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.00625,
+      "width": 0.2,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_134.csv.gz",
+    "stdout": "C5 T-A v=  0.020 aout=  2.000 wall=     8.50 lost=11 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.0125,
+      "width": 0.1,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_135.csv.gz",
+    "stdout": "C5 T-A v=  0.020 aout=  2.000 wall=     4.12 lost=11 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.00625,
+      "width": 0.1,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_136.csv.gz",
+    "stdout": "C5 T-A v=  0.020 aout=  2.000 wall=     8.25 lost=11 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.0125,
+      "width": 0.05,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_137.csv.gz",
+    "stdout": "C5 T-A v=  0.020 aout=  2.000 wall=     4.05 lost=11 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.00625,
+      "width": 0.05,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_138.csv.gz",
+    "stdout": "C5 T-A v=  0.020 aout=  2.000 wall=     8.15 lost=11 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-07,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_139.csv.gz",
+    "stdout": "C3 T-A v=  0.020 aout=  2.000 wall=     2.69 lost=11 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-11,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_140.csv.gz",
+    "stdout": "C3 T-A v=  0.020 aout=  2.000 wall=    11.12 lost=11 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.25
+    },
+    "file": "concept/interface_candidates/results/main_141.csv.gz",
+    "stdout": "FO T-A v=  0.020 aout=  2.000 wall=     4.42 lost=11 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.25
+    },
+    "file": "concept/interface_candidates/results/main_142.csv.gz",
+    "stdout": "C3 T-A v=  0.020 aout=  2.000 wall=     5.73 lost=11 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.125
+    },
+    "file": "concept/interface_candidates/results/main_143.csv.gz",
+    "stdout": "FO T-A v=  0.020 aout=  2.000 wall=     5.50 lost=12 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.125
+    },
+    "file": "concept/interface_candidates/results/main_144.csv.gz",
+    "stdout": "C3 T-A v=  0.020 aout=  2.000 wall=     6.07 lost=12 failed=0"
+  },
+  {
+    "config": {
+      "method": "GL2",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.1,
+      "width": 0.2,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_145.csv.gz",
+    "stdout": "GL2 T-A v=  0.020 aout=  2.000 wall=     6.69 lost=11 failed=0"
+  },
+  {
+    "config": {
+      "method": "GL2",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.05,
+      "width": 0.1,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_146.csv.gz",
+    "stdout": "GL2 T-A v=  0.020 aout=  2.000 wall=     8.28 lost=11 failed=0"
+  },
+  {
+    "config": {
+      "method": "GL2",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.025,
+      "width": 0.05,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_147.csv.gz",
+    "stdout": "GL2 T-A v=  0.020 aout=  2.000 wall=    13.65 lost=11 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-07,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_148.csv.gz",
+    "stdout": "FO T-A v=  0.040 aout=  2.000 wall=     1.14 lost=91 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_149.csv.gz",
+    "stdout": "FO T-A v=  0.040 aout=  2.000 wall=     2.00 lost=91 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-11,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_150.csv.gz",
+    "stdout": "FO T-A v=  0.040 aout=  2.000 wall=     4.35 lost=91 failed=0"
+  },
+  {
+    "config": {
+      "method": "C1L0",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_151.csv.gz",
+    "stdout": "C1L0 T-A v=  0.040 aout=  2.000 wall=     0.45 lost=84 failed=24"
+  },
+  {
+    "config": {
+      "method": "C1L1",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_152.csv.gz",
+    "stdout": "C1L1 T-A v=  0.040 aout=  2.000 wall=     0.46 lost=82 failed=24"
+  },
+  {
+    "config": {
+      "method": "C2fixed",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_153.csv.gz",
+    "stdout": "C2fixed T-A v=  0.040 aout=  2.000 wall=     2.12 lost=91 failed=0"
+  },
+  {
+    "config": {
+      "method": "C2pphi",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_154.csv.gz",
+    "stdout": "C2pphi T-A v=  0.040 aout=  2.000 wall=     2.15 lost=91 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_155.csv.gz",
+    "stdout": "C3 T-A v=  0.040 aout=  2.000 wall=     2.19 lost=91 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_156.csv.gz",
+    "stdout": "C3 T-A v=  0.040 aout=  2.000 wall=     2.14 lost=91 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_157.csv.gz",
+    "stdout": "C3 T-A v=  0.040 aout=  2.000 wall=     2.03 lost=91 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_158.csv.gz",
+    "stdout": "C3 T-A v=  0.040 aout=  2.000 wall=     2.06 lost=91 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_159.csv.gz",
+    "stdout": "C3 T-A v=  0.040 aout=  2.000 wall=     3.01 lost=91 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_160.csv.gz",
+    "stdout": "C3 T-A v=  0.040 aout=  2.000 wall=     2.54 lost=91 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_161.csv.gz",
+    "stdout": "C3 T-A v=  0.040 aout=  2.000 wall=     2.07 lost=91 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_162.csv.gz",
+    "stdout": "C3 T-A v=  0.040 aout=  2.000 wall=     2.02 lost=91 failed=0"
+  },
+  {
+    "config": {
+      "method": "C4",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_163.csv.gz",
+    "stdout": "C4 T-A v=  0.040 aout=  2.000 wall=     0.39 lost=101 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "A",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.025,
+      "width": 0.2,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_164.csv.gz",
+    "stdout": "C5 T-A v=  0.040 aout=  2.000 wall=     0.97 lost=91 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-07,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_165.csv.gz",
+    "stdout": "FO T-B v=  0.010 aout=  0.300 wall=     3.50 lost=14 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_166.csv.gz",
+    "stdout": "FO T-B v=  0.010 aout=  0.300 wall=     6.69 lost=14 failed=0"
+  },
+  {
+    "config": {
+      "method": "C1L0",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_167.csv.gz",
+    "stdout": "C1L0 T-B v=  0.010 aout=  0.300 wall=     1.65 lost=14 failed=3"
+  },
+  {
+    "config": {
+      "method": "C1L1",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_168.csv.gz",
+    "stdout": "C1L1 T-B v=  0.010 aout=  0.300 wall=     1.66 lost=14 failed=3"
+  },
+  {
+    "config": {
+      "method": "C2fixed",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_169.csv.gz",
+    "stdout": "C2fixed T-B v=  0.010 aout=  0.300 wall=     7.27 lost=14 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_170.csv.gz",
+    "stdout": "C3 T-B v=  0.010 aout=  0.300 wall=     7.74 lost=14 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_171.csv.gz",
+    "stdout": "C3 T-B v=  0.010 aout=  0.300 wall=     7.56 lost=14 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_172.csv.gz",
+    "stdout": "C3 T-B v=  0.010 aout=  0.300 wall=     7.92 lost=14 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_173.csv.gz",
+    "stdout": "C3 T-B v=  0.010 aout=  0.300 wall=     7.05 lost=14 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_174.csv.gz",
+    "stdout": "C3 T-B v=  0.010 aout=  0.300 wall=    12.90 lost=14 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_175.csv.gz",
+    "stdout": "C3 T-B v=  0.010 aout=  0.300 wall=     9.38 lost=14 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_176.csv.gz",
+    "stdout": "C3 T-B v=  0.010 aout=  0.300 wall=     6.94 lost=14 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_177.csv.gz",
+    "stdout": "C3 T-B v=  0.010 aout=  0.300 wall=     6.89 lost=14 failed=0"
+  },
+  {
+    "config": {
+      "method": "C4",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_178.csv.gz",
+    "stdout": "C4 T-B v=  0.010 aout=  0.300 wall=     1.59 lost=16 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.025,
+      "width": 0.2,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_179.csv.gz",
+    "stdout": "C5 T-B v=  0.010 aout=  0.300 wall=     3.92 lost=14 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-07,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_180.csv.gz",
+    "stdout": "FO T-B v=  0.020 aout=  0.300 wall=     1.77 lost=100 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_181.csv.gz",
+    "stdout": "FO T-B v=  0.020 aout=  0.300 wall=     3.40 lost=100 failed=0"
+  },
+  {
+    "config": {
+      "method": "C1L0",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_182.csv.gz",
+    "stdout": "C1L0 T-B v=  0.020 aout=  0.300 wall=     0.84 lost=97 failed=2"
+  },
+  {
+    "config": {
+      "method": "C1L1",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_183.csv.gz",
+    "stdout": "C1L1 T-B v=  0.020 aout=  0.300 wall=     0.89 lost=97 failed=2"
+  },
+  {
+    "config": {
+      "method": "C2fixed",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_184.csv.gz",
+    "stdout": "C2fixed T-B v=  0.020 aout=  0.300 wall=     3.80 lost=100 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_185.csv.gz",
+    "stdout": "C3 T-B v=  0.020 aout=  0.300 wall=     3.84 lost=100 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_186.csv.gz",
+    "stdout": "C3 T-B v=  0.020 aout=  0.300 wall=     3.77 lost=100 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_187.csv.gz",
+    "stdout": "C3 T-B v=  0.020 aout=  0.300 wall=     3.62 lost=100 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_188.csv.gz",
+    "stdout": "C3 T-B v=  0.020 aout=  0.300 wall=     3.81 lost=100 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_189.csv.gz",
+    "stdout": "C3 T-B v=  0.020 aout=  0.300 wall=     6.10 lost=100 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_190.csv.gz",
+    "stdout": "C3 T-B v=  0.020 aout=  0.300 wall=     4.90 lost=100 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_191.csv.gz",
+    "stdout": "C3 T-B v=  0.020 aout=  0.300 wall=     3.84 lost=100 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_192.csv.gz",
+    "stdout": "C3 T-B v=  0.020 aout=  0.300 wall=     4.79 lost=100 failed=0"
+  },
+  {
+    "config": {
+      "method": "C4",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_193.csv.gz",
+    "stdout": "C4 T-B v=  0.020 aout=  0.300 wall=     0.81 lost=106 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.025,
+      "width": 0.2,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_194.csv.gz",
+    "stdout": "C5 T-B v=  0.020 aout=  0.300 wall=     2.08 lost=100 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-07,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_195.csv.gz",
+    "stdout": "FO T-B v=  0.040 aout=  0.300 wall=     0.92 lost=161 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_196.csv.gz",
+    "stdout": "FO T-B v=  0.040 aout=  0.300 wall=     1.78 lost=161 failed=0"
+  },
+  {
+    "config": {
+      "method": "C1L0",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_197.csv.gz",
+    "stdout": "C1L0 T-B v=  0.040 aout=  0.300 wall=     0.42 lost=158 failed=3"
+  },
+  {
+    "config": {
+      "method": "C1L1",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_198.csv.gz",
+    "stdout": "C1L1 T-B v=  0.040 aout=  0.300 wall=     0.44 lost=158 failed=3"
+  },
+  {
+    "config": {
+      "method": "C2fixed",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_199.csv.gz",
+    "stdout": "C2fixed T-B v=  0.040 aout=  0.300 wall=     1.95 lost=161 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_200.csv.gz",
+    "stdout": "C3 T-B v=  0.040 aout=  0.300 wall=     2.09 lost=161 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_201.csv.gz",
+    "stdout": "C3 T-B v=  0.040 aout=  0.300 wall=     2.47 lost=161 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_202.csv.gz",
+    "stdout": "C3 T-B v=  0.040 aout=  0.300 wall=     1.77 lost=161 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_203.csv.gz",
+    "stdout": "C3 T-B v=  0.040 aout=  0.300 wall=     2.06 lost=161 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_204.csv.gz",
+    "stdout": "C3 T-B v=  0.040 aout=  0.300 wall=     3.66 lost=161 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_205.csv.gz",
+    "stdout": "C3 T-B v=  0.040 aout=  0.300 wall=     3.25 lost=161 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_206.csv.gz",
+    "stdout": "C3 T-B v=  0.040 aout=  0.300 wall=     2.17 lost=161 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_207.csv.gz",
+    "stdout": "C3 T-B v=  0.040 aout=  0.300 wall=     2.20 lost=161 failed=0"
+  },
+  {
+    "config": {
+      "method": "C4",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_208.csv.gz",
+    "stdout": "C4 T-B v=  0.040 aout=  0.300 wall=     0.46 lost=164 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "B",
+      "aout": 0.3,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.025,
+      "width": 0.2,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_209.csv.gz",
+    "stdout": "C5 T-B v=  0.040 aout=  0.300 wall=     1.28 lost=161 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-07,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_210.csv.gz",
+    "stdout": "FO T-B v=  0.010 aout=  0.750 wall=     4.01 lost=10 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_211.csv.gz",
+    "stdout": "FO T-B v=  0.010 aout=  0.750 wall=     7.29 lost=10 failed=0"
+  },
+  {
+    "config": {
+      "method": "C1L0",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_212.csv.gz",
+    "stdout": "C1L0 T-B v=  0.010 aout=  0.750 wall=     1.73 lost=9 failed=8"
+  },
+  {
+    "config": {
+      "method": "C1L1",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_213.csv.gz",
+    "stdout": "C1L1 T-B v=  0.010 aout=  0.750 wall=     1.75 lost=9 failed=8"
+  },
+  {
+    "config": {
+      "method": "C2fixed",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_214.csv.gz",
+    "stdout": "C2fixed T-B v=  0.010 aout=  0.750 wall=     8.29 lost=10 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_215.csv.gz",
+    "stdout": "C3 T-B v=  0.010 aout=  0.750 wall=     8.89 lost=10 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_216.csv.gz",
+    "stdout": "C3 T-B v=  0.010 aout=  0.750 wall=     7.62 lost=10 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_217.csv.gz",
+    "stdout": "C3 T-B v=  0.010 aout=  0.750 wall=     8.85 lost=10 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_218.csv.gz",
+    "stdout": "C3 T-B v=  0.010 aout=  0.750 wall=     7.35 lost=10 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_219.csv.gz",
+    "stdout": "C3 T-B v=  0.010 aout=  0.750 wall=    12.83 lost=10 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_220.csv.gz",
+    "stdout": "C3 T-B v=  0.010 aout=  0.750 wall=    10.92 lost=10 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_221.csv.gz",
+    "stdout": "C3 T-B v=  0.010 aout=  0.750 wall=     7.86 lost=10 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_222.csv.gz",
+    "stdout": "C3 T-B v=  0.010 aout=  0.750 wall=     7.22 lost=10 failed=0"
+  },
+  {
+    "config": {
+      "method": "C4",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_223.csv.gz",
+    "stdout": "C4 T-B v=  0.010 aout=  0.750 wall=     1.45 lost=12 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.025,
+      "width": 0.2,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_224.csv.gz",
+    "stdout": "C5 T-B v=  0.010 aout=  0.750 wall=     5.52 lost=10 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-07,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_225.csv.gz",
+    "stdout": "FO T-B v=  0.020 aout=  0.750 wall=     2.19 lost=55 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_226.csv.gz",
+    "stdout": "FO T-B v=  0.020 aout=  0.750 wall=     3.83 lost=55 failed=0"
+  },
+  {
+    "config": {
+      "method": "C1L0",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_227.csv.gz",
+    "stdout": "C1L0 T-B v=  0.020 aout=  0.750 wall=     0.91 lost=50 failed=7"
+  },
+  {
+    "config": {
+      "method": "C1L1",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_228.csv.gz",
+    "stdout": "C1L1 T-B v=  0.020 aout=  0.750 wall=     0.92 lost=51 failed=7"
+  },
+  {
+    "config": {
+      "method": "C2fixed",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_229.csv.gz",
+    "stdout": "C2fixed T-B v=  0.020 aout=  0.750 wall=     4.59 lost=55 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_230.csv.gz",
+    "stdout": "C3 T-B v=  0.020 aout=  0.750 wall=     4.21 lost=55 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_231.csv.gz",
+    "stdout": "C3 T-B v=  0.020 aout=  0.750 wall=     4.45 lost=55 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_232.csv.gz",
+    "stdout": "C3 T-B v=  0.020 aout=  0.750 wall=     3.90 lost=55 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_233.csv.gz",
+    "stdout": "C3 T-B v=  0.020 aout=  0.750 wall=     4.78 lost=55 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_234.csv.gz",
+    "stdout": "C3 T-B v=  0.020 aout=  0.750 wall=     7.79 lost=55 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_235.csv.gz",
+    "stdout": "C3 T-B v=  0.020 aout=  0.750 wall=     7.81 lost=55 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_236.csv.gz",
+    "stdout": "C3 T-B v=  0.020 aout=  0.750 wall=     5.44 lost=55 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_237.csv.gz",
+    "stdout": "C3 T-B v=  0.020 aout=  0.750 wall=     5.49 lost=55 failed=0"
+  },
+  {
+    "config": {
+      "method": "C4",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_238.csv.gz",
+    "stdout": "C4 T-B v=  0.020 aout=  0.750 wall=     0.76 lost=53 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.025,
+      "width": 0.2,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_239.csv.gz",
+    "stdout": "C5 T-B v=  0.020 aout=  0.750 wall=     2.66 lost=55 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-07,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_240.csv.gz",
+    "stdout": "FO T-B v=  0.040 aout=  0.750 wall=     1.57 lost=145 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_241.csv.gz",
+    "stdout": "FO T-B v=  0.040 aout=  0.750 wall=     2.47 lost=145 failed=0"
+  },
+  {
+    "config": {
+      "method": "C1L0",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_242.csv.gz",
+    "stdout": "C1L0 T-B v=  0.040 aout=  0.750 wall=     0.61 lost=138 failed=8"
+  },
+  {
+    "config": {
+      "method": "C1L1",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_243.csv.gz",
+    "stdout": "C1L1 T-B v=  0.040 aout=  0.750 wall=     0.66 lost=138 failed=7"
+  },
+  {
+    "config": {
+      "method": "C2fixed",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_244.csv.gz",
+    "stdout": "C2fixed T-B v=  0.040 aout=  0.750 wall=     2.73 lost=145 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_245.csv.gz",
+    "stdout": "C3 T-B v=  0.040 aout=  0.750 wall=     3.25 lost=145 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_246.csv.gz",
+    "stdout": "C3 T-B v=  0.040 aout=  0.750 wall=     2.53 lost=145 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_247.csv.gz",
+    "stdout": "C3 T-B v=  0.040 aout=  0.750 wall=     2.44 lost=145 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_248.csv.gz",
+    "stdout": "C3 T-B v=  0.040 aout=  0.750 wall=     1.97 lost=145 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_249.csv.gz",
+    "stdout": "C3 T-B v=  0.040 aout=  0.750 wall=     3.68 lost=145 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_250.csv.gz",
+    "stdout": "C3 T-B v=  0.040 aout=  0.750 wall=     3.04 lost=145 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_251.csv.gz",
+    "stdout": "C3 T-B v=  0.040 aout=  0.750 wall=     2.29 lost=145 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_252.csv.gz",
+    "stdout": "C3 T-B v=  0.040 aout=  0.750 wall=     2.29 lost=145 failed=0"
+  },
+  {
+    "config": {
+      "method": "C4",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_253.csv.gz",
+    "stdout": "C4 T-B v=  0.040 aout=  0.750 wall=     0.39 lost=147 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "B",
+      "aout": 0.75,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.025,
+      "width": 0.2,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_254.csv.gz",
+    "stdout": "C5 T-B v=  0.040 aout=  0.750 wall=     1.23 lost=145 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-07,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_255.csv.gz",
+    "stdout": "FO T-B v=  0.010 aout=  2.000 wall=     4.81 lost=3 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_256.csv.gz",
+    "stdout": "FO T-B v=  0.010 aout=  2.000 wall=     9.28 lost=3 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-11,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_257.csv.gz",
+    "stdout": "FO T-B v=  0.010 aout=  2.000 wall=    20.37 lost=3 failed=0"
+  },
+  {
+    "config": {
+      "method": "C1L0",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_258.csv.gz",
+    "stdout": "C1L0 T-B v=  0.010 aout=  2.000 wall=     1.99 lost=1 failed=20"
+  },
+  {
+    "config": {
+      "method": "C1L1",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_259.csv.gz",
+    "stdout": "C1L1 T-B v=  0.010 aout=  2.000 wall=     2.10 lost=2 failed=21"
+  },
+  {
+    "config": {
+      "method": "C2fixed",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_260.csv.gz",
+    "stdout": "C2fixed T-B v=  0.010 aout=  2.000 wall=    13.63 lost=3 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_261.csv.gz",
+    "stdout": "C3 T-B v=  0.010 aout=  2.000 wall=    14.56 lost=3 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_262.csv.gz",
+    "stdout": "C3 T-B v=  0.010 aout=  2.000 wall=    12.60 lost=3 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_263.csv.gz",
+    "stdout": "C3 T-B v=  0.010 aout=  2.000 wall=    11.71 lost=3 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_264.csv.gz",
+    "stdout": "C3 T-B v=  0.010 aout=  2.000 wall=     8.92 lost=3 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_265.csv.gz",
+    "stdout": "C3 T-B v=  0.010 aout=  2.000 wall=    13.09 lost=3 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_266.csv.gz",
+    "stdout": "C3 T-B v=  0.010 aout=  2.000 wall=    10.08 lost=3 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_267.csv.gz",
+    "stdout": "C3 T-B v=  0.010 aout=  2.000 wall=     8.37 lost=3 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_268.csv.gz",
+    "stdout": "C3 T-B v=  0.010 aout=  2.000 wall=     8.35 lost=3 failed=0"
+  },
+  {
+    "config": {
+      "method": "C4",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_269.csv.gz",
+    "stdout": "C4 T-B v=  0.010 aout=  2.000 wall=     1.35 lost=0 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.01,
+      "tend": 8000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.025,
+      "width": 0.2,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_270.csv.gz",
+    "stdout": "C5 T-B v=  0.010 aout=  2.000 wall=     4.31 lost=3 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-07,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_271.csv.gz",
+    "stdout": "FO T-B v=  0.020 aout=  2.000 wall=     2.17 lost=39 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_272.csv.gz",
+    "stdout": "FO T-B v=  0.020 aout=  2.000 wall=     4.20 lost=39 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-11,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_273.csv.gz",
+    "stdout": "FO T-B v=  0.020 aout=  2.000 wall=     9.16 lost=39 failed=0"
+  },
+  {
+    "config": {
+      "method": "C1L0",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_274.csv.gz",
+    "stdout": "C1L0 T-B v=  0.020 aout=  2.000 wall=     4.52 lost=36 failed=21"
+  },
+  {
+    "config": {
+      "method": "C1L1",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_275.csv.gz",
+    "stdout": "C1L1 T-B v=  0.020 aout=  2.000 wall=     0.96 lost=36 failed=20"
+  },
+  {
+    "config": {
+      "method": "C2fixed",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_276.csv.gz",
+    "stdout": "C2fixed T-B v=  0.020 aout=  2.000 wall=     4.39 lost=39 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_277.csv.gz",
+    "stdout": "C3 T-B v=  0.020 aout=  2.000 wall=     4.54 lost=39 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_278.csv.gz",
+    "stdout": "C3 T-B v=  0.020 aout=  2.000 wall=     4.44 lost=39 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_279.csv.gz",
+    "stdout": "C3 T-B v=  0.020 aout=  2.000 wall=     4.13 lost=39 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_280.csv.gz",
+    "stdout": "C3 T-B v=  0.020 aout=  2.000 wall=     4.05 lost=39 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_281.csv.gz",
+    "stdout": "C3 T-B v=  0.020 aout=  2.000 wall=     5.95 lost=39 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_282.csv.gz",
+    "stdout": "C3 T-B v=  0.020 aout=  2.000 wall=     5.57 lost=39 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_283.csv.gz",
+    "stdout": "C3 T-B v=  0.020 aout=  2.000 wall=     4.20 lost=39 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_284.csv.gz",
+    "stdout": "C3 T-B v=  0.020 aout=  2.000 wall=     4.24 lost=39 failed=0"
+  },
+  {
+    "config": {
+      "method": "C4",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_285.csv.gz",
+    "stdout": "C4 T-B v=  0.020 aout=  2.000 wall=     0.74 lost=21 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.025,
+      "width": 0.2,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_286.csv.gz",
+    "stdout": "C5 T-B v=  0.020 aout=  2.000 wall=     2.50 lost=39 failed=0"
+  },
+  {
+    "config": {
+      "method": "C4",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 1.0,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_287.csv.gz",
+    "stdout": "C4 T-B v=  0.020 aout=  2.000 wall=     0.38 lost=14 failed=0"
+  },
+  {
+    "config": {
+      "method": "C4",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.5,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_288.csv.gz",
+    "stdout": "C4 T-B v=  0.020 aout=  2.000 wall=     0.50 lost=13 failed=0"
+  },
+  {
+    "config": {
+      "method": "C4",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.125,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_289.csv.gz",
+    "stdout": "C4 T-B v=  0.020 aout=  2.000 wall=     1.23 lost=36 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.0125,
+      "width": 0.2,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_290.csv.gz",
+    "stdout": "C5 T-B v=  0.020 aout=  2.000 wall=     5.00 lost=39 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.00625,
+      "width": 0.2,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_291.csv.gz",
+    "stdout": "C5 T-B v=  0.020 aout=  2.000 wall=     8.36 lost=39 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.0125,
+      "width": 0.1,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_292.csv.gz",
+    "stdout": "C5 T-B v=  0.020 aout=  2.000 wall=     4.11 lost=39 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.00625,
+      "width": 0.1,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_293.csv.gz",
+    "stdout": "C5 T-B v=  0.020 aout=  2.000 wall=     8.67 lost=39 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.0125,
+      "width": 0.05,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_294.csv.gz",
+    "stdout": "C5 T-B v=  0.020 aout=  2.000 wall=     4.84 lost=39 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.00625,
+      "width": 0.05,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_295.csv.gz",
+    "stdout": "C5 T-B v=  0.020 aout=  2.000 wall=     9.27 lost=39 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-07,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_296.csv.gz",
+    "stdout": "C3 T-B v=  0.020 aout=  2.000 wall=     2.38 lost=39 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-11,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_297.csv.gz",
+    "stdout": "C3 T-B v=  0.020 aout=  2.000 wall=    10.22 lost=39 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.25
+    },
+    "file": "concept/interface_candidates/results/main_298.csv.gz",
+    "stdout": "FO T-B v=  0.020 aout=  2.000 wall=     3.93 lost=39 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.25
+    },
+    "file": "concept/interface_candidates/results/main_299.csv.gz",
+    "stdout": "C3 T-B v=  0.020 aout=  2.000 wall=     4.90 lost=39 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.125
+    },
+    "file": "concept/interface_candidates/results/main_300.csv.gz",
+    "stdout": "FO T-B v=  0.020 aout=  2.000 wall=     4.42 lost=39 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.02,
+      "tend": 4000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.125
+    },
+    "file": "concept/interface_candidates/results/main_301.csv.gz",
+    "stdout": "C3 T-B v=  0.020 aout=  2.000 wall=     5.87 lost=39 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-07,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_302.csv.gz",
+    "stdout": "FO T-B v=  0.040 aout=  2.000 wall=     1.08 lost=109 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_303.csv.gz",
+    "stdout": "FO T-B v=  0.040 aout=  2.000 wall=     1.92 lost=109 failed=0"
+  },
+  {
+    "config": {
+      "method": "FO",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-11,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_304.csv.gz",
+    "stdout": "FO T-B v=  0.040 aout=  2.000 wall=     4.21 lost=109 failed=0"
+  },
+  {
+    "config": {
+      "method": "C1L0",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_305.csv.gz",
+    "stdout": "C1L0 T-B v=  0.040 aout=  2.000 wall=     0.42 lost=94 failed=21"
+  },
+  {
+    "config": {
+      "method": "C1L1",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_306.csv.gz",
+    "stdout": "C1L1 T-B v=  0.040 aout=  2.000 wall=     0.41 lost=97 failed=21"
+  },
+  {
+    "config": {
+      "method": "C2fixed",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_307.csv.gz",
+    "stdout": "C2fixed T-B v=  0.040 aout=  2.000 wall=     2.08 lost=109 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_308.csv.gz",
+    "stdout": "C3 T-B v=  0.040 aout=  2.000 wall=     2.08 lost=109 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_309.csv.gz",
+    "stdout": "C3 T-B v=  0.040 aout=  2.000 wall=     2.03 lost=109 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_310.csv.gz",
+    "stdout": "C3 T-B v=  0.040 aout=  2.000 wall=     1.91 lost=109 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 0,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_311.csv.gz",
+    "stdout": "C3 T-B v=  0.040 aout=  2.000 wall=     1.92 lost=109 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 2,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_312.csv.gz",
+    "stdout": "C3 T-B v=  0.040 aout=  2.000 wall=     2.98 lost=109 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_313.csv.gz",
+    "stdout": "C3 T-B v=  0.040 aout=  2.000 wall=     2.45 lost=109 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 5,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_314.csv.gz",
+    "stdout": "C3 T-B v=  0.040 aout=  2.000 wall=     1.95 lost=109 failed=0"
+  },
+  {
+    "config": {
+      "method": "C3",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 8,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_315.csv.gz",
+    "stdout": "C3 T-B v=  0.040 aout=  2.000 wall=     1.91 lost=109 failed=0"
+  },
+  {
+    "config": {
+      "method": "C4",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 1,
+      "knob": 0.25,
+      "width": 0,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_316.csv.gz",
+    "stdout": "C4 T-B v=  0.040 aout=  2.000 wall=     0.34 lost=121 failed=0"
+  },
+  {
+    "config": {
+      "method": "C5",
+      "case": "B",
+      "aout": 2.0,
+      "speed": 0.04,
+      "tend": 2000.0,
+      "tol": 1e-09,
+      "din": 3,
+      "order": 0,
+      "knob": 0.025,
+      "width": 0.2,
+      "sample": 0.5
+    },
+    "file": "concept/interface_candidates/results/main_317.csv.gz",
+    "stdout": "C5 T-B v=  0.040 aout=  2.000 wall=     0.97 lost=109 failed=0"
+  }
+]

@@ -1,0 +1,22 @@
+name: Question
+description: Usage, input settings or interpretation of output.
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The README, `examples/simple_full.in` (every input key with its
+        default), `DOC/` and `python/README.rst` answer many questions.
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: >-
+        What you are trying to do, the relevant part of `simple.in`, and the
+        SIMPLE version (commit or tag).

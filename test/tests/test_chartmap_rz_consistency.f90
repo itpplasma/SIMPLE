@@ -23,6 +23,7 @@ program test_chartmap_rz_consistency
 
     integer :: nerrors
     real(dp) :: dummy
+    logical :: vmec_initialized = .false.
 
     real(dp), parameter :: TOL_RZ = 1.0e-8_dp
 
@@ -50,6 +51,14 @@ program test_chartmap_rz_consistency
     print *, '================================'
 
 contains
+
+    subroutine ensure_vmec_initialized
+        ! All cases read the same equilibrium without changing it. Share the
+        ! expensive spline construction while retaining every coordinate check.
+        if (vmec_initialized) return
+        call init_vmec(VMEC_FILE, 5, 5, 5, dummy)
+        vmec_initialized = .true.
+    end subroutine ensure_vmec_initialized
 
     subroutine test_rz_chartmap_roundtrip(nerrors)
         !> Test R,Z -> chartmap -> R,Z roundtrip (direct, no VMEC).
@@ -145,7 +154,7 @@ contains
             return
         end if
 
-        call init_vmec(VMEC_FILE, 5, 5, 5, dummy)
+        call ensure_vmec_initialized
         call make_vmec_coordinate_system(vmec_cs)
         call make_chartmap_coordinate_system(chart_cs, CHARTMAP_FILE)
 
@@ -241,7 +250,7 @@ contains
             return
         end if
 
-        call init_vmec(VMEC_FILE, 5, 5, 5, dummy)
+        call ensure_vmec_initialized
         call make_vmec_coordinate_system(vmec_cs)
         call make_chartmap_coordinate_system(chart_cs, CHARTMAP_FILE)
 
@@ -314,7 +323,7 @@ contains
             return
         end if
 
-        call init_vmec(VMEC_FILE, 5, 5, 5, dummy)
+        call ensure_vmec_initialized
         call make_vmec_coordinate_system(vmec_cs)
         call make_chartmap_coordinate_system(chart_cs, CHARTMAP_FILE)
 
@@ -386,7 +395,7 @@ contains
             return
         end if
 
-        call init_vmec(VMEC_FILE, 5, 5, 5, dummy)
+        call ensure_vmec_initialized
         call make_vmec_coordinate_system(vmec_cs)
         call make_chartmap_coordinate_system(chart_cs, CHARTMAP_FILE)
 

@@ -43,23 +43,25 @@ def run(binary, field, generate_start_only):
             config(field.resolve(), generate_start_only))
         proc = subprocess.run([binary.resolve(), "simple.in"], cwd=work,
                               capture_output=True, text=True, timeout=120)
+        if not generate_start_only:
+            assert proc.returncode != 0
+            output = proc.stdout + proc.stderr
+            assert "multi-volume SPECTRE tracing requires integmode > 0" in output
+            assert "DOC/spectre-rejected-interface-models.md" in output
+            assert not (work / "times_lost.dat").exists()
+            return
         if proc.returncode != 0:
             raise RuntimeError(proc.stdout + proc.stderr)
         actual = np.loadtxt(work / "start.dat")
         if not np.array_equal(actual, STARTS):
             raise AssertionError(f"explicit starts were replaced:\n{actual}")
-        if not generate_start_only:
-            times_lost = np.atleast_2d(np.loadtxt(work / "times_lost.dat"))
-            if not np.all(np.isfinite(times_lost[:, 2])):
-                raise AssertionError(
-                    f"non-finite trapped-passing diagnostics:\n{times_lost}")
 
 
 def main():
     binary, field = map(Path, sys.argv[1:])
     run(binary, field, True)
     run(binary, field, False)
-    print("SPECTRE startmode=2 explicit starts and diagnostics PASS")
+    print("SPECTRE startmode=2 explicit starts and multi-volume rejection PASS")
 
 
 if __name__ == "__main__":
