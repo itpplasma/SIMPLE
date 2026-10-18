@@ -28,8 +28,8 @@ These tests used four build jobs, at most four OpenMP threads, one BLAS thread,
 and sequential CTest execution on a shared login node. Keep login tests short;
 use Slurm for production. Store builds under `$HOME` (50 GB quota in this test)
 or `$SCRATCH`; remove surplus build trees and preserve source revisions/logs.
-The sole job submitted here used the budget-free `lrd_all_serial` partition
-without an account. No GPU or production-partition job was submitted.
+The batch smoke test used the budget-free `lrd_all_serial` partition, which
+does not require a project account. GPU execution was not tested.
 
 ## Verified Leonardo CPU recipe
 
@@ -154,16 +154,39 @@ See [Leonardo's partition limits](https://docs.hpc.cineca.it/hpc/leonardo.html#j
 | Selected `make test-fast` command above | 11/11 passed, 12.99 s CTest time (22.40 s including Make's configure/build) |
 | Timed eight-particle example above | Exit 0, 9.29 s wall time, 6,287 field evaluations |
 | Output inspection with Python's standard library | 8 particle rows, 8 exit-code rows, 20 confinement rows; all finite; final time `1e-5` s |
-| `sbatch examples/hpc/cineca/leonardo-serial.sbatch` | Job 61061586 completed, `sacct` exit `0:0`, 17 s elapsed (9 s application step) |
+| `sbatch examples/hpc/cineca/leonardo-serial.sbatch` | Completed, `sacct` exit `0:0`, 17 s elapsed (9 s application step) |
 | GNU/CUDA configure and selected targets below | Passed, 26.91 s configure and 72.28 s compilation; no GPU execution |
 | Local worktree GNU 16.2.1 Release/OpenMP | Same 11/11 tests passed in 7.34 s; example exit 0 in 18.98 s |
 
 These are smoke-test timings on shared machines, not performance comparisons.
-The final environment script also directs temporary files to `build/tmp`.
-One approximately 455 MB CPU reference tree remains at
-`$HOME/SIMPLE-efss-cineca/build`; alternate builds were removed. Logs, module
-lists, CMake caches and Slurm accounting remain in
-`$HOME/SIMPLE-efss-cineca-evidence`. No Fortran or CMake source was changed.
+The following excerpts preserve the measured results of the commands above;
+job IDs are replaced by `<job>`, and installation paths are omitted. They are
+historical results for the pinned revisions, not a guarantee for other builds.
+
+```text
+# cmake --build build --clean-first -j 4
+[1824/1824] Linking Fortran executable test/tests/canonical_switch/study_canonical_switch.x
+real 107.24
+
+# Selected make test-fast
+Total Test time (real) =  12.99 sec
+real 22.40
+
+# Eight-particle example
+ Total field evaluations:                  6287
+real 9.29
+
+# sacct --format=JobID,State,ExitCode,Elapsed -n
+<job>        COMPLETED      0:0   00:00:17
+<job>.ba+    COMPLETED      0:0   00:00:17
+<job>.ex+    COMPLETED      0:0   00:00:17
+<job>.0      COMPLETED      0:0   00:00:09
+```
+
+To check a repeat run, require all eleven selected tests to pass, inspect the
+application exit status, and compare the output counts and finite values in the
+table. Inspect the exit-code column separately: skipped particles do not count
+as completed trajectories.
 
 ## CUDA and NVHPC
 
@@ -186,8 +209,17 @@ cuobjdump --list-elf build-cuda/libsimple_cuda_native_rk54.so
 ```
 
 The last command found an `sm_80` cubin. The device code resides in a shared
-library (`CMakeLists.txt:120–132`); `ldd build-cuda/simple.x` resolved it and
-`libcudart.so.12`. These checks do not launch a GPU kernel.
+library (`CMakeLists.txt:120–132`). These checks do not launch a GPU kernel.
+The retained compilation and image inspection output was:
+
+```text
+[1344/1344] Linking Fortran executable test/tests/test_cuda_native_bridge.x
+real 72.28
+ELF file    1: simple_cuda_native_rk54.sm_80.cubin
+```
+
+`ldd` resolved `libsimple_cuda_native_rk54.so` and `libcudart.so.12`; installation
+paths and addresses are omitted here.
 
 The NVHPC attempt used this separate build directory and compiler combination
 (the explicit temporary directory keeps subsequent builds under `$HOME`):
@@ -215,10 +247,17 @@ an independent `selected_real_kind(33,4931)` probe returned `-3`.
 Fortnum unconditionally includes this file at `src/CMakeLists.txt:181` in the
 pinned revision. Upstream main `b29e82cf6e41dc1e5509c2e6722ad99f5a5132bd`
 still includes it at line 189. No dependency or physics workaround was applied.
-After this fatal error, the remaining compiler process for
-`src/generated/fortnum_dop853_tableau.f90` was stopped after more than four
-minutes; no successful NVHPC build is claimed.
-Also leave deterministic mode off for this attempt: libneo's
+The failure and kind-probe results were:
+
+```text
+NVFORTRAN-S-0081-Illegal selector - KIND value must be non-negative
+  (src/verified/fortnum_interval_qp.f90: 22)
+selected_real_kind(33,4931): -3
+```
+
+The diagnostic's installation prefix is omitted and the probe result is
+labeled here. No successful NVHPC build is claimed. Leave deterministic mode
+off for this attempt: libneo's
 `CMakeLists.txt:86–89` explicitly rejects it with non-GNU Fortran.
 
 ## Known setup pitfalls
@@ -230,18 +269,12 @@ Also leave deterministic mode off for this attempt: libneo's
   `/leonardo/prod/opt/modulefiles/base/archive/git/2.38.1:43–44` loads
   `openssh/9.1p1`, which loads the older Kerberos dependency. Use `/usr/bin/git`
   after `module purge`; the minimal serial stack avoids that conflict.
-* SIMPLE and libneo main were checked before changing the module recipe:
-  their heads were still `fe2de27` and `f6090e8`. Existing compiler warnings
-  in fetched Fortplot were nonfatal; this work does not repair them.
 
 ## Pitagora: derived recipe, not yet executed
 
 Consult the current [Pitagora guide](https://docs.hpc.cineca.it/hpc/pitagora.html).
-The single end-of-task retry, `ssh -o BatchMode=yes -o ConnectTimeout=20
-pitagora hostname`, returned status 255 with `Connection closed`. No shell,
-module inventory, build or job submission was possible; no access workaround
-was attempted. The account-side diagnosis was supplied with the task and was
-not independently established by this SSH result.
+Pitagora access was unavailable during this verification. Its module setup,
+builds and batch templates have not been tested.
 
 Use `login-dcgp.pitagora.cineca.it` for AMD Turin CPU builds and
 `login-boost.pitagora.cineca.it` for Intel/H100 builds. Inventory modules again;
