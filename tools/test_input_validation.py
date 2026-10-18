@@ -61,6 +61,7 @@ class InputValidationTests(unittest.TestCase):
             ("&config debug=banana /", "expects logical"),
             ("&config relerr=1e999 /", "expects real"),
             ("&config trace_time=-1 /", "must be positive"),
+            ("&config facE_al=0 /", "must be positive"),
             ("&config ntimstep=1 /", "must be >= 2"),
             ("&config gpu_mode='typo' /", "must be one of"),
             ("&config nper=1,2 /", "at most 1"),

@@ -187,7 +187,10 @@
           "default_value": "1d0",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 147
+          "source_line": 147,
+          "validation": {
+            "positive": true
+          }
         },
         {
           "name": "npoiper2",

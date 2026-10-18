@@ -39,7 +39,7 @@ RULES = {
     "canonical_ode_relerr": {"positive": True},
     "n_d": {"positive": True},
     "batch_size": {"min": 1},
-    "facE_al": {"positive": True},
+    "face_al": {"positive": True},
     "ntestpart": {"min": 1},
     "nper": {"min": 1},
     "ntimstep": {"min": 2},
