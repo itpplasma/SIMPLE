@@ -246,11 +246,15 @@ contains
         use collis_alp, only: efcolf_grid, velrat_grid, enrat_grid, stost
         use parmot_mod, only: ro0
         use finite_check, only: is_finite
+        use reference_coordinates, only: ref_coords
+        use libneo_coordinates, only: coordinate_system_t
+        use cartesian_coordinates, only: cartesian_coordinate_system_t
         use field_can_mod, only: field_can_t
         use orbit_symplectic_base, only: symplectic_integrator_t, &
             SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
         use params, only: dtaumin, wall_query_rho_lcfs
         type(tracer_t) :: local_orbit
+        class(coordinate_system_t), allocatable :: saved_ref_coords
         type(symplectic_integrator_t) :: saved_si
         type(field_can_t) :: saved_field
         real(dp), parameter :: initial(5) = [0.2_dp, 1.0_dp, 0.2_dp, &
@@ -270,6 +274,10 @@ contains
         enrat_grid = 1.0_dp
         dtaumin = 1.0e-3_dp
         saved_wall_gate = wall_query_rho_lcfs
+        ! TEST field initialization supplies no reference coordinate object.
+        ! Use the production Cartesian implementation for the wall path.
+        call move_alloc(ref_coords, saved_ref_coords)
+        allocate(cartesian_coordinate_system_t :: ref_coords)
         wall_query_rho_lcfs = huge(1.0_dp)
         orbit_model = ORBIT_GC
         integmode = 3
@@ -328,6 +336,8 @@ contains
             end do
         end do
         wall_query_rho_lcfs = saved_wall_gate
+        deallocate(ref_coords)
+        call move_alloc(saved_ref_coords, ref_coords)
         ro0 = saved_ro0
         dtaumin = saved_dtaumin
         efcolf_grid = 0.0_dp

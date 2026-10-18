@@ -24,7 +24,9 @@ def _fixture(path: Path) -> float:
     uncommented = re.sub(
         rf"({literal})|![^\n]*", lambda match: match.group(1) or "", text
     )
-    for assignment in re.finditer(r"(?i)\bwall_input\s*=\s*", uncommented):
+    for assignment in re.finditer(
+        r"(?i)\bwall_input\s*(?:\([^)]*\)\s*)?=\s*", uncommented
+    ):
         value = re.match(literal, uncommented[assignment.end() :])
         if value is None or value.group()[1:-1].strip():
             raise ValueError(f"{path}: collision fixture must not configure a wall")

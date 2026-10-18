@@ -169,6 +169,13 @@ def test_empty_wall_input_and_comment_do_not_enable_wall(cases):
     assert MODULE.compare(*cases, 1.5e-7, 1e-12) == 0
 
 
+@pytest.mark.parametrize("which", [0, 1])
+def test_wall_character_substring_cannot_bypass_no_wall_gate(cases, which):
+    path = cases[which] / "simple.in"
+    path.write_text(path.read_text().replace("/\n", "wall_input(1:8)='wall.stl'\n/\n"))
+    assert MODULE.compare(*cases, 1.5e-7, 1e-12) == 1
+
+
 def _shell(ref, cur, enabled):
     env = dict(
         os.environ,
