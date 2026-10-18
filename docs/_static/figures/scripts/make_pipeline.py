@@ -147,7 +147,9 @@ def build() -> str:
     half = (COL_W - 8) / 2
     be_h = ys[4] + bh - be_y
     box(x4, be_y, half, be_h, "orbit", ["CPU", "OpenMP"], size=fs)
-    box(x4 + half + 8, be_y, half, be_h, "orbit", ["GPU", "CUDA"], size=fs)
+    # CUDA supports guiding-centre RK in Boozer coordinates, not full orbit.
+    box(x4 + half + 8, be_y, half, be_h, "orbit",
+        ["GPU", "CUDA", "RK", "Boozer"], size=fs)
     arrow(x3 + COL_W, (ctop + cbot) / 2, x4 - 2, (ctop + cbot) / 2)
     arrow(x3 + COL_W, ys[4] + bh / 2 - 12, x4 - 2, fo_y + fo_h / 2 + 18)
 
@@ -212,8 +214,9 @@ def build() -> str:
         "<title id=\"title\">SIMPLE workflow</title>\n"
         "<desc id=\"desc\">Field sources (VMEC, GVEC and booz_xform via Boozer "
         "chartmap converters, coils, SPECTRE) feed a splined field representation, "
-        "canonical coordinates, guiding-centre or full-orbit integration on CPU or "
-        "GPU, and outputs (confined fraction, loss times, orbit classes, wall hits) "
+        "canonical coordinates, guiding-centre integration on CPU or Boozer RK "
+        "on GPU, full-orbit integration on CPU, and outputs "
+        "(confined fraction, loss times, orbit classes, wall hits) "
         "that pysimple post-processes and exposes to external optimisers.</desc>\n"
         f"<style>{css}</style>\n"
         '<defs><marker id="head" viewBox="0 0 10 10" refX="8" refY="5" '

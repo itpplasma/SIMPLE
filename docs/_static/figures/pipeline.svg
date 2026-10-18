@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 546" width="980" height="546" role="img" aria-labelledby="title desc">
 <title id="title">SIMPLE workflow</title>
-<desc id="desc">Field sources (VMEC, GVEC and booz_xform via Boozer chartmap converters, coils, SPECTRE) feed a splined field representation, canonical coordinates, guiding-centre or full-orbit integration on CPU or GPU, and outputs (confined fraction, loss times, orbit classes, wall hits) that pysimple post-processes and exposes to external optimisers.</desc>
+<desc id="desc">Field sources (VMEC, GVEC and booz_xform via Boozer chartmap converters, coils, SPECTRE) feed a splined field representation, canonical coordinates, guiding-centre integration on CPU or Boozer RK on GPU, full-orbit integration on CPU, and outputs (confined fraction, loss times, orbit classes, wall hits) that pysimple post-processes and exposes to external optimisers.</desc>
 <style>text{font-family:'DejaVu Sans',Helvetica,Arial,sans-serif}.label{fill:#333333}.note{fill:#555555;font-style:italic}.arrow{stroke:#7F7F7F}#head path{fill:#7F7F7F}@media (prefers-color-scheme: dark){.label{fill:#E6E6E6}.note{fill:#BDBDBD}.arrow{stroke:#A6A6A6}#head path{fill:#A6A6A6}}</style>
 <defs><marker id="head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker></defs>
 <text class="label" x="5" y="30" text-anchor="start" font-size="16" font-weight="700">1  Sources</text>
@@ -70,8 +70,10 @@
 <text x="644.0" y="317.9" text-anchor="middle" font-size="14.5" fill="#1F1F1F" font-weight="700">CPU</text>
 <text x="644.0" y="336.5" text-anchor="middle" font-size="13.5" fill="#1F1F1F">OpenMP</text>
 <rect x="694.0" y="272" width="84.0" height="100" rx="7" fill="#FBEBD0" stroke="#E69F00" stroke-width="1.6"/>
-<text x="736.0" y="317.9" text-anchor="middle" font-size="14.5" fill="#1F1F1F" font-weight="700">GPU</text>
-<text x="736.0" y="336.5" text-anchor="middle" font-size="13.5" fill="#1F1F1F">CUDA</text>
+<text x="736.0" y="299.4" text-anchor="middle" font-size="14.5" fill="#1F1F1F" font-weight="700">GPU</text>
+<text x="736.0" y="317.9" text-anchor="middle" font-size="13.5" fill="#1F1F1F">CUDA</text>
+<text x="736.0" y="336.5" text-anchor="middle" font-size="13.5" fill="#1F1F1F">RK</text>
+<text x="736.0" y="355.1" text-anchor="middle" font-size="13.5" fill="#1F1F1F">Boozer</text>
 <line class="arrow" x1="578" y1="174.0" x2="600" y2="174.0" stroke-width="1.6" marker-end="url(#head)"/>
 <line class="arrow" x1="578" y1="332.0" x2="600" y2="232.0" stroke-width="1.6" marker-end="url(#head)"/>
 <rect x="802" y="44" width="176" height="56" rx="7" fill="#F8DFD0" stroke="#D55E00" stroke-width="1.6"/>
