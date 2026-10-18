@@ -1,4 +1,4 @@
-"""Sphinx configuration for the SIMPLE Python API documentation."""
+"""Sphinx configuration for the SIMPLE documentation."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ if PYTHON_SRC_STR not in sys.path:
 
 # -- Project information -------------------------------------------------------
 
-project = "SIMPLE Python API"
+project = "SIMPLE"
 author = "SIMPLE Developers"
 current_year = datetime.utcnow().year
 copyright = f"{current_year}, SIMPLE Developers"
@@ -34,10 +34,19 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
     "sphinx.ext.githubpages",
+    "sphinx.ext.mathjax",
+    "myst_parser",
 ]
 
+source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
+myst_enable_extensions = ["dollarmath", "amsmath"]
+myst_heading_anchors = 6
+
 templates_path = ["_templates"]
-exclude_patterns: list[str] = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns: list[str] = [
+    "_build", "Thumbs.db", ".DS_Store",
+    "reference/design/spectre-rejected-interface-models.md",
+]
 
 autodoc_class_signature = "separated"
 autodoc_member_order = "bysource"
@@ -53,7 +62,7 @@ napoleon_numpy_docstring = True
 # -- HTML output ---------------------------------------------------------------
 
 html_theme = "furo"
-html_title = "SIMPLE Python API"
+html_title = "SIMPLE documentation"
 html_static_path = ["_static"]
 
 
