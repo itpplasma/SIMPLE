@@ -25,6 +25,11 @@ Method papers
    fusion alpha particles in stellarator reactors, *Nucl. Mater. Energy* 48,
    102200 (2026), https://doi.org/10.1016/j.nme.2026.102200
 
+#. C. G. Albert, G. S. Grassler, S. V. Kasilov, M. Markl, J. Schatzlmayr,
+   Symplectic integration of guiding-center equations in canonical
+   coordinates for general toroidal fields, arXiv:2503.15278 (2025),
+   https://arxiv.org/abs/2503.15278 (preprint).
+
 Related work used by SIMPLE
 ---------------------------
 

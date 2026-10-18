@@ -6,6 +6,16 @@ fit together.
 
 Update this file when coordinates or field-loading paths change.
 
+Fusion birth sampling (`startmode = 7`) uses the VMEC volume Jacobian in
+`(s,theta,phi)` for VMEC input, or the field-derived Boozer Jacobian
+`torflux*(iota*B_theta+B_zeta)/B^2` in integration `(s,theta_B,zeta_B)` for
+Boozer chartmaps. The latter is a physical volume element only when the
+chart geometry and field data are Boozer-consistent; this consistency is
+not checked at load time. It converts chartmap starts to
+reference coordinates only after sampling; profile arguments remain toroidal
+flux `s`, not reference `sqrt(s)`. See [alpha births](https://github.com/itpplasma/SIMPLE/blob/main/docs/alpha-birth.md)
+for source-grid resolution, units, supported inputs and marker normalization.
+
 ---
 
 ## Table of Contents
@@ -658,7 +668,7 @@ offset already places the particle outside is an immediate physical loss
 reporting a coordinate-inversion failure. The separate single-volume GC model
 retains its guiding-centre edge convention; GC bulk motion remains unchanged.
 Levels 0/1 and their GC crossing-event log were removed without aliases; see
-[the rejection record](spectre-rejected-interface-models.md). Single-volume RK45
+[the rejection record](https://github.com/itpplasma/SIMPLE/blob/main/DOC/spectre-rejected-interface-models.md). Single-volume RK45
 and multi-volume field evaluation, geometry, diagnostics and sampling remain
 supported. The home-volume lock pins implicit Newton trials and coordinate
 transforms to one volume; interior physical crossings use the full orbit.
@@ -743,7 +753,7 @@ sampler also sets `bmin`/`bmax`/`bmod00` from a scan of the surface.
 **Single-volume boundary handling**. The RK45 path retains its clamped
 boundary evaluation and coordinate-axis reflection; the outer edge `rho_g = 1`
 is absorbing. No internal interface map or crossing log is produced.
-See [the rejection record](spectre-rejected-interface-models.md) for the removed
+See [the rejection record](https://github.com/itpplasma/SIMPLE/blob/main/DOC/spectre-rejected-interface-models.md) for the removed
 models and their physical failure.
 
 #### Guiding-center symplectic per volume (`integmode > 0`)
@@ -1344,7 +1354,7 @@ The standalone sheet experiments no longer expose fixed-mu GC resets,
 phase-discarding hybrids, refreshed frozen-plane propagation in curved fields,
 or Boris as a symplectic candidate. Their sharp-sheet branch/energy-kick landing
 stepper was also removed. The
-[implementation ledger](spectre-rejected-interface-models.md#implementation-removal-ledger)
+[implementation ledger](https://github.com/itpplasma/SIMPLE/blob/main/DOC/spectre-rejected-interface-models.md#implementation-removal-ledger)
 records counterexamples, measured failures and the exact scope of each rejection.
 The maintained production interface path remains the event-resolved RK45 bridge;
 its whole-map symplecticity is not claimed. Resolved smooth-layer and exact planar

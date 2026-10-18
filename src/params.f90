@@ -61,6 +61,7 @@ module params
     integer          :: ibins
     logical          :: generate_start_only = .False.
     integer          :: startmode = 1
+    integer :: fusion_grid(3) = (/128, 32, 32/)
     real(dp) :: grid_density = 0d0
     logical          :: special_ants_file = .False.
 
@@ -212,7 +213,7 @@ module params
     namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
         trace_time, num_surf, sbeg, phibeg, thetabeg, contr_pp, &
         facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm, &
-        isw_field_type, generate_start_only, startmode, grid_density, &
+        isw_field_type, generate_start_only, startmode, fusion_grid, grid_density, &
         special_ants_file, integmode, orbit_model, orbit_coord, relerr, &
         gpu_mode, gpu_backend, gpu_method, gpu_start_coordinates, &
         gpu_landreman, gpu_compact_init, gpu_work_order, gpu_num_devices, &
@@ -241,6 +242,7 @@ module params
         local, loopskip, bmod_ref, macrostep_log_ratio  ! removed, ignored
 
     integer(int8), allocatable :: wall_hit(:)
+    integer, allocatable :: wall_hit_triangle(:)
     real(dp), allocatable :: wall_hit_cart(:, :)
     real(dp), allocatable :: wall_hit_normal_cart(:, :)
     real(dp), allocatable :: wall_hit_cos_incidence(:)
@@ -636,6 +638,7 @@ contains
         if (allocated(confpart_trap)) deallocate (confpart_trap)
         if (allocated(confpart_pass)) deallocate (confpart_pass)
         if (allocated(unresolved_orbits)) deallocate (unresolved_orbits)
+        if (allocated(wall_hit_triangle)) deallocate (wall_hit_triangle)
         if (allocated(wall_hit)) deallocate (wall_hit)
         if (allocated(wall_hit_cart)) deallocate (wall_hit_cart)
         if (allocated(wall_hit_normal_cart)) deallocate (wall_hit_normal_cart)
@@ -652,6 +655,7 @@ contains
         allocate (unresolved_orbits(ntimstep))
         allocate (iclass(3, ntestpart))
         allocate (class_passing(ntestpart), class_lost(ntestpart))
+        allocate (wall_hit_triangle(ntestpart))
         allocate (wall_hit(ntestpart))
         allocate (wall_hit_cart(3, ntestpart))
         allocate (wall_hit_normal_cart(3, ntestpart))
@@ -667,6 +671,7 @@ contains
         iclass = 0
         class_passing = .false.
         class_lost = .false.
+        wall_hit_triangle = -1
         wall_hit = 0_int8
         wall_hit_cart = 0.0d0
         wall_hit_normal_cart = 0.0d0

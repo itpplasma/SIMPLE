@@ -15,6 +15,10 @@ symplectic methods in canonical coordinates, which improve long-time
 behaviour at suitable time steps. Regular and chaotic
 orbits can be classified early, which shortens the computation further.
 
+.. figure:: /_static/figures/front.png
+   :alt: Alpha-particle loss locations and confinement in the public QA example.
+   :width: 90%
+
 SIMPLE is written in Fortran with OpenMP parallelisation, an optional CUDA
 backend for GPUs and a Python interface, ``pysimple``. It reads VMEC
 equilibria, Boozer chartmaps (also from GVEC and booz_xform), coil files and

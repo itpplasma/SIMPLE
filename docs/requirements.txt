@@ -2,3 +2,5 @@ sphinx>=7.3
 furo>=2024.1.29
 numpy>=1.25
 myst-parser>=3.0
+matplotlib>=3.8
+netCDF4>=1.6
