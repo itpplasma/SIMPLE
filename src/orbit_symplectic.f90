@@ -1761,8 +1761,10 @@ subroutine attempt_midpoint_step(si, f, status)
   if (status /= SYMPLECTIC_STEP_OK) return
 
   si%z = x(1:4)
-  if (extrap_field) then
+  if (extrap_field .and. .not. crossed) then
     ! f holds the endpoint field, not the independent midpoint radius x(5).
+    ! After an axis chart switch xlast lives in the other chart, so the
+    ! extrapolation is invalid there and the field is evaluated fresh.
     f%pth = f%pth + f%dpth(1)*(x(1)-xlast(1)) &
       + f%dpth(2)*(x(2)-xlast(2)) + f%dpth(3)*(x(3)-xlast(3)) &
       + f%dpth(4)*(x(4)-xlast(4))
@@ -1913,6 +1915,7 @@ recursive subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
   integer :: ktau, step_status
   type(symplectic_integrator_t) :: accepted_integrator
   type(field_can_t) :: accepted_field
+  logical :: crossed
 
   if (sympl_rmax > 1d0) then
     ierr = SYMPLECTIC_STEP_OK
@@ -1934,18 +1937,12 @@ recursive subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
         ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
         return
       end if
-      if (x(1) < 0d0) then
-        x(1) = -x(1)
-        x(2) = x(2) + pi
-        call count_event(EVT_R_NEGATIVE)
-        if (x(1) > sympl_rmax) then
-          ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
-          return
-        end if
-      end if
+      call apply_axis_chart_switch(x(1), x(2), crossed, ierr)
+      if (ierr /= SYMPLECTIC_STEP_OK) return
       si%z = x(1:4)
-      if (extrap_field) then
-        ! Only the endpoint coordinates enter the carried momentum.
+      if (extrap_field .and. .not. crossed) then
+        ! Only the endpoint coordinates enter the carried momentum. Across
+        ! an axis chart switch the field is evaluated fresh instead.
         f%pth = f%pth + f%dpth(1)*(x(1)-xlast(1)) &
           + f%dpth(2)*(x(2)-xlast(2)) + f%dpth(3)*(x(3)-xlast(3)) &
           + f%dpth(4)*(x(4)-xlast(4))
