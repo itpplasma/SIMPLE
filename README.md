@@ -116,16 +116,23 @@ CI keeps the existing GNU test jobs and adds GCC 13/14 smoke tests on non-draft
 PRs. On pushes to `main` and `full=true` manual runs, GCC 14 runs the fast suite
 with coverage instead. Reports are attached as the `fast-suite-coverage`
 artifact and summarized in the job summary.
-Coverage uses the normal `Fast` profile; `ENABLE_COVERAGE` instruments SIMPLE
-and its tests after configuring external dependencies. To collect coverage
-locally with GNU Fortran, GCC's matching `gcov`, and `lcov`:
+Coverage of `src/` and `app/` uses the normal `Fast` profile; `ENABLE_COVERAGE`
+instruments SIMPLE and its tests after configuring external dependencies. To collect coverage
+locally with GNU Fortran and GCC's matching `gcov`:
 
 ```bash
+python -m pip install gcovr==8.4
 make test-fast CONFIG=Fast \
     FLAGS='-DENABLE_COVERAGE=ON -DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF'
-cmake --build build --target coverage
-lcov --summary build/coverage_filtered.info
+gcovr --root . --filter 'src/|app/' --include-internal-functions \
+    --xml-pretty --xml build/coverage.xml \
+    --html-details build/coverage.html --print-summary build
 ```
+
+If GCC is versioned, pass `--gcov-executable gcov-<version>`. The internal-function
+flag includes Fortran module procedures named with a `__` prefix. OpenMP coverage
+counters use atomic updates; the new GCC jobs use two CTest workers and two OpenMP
+threads, honoring registered serial tests and resource locks.
 
 The `CI` workflow's **Run workflow** (`workflow_dispatch`) offers optional
 non-blocking Intel ifx and LLVM flang smoke jobs via `experimental_compilers`. These reuse the Make/CMake
