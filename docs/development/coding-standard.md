@@ -12,8 +12,10 @@ unchanged).
 ### Language and files
 
 - Modern free-form Fortran with lower-case keywords, compiled with GNU
-  Fortran. Code on the OpenACC or CUDA paths must also build with the NVIDIA
-  compiler (`make nvfortran`, `make nvfortran-acc`).
+  Fortran. Code on the OpenACC paths must also build with NVIDIA Fortran
+  (`make nvfortran`, `make nvfortran-acc`). Native CUDA requires the CUDA
+  toolkit and either GNU or NVIDIA Fortran; see
+  [the GPU build instructions](../../README.md#gpu-quickstart).
 - All Fortran sources pass through the preprocessor (`-cpp`), whatever the
   file extension.
 - The GNU build uses `-Wall -Wextra -Wimplicit-interface` and rejects lines
@@ -137,10 +139,11 @@ unchanged).
 
 ### Generated code
 
-SIMPLE has no generated Fortran in `src/` at present. Prototypes under
+The physics kernels in `src/` are handwritten. CMake generates the version
+module in the build tree from `src/version.f90.in`. Prototypes under
 `concept/` generate kernels at build time from symbolic derivations. If
-generated code is added to `src/`, check in both the generator and its output,
-mark the output as generated and do not edit it by hand **(new code)**.
+generated kernels are added to `src/`, check in both the generator and its
+output, mark the output as generated and do not edit it by hand **(new code)**.
 
 ## Python
 
@@ -148,13 +151,12 @@ Python code is the `pysimple` package (`python/pysimple/`), the tools in
 `tools/`, the examples and the tests in `test/python/`.
 
 - CI uses Python 3.12. Start modules with a docstring and
-  `from __future__ import annotations`.
-- Follow PEP 8 with a line length of 88 characters. The CI lint and format
-  check runs on changed lines; the rule set is in the repository configuration
-  of that check.
-- Type hints on public functions. Every public function has a docstring in
-  plain prose that names units, shapes and raised exceptions; the API
-  reference is built from these docstrings with Sphinx (`docs/`).
+  `from __future__ import annotations` **(new code)**.
+- Follow PEP 8 with a line length of 88 characters. The current CI workflows
+  do not run Python lint or formatting checks.
+- Public functions have type hints and a docstring in plain prose that names
+  units, shapes and raised exceptions **(new code)**. The API reference is
+  built from the package docstrings with Sphinx (`docs/`).
 - `pysimple` is a thin layer over `simple_api` and `params`. Physics belongs
   in Fortran so that `simple.x` and `pysimple` give the same result.
 - Use `pathlib.Path` for paths and `numpy` arrays for state data. States are

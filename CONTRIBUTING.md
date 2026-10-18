@@ -62,28 +62,30 @@ source .venv/bin/activate
 ```
 
 Without this environment the Python tests fail with `ModuleNotFoundError`; use
-`make test-nopy` to run only the Fortran tests.
+`make test-nopy` to exclude tests labelled `python`. Some remaining test
+wrappers still use the Python standard library.
 
 ## Running tests
 
 Tests are registered with CTest and run through `make`. Do not call test
-executables or `ctest` directly; the targets below rebuild with deterministic
-floating point (`SIMPLE_DETERMINISTIC_FP=ON`) first.
+executables or `ctest` directly. Except for `test-all`, the targets below
+rebuild with deterministic floating point (`SIMPLE_DETERMINISTIC_FP=ON`) first.
+`test-all` uses the current build configuration.
 
 | Command | Scope |
 | --- | --- |
 | `make test-fast` | Unit and integration tests without the `slow`, `regression`, `performance` and `scalability` labels. Run before every push. |
 | `make test` | All tests except `regression`, including slow and Python tests. |
-| `make test-nopy` | As `make test`, without Python tests. |
-| `make test-regression` | Golden-record regression tests (label `regression`). |
+| `make test-nopy` | As `make test`, excluding tests labelled `python`. |
+| `make test-regression` | Tests labelled `regression`, including golden-record comparisons. |
 | `make test-golden` | Golden-record tests only (label `golden_record`). |
 | `make test-all` | Every registered test. |
 
 Select tests by name with `TEST=<regex>`, for example
 `make test-fast TEST=test_finite_check`. The value passes through `make`, so
-write a regex anchor `$` as `$$`. Output is verbose by default; set
-`VERBOSE=0` to reduce it. Add `CONFIG=Fast` to any target to use the Fast
-profile.
+write a regex anchor `$` as `$$`. Set `VERBOSE=1` for verbose test output;
+otherwise CTest shows output on failure. Add `CONFIG=Fast` to any target to
+use the Fast profile.
 
 The golden-record tests clone and build `main` in the build tree, run the cases
 in `test/golden_record/*/simple.in` with both builds and compare the outputs.
@@ -151,12 +153,12 @@ summary:
   test-performance changes and build or dependency changes go into separate
   pull requests.
 
-CI builds SIMPLE with deterministic floating point on Ubuntu and runs the fast,
-slow and golden-record tests, a CGAL build and the documentation build. The CI
-also checks formatting and lint on the changed lines; follow the
-[coding standard](docs/development/coding-standard.md) and the check output.
-The exact set of CI jobs evolves; the workflows in `.github/workflows/` are
-authoritative.
+For pull requests ready for review, CI builds SIMPLE with deterministic
+floating point on Ubuntu and runs the fast, slow and regression tests, a CGAL
+build and the documentation build. Follow the
+[coding standard](docs/development/coding-standard.md); the current workflows
+do not run a formatting or lint check. The workflows in `.github/workflows/`
+are authoritative for the current checks.
 
 ## Commit messages
 
