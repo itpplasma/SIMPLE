@@ -4,13 +4,13 @@ program test_particle_rng
         particle_stream_id, particle_index_offset, startmode, idx, &
         ntestpart, batch_size, reuse_batch, init_batch
     use samplers, only: sample
-    use omp_lib, only: omp_get_num_threads
+    !$ use omp_lib, only: omp_get_num_threads
     implicit none
 
     integer, parameter :: population = 16, draws = 12, subset = 5
     real(dp) :: serial(draws, population), parallel(draws, population)
     real(dp) :: replay(draws), legacy(draws), row(5), selected(5, subset)
-    integer :: i, j, unit, seedsize, saved_idx(subset), observed_threads
+    integer :: i, j, unit, seedsize, saved_idx(subset), observed_threads, expected_threads
     integer, allocatable :: seed(:)
 
     deterministic = .true.
@@ -33,10 +33,12 @@ program test_particle_rng
         call random_number(serial(:, i))
     end do
     !$omp end parallel do
-    observed_threads = 0
+    observed_threads = 1
+    expected_threads = 1
+    !$ expected_threads = 4
     !$omp parallel num_threads(4) private(i)
     !$omp single
-    observed_threads = omp_get_num_threads()
+    !$ observed_threads = omp_get_num_threads()
     !$omp end single
     !$omp do schedule(dynamic, 1)
     do i = 1, population
@@ -45,7 +47,7 @@ program test_particle_rng
     end do
     !$omp end do
     !$omp end parallel
-    if (observed_threads /= 4) error stop 'Four-thread RNG check not executed'
+    if (observed_threads /= expected_threads) error stop 'Requested RNG thread check not executed'
     if (any(serial /= parallel)) error stop 'Marker stream depends on thread count'
     do i = 1, population
         do j = i + 1, population
