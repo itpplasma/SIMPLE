@@ -13,28 +13,29 @@ module simple_main
         integ_to_ref, ref_to_integ, init_field_can
     use callback, only: output_orbits_macrostep
     use params, only: swcoll, ntestpart, startmode, special_ants_file, num_surf, &
-        grid_density, dtau, dtaumin, ntau, v0, kpart, confpart_pass, &
-        confpart_trap, unresolved_orbits, times_lost, orbit_exit_code, &
-        boundary_event_radial_residual, &
-        boundary_event_time_width, integmode, relerr, trace_time, class_plot, &
-        fast_class, generate_start_only, ntcut, iclass, bmin, bmax, zstart, &
-        zend, trap_par, perp_inv, sbeg, ntimstep, should_skip, &
-        reset_seed_if_deterministic, field_input, isw_field_type, reuse_batch, &
-        max_consecutive_warning_holds, &
-        coord_input, wall_input, wall_units, wall_hit, wall_hit_triangle, &
-            wall_hit_cart, &
-        wall_query_rho_lcfs, &
-        chart_boundary_kind, chart_boundary_kind_effective, &
-        wall_hit_normal_cart, wall_hit_cos_incidence, wall_hit_angle_rad, &
-        ntau_macro, kt_macro, checkpoint_interval, orbit_model, orbit_coord, &
-        gpu_mode, gpu_backend, gpu_method, gpu_start_coordinates, &
-        gpu_landreman, gpu_compact_init, gpu_t_block, gpu_loss_tau, &
-        gpu_maxloss, gpu_min_timestep, gpu_particle_profile, &
-        ORBIT_GC, ORBIT_FULL_ORBIT, ORBIT_EXIT_COMPLETED, ORBIT_EXIT_LCFS, &
-        ORBIT_EXIT_WALL, ORBIT_EXIT_SKIPPED, ORBIT_EXIT_NUMERICAL_CONFINED, &
-        ORBIT_EXIT_NUMERICAL_DOMAIN, &
-        ORBIT_EXIT_NUMERICAL_MAXITER, ORBIT_EXIT_NUMERICAL_LINEAR, &
-        ORBIT_EXIT_NUMERICAL_EVENT, ORBIT_EXIT_NUMERICAL_FULL_ORBIT
+                      grid_density, dtau, dtaumin, ntau, v0, kpart, confpart_pass, &
+                      confpart_trap, unresolved_orbits, times_lost, orbit_exit_code, &
+                      boundary_event_radial_residual, &
+                 boundary_event_time_width, integmode, relerr, trace_time, class_plot, &
+                   fast_class, generate_start_only, ntcut, iclass, bmin, bmax, zstart, &
+                      zend, trap_par, perp_inv, sbeg, ntimstep, should_skip, &
+                      reset_seed_if_deterministic, particle_stream_id, field_input, &
+                      isw_field_type, reuse_batch, &
+                      max_consecutive_warning_holds, &
+                     coord_input, wall_input, wall_units, wall_hit, wall_hit_triangle, &
+                      wall_hit_cart, &
+                      wall_query_rho_lcfs, &
+                      chart_boundary_kind, chart_boundary_kind_effective, &
+                     wall_hit_normal_cart, wall_hit_cos_incidence, wall_hit_angle_rad, &
+                  ntau_macro, kt_macro, checkpoint_interval, orbit_model, orbit_coord, &
+                      gpu_mode, gpu_backend, gpu_method, gpu_start_coordinates, &
+                      gpu_landreman, gpu_compact_init, gpu_t_block, gpu_loss_tau, &
+                      gpu_maxloss, gpu_min_timestep, gpu_particle_profile, &
+                    ORBIT_GC, ORBIT_FULL_ORBIT, ORBIT_EXIT_COMPLETED, ORBIT_EXIT_LCFS, &
+                   ORBIT_EXIT_WALL, ORBIT_EXIT_SKIPPED, ORBIT_EXIT_NUMERICAL_CONFINED, &
+                      ORBIT_EXIT_NUMERICAL_DOMAIN, &
+                      ORBIT_EXIT_NUMERICAL_MAXITER, ORBIT_EXIT_NUMERICAL_LINEAR, &
+                      ORBIT_EXIT_NUMERICAL_EVENT, ORBIT_EXIT_NUMERICAL_FULL_ORBIT
     use params, only: canonical_grid_nr, canonical_grid_ntheta, &
         canonical_grid_nphi, canonical_ode_relerr
     use diag_counters, only: diag_counters_init, count_event, &
@@ -1345,7 +1346,7 @@ contains
             end if
 #endif
 
-            if (swcoll) call reset_seed_if_deterministic
+            if (swcoll) call reset_seed_if_deterministic(particle_stream_id(i))
             call trace_orbit_with_classifiers(norb, i, class_result)
 
             ! Store classification flags in params arrays
@@ -1895,7 +1896,7 @@ contains
         orbit_traj = quiet_nan()
         orbit_times = quiet_nan()
 
-        if (swcoll) call reset_seed_if_deterministic
+        if (swcoll) call reset_seed_if_deterministic(particle_stream_id(ipart))
 
         if (ntcut > 0 .or. class_plot) then
             call trace_orbit_with_classifiers(anorb, ipart, class_result)
@@ -2440,6 +2441,7 @@ contains
     subroutine macrostep(anorb, z, kt, ierr_orbit, ntau_local, exit_step, &
             hold_streak, numerical_hold_any, rk_recovery)
         use alpha_lifetime_sub, only: orbit_timestep_axis
+        use orbit_fo_boris, only: fo_state_t
         use orbit_symplectic, only: advance_symplectic_with_retry, &
             orbit_timestep_sympl
 
@@ -2454,6 +2456,7 @@ contains
         type(rk_recovery_state_t), intent(inout), optional :: rk_recovery
 
         integer :: hold_streak_local, ktau, recovery_method
+        integer :: ierr_coll, collision_hold_start
         real(dp) :: z_step_start(5), z_step_end(5), loss_fraction
         real(dp) :: u_event(3)
         logical :: numerical_hold, numerical_hold_any_local
@@ -2461,6 +2464,10 @@ contains
         type(rk_recovery_state_t) :: rk_recovery_local
         type(symplectic_integrator_t) :: si_step_start
         type(field_can_t) :: f_step_start
+        type(symplectic_integrator_t) :: collision_si_start
+        type(field_can_t) :: collision_field_start
+        type(fo_state_t) :: collision_fo_start
+        type(rk_recovery_state_t) :: collision_recovery_start
 
         if (present(exit_step)) exit_step = real(kt, dp)
         hold_streak_local = 0
@@ -2473,6 +2480,13 @@ contains
             numerical_hold = .false.
             reference_boundary = .false.
             z_step_start = z
+            if (swcoll) then
+                collision_si_start = anorb%si
+                collision_field_start = anorb%f
+                collision_fo_start = anorb%fo
+                collision_recovery_start = rk_recovery_local
+                collision_hold_start = hold_streak_local
+            end if
             if (orbit_model == ORBIT_FULL_ORBIT) then
                 call orbit_timestep_fo(anorb%fo, z, ierr_orbit)
                 if (ierr_orbit .ne. 0) then
@@ -2667,7 +2681,19 @@ contains
             if (integmode <= 0 .or. rk_recovery_local%active) &
                 hold_streak_local = 0
             if (swcoll) then
-                call collide(z, dtaumin) ! Collisions
+                call collide(z, dtaumin, ierr_coll)
+                if (ierr_coll /= 0) then
+                    ! Reject the complete drift-plus-collision microstep.
+                    ! A collision fault is numerical, never a boundary or hold.
+                    z = z_step_start
+                    anorb%si = collision_si_start
+                    anorb%f = collision_field_start
+                    anorb%fo = collision_fo_start
+                    rk_recovery_local = collision_recovery_start
+                    hold_streak_local = collision_hold_start
+                    ierr_orbit = SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
+                    exit
+                end if
                 if (rk_recovery_local%active) then
                     rk_recovery_local%momentum_reference = z(4)
                 end if
@@ -2770,6 +2796,7 @@ contains
             ipart, x_prev_m, exit_step, hold_streak, numerical_hold_any, &
             rk_recovery)
         use alpha_lifetime_sub, only: orbit_timestep_axis
+        use orbit_fo_boris, only: fo_state_t
         use orbit_symplectic, only: advance_symplectic_with_retry, &
             orbit_timestep_sympl
 
@@ -2786,6 +2813,7 @@ contains
         type(rk_recovery_state_t), intent(inout), optional :: rk_recovery
 
         integer :: hold_streak_local, ktau, recovery_method
+        integer :: ierr_coll, collision_hold_start
         real(dp) :: u_ref_prev(3), u_ref_cur(3), x_cur(3), x_cur_m(3)
         real(dp) :: z_step_start(5), z_step_end(5), segment_duration
         real(dp) :: boundary_fraction
@@ -2795,6 +2823,10 @@ contains
         type(rk_recovery_state_t) :: rk_recovery_local
         type(symplectic_integrator_t) :: si_step_start
         type(field_can_t) :: f_step_start
+        type(symplectic_integrator_t) :: collision_si_start
+        type(field_can_t) :: collision_field_start
+        type(fo_state_t) :: collision_fo_start
+        type(rk_recovery_state_t) :: collision_recovery_start
 
         call integ_to_ref(z(1:3), u_ref_prev)
         if (present(exit_step)) exit_step = real(kt, dp)
@@ -2808,6 +2840,13 @@ contains
             reference_boundary = .false.
             segment_duration = 1.0_dp
             z_step_start = z
+            if (swcoll) then
+                collision_si_start = anorb%si
+                collision_field_start = anorb%f
+                collision_fo_start = anorb%fo
+                collision_recovery_start = rk_recovery_local
+                collision_hold_start = hold_streak_local
+            end if
             if (integmode <= 0 .or. rk_recovery_local%active) then
                 if (rk_recovery_local%active) then
                     call orbit_timestep_recovery(anorb%fo, z, dtaumin, relerr, &
@@ -2997,7 +3036,19 @@ contains
             end if
 
             if (swcoll) then
-                call collide(z, dtaumin)
+                call collide(z, dtaumin, ierr_coll)
+                if (ierr_coll /= 0) then
+                    ! Reject the complete drift-plus-collision microstep.
+                    ! A collision fault is numerical, never a boundary or hold.
+                    z = z_step_start
+                    anorb%si = collision_si_start
+                    anorb%f = collision_field_start
+                    anorb%fo = collision_fo_start
+                    rk_recovery_local = collision_recovery_start
+                    hold_streak_local = collision_hold_start
+                    ierr_orbit = SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
+                    exit
+                end if
                 if (rk_recovery_local%active) then
                     rk_recovery_local%momentum_reference = z(4)
                 end if
@@ -3096,10 +3147,10 @@ contains
         anorb%si%pthold = anorb%f%pth
     end subroutine update_momentum
 
-    subroutine collide(z, dt)
+    subroutine collide(z, dt, ierr_coll)
         real(dp), intent(inout) :: z(5)
         real(dp), intent(in) :: dt
-        integer :: ierr_coll
+        integer, intent(out) :: ierr_coll
 
         call stost(z, dt, 1, ierr_coll)
         if (ierr_coll /= 0) then

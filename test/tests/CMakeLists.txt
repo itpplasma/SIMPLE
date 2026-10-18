@@ -343,14 +343,8 @@ if (ENABLE_OPENMP)
         TIMEOUT 120)
     add_executable (test_sympl_testfield.x test_sympl_testfield.f90)
     target_link_libraries(test_sympl_testfield.x simple)
-    if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
-        target_compile_options(test_sympl_testfield.x PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-Mpreprocess>)
-    else()
-        target_compile_options(test_sympl_testfield.x PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-cpp>)
-    endif()
-    target_compile_definitions(test_sympl_testfield.x PRIVATE WOUT_FILE="${WOUT_FILE}")
     add_test(NAME test_sympl_testfield
-        COMMAND test_sympl_testfield.x
+        COMMAND test_sympl_testfield.x "${WOUT_FILE}"
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
     add_executable(test_orbit_frequencies.x test_orbit_frequencies.f90)
@@ -417,6 +411,21 @@ add_executable(test_finite_check.x test_finite_check.f90)
 target_link_libraries(test_finite_check.x simple)
 add_test(NAME test_finite_check COMMAND test_finite_check.x)
 set_tests_properties(test_finite_check PROPERTIES LABELS "unit")
+
+add_executable(test_particle_rng.x test_particle_rng.f90)
+target_link_libraries(test_particle_rng.x simple)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/particle_rng)
+add_test(NAME test_particle_rng COMMAND test_particle_rng.x)
+set_tests_properties(test_particle_rng PROPERTIES
+    LABELS "unit;collisions" TIMEOUT 30
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/particle_rng
+    ENVIRONMENT "OMP_DYNAMIC=FALSE")
+
+add_executable(test_collision_substeps.x test_collision_substeps.f90)
+target_link_libraries(test_collision_substeps.x simple)
+add_test(NAME test_collision_substeps COMMAND test_collision_substeps.x)
+set_tests_properties(test_collision_substeps PROPERTIES
+    LABELS "unit;collisions;physics" TIMEOUT 180)
 
 add_executable (test_profiles.x test_profiles.f90)
 target_link_libraries(test_profiles.x simple)
@@ -1110,6 +1119,12 @@ foreach(CASE ${GOLDEN_RECORD_TEST_CASES})
         LABELS "golden_record;regression"
         ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record;GOLDEN_RECORD_RTOL=1.5e-7"
     )
+    if(CASE STREQUAL "collision")
+        # Intentional stream/operator correction: preserve the run and timing;
+        # analytic collision tests supply the physical distribution oracles.
+        set_property(TEST golden_record_${CASE} APPEND PROPERTY ENVIRONMENT
+            "GOLDEN_RECORD_STOCHASTIC_COLLISION=1")
+    endif()
 endforeach()
 
 # Golden record sanity test: tests the comparison system itself
