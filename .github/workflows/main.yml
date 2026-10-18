@@ -155,7 +155,11 @@ jobs:
         with:
           name: test-results
           path: |
-            build/Testing/
+            build/test/Testing/
+            build/test/tests/golden_record/runs/**/simple.in
+            build/test/tests/golden_record/runs/**/start.dat
+            build/test/tests/golden_record/runs/**/times_lost.dat
+            build/test/tests/golden_record/runs/**/orbit_exit_code.dat
 
   gcc-matrix:
     permissions:
@@ -391,7 +395,7 @@ jobs:
         with:
           name: cgal-wall-results
           path: |
-            build/Testing/
+            build/test/Testing/
             build/test/tests/collisional_stl_wall/
 
   build-docs:

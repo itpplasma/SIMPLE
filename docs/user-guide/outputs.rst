@@ -1,174 +1,116 @@
-Outputs and their meaning
-=========================
+Outputs
+=======
 
-SIMPLE writes text files in every run and NetCDF files on request. Times are
-in seconds, angles in radians and not wrapped to :math:`[0, 2\pi)`, and
-positions in the reference coordinates (:math:`s` for VMEC, :math:`\rho` for
-chartmaps).
+This page lists every file SIMPLE writes, its columns and the meaning of the
+exit codes. Times are in s; angles in radians, not wrapped; positions in the
+reference coordinates (:math:`s` for VMEC, :math:`\rho = \sqrt{s}` for Boozer
+chartmaps, the native radius for other chartmaps).
 
 Phase-space state
 -----------------
 
-Start and end states have five components:
-
-.. list-table::
-   :header-rows: 1
-   :widths: 10 25 65
-
-   * - Index
-     - Symbol
-     - Meaning
-   * - 1
-     - :math:`s` or :math:`\rho`
-     - Radial reference coordinate: normalised toroidal flux for VMEC,
-       chartmap radius for chartmaps.
-   * - 2
-     - :math:`\vartheta`
-     - Poloidal angle of the reference coordinates.
-   * - 3
-     - :math:`\varphi`
-     - Toroidal angle of the reference coordinates.
-   * - 4
-     - :math:`v/v_0`
-     - Speed normalised to the birth speed; 1 without collisions.
-   * - 5
-     - :math:`\lambda = v_\parallel/v`
-     - Pitch.
+=====  ==================================  ============================================
+Index  Symbol                              Meaning
+=====  ==================================  ============================================
+1      :math:`s` or :math:`\rho`           radial reference coordinate
+2      :math:`\vartheta`                   poloidal reference angle
+3      :math:`\varphi`                     toroidal reference angle
+4      :math:`v/v_0`                       speed over birth speed; 1 without collisions
+5      :math:`\lambda = v_\parallel/v`     pitch
+=====  ==================================  ============================================
 
 Text files
 ----------
 
 ``confined_fraction.dat``
-   One line per macrostep: time, confined fraction of passing particles,
-   confined fraction of trapped particles, number of resolved particles. The
-   fractions are normalised to the resolved particles at that time. The loss
-   fraction is :math:`1 - f_\text{pass} - f_\text{trap}`.
+   One row per macrostep: time, confined fraction of passing markers,
+   confined fraction of trapped markers, number of resolved markers. Both
+   fractions are divided by the resolved markers at that time; the loss
+   fraction is :math:`1 - f_\text{pass} - f_\text{trap}`. Passing means
+   :math:`\kappa < 0` at the start.
 ``unresolved_fraction.dat``
-   One line per macrostep: time, fraction of numerically unresolved orbits,
-   total particle number.
+   One row per macrostep: time, fraction of unresolved markers, ``ntestpart``.
 ``times_lost.dat``
-   One line per particle: index, loss time, trapping parameter, start radius,
-   perpendicular invariant :math:`J_\perp`, final state (5 columns). The loss
-   time is ``trace_time`` for confined particles, ``-1`` for particles that
-   were not traced (``contr_pp``) and ``NaN`` for unresolved orbits.
+   One row per marker: index, loss time, trapping parameter :math:`\kappa`,
+   start radius, perpendicular invariant :math:`J_\perp`, end state (5
+   columns). The loss time is ``trace_time`` for confined markers, ``-1``
+   for markers not traced (exit code 3) and ``NaN`` for unresolved ones.
 ``orbit_exit_code.dat``
-   One line per particle: index, exit code, loss time, radial residual and
-   time width of the located boundary event.
+   One row per marker: index, exit code, loss time, radial residual and time
+   width of the located boundary crossing.
 ``start.dat``
-   Start states, one per line (written for ``startmode`` 1 and 5, read for 2
-   and 4).
+   Start states, one per row (written by ``startmode`` 1, 5, 7; read by 2, 4,
+   6).
 ``avg_inverse_t_lost.dat``
-   Mean of the inverse loss time of lost particles.
-``class_parts.dat``, ``bminmax.dat``
-   Classification results and the :math:`B_\text{min}`, :math:`B_\text{max}`
-   table, when classification is on (:doc:`classification`).
+   Mean of :math:`1/t_\text{loss}` over lost markers (0 if none).
+``class_parts.dat``
+   With classification (``tcut > 0`` or ``class_plot``): index, start
+   radius, :math:`J_\perp`, three class codes (:doc:`classification`).
+``bminmax.dat``
+   With classification and ``num_surf > 1``: :math:`s`,
+   :math:`B_\text{min}(s)`, :math:`B_\text{max}(s)` in G.
+``alpha_source.dat``
+   Source normalisation of ``startmode = 7`` (:doc:`/alpha-birth`).
+
+:math:`\kappa` and :math:`J_\perp` are defined in
+:doc:`/model/guiding-centre`.
 
 Exit codes
 ----------
 
-.. list-table::
-   :header-rows: 1
-   :widths: 10 90
+======  ======================================================================
+Code    Meaning
+======  ======================================================================
+0       traced to ``trace_time``: confined
+1       lost through the LCFS (or a chartmap boundary declared ``'lcfs'``)
+2       lost to the wall (STL wall or chartmap boundary declared ``'wall'``)
+3       not traced (``contr_pp``, ``notrace_passing``); counted confined
+4       all recovery methods failed for a collisionless marker in the core
+        (:math:`s < 0.01`); counted confined
+101     unresolved: left the coordinate domain (``chart_boundary_kind = 'domain'``)
+102     unresolved: Newton iteration did not converge
+103     unresolved: linear solve failed
+104     unresolved: boundary crossing could not be located
+105     unresolved: full-orbit step failed
+======  ======================================================================
 
-   * - Code
-     - Meaning
-   * - 0
-     - Traced to ``trace_time`` (confined).
-   * - 1
-     - Lost: crossed the last closed flux surface.
-   * - 2
-     - Lost: hit the wall (STL wall or chartmap boundary declared as wall).
-   * - 3
-     - Not traced; counted as confined (``contr_pp``, ``notrace_passing``).
-   * - 4
-     - Numerically confined: all recovery methods failed in the core
-       (:math:`s < 0.01`) of a collisionless orbit; counted as confined.
-   * - 101
-     - Numerical: left the domain of the coordinates (``chart_boundary_kind =
-       'domain'``).
-   * - 102
-     - Numerical: Newton iteration did not converge.
-   * - 103
-     - Numerical: linear solve failed.
-   * - 104
-     - Numerical: boundary event could not be located.
-   * - 105
-     - Numerical: full-orbit step failed.
-
-Codes 101 to 105 are unresolved orbits. They are excluded from the confined
-fractions and reported in ``unresolved_fraction.dat``. A large unresolved
-fraction indicates a too large time step, a too coarse field resolution or a
-problem of the equilibrium near the axis.
-
-Trapping parameter
-------------------
-
-The trapping parameter of a particle is evaluated at its start point,
-
-.. math::
-
-   \kappa = \left(\frac{\mu B_\text{max}}{E} - 1\right)
-            \frac{B_\text{min}}{B_\text{max} - B_\text{min}}
-          = \left((1 - \lambda^2)\frac{B_\text{max}}{B} - 1\right)
-            \frac{B_\text{min}}{B_\text{max} - B_\text{min}},
-
-with :math:`B_\text{min}`, :math:`B_\text{max}` on the start surface.
-Negative values are passing, 0 is the trapped-passing boundary and 1 is a
-deeply trapped particle reflecting at :math:`B_\text{min}`. The split of
-``confined_fraction.dat`` into passing and trapped uses :math:`\kappa < 0`.
+Unresolved markers (101–105) are excluded from the confined fractions and
+counted in ``unresolved_fraction.dat``. A large unresolved fraction means a
+too large step (``npoiper2``), too coarse field splines or a bad equilibrium
+near the axis; it is not a physical loss.
 
 NetCDF results
 --------------
 
-``output_results_netcdf = .true.`` writes ``results.nc`` with one entry per
-particle (dimension ``particle``):
+``output_results_netcdf = .true.`` writes ``results.nc`` with dimension
+``particle`` (``ntestpart``) and global attributes holding the run settings
+(``trace_time``, ``ntestpart``, ``integmode``, ``cart_units``, input files,
+...).
 
-.. list-table::
-   :header-rows: 1
-   :widths: 30 70
+======================================  ===============================================
+Variable                                Meaning
+======================================  ===============================================
+``zstart``, ``zend``                    start and end state (``particle``, ``phase``);
+                                        shape (n, 5) in Python
+``xstart_cart``, ``xend_cart``          Cartesian start and end position (``units``)
+``times_lost``, ``orbit_exit_code``     as in the text files
+``boundary_event_radial_residual``      column 4 of ``orbit_exit_code.dat``
+``boundary_event_time_width``           column 5 of ``orbit_exit_code.dat``
+``trap_par``, ``perp_inv``              :math:`\kappa`, :math:`J_\perp`
+``iclass``                              three class codes; zero without classification
+``class_lost``                          loss flag of the classification run
+``wall_hit``, ``wall_hit_cart``         STL wall hit flag and intersection point
+``wall_hit_triangle``                   hit STL facet, 0-based; only with ``wall_input``
+``wall_hit_normal_cart``                facet normal at the hit
+``wall_hit_cos_incidence``              incidence cosine; 1 is normal incidence
+``wall_hit_angle_rad``                  incidence angle; 0 is normal incidence
+======================================  ===============================================
 
-   * - Variable
-     - Meaning
-   * - ``zstart``, ``zend``
-     - Start and end state, shape (``particle``, ``phase``).
-   * - ``xstart_cart``, ``xend_cart``
-     - Cartesian start and end position (unit in the ``units`` attribute).
-   * - ``times_lost``, ``orbit_exit_code``
-     - As in the text files.
-   * - ``trap_par``, ``perp_inv``
-     - Trapping parameter, perpendicular invariant.
-   * - ``iclass``
-     - Classification results (3 per particle).
-   * - ``class_lost``
-     - Loss flag of the classification run; it is only set when
-       classification is on.
-   * - ``wall_hit``, ``wall_hit_cart``
-     - STL wall hit flag and intersection point.
-   * - ``wall_hit_normal_cart``, ``wall_hit_cos_incidence``,
-       ``wall_hit_angle_rad``
-     - Wall normal and incidence angle at the hit (0 is normal incidence).
+``output_orbits_macrostep = .true.`` writes ``orbits.nc`` with every
+marker's state at every macrostep: ``time``, ``s``, ``theta``, ``phi``,
+``p_abs`` (:math:`v/v_0`), ``v_par`` (:math:`\lambda`) and, when a reference
+geometry exists, ``R`` and ``Z``. The attribute ``radial_coordinate`` names
+the meaning of ``s``.
 
-Global attributes record the run settings, for example ``trace_time`` and
-``ntestpart``. In Python, the array ``zend`` has the shape (particles, 5);
-transpose it to index the phase-space component first.
-
-``output_orbits_macrostep = .true.`` writes ``orbits.nc`` with the state of
-every particle at every macrostep (variables ``s``, ``theta``, ``phi``,
-``p_abs``, ``v_par`` and, when a reference geometry exists, ``R`` and ``Z``).
-The attribute ``radial_coordinate`` gives the meaning of ``s``.
-
-Reading results in Python
--------------------------
-
-``pysimple.plotting`` reads a run directory and plots the standard loss
-statistics:
-
-.. code-block:: python
-
-   from pysimple.plotting import load_loss_data, plot_loss_statistics
-
-   data = load_loss_data("run")
-   plot_loss_statistics(data, "loss_statistics.png", show=False)
-
-``examples/plot_losses.py`` and ``examples/plot_energy_loss.py`` are
-command-line versions.
+All text files load with ``numpy.loadtxt``. Plots: :doc:`postprocessing`;
+``pysimple.plotting.plot_loss_statistics`` adds energy-resolved loss panels.
