@@ -16,7 +16,6 @@ code.
    design/wall-heat-loads
    design/full-orbit-integration
    design/spectre-interface-crossing
-   design/spectre-rejected-interface-models
 
 The derivation of canonical and Boozer flux coordinates from VMEC data is
 available as LaTeX source in ``DOC/canonical_and_boozer_flux_coords_via_VMEC.tex``

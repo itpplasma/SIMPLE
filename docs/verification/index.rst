@@ -1,13 +1,8 @@
 Verification and benchmarks
 ===========================
 
-.. placeholder-page
-
-.. note::
-
-   This page will hold a verification report generated from the test suite
-   and the benchmark cases. Until it is added, the page summarises the
-   published benchmarks and the available automated tests.
+The :doc:`/verification` describes the reproducible numerical checks and
+how to generate their measurements and plots.
 
 Published benchmarks
 --------------------
@@ -56,8 +51,4 @@ includes
   examples,
 * separately invoked golden-record tests, which compare the current output
   with a reference version for a set of cases (``test/golden_record``,
-  ``make test-golden-main``).
-
-The review policy (:doc:`/review-policy`) defines which evidence
-a change must provide, including independent comparisons for changes of
-physics and output semantics.
+  ``make test-regression``).

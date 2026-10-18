@@ -8,7 +8,7 @@ RK45 guiding-centre tracing and sampling-only initialization remain supported.
 The conserved-magnetic-moment guiding-centre crossing maps were removed because
 a sharp sheet changes the physical magnetic moment by a gyrophase-dependent
 amount and the maps produce spurious confinement. The
-[rejection record](spectre-rejected-interface-models.md) retains the mathematical
+[rejection record](https://github.com/itpplasma/SIMPLE/blob/main/DOC/spectre-rejected-interface-models.md) retains the mathematical
 arguments, symbolic verifier, recorded measurements, and code provenance.
 
 ## Full orbit near interfaces (`crossing_level = 3`)

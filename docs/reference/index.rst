@@ -10,5 +10,4 @@ Reference
    /api/index
    /examples
    /boozer-chartmap-schema
-   design-notes
    publications

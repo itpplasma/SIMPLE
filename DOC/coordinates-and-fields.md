@@ -658,7 +658,7 @@ offset already places the particle outside is an immediate physical loss
 reporting a coordinate-inversion failure. The separate single-volume GC model
 retains its guiding-centre edge convention; GC bulk motion remains unchanged.
 Levels 0/1 and their GC crossing-event log were removed without aliases; see
-[the rejection record](spectre-rejected-interface-models.md). Single-volume RK45
+[the rejection record](https://github.com/itpplasma/SIMPLE/blob/main/DOC/spectre-rejected-interface-models.md). Single-volume RK45
 and multi-volume field evaluation, geometry, diagnostics and sampling remain
 supported. The home-volume lock pins implicit Newton trials and coordinate
 transforms to one volume; interior physical crossings use the full orbit.
@@ -743,7 +743,7 @@ sampler also sets `bmin`/`bmax`/`bmod00` from a scan of the surface.
 **Single-volume boundary handling**. The RK45 path retains its clamped
 boundary evaluation and coordinate-axis reflection; the outer edge `rho_g = 1`
 is absorbing. No internal interface map or crossing log is produced.
-See [the rejection record](spectre-rejected-interface-models.md) for the removed
+See [the rejection record](https://github.com/itpplasma/SIMPLE/blob/main/DOC/spectre-rejected-interface-models.md) for the removed
 models and their physical failure.
 
 #### Guiding-center symplectic per volume (`integmode > 0`)
