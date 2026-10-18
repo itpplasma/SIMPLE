@@ -680,7 +680,7 @@ contains
 
         length = len_trim(path)
         is_vmecpp_input = length >= 5
-        if (is_vmecpp_input) is_vmecpp_input = path(length-4:length) == '.json'
+        if (is_vmecpp_input) is_vmecpp_input = path(length - 4:length) == '.json'
     end function is_vmecpp_input
 
     subroutine init_spectre_field(self)
