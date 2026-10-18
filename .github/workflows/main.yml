@@ -195,6 +195,9 @@ jobs:
             libgsl-dev libhdf5-dev libfftw3-dev libnetcdf-dev libnetcdff-dev \
             libopenblas-dev liblapack-dev openmpi-bin libopenmpi-dev
           python -m pip install numpy netCDF4
+          if [ "$COVERAGE" = 'ON' ]; then
+            python -m pip install gcovr==8.4
+          fi
 
       - name: Build and run tests
         env:
@@ -209,11 +212,15 @@ jobs:
       - name: Generate coverage report and summary
         if: env.COVERAGE == 'ON' && !cancelled()
         run: |
-          cmake --build build --target coverage
+          gcovr --root . --filter 'src/|app/' --include-internal-functions \
+            --gcov-executable gcov-${{ matrix.gcc }} \
+            --xml-pretty --xml build/coverage.xml \
+            --html-details build/coverage.html --print-summary build \
+            > build/coverage-summary.txt
           {
             echo '## Fast-suite coverage (GCC ${{ matrix.gcc }})'
             echo '```text'
-            lcov --summary build/coverage_filtered.info
+            cat build/coverage-summary.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -223,9 +230,7 @@ jobs:
         with:
           name: fast-suite-coverage
           if-no-files-found: error
-          path: |
-            build/coverage.info
-            build/coverage_filtered.info
+          path: build/coverage*
 
   intel-ifx:
     permissions:
