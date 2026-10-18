@@ -6,9 +6,13 @@ build-backend = "scikit_build_core.build"
 name = "pysimple"
 version = "1.5.1"
 dependencies = ["numpy", "f90wrap==0.3.0"]
+optional-dependencies.plotting = ["matplotlib>=3.9", "netCDF4>=1.7"]
 classifiers = [
     "License :: OSI Approved :: MIT License",
 ]
+
+[project.scripts]
+simple-plot = "pysimple.cli:main"
 
 [tool.scikit-build]
 build.verbose = true
