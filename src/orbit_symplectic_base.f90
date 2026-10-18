@@ -9,11 +9,8 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
 
     logical, parameter :: extrap_field = .True.  ! do extrapolation after final iteration
 
-    ! Upper radial bound the Newton/loss guards treat as "left the domain". Default
-    ! 1.0 is the normalized-flux edge s = 1 for VMEC/Meiss/Boozer/flux charts. SPECTRE
-    ! integrates in the stacked chart rho_g in [0, Mvol] and raises this to Mvol so an
-    ! iterate inside an outer volume is not misread as a loss; per-volume boundary
-    ! stops are handled by the caller (#439).
+    ! Upper radial bound for Newton trials: normalized-flux edge s = 1 by
+    ! default; SPECTRE uses Mvol + 1, with physical loss localized at Mvol.
     real(dp) :: sympl_rmax = 1.0d0
     !$acc declare copyin(sympl_rmax)
 

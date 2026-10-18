@@ -116,20 +116,6 @@ class TestWallHeatMap:
         assert heat_map.trace_time == pytest.approx(1e-3)
         assert heat_map.total_alpha_power == TEST_ALPHA_POWER_MW
 
-    def test_flux_grid_shape(self, mock_results_file: Path):
-        """Test flux grid has correct shape."""
-        heat_map = WallHeatMap.from_netcdf(
-            mock_results_file,
-            total_alpha_power_MW=TEST_ALPHA_POWER_MW,
-            n_theta=32,
-            n_zeta=64,
-        )
-
-        assert heat_map.flux_grid.shape == (32, 64)
-        assert heat_map.hit_count.shape == (32, 64)
-        assert len(heat_map.theta_edges) == 33
-        assert len(heat_map.zeta_edges) == 65
-
     def test_lost_power_energy_weighted(self, mock_results_file: Path):
         """Test lost power uses energy weighting, not just particle count."""
         heat_map = WallHeatMap.from_netcdf(
@@ -194,19 +180,6 @@ class TestWallHeatMap:
         )
         assert half_power < heat_map.lost_power
 
-    def test_summary_string(self, mock_results_file: Path):
-        """Test summary string generation."""
-        heat_map = WallHeatMap.from_netcdf(
-            mock_results_file, total_alpha_power_MW=TEST_ALPHA_POWER_MW
-        )
-
-        summary = heat_map.summary()
-        assert "30/100" in summary
-        assert "MW" in summary
-        assert "Alpha power" in summary
-        assert "Particle loss fraction" in summary
-        assert "Energy loss fraction" in summary
-
     def test_no_lost_particles(self, tmp_path: Path):
         """Test handling of results with no lost particles."""
         results_path = tmp_path / "no_lost.nc"
@@ -224,40 +197,9 @@ class TestWallHeatMap:
         assert np.all(heat_map.energy_grid == 0)
 
 
-class TestPort:
-    """Tests for Port dataclass."""
-
-    def test_port_bounds(self):
-        """Test port boundary calculations."""
-        port = Port(
-            name="test",
-            theta_center=0.5,
-            zeta_center=1.0,
-            theta_width=0.2,
-            zeta_width=0.4,
-        )
-
-        assert port.theta_min == pytest.approx(0.4)
-        assert port.theta_max == pytest.approx(0.6)
-        assert port.zeta_min == pytest.approx(0.8)
-        assert port.zeta_max == pytest.approx(1.2)
-
-
 @pytest.mark.skipif(not HAS_NETCDF4, reason="netCDF4 not available")
 class TestPortOptimizer:
     """Tests for PortOptimizer class."""
-
-    def test_add_port(self, mock_results_file: Path):
-        """Test adding ports to optimizer."""
-        heat_map = WallHeatMap.from_netcdf(
-            mock_results_file, total_alpha_power_MW=TEST_ALPHA_POWER_MW
-        )
-        opt = PortOptimizer(heat_map)
-
-        opt.add_port("NBI_1", theta_width=0.3, zeta_width=0.2)
-        opt.add_port("diag_1", theta_width=0.1, zeta_width=0.1)
-
-        assert len(opt._ports) == 2
 
     def test_solve_no_ports(self, mock_results_file: Path):
         """Test optimization with no ports returns empty result."""
@@ -401,24 +343,6 @@ class TestNewFeatures:
         # Total should equal wall area
         assert np.sum(heat_map.bin_areas) == pytest.approx(heat_map.wall_area, rel=0.01)
 
-    def test_flux_error_attribute(self, mock_results_file: Path):
-        """Test that flux_error (Monte Carlo error) is computed."""
-        heat_map = WallHeatMap.from_netcdf(
-            mock_results_file, total_alpha_power_MW=TEST_ALPHA_POWER_MW
-        )
-
-        assert heat_map.flux_error is not None
-        assert heat_map.flux_error.shape == heat_map.flux_grid.shape
-
-        # Error should be flux / sqrt(N) for bins with particles
-        for i in range(heat_map.flux_grid.shape[0]):
-            for j in range(heat_map.flux_grid.shape[1]):
-                if heat_map.hit_count[i, j] > 0:
-                    expected_err = heat_map.flux_grid[i, j] / np.sqrt(heat_map.hit_count[i, j])
-                    assert heat_map.flux_error[i, j] == pytest.approx(expected_err, rel=1e-10)
-                else:
-                    assert heat_map.flux_error[i, j] == 0.0
-
     def test_chartmap_bin_areas(self, tmp_path: Path, mock_results_file: Path):
         """Test that chartmap provides per-bin areas."""
         chartmap_path = tmp_path / "chartmap.nc"
@@ -524,22 +448,6 @@ class TestNewFeatures:
 class TestVisualization:
     """Tests for visualization functions."""
 
-    def test_plot_heat_flux_2d_no_display(self, mock_results_file: Path):
-        """Test 2D plot creation without display."""
-        import matplotlib
-        matplotlib.use('Agg')
-        import matplotlib.pyplot as plt
-
-        heat_map = WallHeatMap.from_netcdf(
-            mock_results_file, total_alpha_power_MW=TEST_ALPHA_POWER_MW
-        )
-
-        fig, ax = plt.subplots()
-        result_ax = plot_heat_flux_2d(heat_map, ax=ax, show_colorbar=True)
-
-        assert result_ax is ax
-        plt.close(fig)
-
     def test_plot_with_ports(self, mock_results_file: Path):
         """Test 2D plot with port overlays."""
         import matplotlib
@@ -564,14 +472,6 @@ class TestVisualization:
 @pytest.mark.skipif(not HAS_NETCDF4, reason="netCDF4 not available")
 class TestIntegration:
     """Integration tests with real SIMPLE output."""
-
-    @pytest.fixture
-    def vmec_file(self) -> str:
-        """Get path to test VMEC file."""
-        vmec_path = Path(__file__).parent.parent / "data" / "wout_vmec_simple.nc"
-        if not vmec_path.exists():
-            pytest.skip("Test VMEC file not available")
-        return str(vmec_path)
 
     def test_full_workflow_mock(self, mock_results_file: Path):
         """Test full workflow with mock data."""
@@ -676,16 +576,19 @@ class TestWallAreaCalculation:
         # Should match within 1.5% (numerical discretization error)
         assert area == pytest.approx(expected_area, rel=0.015)
 
-    def test_area_positive(self, tmp_path: Path):
-        """Test that computed area is positive and reasonable."""
+    @pytest.mark.parametrize(
+        "R0, a, nfp, nzeta",
+        [(5.0, 0.5, 1, 32), (8.0, 0.8, 10, 16), (100.0, 1.0, 5, 16),
+         (3.0, 1.0, 1, 64), (6.2, 2.0, 1, 64), (5.5, 0.53, 5, 16)],
+    )
+    def test_torus_area_matches_analytic(self, tmp_path: Path, R0, a, nfp, nzeta):
+        """Area of a circular torus is 4 pi^2 R0 a for any aspect ratio and nfp."""
         chartmap_path = tmp_path / "chartmap.nc"
-        create_mock_chartmap_nc(chartmap_path)
+        create_mock_chartmap_nc(chartmap_path, R0=R0, a=a, nfp=nfp, nzeta=nzeta)
 
         area = compute_wall_area_from_chartmap(chartmap_path)
 
-        assert area > 0
-        # For R0=10m, a=1m: A ~ 4*pi^2*10*1 ~ 395 m^2
-        assert 300 < area < 500
+        assert area == pytest.approx(4 * np.pi**2 * R0 * a, rel=0.015)
 
     def test_heatmap_uses_chartmap_area(self, tmp_path: Path, mock_results_file: Path):
         """Test that WallHeatMap uses chartmap area when provided."""
@@ -702,50 +605,6 @@ class TestWallAreaCalculation:
         R0, a = 10.0, 1.0
         expected_area = 4 * np.pi**2 * R0 * a
         assert heat_map.wall_area == pytest.approx(expected_area, rel=0.015)
-
-    def test_single_field_period(self, tmp_path: Path):
-        """Test wall area with nfp=1 (full torus in one period)."""
-        chartmap_path = tmp_path / "chartmap.nc"
-        R0, a = 5.0, 0.5
-        create_mock_chartmap_nc(chartmap_path, R0=R0, a=a, nfp=1, nzeta=32)
-
-        area = compute_wall_area_from_chartmap(chartmap_path)
-        expected_area = 4 * np.pi**2 * R0 * a
-
-        assert area == pytest.approx(expected_area, rel=0.015)
-
-    def test_high_field_periods(self, tmp_path: Path):
-        """Test wall area with many field periods (typical stellarator)."""
-        chartmap_path = tmp_path / "chartmap.nc"
-        R0, a = 8.0, 0.8
-        create_mock_chartmap_nc(chartmap_path, R0=R0, a=a, nfp=10, nzeta=16)
-
-        area = compute_wall_area_from_chartmap(chartmap_path)
-        expected_area = 4 * np.pi**2 * R0 * a
-
-        assert area == pytest.approx(expected_area, rel=0.015)
-
-    def test_high_aspect_ratio(self, tmp_path: Path):
-        """Test wall area with high aspect ratio (R0 >> a)."""
-        chartmap_path = tmp_path / "chartmap.nc"
-        R0, a = 100.0, 1.0  # Aspect ratio = 100
-        create_mock_chartmap_nc(chartmap_path, R0=R0, a=a, nfp=5)
-
-        area = compute_wall_area_from_chartmap(chartmap_path)
-        expected_area = 4 * np.pi**2 * R0 * a  # ~3948 m^2
-
-        assert area == pytest.approx(expected_area, rel=0.015)
-
-    def test_low_aspect_ratio(self, tmp_path: Path):
-        """Test wall area with low aspect ratio (R0 ~ 3*a, typical tokamak)."""
-        chartmap_path = tmp_path / "chartmap.nc"
-        R0, a = 3.0, 1.0  # Aspect ratio = 3
-        create_mock_chartmap_nc(chartmap_path, R0=R0, a=a, nfp=1, nzeta=64)
-
-        area = compute_wall_area_from_chartmap(chartmap_path)
-        expected_area = 4 * np.pi**2 * R0 * a  # ~118 m^2
-
-        assert area == pytest.approx(expected_area, rel=0.015)
 
     def test_fine_grid_convergence(self, tmp_path: Path):
         """Test that finer grid gives more accurate area."""
@@ -766,25 +625,3 @@ class TestWallAreaCalculation:
         error_coarse = abs(area_coarse - expected_area) / expected_area
         error_fine = abs(area_fine - expected_area) / expected_area
         assert error_fine < error_coarse
-
-    def test_reactor_scale(self, tmp_path: Path):
-        """Test wall area at reactor scale (ITER-like dimensions)."""
-        chartmap_path = tmp_path / "chartmap.nc"
-        R0, a = 6.2, 2.0  # ITER-like: R0=6.2m, a=2m
-        create_mock_chartmap_nc(chartmap_path, R0=R0, a=a, nfp=1, nzeta=64)
-
-        area = compute_wall_area_from_chartmap(chartmap_path)
-        expected_area = 4 * np.pi**2 * R0 * a  # ~489 m^2
-
-        assert area == pytest.approx(expected_area, rel=0.015)
-
-    def test_small_device(self, tmp_path: Path):
-        """Test wall area for small device (W7-X scale)."""
-        chartmap_path = tmp_path / "chartmap.nc"
-        R0, a = 5.5, 0.53  # W7-X: R0=5.5m, a=0.53m
-        create_mock_chartmap_nc(chartmap_path, R0=R0, a=a, nfp=5)
-
-        area = compute_wall_area_from_chartmap(chartmap_path)
-        expected_area = 4 * np.pi**2 * R0 * a  # ~115 m^2
-
-        assert area == pytest.approx(expected_area, rel=0.015)

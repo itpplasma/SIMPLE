@@ -6,18 +6,26 @@ program test_stl_wall_intersection
     use simple_main, only: main_wall => wall, chartmap_cart_scale_to_m, &
                            locate_wall_segment
     use params, only: wall_hit, wall_hit_cart, wall_hit_normal_cart, &
-                      wall_hit_cos_incidence, wall_hit_angle_rad, &
-                      wall_query_rho_lcfs
+                      wall_hit_cos_incidence, wall_hit_angle_rad, wall_hit_triangle, &
+                      wall_query_rho_lcfs, reallocate_arrays, ntestpart, &
+                      npoiper, ntimstep, zstart, zend, class_lost, &
+                      wall_input, wall_units
+    use netcdf_results_output, only: write_results_netcdf
+    use new_vmec_stuff_mod, only: nper
     use reference_coordinates, only: ref_coords
     use cartesian_coordinates, only: cartesian_coordinate_system_t
     implicit none
 
-    integer :: errors
+    integer :: errors, triangle, j
     logical :: hit
     real(dp) :: p0(3), p1(3), hit_p(3)
     real(dp) :: normal(3), dotx
     real(dp) :: z(5), z_start(5), z_end(5), hit_step
     real(dp) :: u_start(3), u_end(3)
+    character(len=32), parameter :: order_mesh(2) = [character(len=32) :: &
+        'wall_facet_order.stl', 'wall_facet_order_binary.stl']
+    character(len=32), parameter :: order_results(2) = [character(len=32) :: &
+        'facet_order_ascii_results.nc', 'facet_order_binary_results.nc']
 
     errors = 0
     call write_tetra_stl_m("tetra_m.stl")
@@ -26,8 +34,9 @@ program test_stl_wall_intersection
     p0 = [0.25_dp, 0.25_dp, 0.25_dp]
     p1 = [2.0_dp, 0.25_dp, 0.25_dp]
     call stl_wall_first_hit_segment_with_normal( &
-        main_wall, p0, p1, hit, hit_p, normal)
+        main_wall, p0, p1, hit, hit_p, normal, triangle)
     call check(hit, "expected intersection for meters STL", errors)
+    call check(triangle == 3, "STL facet order mismatch", errors)
     call check_close_vec(hit_p, [0.5_dp, 0.25_dp, 0.25_dp], 1.0e-12_dp, &
         "meters STL hit point mismatch", errors)
     call check_close(norm2(normal), 1.0_dp, 1.0e-12_dp, &
@@ -37,8 +46,13 @@ program test_stl_wall_intersection
         "meters STL normal mismatch", errors)
 
     allocate (cartesian_coordinate_system_t :: ref_coords)
-    allocate (wall_hit(1), wall_hit_cart(3, 1), wall_hit_normal_cart(3, 1), &
-              wall_hit_cos_incidence(1), wall_hit_angle_rad(1))
+    nper = 1
+    npoiper = 1
+    ntimstep = 2
+    ntestpart = 5
+    call reallocate_arrays()
+    zstart = 0.0_dp
+    zend = 0.0_dp
     wall_hit = 0_int8
     wall_hit_cart = 0.0_dp
     wall_hit_normal_cart = 0.0_dp
@@ -76,6 +90,7 @@ program test_stl_wall_intersection
         "wall event phase-space interpolation mismatch", errors)
     call check_close(hit_step, 9.0_dp, 1.0e-12_dp, &
         "wall event time mismatch", errors)
+    call check(wall_hit_triangle(1) == 3, "stored triangle mismatch", errors)
     call check(wall_hit(1) == 1_int8, "wall hit flag missing", errors)
     call check_close_vec(wall_hit_cart(:, 1), hit_p, 1.0e-12_dp, &
         "stored wall hit position mismatch", errors)
@@ -102,13 +117,87 @@ program test_stl_wall_intersection
     call write_tetra_stl_mm("tetra_mm.stl")
     call stl_wall_init(main_wall, "tetra_mm.stl", 1.0e-3_dp)
     call stl_wall_first_hit_segment_with_normal( &
-        main_wall, p0, p1, hit, hit_p, normal)
+        main_wall, p0, p1, hit, hit_p, normal, triangle)
     call check(hit, "expected intersection for millimeters STL (scaled)", errors)
     call check_close_vec(hit_p, [0.5_dp, 0.25_dp, 0.25_dp], 1.0e-12_dp, &
         "mm STL scaled hit point mismatch", errors)
     call check_close(norm2(normal), 1.0_dp, 1.0e-12_dp, &
         "mm STL normal not unit length", errors)
     call stl_wall_finalize(main_wall)
+    call check(triangle == 3, "scaled STL facet order mismatch", errors)
+
+    ! Record one hit on each facet plus a no-hit marker using the production
+    ! locator and NetCDF writer, for the Python integration test and example.
+    call stl_wall_init(main_wall, "tetra_m.stl", 1.0_dp)
+    wall_hit = 0_int8
+    wall_hit_triangle = -1
+    ! The results writer uses cm for Cartesian reference coordinates.
+    chartmap_cart_scale_to_m = 0.01_dp
+    zstart(4, :) = 1.0_dp
+    zend(4, :) = 1.0_dp
+    do j = 1, 4
+        p1 = p0
+        select case (j)
+        case (1)
+            p1(3) = -1.0_dp
+        case (2)
+            p1(2) = -1.0_dp
+        case (3)
+            p1(1) = -1.0_dp
+        case (4)
+            p1(1) = 2.0_dp
+        end select
+        z_start = [100.0_dp*p0, 1.0_dp, 0.0_dp]
+        z_end = [100.0_dp*p1, 1.0_dp, 0.0_dp]
+        zstart(:, j) = z_start
+        z = z_end
+        call locate_wall_segment(z, z_start, z_end, j, p0, z_start(1:3), &
+            p1, z_end(1:3), 6.0_dp, 0.0_dp, 1.0_dp, hit, hit_step)
+        call check(hit, "fixture facet missed", errors)
+        call check(wall_hit_triangle(j) == j - 1, "fixture facet index", errors)
+        zend(:, j) = z
+        class_lost(j) = hit
+    end do
+    call check(wall_hit_triangle(5) == -1, "no-hit sentinel", errors)
+    call stl_wall_first_hit_segment_with_normal(main_wall, &
+        [2.0_dp, 2.0_dp, 2.0_dp], [3.0_dp, 3.0_dp, 3.0_dp], &
+        hit, hit_p, normal, triangle)
+    call check(.not. hit .and. triangle == -1, "no-hit query index", errors)
+    wall_input = "tetra_m.stl"
+    wall_units = "m"
+    call write_results_netcdf("tetra_wall_results.nc", main_wall%facet_count)
+    call stl_wall_finalize(main_wall)
+
+    ! Facets 0..3 are degenerate, duplicate and non-manifold, before the
+    ! isolated target at index 4. Neither repairs nor filtering may shift IDs.
+    do j = 1, 2
+        wall_input = order_mesh(j)
+        call stl_wall_init(main_wall, trim(wall_input), 1.0_dp)
+        call check(main_wall%facet_count == 5, "original facet count", errors)
+        p0 = [0.5_dp, 0.25_dp, 0.25_dp]
+        p1 = [2.0_dp, 0.25_dp, 0.25_dp]
+        call stl_wall_first_hit_segment_with_normal( &
+            main_wall, p0, p1, hit, hit_p, normal, triangle)
+        call check(hit, "facet-order target missed", errors)
+        call check(triangle == 4, "facet-order regression index", errors)
+        call check_close_vec(hit_p, [1.0_dp, 0.25_dp, 0.25_dp], &
+            1.0e-12_dp, "facet-order hit point", errors)
+        call check_close_vec(normal, [1.0_dp, 0.0_dp, 0.0_dp], &
+            1.0e-12_dp, "normal must follow STL winding", errors)
+        wall_hit = 0_int8
+        wall_hit_triangle = -1
+        z_start = [100.0_dp*p0, 1.0_dp, 0.0_dp]
+        z_end = [100.0_dp*p1, 1.0_dp, 0.0_dp]
+        zstart(:, 1) = z_start
+        z = z_end
+        call locate_wall_segment(z, z_start, z_end, 1, p0, z_start(1:3), &
+            p1, z_end(1:3), 6.0_dp, 0.0_dp, 1.0_dp, hit, hit_step)
+        call check(hit, "facet-order locator missed", errors)
+        call check(wall_hit_triangle(1) == 4, "stored facet-order index", errors)
+        zend(:, 1) = z
+        call write_results_netcdf(trim(order_results(j)), main_wall%facet_count)
+        call stl_wall_finalize(main_wall)
+    end do
     if (errors /= 0) error stop 1
 contains
 

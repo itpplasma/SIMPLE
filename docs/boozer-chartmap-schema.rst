@@ -1,12 +1,13 @@
-Boozer Chartmap Schema
+Boozer chartmap format
 ======================
 
-Extended Boozer chartmap files are NetCDF inputs for SIMPLE runs without a
-VMEC file at runtime. The file stores geometry and field data on uniform grids,
-because the SIMPLE/libneo spline path assumes a constant spacing for each
-abscissa.
+An extended Boozer chartmap is a NetCDF file with geometry and field data in
+Boozer coordinates; SIMPLE traces it without a VMEC file. This page specifies
+the file for writers of converters. All grids are uniform, because the
+SIMPLE/libneo splines assume constant spacing along each abscissa. Usage and
+the shipped converters are in :doc:`/user-guide/field-sources`.
 
-Radial Grids
+Radial grids
 ------------
 
 The schema uses two radial coordinates:
@@ -24,7 +25,7 @@ Runtime input keeps the usual SIMPLE meaning: ``sbeg`` is normalized toroidal
 flux ``s`` in both VMEC and chartmap runs. A chartmap run evaluates the start
 surface at ``rho = sqrt(sbeg)``.
 
-Angles and Signs
+Angles and signs
 ----------------
 
 SIMPLE chartmaps use the same left-handed Boozer orientation as the VMEC path.
@@ -60,7 +61,7 @@ reversal before SIMPLE reads it:
 Raw right-handed GVEC chartmaps and double-flipped chartmaps do not match the
 SIMPLE/VMEC convention.
 
-Runtime Scaling
+Runtime scaling
 ---------------
 
 Chartmap files store base-scale CGS quantities. SIMPLE applies the usual
@@ -146,7 +147,7 @@ Variables
      - scalar
      - dimensionless
 
-Required Attributes
+Required attributes
 -------------------
 
 Global attributes:

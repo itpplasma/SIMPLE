@@ -1,0 +1,225 @@
+-- UNCHECKED DRAFT (item A stopped on scope change). NOT part of the Lean project.
+-- These declarations were moved out of EntryFrozen.lean because they did not
+-- elaborate under Lean 4.16.0 / pinned Mathlib (see README.md for each failure).
+-- Some pieces here (omega2 lemmas, free_stage1/2) did check but depend on the
+-- Plane section context; they are kept together for a later repair.
+/-- Derivative of Psi z = Phi (sigma z, z). -/
+theorem selection_hasFDerivAt (Φ : P × E → E) (σ : E → P) (x : E)
+    (L : P × E →L[ℝ] E) (S : E →L[ℝ] P)
+    (hΦ : HasFDerivAt Φ L (σ x, x)) (hσ : HasFDerivAt σ S x) :
+    HasFDerivAt (fun z => Φ (σ z, z))
+      ((L.comp (ContinuousLinearMap.inl ℝ P E)).comp S +
+        L.comp (ContinuousLinearMap.inr ℝ P E)) x := by
+  have hin : HasFDerivAt (fun z => (σ z, z)) (S.prod (ContinuousLinearMap.id ℝ E)) x :=
+    hσ.prod (hasFDerivAt_id x)
+  have hc := hΦ.comp x hin
+  convert hc using 1
+  ext u
+  simp only [ContinuousLinearMap.add_apply, ContinuousLinearMap.comp_apply,
+    ContinuousLinearMap.inl_apply, ContinuousLinearMap.inr_apply,
+    ContinuousLinearMap.prod_apply, ContinuousLinearMap.id_apply]
+  rw [← map_add]
+  congr 1
+  ext <;> simp
+
+/-- Same conclusion through the derivative formula: D sigma = 0 removes C. -/
+theorem locally_constant_derivative (ω : E →L[ℝ] E →L[ℝ] ℝ) (Φ : P × E → E)
+    (σ : E → P) (x : E) (L : P × E →L[ℝ] E)
+    (hΦ : HasFDerivAt Φ L (σ x, x))
+    (hloc : ∀ᶠ z in nhds x, σ z = σ x)
+    (hA : ∀ u v, ω (L.comp (ContinuousLinearMap.inr ℝ P E) u)
+      (L.comp (ContinuousLinearMap.inr ℝ P E) v) = ω u v) :
+    SymplAt ω (fun z => Φ (σ z, z)) x := by
+  have hσ : HasFDerivAt σ (0 : E →L[ℝ] P) x :=
+    (hasFDerivAt_const (σ x) x).congr_of_eventuallyEq hloc
+  have hd := selection_hasFDerivAt Φ σ x L 0 hΦ hσ
+  refine ⟨_, hd, fun u v => ?_⟩
+  simpa using hA u v
+
+
+/-! Concrete phase plane ℝ × ℝ with omega = dq ∧ dp. -/
+section Plane
+
+def ω2 : (ℝ × ℝ) →L[ℝ] (ℝ × ℝ) →L[ℝ] ℝ :=
+  (ContinuousLinearMap.mul ℝ ℝ).bilinearComp (ContinuousLinearMap.fst ℝ ℝ ℝ)
+      (ContinuousLinearMap.snd ℝ ℝ ℝ) -
+    (ContinuousLinearMap.mul ℝ ℝ).bilinearComp (ContinuousLinearMap.snd ℝ ℝ ℝ)
+      (ContinuousLinearMap.fst ℝ ℝ ℝ)
+
+theorem ω2_apply (u v : ℝ × ℝ) : ω2 u v = u.1 * v.2 - u.2 * v.1 := by
+  simp [ω2]
+
+theorem ω2_skew (u v : ℝ × ℝ) : ω2 u v = -ω2 v u := by
+  rw [ω2_apply, ω2_apply]; ring
+
+/-! Switch: Phi(lam, (q,p)) = (q + lam, p) is a symplectic translation for
+    every lam, but the selection lam = s(q) jumps at q = 0. -/
+
+def stepSel (q : ℝ) : ℝ := if q < 0 then 0 else 1
+
+def switched (z : ℝ × ℝ) : ℝ × ℝ := (z.1 + stepSel z.1, z.2)
+
+theorem switch_not_continuous : ¬ ContinuousAt switched (0, 0) := by
+  intro hc
+  have h1 : ContinuousAt (fun q : ℝ => (switched (q, 0)).1) 0 := by
+    have hin : ContinuousAt (fun q : ℝ => ((q, 0) : ℝ × ℝ)) 0 :=
+      (continuous_id.prod_mk continuous_const).continuousAt
+    exact continuous_fst.continuousAt.comp (hc.comp hin)
+  rw [Metric.continuousAt_iff] at h1
+  obtain ⟨δ, hδ, hball⟩ := h1 (1/2) (by norm_num)
+  have hx : dist (-(δ/2)) (0 : ℝ) < δ := by
+    rw [Real.dist_eq]; rw [abs_of_neg (by linarith)]; linarith
+  have hh := hball hx
+  have e1 : (switched (-(δ/2), 0)).1 = -(δ/2) := by
+    simp [switched, stepSel, show -(δ/2) < 0 by linarith]
+  have e2 : (switched (0, 0)).1 = 1 := by simp [switched, stepSel]
+  rw [e1, e2, Real.dist_eq, abs_of_neg (by linarith)] at hh
+  linarith
+
+theorem switch_not_symplectic : ¬ SymplAt ω2 switched (0, 0) := by
+  rintro ⟨M, hM, _⟩
+  exact switch_not_continuous hM.continuousAt
+
+/-- Away from the switching set the same selection is locally constant and
+    the switched map is symplectic. -/
+theorem switch_symplectic_off (z : ℝ × ℝ) (hz : z.1 ≠ 0) :
+    SymplAt ω2 switched z := by
+  have hloc : ∀ᶠ w in nhds z, stepSel w.1 = stepSel z.1 := by
+    rcases lt_or_gt_of_ne hz with hneg | hpos
+    · have hev : ∀ᶠ w in nhds z, w.1 < 0 :=
+        (continuous_fst.tendsto z).eventually (Iio_mem_nhds hneg)
+      filter_upwards [hev] with w hw
+      simp [stepSel, hw, hneg]
+    · have hev : ∀ᶠ w in nhds z, 0 < w.1 :=
+        (continuous_fst.tendsto z).eventually (Ioi_mem_nhds hpos)
+      filter_upwards [hev] with w hw
+      simp [stepSel, not_lt.mpr hw.le, not_lt.mpr hpos.le]
+  have hfix : SymplAt ω2 (fun w : ℝ × ℝ => (w.1 + stepSel z.1, w.2)) z := by
+    refine ⟨ContinuousLinearMap.id ℝ (ℝ × ℝ), ?_, fun _ _ => rfl⟩
+    have h := (hasFDerivAt_id z).add_const ((stepSel z.1, 0) : ℝ × ℝ)
+    convert h using 1
+    funext w
+    ext <;> simp
+  exact locally_constant_selection ω2
+    (fun w : ℝ × ℝ × ℝ => (w.2.1 + w.1, w.2.2)) (fun w => stepSel w.1) z
+    (stepSel z.1) hloc hfix
+
+/-! Claim 4: free particle H = p^2/2 with the actual Gauss2 coefficients. -/
+
+def Hfree (y : ℝ × ℝ) : ℝ := y.2 ^ 2 / 2
+def Ffree (y : ℝ × ℝ) : ℝ × ℝ := (y.2, 0)
+def c1 : ℝ := a11 + a12
+def c2 : ℝ := a21 + a22
+def Yf1 (h : ℝ) (y : ℝ × ℝ) : ℝ × ℝ := (y.1 + h * c1 * y.2, y.2)
+def Yf2 (h : ℝ) (y : ℝ × ℝ) : ℝ × ℝ := (y.1 + h * c2 * y.2, y.2)
+
+theorem free_hasFDerivAt (y : ℝ × ℝ) :
+    HasFDerivAt Hfree (y.2 • ContinuousLinearMap.snd ℝ ℝ ℝ) y := by
+  have h := (hasFDerivAt_snd (p := y) (𝕜 := ℝ) (E := ℝ) (F := ℝ)).pow 2
+  have h2 := h.div_const 2
+  convert h2 using 1
+  ext v <;> simp <;> ring
+
+theorem free_ham (y : ℝ × ℝ) : ω2 (Ffree y) = fderiv ℝ Hfree y := by
+  rw [(free_hasFDerivAt y).fderiv]
+  ext v <;> simp [ω2_apply, Ffree]
+
+theorem free_contDiff (y : ℝ × ℝ) : ContDiffAt ℝ 2 Hfree y := by
+  have : ContDiff ℝ 2 Hfree := (contDiff_snd.pow 2).div_const 2
+  exact this.contDiffAt
+
+theorem free_stage₁ (h : ℝ) (y : ℝ × ℝ) :
+    Yf1 h y = y + h • (a11 • Ffree (Yf1 h y) + a12 • Ffree (Yf2 h y)) := by
+  ext <;> simp [Yf1, Yf2, Ffree, c1] <;> ring
+
+theorem free_stage₂ (h : ℝ) (y : ℝ × ℝ) :
+    Yf2 h y = y + h • (a21 • Ffree (Yf1 h y) + a22 • Ffree (Yf2 h y)) := by
+  ext <;> simp [Yf1, Yf2, Ffree, c2] <;> ring
+
+theorem free_step (h : ℝ) (y : ℝ × ℝ) :
+    gaussStep Ffree (Yf1 h) (Yf2 h) h y = (y.1 + h * y.2, y.2) := by
+  ext <;> simp [gaussStep, Yf1, Yf2, Ffree, b] <;> ring
+
+theorem Yf_hasFDerivAt (c h : ℝ) (y : ℝ × ℝ) :
+    HasFDerivAt (fun y : ℝ × ℝ => (y.1 + h * c * y.2, y.2))
+      ((ContinuousLinearMap.fst ℝ ℝ ℝ + (h * c) • ContinuousLinearMap.snd ℝ ℝ ℝ).prod
+        (ContinuousLinearMap.snd ℝ ℝ ℝ)) y :=
+  (hasFDerivAt_fst.add (hasFDerivAt_snd.const_mul (h * c))).prod hasFDerivAt_snd
+
+theorem Ffree_hasFDerivAt (y : ℝ × ℝ) :
+    HasFDerivAt Ffree ((ContinuousLinearMap.snd ℝ ℝ ℝ).prod 0) y :=
+  hasFDerivAt_snd.prod (hasFDerivAt_const 0 y)
+
+/-- Fixed h: the Gauss2 theorem applies to the free particle (sanity check of
+    hypotheses with the actual coefficients). -/
+theorem free_fixed_symplectic (h : ℝ) (y : ℝ × ℝ) :
+    SymplAt ω2 (gaussStep Ffree (Yf1 h) (Yf2 h) h) y :=
+  gauss2_symplectic ω2 Hfree Ffree (Yf1 h) (Yf2 h) y h _ _ _ _
+    (Yf_hasFDerivAt c1 h y) (Yf_hasFDerivAt c2 h y)
+    (Ffree_hasFDerivAt _) (Ffree_hasFDerivAt _)
+    (free_contDiff _) (free_contDiff _) free_ham ω2_skew
+    (free_stage₁ h) (free_stage₂ h)
+
+/-- The state-selected, then frozen, step: h = hsel q chosen from the input. -/
+def selectedStep (hsel : ℝ → ℝ) (y : ℝ × ℝ) : ℝ × ℝ :=
+  gaussStep Ffree (Yf1 (hsel y.1)) (Yf2 (hsel y.1)) (hsel y.1) y
+
+theorem selectedStep_eq (hsel : ℝ → ℝ) (y : ℝ × ℝ) :
+    selectedStep hsel y = (y.1 + hsel y.1 * y.2, y.2) :=
+  free_step _ _
+
+theorem selected_hasFDerivAt (hsel : ℝ → ℝ) (d : ℝ) (y : ℝ × ℝ)
+    (hd : HasDerivAt hsel d y.1) :
+    HasFDerivAt (selectedStep hsel)
+      ((ContinuousLinearMap.fst ℝ ℝ ℝ +
+          (y.2 * d) • ContinuousLinearMap.fst ℝ ℝ ℝ +
+          hsel y.1 • ContinuousLinearMap.snd ℝ ℝ ℝ).prod
+        (ContinuousLinearMap.snd ℝ ℝ ℝ)) y := by
+  have hfun : selectedStep hsel = fun y : ℝ × ℝ => (y.1 + hsel y.1 * y.2, y.2) :=
+    funext (selectedStep_eq hsel)
+  rw [hfun]
+  have hh : HasFDerivAt (fun y : ℝ × ℝ => hsel y.1)
+      (d • ContinuousLinearMap.fst ℝ ℝ ℝ) y := by
+    have := hd.hasFDerivAt.comp y (hasFDerivAt_fst (p := y) (𝕜 := ℝ) (E := ℝ) (F := ℝ))
+    convert this using 1
+    ext v <;> simp [mul_comm]
+  have hprod := hh.mul (hasFDerivAt_snd (p := y) (𝕜 := ℝ) (E := ℝ) (F := ℝ))
+  have hfst := (hasFDerivAt_fst (p := y) (𝕜 := ℝ) (E := ℝ) (F := ℝ)).add hprod
+  have hall := hfst.prod (hasFDerivAt_snd (p := y) (𝕜 := ℝ) (E := ℝ) (F := ℝ))
+  convert hall using 1
+  ext v <;> simp <;> ring
+
+/-- The symplectic pairing of the selected step is 1 + h'(q) p, not 1. -/
+theorem selected_pairing (hsel : ℝ → ℝ) (d : ℝ) (y : ℝ × ℝ)
+    (hd : HasDerivAt hsel d y.1) (M : (ℝ × ℝ) →L[ℝ] (ℝ × ℝ))
+    (hM : HasFDerivAt (selectedStep hsel) M y) :
+    ω2 (M (1, 0)) (M (0, 1)) = 1 + d * y.2 ∧ ω2 ((1, 0) : ℝ × ℝ) (0, 1) = 1 := by
+  rw [hM.unique (selected_hasFDerivAt hsel d y hd)]
+  constructor <;> simp [ω2_apply] <;> ring
+
+/-- Claim 4. h(q) = h0 + q, p = 1: the selected step is not symplectic. -/
+theorem selected_not_symplectic (h0 q : ℝ) :
+    ¬ SymplAt ω2 (selectedStep (fun q => h0 + q)) (q, 1) := by
+  rintro ⟨M, hM, hω⟩
+  have hd : HasDerivAt (fun q : ℝ => h0 + q) 1 q := by
+    simpa using (hasDerivAt_id q).const_add h0
+  obtain ⟨h1, h2⟩ := selected_pairing (fun q => h0 + q) 1 (q, 1) hd M hM
+  have h3 := hω (1, 0) (0, 1)
+  rw [h1, h2] at h3
+  norm_num at h3
+
+end Plane
+#print axioms selection_hasFDerivAt
+#print axioms locally_constant_derivative
+#print axioms switch_not_continuous
+#print axioms switch_not_symplectic
+#print axioms switch_symplectic_off
+#print axioms free_ham
+#print axioms free_stage₁
+#print axioms free_stage₂
+#print axioms free_step
+#print axioms free_fixed_symplectic
+#print axioms selectedStep_eq
+#print axioms selected_hasFDerivAt
+#print axioms selected_pairing
+#print axioms selected_not_symplectic

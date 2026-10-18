@@ -163,6 +163,10 @@ contains
         velrat_out(3) = v0/vte
 
         dense = densi1*Z1 + densi2*Z2
+        if (dense == 0.0_wp) then
+            efcolf_out = 0.0_wp
+            return
+        end if
         alami1 = 23.d0 - log(max(epsilon(1.d0), &
                                  sqrt(densi1*Z1**2/tempi1)*2.d0*Z1*(4.d0 + am1)/(4.d0*tempi1 + am1*ealpha)))
         alami2 = 23.d0 - log(max(epsilon(1.d0), &
@@ -211,8 +215,14 @@ contains
             tempe_loc = max(Te, 1.0d0)
             tempi1_loc = max(Ti1, 1.0d0)
             tempi2_loc = max(Ti2, 1.0d0)
-            densi1_loc = max(ni1*1.0d-6, 1.0d0)
-            densi2_loc = max(ni2*1.0d-6, 1.0d0)
+            ! Preserve exact vacuum; retain the floor for positive densities.
+            if (ni1 == 0.0_wp .and. ni2 == 0.0_wp) then
+                densi1_loc = 0.0_wp
+                densi2_loc = 0.0_wp
+            else
+                densi1_loc = max(ni1*1.0d-6, 1.0d0)
+                densi2_loc = max(ni2*1.0d-6, 1.0d0)
+            end if
 
             call compute_collision_coeffs(am1, am2, Z1, Z2, &
                                           densi1_loc, densi2_loc, &
@@ -245,67 +255,101 @@ contains
                     + weight*(enrat_grid(:, idx_hi) - enrat_grid(:, idx_lo))
     end subroutine get_local_coeffs
 
-    subroutine stost(z, dtauc, iswmode, ierr)
+    subroutine stost(z, dtauc, iswmode, ierr, max_substep_fraction)
+        use finite_check, only: is_finite
+
         integer, intent(in) :: iswmode
         real(wp), intent(in) :: dtauc
         real(wp), intent(inout) :: z(5)
         integer, intent(out) :: ierr
+        real(wp), intent(in), optional :: max_substep_fraction
 
-        real(wp), parameter :: pmin = 1.d-8
-        real(wp) :: p, dpp, dhh, fpeff, alam, dalam, coala
+        real(wp), parameter :: default_fraction = 0.1_wp
+        real(wp), parameter :: twopi = 8.0_wp*atan(1.0_wp)
+        integer, parameter :: max_substeps = 100000
+        real(wp) :: initial(5), fraction, remaining, step, p, dpp, dhh, fpeff
+        real(wp) :: alam, angle, azimuth
         real(wp) :: efcolf_loc(nsorts), velrat_loc(nsorts), enrat_loc(nsorts)
         real :: ur
+        integer :: substep
+        logical :: pitch, energy, diffusion
 
-        p = z(4)
-
-        call get_local_coeffs(z(1), efcolf_loc, velrat_loc, enrat_loc)
-        call coleff_local(p, efcolf_loc, velrat_loc, enrat_loc, dpp, dhh, fpeff)
-
+        initial = z
         ierr = 0
+        fraction = default_fraction
+        if (present(max_substep_fraction)) fraction = max_substep_fraction
+        if (.not. all(is_finite(z)) .or. .not. is_finite(dtauc) .or. &
+            .not. is_finite(fraction)) then
+            ierr = 1
+            return
+        end if
+        if (z(4) <= 0.0_wp .or. abs(z(5)) > 1.0_wp .or. dtauc < 0.0_wp .or. &
+            fraction <= 0.0_wp .or. fraction > 0.25_wp .or. &
+            iswmode < 1 .or. iswmode > 4) then
+            ierr = 1
+            return
+        end if
+        if (dtauc == 0.0_wp) return
+        call get_local_coeffs(z(1), efcolf_loc, velrat_loc, enrat_loc)
+        ! A vacuum neither advances the state nor consumes random numbers.
+        if (all(efcolf_loc == 0.0_wp)) return
+        pitch = iswmode == 1 .or. iswmode == 4
+        energy = iswmode /= 4
+        diffusion = iswmode < 3
+        remaining = dtauc
 
-        if (iswmode == 1 .or. iswmode == 4) then
-            alam = z(5)
-            coala = 1.d0 - alam**2
-
-            if (coala < 0.d0) then
+        do substep = 1, max_substeps
+            p = z(4)
+            call coleff_local(p, efcolf_loc, velrat_loc, enrat_loc, dpp, dhh, fpeff)
+            if (.not. all(is_finite([dpp, dhh, fpeff])) .or. &
+                dpp < 0.0_wp .or. dhh < 0.0_wp) then
                 ierr = 1
-                return
+                exit
             end if
-
-            call getran(1, ur)
-
-            dalam = sqrt(2.d0*dhh*coala*dtauc)*dble(ur) - 2.d0*alam*dhh*dtauc
-
-            if (abs(dalam) > 1.d0) then
-                ierr = 2
+            ! Choose from the current state before drawing increments. Bound
+            ! angular diffusion and both the relative drag and largest possible
+            ! radial noise (getran(0) has support [-sqrt(3),sqrt(3)]).
+            step = remaining
+            if (pitch .and. dhh > 0.0_wp) &
+                step = min(step, fraction**2/dhh)
+            if (energy) then
+                if (abs(fpeff) > 0.0_wp) &
+                    step = min(step, fraction*p/abs(fpeff))
+                if (diffusion .and. dpp > 0.0_wp) &
+                    step = min(step, fraction**2*p**2/(6.0_wp*dpp))
+            end if
+            if (step <= 0.0_wp .or. remaining - step == remaining) then
+                ierr = 4 ! Cannot represent further time progress.
+                exit
+            end if
+            if (pitch) then
+                ! Isotropic random rotation of fixed small angle. Its weak
+                ! generator is dhh*d/dlambda[(1-lambda**2)*d/dlambda].
+                ! Unlike Euler pitch kicks, it stays on the velocity sphere.
+                angle = sqrt(4.0_wp*dhh*step)
                 call random_number(ur)
-                alam = 2.d0*(dble(ur) - 0.5d0)
-            else
-                alam = alam + dalam
-                if (alam > 1.d0) then
-                    ierr = 3
-                    alam = 2.d0 - alam
-                else if (alam < -1.d0) then
-                    ierr = 3
-                    alam = -2.d0 - alam
+                azimuth = twopi*real(ur, wp)
+                alam = z(5)
+                z(5) = alam*cos(angle) + sqrt(1.0_wp - alam**2)* &
+                       sin(angle)*cos(azimuth)
+            end if
+            if (energy) then
+                z(4) = p + fpeff*step
+                if (diffusion) then
+                    call getran(0, ur)
+                    z(4) = z(4) + sqrt(2.0_wp*dpp*step)*real(ur, wp)
                 end if
             end if
-
-            z(5) = alam
-            if (iswmode == 4) return
-        end if
-
-        if (iswmode < 3) then
-            call getran(0, ur)
-            z(4) = z(4) + sqrt(abs(2.d0*dpp*dtauc))*dble(ur) + fpeff*dtauc
-        else
-            z(4) = z(4) + fpeff*dtauc
-        end if
-
-        if (z(4) < pmin) then
-            ierr = ierr + 10
-            z(4) = pmin + abs(pmin - z(4))
-        end if
+            if (.not. all(is_finite(z)) .or. z(4) <= 0.0_wp .or. &
+                abs(z(5)) > 1.0_wp) then
+                ierr = 1
+                exit
+            end if
+            remaining = remaining - step
+            if (remaining == 0.0_wp) return
+        end do
+        if (ierr == 0) ierr = 5 ! Explicit computational budget exhaustion.
+        z = initial
     end subroutine stost
 
     subroutine getran(irand, ur)
