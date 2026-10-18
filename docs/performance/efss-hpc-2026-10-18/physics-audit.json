@@ -1,0 +1,7 @@
+{
+  "cpu_runs": 10,
+  "markers_per_run": 256,
+  "all_completed": true,
+  "finite_per_marker_outputs": true,
+  "max_times_lost_array_delta": 0.0
+}

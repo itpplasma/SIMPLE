@@ -79,11 +79,11 @@ cmake --build build-cuda --parallel 16
 ```
 
 H100 uses architecture `90`. Native CUDA uses a C++17 CUDA compiler plus GNU
-Fortran; NVIDIA Fortran is optional. Validate both native CUDA tests before production use (the
-Makefile's command-line `BUILD_DIR` override keeps its native test driver):
+Fortran; NVIDIA Fortran is optional. Validate both native CUDA tests before production use
+(the Makefile's command-line `BUILD_DIR` override keeps its native test driver):
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 OMP_NUM_THREADS=16 CMAKE_BUILD_PARALLEL_LEVEL=16 \
+OMP_NUM_THREADS=16 CMAKE_BUILD_PARALLEL_LEVEL=16 \
   make test CONFIG=Release BUILD_DIR=build-cuda \
   FLAGS='-DSIMPLE_ENABLE_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=90 -DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF' \
   TEST='test_cuda_native_(rk54|bridge)'
@@ -93,7 +93,11 @@ Run this inside an allocated GPU job. It enables deterministic floating point;
 reconfigure the intended setting before timing. See
 [GPU controls](../../DOC/gpu-cuda.md). Use Boozer guiding-center tracing,
 `gpu_mode='production'`, `gpu_backend='cuda-native'`, `gpu_method='dopri'`,
-`gpu_landreman=.true.`, and `gpu_num_devices=1`; collisions, walls, classifiers
+`gpu_landreman=.true.`, and `gpu_num_devices=1`. The local direct-VMEC production attempt currently
+fails at `src/simple_cuda_native.f90:133` before CUDA tracing; see the linked
+performance report. This template does not resolve that initialization block.
+Validate a compatible chartmap/Boozer-start workflow or an upstream fix before
+production deployment. Collisions, walls, classifiers
 and orbit output are unsupported. The ordinary CPU template uses `gpu_mode='off'`.
 
 ## Submit and validate
@@ -105,9 +109,12 @@ build's module stack, and submit there:
 ```bash
 export SIMPLE_EXE=/absolute/path/to/SIMPLE/build/simple.x
 sbatch /absolute/path/to/SIMPLE/examples/hpc/pitagora/dcgp.slurm
+# Production alternative; command-line options override the debug headers:
+sbatch --partition=dcgp_fua_prod --time=24:00:00 /absolute/path/to/SIMPLE/examples/hpc/pitagora/dcgp.slurm
 # GPU alternative:
 export SIMPLE_EXE=/absolute/path/to/SIMPLE/build-cuda/simple.x
 sbatch /absolute/path/to/SIMPLE/examples/hpc/pitagora/booster.slurm
+sbatch --partition=boost_fua_prod --time=24:00:00 /absolute/path/to/SIMPLE/examples/hpc/pitagora/booster.slurm
 ```
 
 Start in debug. Check the allocation, thread binding, selected CUDA backend,

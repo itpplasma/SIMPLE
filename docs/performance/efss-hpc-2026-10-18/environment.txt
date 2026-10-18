@@ -1,0 +1,79 @@
+$ uname -sr
+
+Linux 7.2.10-arch1-1
+
+$ gfortran --version
+
+GNU Fortran (GCC) 16.2.1 20260810
+Copyright (C) 2026 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+$ gcc --version
+
+gcc (GCC) 16.2.1 20260810
+Copyright (C) 2026 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+$ g++ --version
+
+g++ (GCC) 16.2.1 20260810
+Copyright (C) 2026 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+$ cmake --version
+
+cmake version 4.4.4
+
+CMake suite maintained and supported by Kitware (kitware.com/cmake).
+
+$ ninja --version
+
+1.13.2
+
+$ /opt/cuda/bin/nvcc --version
+
+nvcc: NVIDIA (R) Cuda compiler driver
+Copyright (c) 2005-2026 NVIDIA Corporation
+Built on Tue_Sep_01_08:45:21_PDT_2026
+Cuda compilation tools, release 13.4, V13.4.92
+Build cuda_13.4.r13.4/compiler.38855100_0
+
+$ /opt/nvidia/hpc_sdk/Linux_x86_64/26.9/compilers/bin/nvfortran --version
+
+nvfortran 26.9-0 64-bit target on x86-64 Linux -tp znver3
+NVIDIA Compilers and Tools
+Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+
+$ nsys --version
+
+NVIDIA Nsight Systems version 2026.3.2.476-263238834031v0
+
+$ perf --version
+
+perf version 7.2.10-1
+
+$ nvidia-smi --query-gpu=name,uuid,driver_version,compute_cap,memory.total --format=csv
+
+name, uuid, driver_version, compute_cap, memory.total [MiB]
+NVIDIA GeForce RTX 5060 Ti, GPU-b0a38907-d7be-1bbe-e4ee-ee34b2e49902, 615.78.08, 12.0, 16311 MiB
+NVIDIA GeForce RTX 5060 Ti, GPU-ae0ce76b-94b7-f19c-6689-e7730b5b59db, 615.78.08, 12.0, 16311 MiB
+
+$ free -h
+
+total        used        free      shared  buff/cache   available
+Mem:            94Gi        23Gi        23Gi       808Mi        49Gi        71Gi
+Swap:           94Gi       8.3Gi        85Gi
+
+$ uptime
+
+09:23:08 up 1 day, 5 min, 13 users,  load average: 11.35, 14.36, 11.38
+
+$ date -u; uptime; nvidia-smi (mid-campaign snapshot)
+2026-10-18 07:39:22 UTC
+ 09:39:22 up 1 day, 21 min,  8 users,  load average: 8.17, 24.78, 24.75
+index, utilization.gpu [%], memory.used [MiB]
+0, 0 %, 15038 MiB
+1, 0 %, 15115 MiB

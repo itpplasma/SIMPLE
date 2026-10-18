@@ -1,0 +1,18 @@
+{
+  "source_commit": "a2086dffc9db50edaa6c171d50d0dc1649dea173",
+  "executable": "/home/ert/code/SIMPLE-efss-hpc/build-cuda/simple.x",
+  "executable_sha256": "adea282199f1834385d53cb7401957af451104dba5532c6e55b024cb36ecbd20",
+  "wout_sha256": "333ab8cef64c4b4f406e76209266fc3bf4d7976e9c28c162983c2120e112e771",
+  "arguments": {
+    "executable": "build-cuda/simple.x",
+    "wout": "build/evidence/wout.nc",
+    "output": "build/evidence/gpu",
+    "markers": "256",
+    "threads": "[16]",
+    "repetitions": "2",
+    "trace_time": "0.01",
+    "timeout": "300.0",
+    "gpu": "True",
+    "device": "0"
+  }
+}

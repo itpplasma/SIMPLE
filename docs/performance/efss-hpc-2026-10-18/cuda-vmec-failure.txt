@@ -1,0 +1,51 @@
+ERROR STOP native CUDA RK requires initialized compact Boozer tables
+
+Error termination. Backtrace:
+#0  0x7fd08d227602 in ???
+#1  0x7fd08d22848a in ???
+#2  0x7fd08d22a317 in ???
+#3  0x5567ca3c96a9 in __simple_cuda_native_MOD_trace_orbits_cuda_native_landreman
+	at /home/ert/code/SIMPLE-efss-hpc/src/simple_cuda_native.f90:133
+#4  0x5567ca3be38c in __simple_main_MOD_trace_gpu_production
+	at /home/ert/code/SIMPLE-efss-hpc/src/simple_main.f90:1052
+#5  0x5567ca3c30cf in __simple_main_MOD_main
+	at /home/ert/code/SIMPLE-efss-hpc/src/simple_main.f90:308
+#6  0x5567ca3af88e in simple_entry_main_
+	at /home/ert/code/SIMPLE-efss-hpc/src/simple_entry.f90:6
+#7  0x5567ca3af75e in simple
+	at /home/ert/code/SIMPLE-efss-hpc/app/simple.f90:10
+#8  0x5567ca3af75e in main
+	at /home/ert/code/SIMPLE-efss-hpc/app/simple.f90:11
+SIMPLE version v1.5.0-285-gfe2de27
+INFO: Timing system initialized
+  Clock rate (ticks per second):   1000000000
+  Resolution per tick: 1.00E-09 seconds
+  Maximum time before wraparound: 9.22E+09 seconds
+INFO: Configuration reading completed       0.000 s (Total:        0.000 s)
+INFO: Profiles configuration reading completed       0.000 s (Total:        0.000 s)
+ Splining VMEC data: ns_A =            5   ns_s =            5   ns_tp =            5
+ WARNING: axis_healing not set; mapped legacy switches to axis_healing='legacy'. The old_axis_healing*/axis_healing_power_law/axis_healing_polyfit
+          switches are deprecated; set axis_healing='legacy' instead.
+          These switches will become errors in the next SIMPLE release.
+ NOTE: axis_healing='legacy'; 'polyfit' is recommended and will
+       become the default. Please test it.
+ VMEC ns =           50  m_max =            7  n_max =           16
+ R0 =    1022.6570650540332       cm, fper =    3.1415926535897900
+ volume =    586429991.49706388       cm^3,  B_00 =    59080.500729610954       G
+INFO: VMEC initialization completed       0.601 s (Total:        0.601 s)
+INFO: Reference coordinate system initialization completed       0.000 s (Total:        0.601 s)
+INFO: STL wall initialization completed       0.000 s (Total:        0.601 s)
+INFO: Field from file loading completed       0.000 s (Total:        0.601 s)
+ Transforming to Boozer coordinates
+ B_r is not computed
+ done
+INFO: Canonical field initialization completed       0.729 s (Total:        1.330 s)
+INFO: Field initialization completed       0.000 s (Total:        1.330 s)
+INFO: Parameter initialization completed       0.000 s (Total:        1.330 s)
+ tau:    12947.363521932875        50.183579542375483        1.3026159609585090E-014         258
+ v0 =    1294736352.1932876
+ bmod00 =    58985.463533066002      bmin =    55528.642224307448      bmax =    62693.581869843940
+INFO: Sampling field initialization completed       3.900 s (Total:        5.230 s)
+INFO: Particle sampling completed       0.001 s (Total:        5.230 s)
+INFO: Field type initialization completed       0.000 s (Total:        5.230 s)
+INFO: Counter initialization completed       0.000 s (Total:        5.230 s)

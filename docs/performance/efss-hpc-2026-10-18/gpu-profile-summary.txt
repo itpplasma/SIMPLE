@@ -1,0 +1,6 @@
+Generating SQLite file build/evidence/gpu-profile.sqlite from build/evidence/gpu-profile.nsys-rep
+Processing [build/evidence/gpu-profile.sqlite] with [/usr/lib/nsight-systems/target-linux-x64/reports/cuda_gpu_kern_sum.py]...
+SKIPPED: build/evidence/gpu-profile.sqlite does not contain CUDA kernel data.
+
+Processing [build/evidence/gpu-profile.sqlite] with [/usr/lib/nsight-systems/target-linux-x64/reports/cuda_api_sum.py]...
+SKIPPED: build/evidence/gpu-profile.sqlite does not contain CUDA trace data.
