@@ -5,17 +5,17 @@ Error termination. Backtrace:
 #1  0x7fd08d22848a in ???
 #2  0x7fd08d22a317 in ???
 #3  0x5567ca3c96a9 in __simple_cuda_native_MOD_trace_orbits_cuda_native_landreman
-	at /home/ert/code/SIMPLE-efss-hpc/src/simple_cuda_native.f90:133
+	at <checkout>/src/simple_cuda_native.f90:133
 #4  0x5567ca3be38c in __simple_main_MOD_trace_gpu_production
-	at /home/ert/code/SIMPLE-efss-hpc/src/simple_main.f90:1052
+	at <checkout>/src/simple_main.f90:1052
 #5  0x5567ca3c30cf in __simple_main_MOD_main
-	at /home/ert/code/SIMPLE-efss-hpc/src/simple_main.f90:308
+	at <checkout>/src/simple_main.f90:308
 #6  0x5567ca3af88e in simple_entry_main_
-	at /home/ert/code/SIMPLE-efss-hpc/src/simple_entry.f90:6
+	at <checkout>/src/simple_entry.f90:6
 #7  0x5567ca3af75e in simple
-	at /home/ert/code/SIMPLE-efss-hpc/app/simple.f90:10
+	at <checkout>/app/simple.f90:10
 #8  0x5567ca3af75e in main
-	at /home/ert/code/SIMPLE-efss-hpc/app/simple.f90:11
+	at <checkout>/app/simple.f90:11
 SIMPLE version v1.5.0-285-gfe2de27
 INFO: Timing system initialized
   Clock rate (ticks per second):   1000000000

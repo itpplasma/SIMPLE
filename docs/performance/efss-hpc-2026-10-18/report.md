@@ -3,14 +3,16 @@
 ## Scope and provenance
 
 **VERIFIED:** This report measures the unchanged physics sources at SIMPLE
-`fe2de273681642ed1f651d3c14c5e23e398fb458`, on mailuefterl, 2026-10-18.
+`fe2de273681642ed1f651d3c14c5e23e398fb458`, on a shared Linux workstation, 2026-10-18.
 The PR adds measurement tools, results and deployment templates; no `src/`
 file changes. The executable hashes, dependency commits and generated compiler
 flags are in [build-metadata.json](build-metadata.json). Commands and outputs
-below distinguish local execution from deployment proposals.
+below distinguish local execution from deployment proposals. Personal checkout
+paths and device UUIDs in the retained logs and metadata are redacted.
 
-**VERIFIED:** The evidence addresses these requested EUROfusion Standard
-Software v2.2 criteria, without claiming certification:
+The evidence is intended to address the following EUROfusion Standard
+Software v2.2 criteria. The numbered mapping remains to be verified against
+the authoritative framework; no certification is claimed:
 
 | Criterion | Evidence | Limit |
 | --- | --- | --- |
@@ -20,8 +22,8 @@ Software v2.2 criteria, without claiming certification:
 | 1.7, accelerated platforms | Native CUDA build and traced production failure below | VMEC production blocked; no H100 measurements |
 
 The [EUROfusion presentation](https://indico.euro-fusion.org/event/3661/contributions/15444/attachments/7239/12983/WPAC_PB_Oct2025.pdf)
-identifies these criterion numbers and links the v2.2 framework. The
-[Pitagora guide](https://docs.hpc.cineca.it/hpc/pitagora.html) supplies the
+links the v2.2 framework on slide 23 but does not reproduce the numbered
+criteria. The [Pitagora guide](https://docs.hpc.cineca.it/hpc/pitagora.html) supplies the
 partition specifications used by the templates.
 
 ## Machine and build
@@ -103,15 +105,16 @@ marker count. Calibration runs are excluded from the retained scaling means.
 
 ## Reproduce
 
-**VERIFIED:** The following are the build and measurement commands used,
-with the input URL and libneo ref pinned for reproduction. Run from the
+The following commands reproduce the build and measurement protocol,
+with the input URL and libneo ref pinned explicitly through `FLAGS`. Run from the
 repository root; all generated files remain inside this worktree. The Python
 scripts require NumPy and Matplotlib. Initial builds completed with exit 0.
 
 ```bash
+export CC=gcc CXX=g++ FC=gfortran
 export CMAKE_BUILD_PARALLEL_LEVEL=16 OPENBLAS_NUM_THREADS=1
-make CONFIG=Release LIBNEO_REF=f6090e8150c2f5b1c0afde09baadf79b50b1ffe7 \
-  FLAGS='-DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF -DSIMPLE_ENABLE_CUDA=OFF -DSIMPLE_DETERMINISTIC_FP=OFF'
+make CONFIG=Release \
+  FLAGS='-DLIBNEO_REF=f6090e8150c2f5b1c0afde09baadf79b50b1ffe7 -DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF -DSIMPLE_ENABLE_CUDA=OFF -DSIMPLE_DETERMINISTIC_FP=OFF'
 cmake -S . -B build-cuda -G Ninja -DCMAKE_BUILD_TYPE=Release \
   -DSIMPLE_ENABLE_CUDA=ON -DSIMPLE_DETERMINISTIC_FP=OFF -DCMAKE_CUDA_ARCHITECTURES=120 \
   -DCMAKE_CUDA_COMPILER=/opt/cuda/bin/nvcc \
@@ -224,8 +227,11 @@ Nsight Systems 2026.3.2 reproduced the same pre-kernel failure.
 [Its summary](gpu-profile-summary.txt) reports no CUDA kernel data and no CUDA
 API trace data. Thus GPU markers/s, CPU/GPU physical agreement and GPU hot
 spots for this VMEC configuration are **not measured**. The compare tool's
-paired tolerance (two marker statuses, 2/N) is unit-tested but is not claimed
-as an executed VMEC CPU/GPU comparison.
+aggregate engineering threshold (2/N for each fraction curve) is unit-tested
+but is not claimed as an executed VMEC CPU/GPU comparison. Confinement is
+normalized to resolved markers; unresolved fractions use the full ensemble.
+This threshold does not bound the number of paired marker-status changes
+and is not a statistical confidence bound.
 
 ```bash
 perf record -e cycles:u -F 99 -o build/evidence/cpu-profile.data -- \
@@ -274,8 +280,8 @@ identified by the recorded hashes. No golden records were regenerated.
 
 ```bash
 CMAKE_BUILD_PARALLEL_LEVEL=16 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=4 OMP_THREAD_LIMIT=4 \
-  make test CONFIG=Release LIBNEO_REF=f6090e8150c2f5b1c0afde09baadf79b50b1ffe7 \
-  FLAGS='-DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF' \
+  make test CONFIG=Release \
+  FLAGS='-DLIBNEO_REF=f6090e8150c2f5b1c0afde09baadf79b50b1ffe7 -DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF' \
   TEST='test_config_reference|test_orbit_symplectic_base|test_ntcut_overflow'
 CUDA_VISIBLE_DEVICES=0 CMAKE_BUILD_PARALLEL_LEVEL=16 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=4 OMP_THREAD_LIMIT=4 \
   make test CONFIG=Release BUILD_DIR=build-cuda \
@@ -285,7 +291,7 @@ python -m unittest discover -s tools/perf -p test_efss_scaling.py
 bash -n examples/hpc/pitagora/dcgp.slurm examples/hpc/pitagora/booster.slurm
 ```
 
-The five tool tests pass; Slurm scripts pass shell syntax checks only. Both
+The nine tool tests pass; Slurm scripts pass shell syntax checks only. Both
 Matplotlib PNGs were rendered and visually inspected. `git diff --check` passes.
 The full regression/slow/Python suites were not run for this evidence-only
 change. The measurement window, including calibrations and the failed GPU

@@ -1,3 +1,4 @@
+# Device UUIDs redacted; software and hardware specifications retained.
 $ uname -sr
 
 Linux 7.2.10-arch1-1
@@ -58,8 +59,8 @@ perf version 7.2.10-1
 $ nvidia-smi --query-gpu=name,uuid,driver_version,compute_cap,memory.total --format=csv
 
 name, uuid, driver_version, compute_cap, memory.total [MiB]
-NVIDIA GeForce RTX 5060 Ti, GPU-b0a38907-d7be-1bbe-e4ee-ee34b2e49902, 615.78.08, 12.0, 16311 MiB
-NVIDIA GeForce RTX 5060 Ti, GPU-ae0ce76b-94b7-f19c-6689-e7730b5b59db, 615.78.08, 12.0, 16311 MiB
+NVIDIA GeForce RTX 5060 Ti, <redacted-device-uuid>, 615.78.08, 12.0, 16311 MiB
+NVIDIA GeForce RTX 5060 Ti, <redacted-device-uuid>, 615.78.08, 12.0, 16311 MiB
 
 $ free -h
 

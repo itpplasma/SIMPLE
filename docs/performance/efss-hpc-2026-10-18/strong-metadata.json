@@ -1,6 +1,6 @@
 {
   "source_commit": "a2086dffc9db50edaa6c171d50d0dc1649dea173",
-  "executable": "/home/ert/code/SIMPLE-efss-hpc/build/simple.x",
+  "executable": "<checkout>/build/simple.x",
   "executable_sha256": "af055967a45eedf13255c81ff27360a0f21f03ecfef6a215591c3e70d7b59f97",
   "wout_sha256": "333ab8cef64c4b4f406e76209266fc3bf4d7976e9c28c162983c2120e112e771",
   "arguments": {
