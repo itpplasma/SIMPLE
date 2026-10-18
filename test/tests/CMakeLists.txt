@@ -386,6 +386,17 @@ add_test(NAME test_config_reference
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_config_reference PROPERTIES LABELS "unit")
 
+add_test(NAME test_input_reference
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/generate_input_reference.py
+        --root ${CMAKE_SOURCE_DIR} --libneo-source ${libneo_SOURCE_DIR} --check)
+set_tests_properties(test_input_reference PROPERTIES LABELS "unit;python"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+add_test(NAME test_input_validation
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/test_input_validation.py)
+set_tests_properties(test_input_validation PROPERTIES LABELS "unit;python"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 add_executable(test_finite_check.x test_finite_check.f90)
 target_link_libraries(test_finite_check.x simple)
 add_test(NAME test_finite_check COMMAND test_finite_check.x)
