@@ -100,18 +100,65 @@ The current `WallHeatMap.from_netcdf` reader selects `class_lost`, so ordinary
 STL tracing results need direct selection with `wall_hit` for heat-load
 post-processing. The regression CSV supplies the hit energy weights directly.
 
-The registered `test_collisional_stl_wall` case uses 256 3.5 MeV alphas,
-the NCSX coil fixture, and an STL triangulated from the boundary of
-the map2disc chart extended by 0.1 m, contracted 5% toward the chart axis
-to leave a field-domain buffer around the planar facets. It uses enhanced flat
-densities and 1 keV temperatures to resolve slowing down in a short trace;
-this is a regression fixture, not a reactor prediction. With Python tools,
+The registered `test_collisional_stl_wall` case uses 192 helium-4 markers at
+35 keV (`facE_al = 100`) and a test-only copy of the public NCSX coils with
+currents multiplied by 3.3. Scaling the current preserves the vacuum field-line
+geometry. Lowering the marker energy keeps the gyroradius small without an
+unrealistically large field: direct Biot–Savart evaluation at the VMEC axis
+at toroidal angle zero gives 5.228 T. With the fixture's VMEC minor radius
+$a = 0.3226$ m, the worst-pitch birth gyroradius is 5.17 mm,
+$\rho_L/a = 0.0160$. The 0.528 T `bmod00` printed during VMEC sampling belongs
+to the auxiliary equilibrium, rather than the scaled coil field used for tracing.
+
+The STL comes from the map2disc chart extended by 0.1 m, contracted 5% toward
+the chart axis to leave a field-domain buffer around its planar facets. Starts
+use the chart-grid ring near $\rho = 0.25$; this geometric radius is not a flux
+label. An independent VMEC Fourier-boundary check verifies all 33 poloidal
+points on all 33 toroidal slices lie inside the LCFS, with at least 4.13 cm
+clearance. Markers sample only those checked grid points. The seeded birth pitch is uniform
+in $[-0.2, 0.2]$, selecting trapped orbits rather than prompt passing losses.
+
+The stored collisionless reference is 21 hits (tolerance two markers), with
+mean hit time 237.55 $\mu$s (3% tolerance). Reference hits span 81.40 to
+420.45 $\mu$s, beyond ten birth-speed reference transits.
+
+The fixture profiles and time scales are:
+
+| Quantity | Value |
+|----------|-------|
+| Flat electron, deuterium and tritium temperatures | 1 keV each |
+| Flat deuterium and tritium densities | $2.5\times10^{20}$ m$^{-3}$ each |
+| Electron density from quasineutrality | $5\times10^{20}$ m$^{-3}$ |
+| Birth momentum drag `slowrate` | 774.27 s$^{-1}$ |
+| Birth relaxation scale $\tau_s = 1/\mathrm{slowrate}$ | 1.292 ms |
+| Trace time | 0.5 ms, or $0.387\tau_s$ |
+| Reference toroidal transit time $2\pi R_0/v_0$ | about 7 $\mu$s |
+
+The rate uses the implemented collision coefficients at $p=1$, including both
+ion species and electrons. Constant power-series coefficients make it uniform
+throughout the chart. A fraction of the birth relaxation time resolves slowing
+down while the markers remain suprathermal; the trace spans about 71 reference
+transit times. Hits must occur after ten reference transit times, and the
+slowing-down check selects hits after twenty. These reference times use the
+birth speed, rather than each marker's pitch-dependent bounce period. This is
+a guiding-centre regression fixture, not a reactor prediction.
+
+Cylindrical chartmaps must retain the full toroidal angle in Cartesian
+positions and bases. The fix in [libneo #429](https://github.com/itpplasma/libneo/pull/429)
+prevents a field-period seam from creating a vessel-length segment and a false
+wall hit. The CGAL CI job pins that fix; use the same revision below.
+The adaptive RK tolerance remains $10^{-9}$. There are 64 wall-check and
+collision-kick intervals per reference transit (about 0.11 $\mu$s per kick,
+less than $10^{-4}\tau_s$). A 128-interval collisionless subset checks hit-time
+and position convergence independently of the stored collisionless reference.
+
+With Python tools,
 map2disc, NumPy and netCDF4 available, run (the exercised map2disc environment
 used NumPy 2.2.6 and SciPy 1.16.3):
 
 ```sh
 CMAKE_BUILD_PARALLEL_LEVEL=8 make test CONFIG=Fast \
-  FLAGS='-DSIMPLE_ENABLE_CGAL=ON -DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=ON' \
+  FLAGS='-DSIMPLE_ENABLE_CGAL=ON -DENABLE_PYTHON_INTERFACE=ON -DSIMPLE_ENABLE_PYTHON_TOOLS=ON -DLIBNEO_REF=6be03a4da4f37873c852ff54d28682942d96e24e' \
   TEST=test_collisional_stl_wall
 ```
 
