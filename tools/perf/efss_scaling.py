@@ -133,7 +133,7 @@ def main():
     parser.add_argument("--executable", type=Path, default=Path("build/simple.x"))
     parser.add_argument("--wout", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--markers", type=int, default=128)
+    parser.add_argument("--markers", type=int, default=256)
     parser.add_argument("--threads", type=int, nargs="+", default=[1, 2, 4, 8, 16])
     parser.add_argument("--repetitions", type=int, default=2)
     parser.add_argument("--trace-time", type=float, default=0.01)

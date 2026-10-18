@@ -38,7 +38,7 @@ def main():
         axis.set_xticks(threads, labels=[str(t) for t in threads])
         axis.set_xlabel('OpenMP threads')
         axis.grid(alpha=.25)
-    fig.suptitle('SIMPLE: 128 seeded markers, public QA equilibrium, 10 ms orbits')
+    fig.suptitle(f'SIMPLE: {int(rows["markers"][0])} markers, whole-process wall time')
     fig.savefig(args.output, dpi=130)
 
 
