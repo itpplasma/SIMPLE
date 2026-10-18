@@ -180,6 +180,21 @@ def test_native_actor_particle_and_energy_totals(circular_chartmap, tmp_path):
                                   d.markers[1].positions)
 
 
+def test_actor_rejects_invalid_resolved_native_output(circular_chartmap, monkeypatch):
+    import pysimple
+    native_trace = pysimple.trace_parallel
+
+    def corrupt_final_state(*args, **kwargs):
+        result = native_trace(*args, **kwargs)
+        # A native LCFS/completion code alone does not guarantee valid states.
+        result["final_positions"][0, 0] = 2.0
+        return result
+
+    monkeypatch.setattr(pysimple, "trace_parallel", corrupt_final_state)
+    with pytest.raises(RuntimeError, match="Invalid final states"):
+        run(source(), field=circular_chartmap, duration=1e-6)
+
+
 def test_database_actor_and_core_profiles(tmp_path):
     input_path, output_path = tmp_path/"input.nc", tmp_path/"output.nc"
     alpha = read_markers(source(rate=True))[0]
