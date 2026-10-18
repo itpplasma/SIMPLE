@@ -191,3 +191,120 @@ The velocity ratio `zend[3]` = $p = v/v_0$ is crucial for energy weighting.
    https://doi.org/10.1088/0029-5515/54/7/073002
 
 5. **BEAMS3D code documentation**: https://princetonuniversity.github.io/STELLOPT/BEAMS3D
+
+## Heat loads on STL triangles
+
+`pysimple.wall_heat_load.TriangleHeatLoad` uses the engineering mesh directly.
+Pure post-processing imports work without the compiled SIMPLE backend; calling
+the tracing API still requires it.
+`pysimple.engineering.WallHeatMap` remains available for flux-coordinate bins.
+Build SIMPLE with `SIMPLE_ENABLE_CGAL=ON`, set `wall_input` and `wall_units`
+(`m` or `mm`; surrounding spaces and upper-case letters are accepted), and
+enable `output_results_netcdf`.
+
+The results then contain `wall_hit_triangle(particle)`: the **zero-based facet
+index in STL file order**, with `-1` for markers without an STL hit. Its
+`start_index=0`, `stl_file`, and `stl_facet_count` attributes identify the
+convention, source mesh, and original number of facets (including zero-area
+facets). The global `wall_units` attribute gives the STL length unit. Use the
+same STL with its facet order unchanged; no mesh welding, repair, or reordering is
+performed. Facets are no longer reoriented: `wall_hit_normal_cart` follows
+the STL vertex winding, which need not point outward. The loader checks the
+recorded filename (basename, allowing files to be relocated) and facet count.
+Older results without `stl_facet_count` retain the basename-only check. No
+content hash is recorded; replacing or reordering a mesh with the same name
+and count cannot be detected. Always supply the original STL.
+
+Only `wall_hit == 1` contributes to the mesh load. Other losses in `class_lost`
+are not assigned to triangles. `zend` supplies the final normalized speed
+`p_i = v_i/v0`; thus collisional slowing down contributes its final energy
+fraction `e_i = p_i**2` without requiring a different postprocessor.
+
+For nonnegative marker weights `w_i`, total source alpha power `P_alpha`, and
+triangle area `A_j` in square meters, the deposited power and flux are
+
+$$
+P_j = P_\alpha\frac{\sum_{i:\,\mathrm{hit}(i)=j} w_i p_i^2}
+                            {\sum_{i=1}^{N}w_i},\qquad
+q_j = P_j/A_j.
+$$
+
+The denominator includes **all source markers**, including confined markers
+and losses that did not hit the STL. Equal weights give the usual `1/N`
+normalization. Supply weights through `marker_weights` (one per source marker)
+or a `marker_weight(particle)` NetCDF variable; otherwise all weights are one.
+The explicit array takes precedence. These are relative source-power weights,
+not absolute watts or weights already multiplied by the final energy. SIMPLE's
+current equal-marker output does not write a `marker_weight` variable.
+
+Weight one is power-correct only when births are sampled in proportion to the
+physical alpha source, as in the source-weighted births of PR #544
+(`startmode = 7`). Other startmodes do not automatically represent that source
+with equal weights; supply appropriate source-power weights. Merely using
+`1/N` for those modes does not establish a physical wall heat load.
+
+This normalization assumes a common reference birth energy `E0` and
+`v0 = sqrt(2 E0/m)`, so `p_i**2 = E_final/E0`. Mixed birth-energy sources need
+a separate source-energy convention and are not handled automatically. The
+loader reads momentum by the named `phase` dimension, including the native
+NetCDF layout `(particle, phase)` seen by Python.
+
+The sum of triangle powers is the deposited fraction of source alpha power;
+it equals the full input power only when all source power reaches the wall
+without slowing down. No incidence cosine is applied to `q_j`: marker power is
+already deposited on the actual triangle area, rather than a projected area.
+
+```python
+from pysimple.wall_heat_load import TriangleHeatLoad
+
+load = TriangleHeatLoad.from_netcdf(
+    "results.nc", "wall.stl", total_alpha_power_MW=600.0,
+)
+print(load.summary(threshold_W_m2=1e5))
+load.to_vtk("wall_heat.vtk")
+load.to_netcdf("wall_heat.nc")
+load.to_stl("wall_heat.stl")  # also writes wall_heat.stl.nc
+```
+
+`power_W`, `power_density_W_m2`, and `hit_count` have one entry per STL facet.
+`power_density_per_MW` is the flux in W/m² for **one MW of source alpha power**:
+`1e6 * sum(w_i * p_i**2) / (sum(w_i) * A_j)`. Divide by `1e6` for
+MW/m² per MW. All exported geometry is in meters.
+
+Zero-area facets retain their original indices and have zero power and flux
+when unhit. They add no area to the metrics. A recorded hit on a zero-area
+facet raises an error, even when its marker weight is zero. The CGAL query
+tree excludes zero-area facets while preserving the remaining file-order IDs;
+the STL export writes zero normals for them.
+
+The metrics use these definitions:
+
+- `peak_W_m2`: maximum triangle flux.
+- `p95_W_m2`: area-weighted 95th percentile over the entire mesh, including
+  unhit facets. Sort fluxes and select the first whose cumulative area reaches
+  95% of total area. This avoids weighting tiny and large facets equally.
+- `wetted_area_m2(threshold_W_m2)`: summed area strictly above the threshold;
+  the default zero threshold counts positive deposition only.
+- `incidence_distribution(bins=18)`: hit counts and deposited watts in angle
+  bins spanning `[0, pi/2]` radians. Zero is normal incidence. These are the
+  recorded guiding-center chord angles relative to the facet normal, not
+  gyrophase-resolved particle velocities.
+
+VTK exports the original facets as cells with `triangle_index`, `area_m2`,
+`hit_count`, `power_W`, `power_density_W_m2`, and
+`power_density_W_m2_per_MW` arrays for ParaView. NetCDF exports those arrays and
+`vertices(triangle, vertex, xyz)` for indexed engineering-tool import. STL has
+no standard scalar cell-data representation, so `to_stl` writes geometry plus
+a `.stl.nc` sidecar carrying the same facet ordering and fields. A GECKO workflow
+can use the STL geometry and join the sidecar fields by `triangle_index`;
+automatic import into a particular GECKO version is not provided.
+
+No smoothing is applied. Sparse hits on small triangles can produce large
+statistical peaks; inspect `hit_count` and convergence with marker count.
+Material response and finite Larmor radius corrections are outside this API.
+
+For a small reproducible example, the CGAL `test_stl_wall_intersection` test
+writes `tetra_m.stl` and `tetra_wall_results.nc` in the test build directory.
+It records one hit on each of four tetrahedron facets and one no-hit marker.
+The Python `test_triangle_heat_load` integration test consumes that fixture
+and checks the hit count, triangle indices, hit planes, and deposited power.
