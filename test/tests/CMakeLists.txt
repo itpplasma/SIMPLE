@@ -396,17 +396,30 @@ foreach(case IN ITEMS flat peaked power negative_density zero_source invalid_bou
     set_tests_properties(test_fusion_${case} PROPERTIES LABELS "unit"
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/fusion_${case})
 endforeach()
-set_tests_properties(test_fusion_negative_density test_fusion_zero_source
-    test_fusion_invalid_bounds test_fusion_invalid_grid test_fusion_hot_profile
-    test_fusion_nonfinite PROPERTIES WILL_FAIL TRUE)
+set_tests_properties(test_fusion_negative_density PROPERTIES
+    PASS_REGULAR_EXPRESSION "fusion source: negative profiles")
+set_tests_properties(test_fusion_zero_source PROPERTIES
+    PASS_REGULAR_EXPRESSION "fusion source: total birth rate must be finite and positive")
+set_tests_properties(test_fusion_invalid_bounds PROPERTIES
+    PASS_REGULAR_EXPRESSION "fusion source: require 0 <= s_inner < s_outer <= 1")
+set_tests_properties(test_fusion_invalid_grid PROPERTIES
+    PASS_REGULAR_EXPRESSION "fusion source: grid dimensions must be in")
+set_tests_properties(test_fusion_hot_profile PROPERTIES
+    PASS_REGULAR_EXPRESSION "fusion source: ion temperature outside")
+set_tests_properties(test_fusion_nonfinite PROPERTIES
+    PASS_REGULAR_EXPRESSION "fusion source: nonfinite profiles")
 
 add_executable(test_fusion_birth_equilibrium.x test_fusion_birth_equilibrium.f90)
 target_link_libraries(test_fusion_birth_equilibrium.x simple)
 add_dependencies(test_fusion_birth_equilibrium.x generate_test_boozer_chartmap)
-foreach(case IN ITEMS vmec chartmap annulus trace bad_energy)
+set(fusion_equilibrium_cases vmec vmec_peaked chartmap annulus trace bad_energy)
+if(ENABLE_OPENMP)
+    list(APPEND fusion_equilibrium_cases vmec_parallel chartmap_parallel)
+endif()
+foreach(case IN LISTS fusion_equilibrium_cases)
     file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/fusion_${case})
     set(fusion_input ${WOUT_FILE})
-    if(case STREQUAL "chartmap")
+    if(case MATCHES "^chartmap")
         set(fusion_input ${CMAKE_CURRENT_BINARY_DIR}/test_boozer_chartmap.nc)
     endif()
     add_test(NAME test_fusion_${case}
@@ -415,7 +428,8 @@ foreach(case IN ITEMS vmec chartmap annulus trace bad_energy)
         TIMEOUT 120 ENVIRONMENT "OMP_NUM_THREADS=1"
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/fusion_${case})
 endforeach()
-set_tests_properties(test_fusion_bad_energy PROPERTIES WILL_FAIL TRUE)
+set_tests_properties(test_fusion_bad_energy PROPERTIES
+    PASS_REGULAR_EXPRESSION "fusion births require 3.5 MeV alphas")
 
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/start_integration_coordinates)
 add_executable(test_start_integration_coordinates.x

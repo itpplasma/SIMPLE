@@ -175,6 +175,9 @@ contains
         open (newunit=unit, file='alpha_source.dat', status='replace')
         write (unit, '(a)') '# Equal-weight D-T births; rows of start.dat are markers.'
         write (unit, '(a)') '# Midpoint source cells, uniform positions within cells.'
+        write (unit, '(a)') '# alpha_power_W uses 3.5 MeV per alpha, not 3.52 MeV.'
+        write (unit, '(a,es24.16)') 'alpha_energy_MeV ', &
+            alpha_energy_joule/1.602176634e-13_dp
         write (unit, '(a,es24.16)') 'alpha_power_W ', power
         write (unit, '(a,es24.16)') 'alpha_birth_rate_per_s ', power/alpha_energy_joule
         write (unit, '(a,es24.16)') 'marker_rate_per_s ', power/alpha_energy_joule/n

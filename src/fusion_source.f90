@@ -57,9 +57,14 @@ contains
         n = product(grid)
         allocate (cdf(0:n))
         cdf(0) = 0.0_dp
-        k = 0
         ! Full torus, not one field period. magfie Jacobian is in cm^3.
         cell_volume = (shi - slo)*(2.0_dp*pi)**2/real(n, dp)*1.0e-6_dp
+        ! Sampling backends read initialized VMEC/Boozer spline tables. Midpoints
+        ! have s > 0, so Boozer's negative-radius flag is never written here.
+        !$omp parallel do default(none) schedule(static) &
+        !$omp shared(slo, shi, grid, cdf, cell_volume, magfie) &
+        !$omp private(ir, it, iz, k, x, te, td, tt, nd, nt, source, &
+        !$omp jac, bmod, bder, hcov, hctr, hcurl)
         do ir = 1, grid(1)
             x(1) = slo + (shi - slo)*(real(ir, dp) - 0.5_dp)/grid(1)
             call get_plasma_params(x(1), te, td, tt, nd, nt)
@@ -76,10 +81,16 @@ contains
                     call magfie(x, bmod, jac, bder, hcov, hctr, hcurl)
                     if (.not. is_finite(jac)) &
                         error stop 'fusion source: nonfinite volume Jacobian'
-                    k = k + 1
-                    cdf(k) = cdf(k - 1) + source*abs(jac)*cell_volume
+                    k = ((ir - 1)*grid(2) + it - 1)*grid(3) + iz
+                    cdf(k) = source*abs(jac)*cell_volume
                 end do
             end do
+        end do
+        !$omp end parallel do
+        ! Keep the prefix sum ordered: thread count cannot change cell masses
+        ! or their accumulation order, including for fixed-seed sampling.
+        do k = 1, n
+            cdf(k) = cdf(k - 1) + cdf(k)
         end do
         if (.not. is_finite(cdf(n)) .or. cdf(n) <= 0.0_dp) &
             error stop 'fusion source: total birth rate must be finite and positive'

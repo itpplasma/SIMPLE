@@ -43,7 +43,7 @@ program test_fusion_source
         ni1_scale = 0.0_dp
     case ('invalid_bounds')
         call build_birth_cdf(0.5_dp, 0.2_dp, grid, cdf, power)
-        stop ! WILL_FAIL test must fail if invalid inputs return normally.
+        stop ! The registered test requires the intended diagnostic.
     case ('invalid_grid')
         grid(1) = 0
     case ('hot_profile')
@@ -75,7 +75,7 @@ program test_fusion_source
     call build_birth_cdf(0.0_dp, 1.0_dp, grid, cdf, power)
     select case (trim(mode))
     case ('negative_density', 'zero_source', 'invalid_grid', 'hot_profile', 'nonfinite')
-        stop ! Returning normally makes the registered WILL_FAIL test fail.
+        stop ! Returning normally omits the required diagnostic.
     end select
     if (trim(mode) == 'power') then
         ! Independent composite Simpson quadrature (10000 radial intervals);

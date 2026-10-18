@@ -6,9 +6,12 @@ fit together.
 
 Update this file when coordinates or field-loading paths change.
 
-Fusion birth sampling (`startmode = 7`) uses the sampling field's physical
-volume Jacobian: VMEC `(s,theta,phi)` for VMEC input, or integration Boozer
-`(s,theta_B,zeta_B)` for Boozer chartmaps. It converts chartmap starts to
+Fusion birth sampling (`startmode = 7`) uses the VMEC volume Jacobian in
+`(s,theta,phi)` for VMEC input, or the field-derived Boozer Jacobian
+`torflux*(iota*B_theta+B_zeta)/B^2` in integration `(s,theta_B,zeta_B)` for
+Boozer chartmaps. The latter is a physical volume element only when the
+chart geometry and field data are Boozer-consistent; this consistency is
+not checked at load time. It converts chartmap starts to
 reference coordinates only after sampling; profile arguments remain toroidal
 flux `s`, not reference `sqrt(s)`. See [alpha births](../docs/alpha-birth.md)
 for source-grid resolution, units, supported inputs and marker normalization.
