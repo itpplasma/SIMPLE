@@ -41,6 +41,7 @@ class ChangedLineGate(unittest.TestCase):
         self.git("init", "-q")
         self.git("config", "user.name", "Lint test")
         self.git("config", "user.email", "lint@example.invalid")
+        self.git("config", "commit.gpgsign", "false")
         shutil.copy(ROOT / ".fprettify", self.repo)
         (self.repo / "tools").mkdir()
         self.python = self.repo / "tools" / "legacy ü space.py"
