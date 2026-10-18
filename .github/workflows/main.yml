@@ -175,7 +175,7 @@ jobs:
         run: |
           make clean
           # Full-torus cylindrical chartmaps: itpplasma/libneo#429.
-          REF="${{ inputs.libneo_ref || 'f1a65a6bbc0c75ebeb37bb80572a7d27fe11afd7' }}"
+          REF="${{ inputs.libneo_ref || 'a816f928b8dcf2211db81e710b92f0f3d10fe0b5' }}"
           make test CONFIG=Fast \
             FLAGS="-DSIMPLE_ENABLE_CGAL=ON -DENABLE_PYTHON_INTERFACE=ON -DSIMPLE_ENABLE_PYTHON_TOOLS=ON -DLIBNEO_REF=$REF" \
             TEST='test_chartmap_metadata|test_stl_wall_intersection|test_collisional_stl_wall|test_triangle_heat_load'
