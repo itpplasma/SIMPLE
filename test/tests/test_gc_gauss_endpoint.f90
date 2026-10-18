@@ -4,13 +4,13 @@ program test_gc_gauss_endpoint
     use field_can_mod, only: field_can_t, evaluate, get_val
     use field_can_test, only: evaluate_test
     use orbit_symplectic_base, only: symplectic_integrator_t, sympl_rmax, &
-        GAUSS1, SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+                              GAUSS1, SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN
     use orbit_symplectic, only: orbit_sympl_init, &
-        orbit_timestep_sympl_rk_gauss, reconstruct_gauss_endpoint
+                               orbit_timestep_sympl_rk_gauss, reconstruct_gauss_endpoint
     implicit none
     real(dp), parameter :: mu = 0.2_dp, ro0 = 0.01_dp
     real(dp), parameter :: start(4) = [0.2_dp, 0.7_dp, 0.3_dp, &
-        0.4_dp*(1 + 0.2_dp*cos(0.7_dp)) - (0.2_dp**2/2 - 0.2_dp**4)/ro0]
+                        0.4_dp*(1 + 0.2_dp*cos(0.7_dp)) - (0.2_dp**2/2 - 0.2_dp**4)/ro0]
     integer :: stages, substeps, level, status, k, rejected
     type(field_can_t) :: f, initial, target, saved_field
     type(symplectic_integrator_t) :: si, saved
@@ -29,8 +29,8 @@ program test_gc_gauss_endpoint
         do substeps = 1, 3, 2
             do level = 1, 3
                 f = initial
-                call orbit_sympl_init(si, f, start, 0.4_dp/2**(level-1), &
-                    substeps, 1e-13_dp, GAUSS1 + stages - 1)
+                call orbit_sympl_init(si, f, start, 0.4_dp/2**(level - 1), &
+                                      substeps, 1e-13_dp, GAUSS1 + stages - 1)
                 call orbit_timestep_sympl_rk_gauss(si, f, stages, status)
                 if (status /= SYMPLECTIC_STEP_OK) error stop 'Gauss interior step'
                 call analytic_values(si%z, physical_pth, physical_h)
