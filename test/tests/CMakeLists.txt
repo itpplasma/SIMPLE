@@ -387,6 +387,36 @@ target_link_libraries(test_profiles.x simple)
 add_test(NAME test_profiles COMMAND test_profiles.x)
 set_tests_properties(test_profiles PROPERTIES LABELS "unit")
 
+add_executable(test_fusion_source.x test_fusion_source.f90)
+target_link_libraries(test_fusion_source.x simple)
+foreach(case IN ITEMS flat peaked power negative_density zero_source invalid_bounds
+        invalid_grid hot_profile nonfinite)
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/fusion_${case})
+    add_test(NAME test_fusion_${case} COMMAND test_fusion_source.x ${case})
+    set_tests_properties(test_fusion_${case} PROPERTIES LABELS "unit"
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/fusion_${case})
+endforeach()
+set_tests_properties(test_fusion_negative_density test_fusion_zero_source
+    test_fusion_invalid_bounds test_fusion_invalid_grid test_fusion_hot_profile
+    test_fusion_nonfinite PROPERTIES WILL_FAIL TRUE)
+
+add_executable(test_fusion_birth_equilibrium.x test_fusion_birth_equilibrium.f90)
+target_link_libraries(test_fusion_birth_equilibrium.x simple)
+add_dependencies(test_fusion_birth_equilibrium.x generate_test_boozer_chartmap)
+foreach(case IN ITEMS vmec chartmap annulus trace bad_energy)
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/fusion_${case})
+    set(fusion_input ${WOUT_FILE})
+    if(case STREQUAL "chartmap")
+        set(fusion_input ${CMAKE_CURRENT_BINARY_DIR}/test_boozer_chartmap.nc)
+    endif()
+    add_test(NAME test_fusion_${case}
+        COMMAND test_fusion_birth_equilibrium.x ${fusion_input} ${case})
+    set_tests_properties(test_fusion_${case} PROPERTIES LABELS "integration"
+        TIMEOUT 120 ENVIRONMENT "OMP_NUM_THREADS=1"
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/fusion_${case})
+endforeach()
+set_tests_properties(test_fusion_bad_energy PROPERTIES WILL_FAIL TRUE)
+
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/start_integration_coordinates)
 add_executable(test_start_integration_coordinates.x
     test_start_integration_coordinates.f90)
