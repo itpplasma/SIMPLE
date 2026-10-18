@@ -39,6 +39,7 @@
     orbit_symplectic_base.f90
     orbit_symplectic_quasi.f90
     orbit_symplectic_euler1.f90
+    orbit_symplectic_darboux.f90
     orbit_rk_core.f90
     orbit_symplectic.f90
     orbit_fo_field.f90

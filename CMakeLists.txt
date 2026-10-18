@@ -572,6 +572,14 @@ target_link_libraries(diag_newton.x PRIVATE simple)
 target_link_libraries(diag_orbit.x PRIVATE simple)
 target_link_libraries(diag_traj.x PRIVATE simple)
 set_target_properties(diag_traj.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+
+# Near-axis p_theta structure per field source (Darboux chart prerequisite).
+add_executable(diag_darboux_axis_fields.x
+    tools/diag/darboux/diag_darboux_axis_fields.f90)
+target_compile_options(diag_darboux_axis_fields.x PRIVATE ${SIMPLE_COMPILE_OPTIONS})
+target_link_libraries(diag_darboux_axis_fields.x PRIVATE simple)
+set_target_properties(diag_darboux_axis_fields.x PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set_target_properties(diag_meiss.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set_target_properties(diag_albert.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set_target_properties(diag_newton.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})

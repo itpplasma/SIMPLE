@@ -5,7 +5,7 @@ use magfie_sub, only : TEST, CANFLUX, BOOZER, MEISS, ALBERT, SPECTRE
 use field, only : magnetic_field_t, vmec_field_t, create_vmec_field
 use field_can_base, only : twopi, evaluate_base => evaluate, coordinate_transform, &
   identity_transform, field_can_t
-use field_can_test, only : evaluate_test
+use field_can_test, only : evaluate_test, evaluate_test_s
 use field_can_flux, only : evaluate_flux, integ_to_ref_flux, ref_to_integ_flux
 use field_can_boozer, only : evaluate_boozer, integ_to_ref_boozer, ref_to_integ_boozer, &
   integ_to_ref_boozer_chartmap, ref_to_integ_boozer_chartmap
@@ -50,6 +50,10 @@ subroutine field_can_from_name(field_name, field_noncan, n_r, n_th, n_phi, &
       call cleanup_albert
       call cleanup_meiss
       evaluate => evaluate_test
+    case("test_s")
+      call cleanup_albert
+      call cleanup_meiss
+      evaluate => evaluate_test_s
     case("flux")
       call cleanup_albert
       call cleanup_meiss

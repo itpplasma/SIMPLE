@@ -6,7 +6,7 @@ use field_can_mod, only: field_can_t, get_val, get_derivatives, get_derivatives2
   eval_field => evaluate
 use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
   RK45, EXPL_IMPL_EULER, IMPL_EXPL_EULER, MIDPOINT, GAUSS1, GAUSS2, GAUSS3, GAUSS4, &
-  LOBATTO3, S_MAX, orbit_timestep_sympl_i, extrap_field, sympl_rmax, &
+  LOBATTO3, DARBOUX_MIDPOINT, S_MAX, orbit_timestep_sympl_i, extrap_field, sympl_rmax, &
   coeff_rk_gauss, coeff_rk_lobatto, f_rk_lobatto, &
   SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN, &
   SYMPLECTIC_STEP_MAXITER, SYMPLECTIC_STEP_LINEAR_SOLVE, &
@@ -19,6 +19,7 @@ use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_expl_impl_euler
 use orbit_symplectic_euler1, only: sympl_euler1_residual, sympl_euler1_jacobian, &
   sympl_euler1_newton_iter, sympl_euler1_extrapolate_field, &
   sympl_euler1_advance_angles
+use orbit_symplectic_darboux, only: orbit_timestep_sympl_darboux_midpoint
 use orbit_rk_core, only: rk_gauss_residual, rk_gauss_jacobian, MODEL_GC
 use vector_potentail_mod, only: torflux
 use lapack_interfaces, only: dgesv
@@ -273,6 +274,9 @@ recursive subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
     case (LOBATTO3)
       raw_timestep_sympl => orbit_timestep_sympl_lobatto3
       orbit_timestep_quasi => orbit_timestep_quasi_lobatto3
+    case (DARBOUX_MIDPOINT)
+      raw_timestep_sympl => orbit_timestep_sympl_darboux_midpoint
+      orbit_timestep_quasi => timestep_midpoint_quasi
     case default
       print *, 'invalid mode for orbit_timestep_sympl: ', mode_init
       error stop

@@ -365,6 +365,17 @@ if (ENABLE_OPENMP)
         LABELS "integration"
         TIMEOUT 120)
 
+    # Global Darboux chart (X, Y) = sqrt(2 p_theta) (cos, sin) theta: axis
+    # grazing orbits on the analytic s-chart tokamak, 1e6 steps per marker.
+    add_executable(test_darboux_axis.x test_darboux_axis.f90)
+    target_link_libraries(test_darboux_axis.x simple)
+    add_test(NAME test_darboux_axis
+        COMMAND test_darboux_axis.x
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(test_darboux_axis PROPERTIES
+        LABELS "integration"
+        TIMEOUT 600)
+
     add_executable(test_axis_regular_rhs.x test_axis_regular_rhs.f90)
     target_link_libraries(test_axis_regular_rhs.x simple)
     add_test(NAME test_axis_regular_rhs

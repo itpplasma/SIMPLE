@@ -5,6 +5,10 @@ use field_can_base, only: field_can_t, n_field_evaluations
 
 implicit none
 
+!> Diagnostic only: amplitude of a non-regular Bmod term eps*cos(theta) that
+!> does not vanish at the axis in evaluate_test_s (spline-artifact model).
+real(dp) :: test_s_axis_artifact = 0.0_dp
+
 contains
 
 subroutine evaluate_test(f, r, th_c, ph_c, mode_secders)
@@ -17,6 +21,57 @@ subroutine evaluate_test(f, r, th_c, ph_c, mode_secders)
 
     n_field_evaluations = n_field_evaluations + 1
 end subroutine evaluate_test
+
+
+subroutine evaluate_test_s(f, s, th_c, ph_c, mode_secders)
+    !> The circular test tokamak of eval_field_test, charted by s = r**2 like
+    !> SIMPLE's flux and Boozer fields. The chain rule d/ds = (1/(2 r)) d/dr
+    !> reproduces the rho^|m| structure of real flux-coordinate data: the
+    !> m = 1 parts of Bmod, hph and Ath have s-derivatives that diverge at the
+    !> axis, while the field stays analytic in (r cos th, r sin th).
+    type(field_can_t), intent(inout) :: f
+    real(dp), intent(in) :: s, th_c, ph_c
+    integer, intent(in) :: mode_secders
+
+    real(dp) :: r, a, b
+
+    r = sqrt(max(s, 1.0e-300_dp))
+    call eval_field_test(f, r, th_c, ph_c, mode_secders)
+    a = 0.5_dp/r
+    b = 0.25_dp/r**2
+    if (mode_secders > 0) then
+        call to_s_second(f%d2Ath, f%dAth(1), a, b)
+        call to_s_second(f%d2Aph, f%dAph(1), a, b)
+        call to_s_second(f%d2hth, f%dhth(1), a, b)
+        call to_s_second(f%d2hph, f%dhph(1), a, b)
+        call to_s_second(f%d2Bmod, f%dBmod(1), a, b)
+    end if
+    f%dAth(1) = a*f%dAth(1)
+    f%dAph(1) = a*f%dAph(1)
+    f%dhth(1) = a*f%dhth(1)
+    f%dhph(1) = a*f%dhph(1)
+    f%dBmod(1) = a*f%dBmod(1)
+    if (test_s_axis_artifact /= 0.0_dp) then
+        f%Bmod = f%Bmod + test_s_axis_artifact*cos(th_c)
+        f%dBmod(2) = f%dBmod(2) - test_s_axis_artifact*sin(th_c)
+        if (mode_secders > 1) f%d2Bmod(4) = f%d2Bmod(4) &
+            - test_s_axis_artifact*cos(th_c)
+    end if
+
+    n_field_evaluations = n_field_evaluations + 1
+end subroutine evaluate_test_s
+
+
+pure subroutine to_s_second(d2, d1r, a, b)
+    !> r-derivatives to s-derivatives: d2/ds2 = b (d2/dr2 - d/dr / r),
+    !> d2/(ds dx) = a d2/(dr dx), with a = 1/(2 r), b = 1/(4 r**2).
+    real(dp), intent(inout) :: d2(6)
+    real(dp), intent(in) :: d1r, a, b
+
+    d2(1) = b*(d2(1) - 2.0_dp*a*d1r)
+    d2(2) = a*d2(2)
+    d2(3) = a*d2(3)
+end subroutine to_s_second
 
 
 ! for testing -> circular tokamak
