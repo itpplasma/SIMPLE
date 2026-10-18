@@ -1,23 +1,23 @@
 program test_particle_rng
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use params, only: deterministic, ran_seed, reset_seed_if_deterministic, &
-        particle_stream_id, particle_index_offset, startmode, idx, &
-        ntestpart, batch_size, reuse_batch, init_batch
+                      particle_stream_id, particle_index_offset, startmode, idx, &
+                      ntestpart, batch_size, reuse_batch, init_batch
     use samplers, only: sample
-    !$ use omp_lib, only: omp_get_num_threads
+!$  use omp_lib, only: omp_get_num_threads
     implicit none
 
     integer, parameter :: population = 16, draws = 12, subset = 5
     real(dp) :: serial(draws, population), parallel(draws, population)
     real(dp) :: replay(draws), legacy(draws), row(5), selected(5, subset)
-    integer :: i, j, unit, seedsize, saved_idx(subset), observed_threads, expected_threads
+  integer :: i, j, unit, seedsize, saved_idx(subset), observed_threads, expected_threads
     integer, allocatable :: seed(:)
 
     deterministic = .true.
     ran_seed = 314159
     call reset_seed_if_deterministic
     call random_seed(size=seedsize)
-    allocate(seed(seedsize))
+    allocate (seed(seedsize))
     call random_seed(get=seed)
     if (any(seed /= ran_seed)) error stop 'Legacy untagged seed changed'
     call random_number(legacy)
@@ -35,10 +35,10 @@ program test_particle_rng
     !$omp end parallel do
     observed_threads = 1
     expected_threads = 1
-    !$ expected_threads = 4
+!$  expected_threads = 4
     !$omp parallel num_threads(4) private(i)
     !$omp single
-    !$ observed_threads = omp_get_num_threads()
+!$  observed_threads = omp_get_num_threads()
     !$omp end single
     !$omp do schedule(dynamic, 1)
     do i = 1, population
@@ -66,12 +66,12 @@ program test_particle_rng
     end do
 
     ! Native selection persists row numbers as text and reads those exact rows.
-    open(newunit=unit, file='start.dat', status='replace', action='write')
+    open (newunit=unit, file='start.dat', status='replace', action='write')
     do i = 1, population
         row = real(i, dp)
-        write(unit, *) row
+        write (unit, *) row
     end do
-    close(unit)
+    close (unit)
     particle_index_offset = 100
     startmode = 4
     ntestpart = population
@@ -105,11 +105,11 @@ program test_particle_rng
     end do
     ! Check both source-file endpoints against an independently specified list.
     saved_idx = [1, 3, 6, 12, population]
-    open(newunit=unit, file='batch.dat', status='replace', action='write')
+    open (newunit=unit, file='batch.dat', status='replace', action='write')
     do i = 1, subset
-        write(unit, *) saved_idx(i)
+        write (unit, *) saved_idx(i)
     end do
-    close(unit)
+    close (unit)
     ntestpart = population
     call init_batch
     call sample(selected, reuse_batch)

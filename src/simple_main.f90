@@ -13,29 +13,29 @@ module simple_main
         integ_to_ref, ref_to_integ, init_field_can
     use callback, only: output_orbits_macrostep
     use params, only: swcoll, ntestpart, startmode, special_ants_file, num_surf, &
-        grid_density, dtau, dtaumin, ntau, v0, kpart, confpart_pass, &
-        confpart_trap, unresolved_orbits, times_lost, orbit_exit_code, &
-        boundary_event_radial_residual, &
-        boundary_event_time_width, integmode, relerr, trace_time, class_plot, &
-        fast_class, generate_start_only, ntcut, iclass, bmin, bmax, zstart, &
-        zend, trap_par, perp_inv, sbeg, ntimstep, should_skip, &
-        reset_seed_if_deterministic, particle_stream_id, field_input, &
-        isw_field_type, reuse_batch, &
-        max_consecutive_warning_holds, &
-        coord_input, wall_input, wall_units, wall_hit, wall_hit_triangle, &
-            wall_hit_cart, &
-        wall_query_rho_lcfs, &
-        chart_boundary_kind, chart_boundary_kind_effective, &
-        wall_hit_normal_cart, wall_hit_cos_incidence, wall_hit_angle_rad, &
-        ntau_macro, kt_macro, checkpoint_interval, orbit_model, orbit_coord, &
-        gpu_mode, gpu_backend, gpu_method, gpu_start_coordinates, &
-        gpu_landreman, gpu_compact_init, gpu_t_block, gpu_loss_tau, &
-        gpu_maxloss, gpu_min_timestep, gpu_particle_profile, &
-        ORBIT_GC, ORBIT_FULL_ORBIT, ORBIT_EXIT_COMPLETED, ORBIT_EXIT_LCFS, &
-        ORBIT_EXIT_WALL, ORBIT_EXIT_SKIPPED, ORBIT_EXIT_NUMERICAL_CONFINED, &
-        ORBIT_EXIT_NUMERICAL_DOMAIN, &
-        ORBIT_EXIT_NUMERICAL_MAXITER, ORBIT_EXIT_NUMERICAL_LINEAR, &
-        ORBIT_EXIT_NUMERICAL_EVENT, ORBIT_EXIT_NUMERICAL_FULL_ORBIT
+                      grid_density, dtau, dtaumin, ntau, v0, kpart, confpart_pass, &
+                      confpart_trap, unresolved_orbits, times_lost, orbit_exit_code, &
+                      boundary_event_radial_residual, &
+                 boundary_event_time_width, integmode, relerr, trace_time, class_plot, &
+                   fast_class, generate_start_only, ntcut, iclass, bmin, bmax, zstart, &
+                      zend, trap_par, perp_inv, sbeg, ntimstep, should_skip, &
+                      reset_seed_if_deterministic, particle_stream_id, field_input, &
+                      isw_field_type, reuse_batch, &
+                      max_consecutive_warning_holds, &
+                     coord_input, wall_input, wall_units, wall_hit, wall_hit_triangle, &
+                      wall_hit_cart, &
+                      wall_query_rho_lcfs, &
+                      chart_boundary_kind, chart_boundary_kind_effective, &
+                     wall_hit_normal_cart, wall_hit_cos_incidence, wall_hit_angle_rad, &
+                  ntau_macro, kt_macro, checkpoint_interval, orbit_model, orbit_coord, &
+                      gpu_mode, gpu_backend, gpu_method, gpu_start_coordinates, &
+                      gpu_landreman, gpu_compact_init, gpu_t_block, gpu_loss_tau, &
+                      gpu_maxloss, gpu_min_timestep, gpu_particle_profile, &
+                    ORBIT_GC, ORBIT_FULL_ORBIT, ORBIT_EXIT_COMPLETED, ORBIT_EXIT_LCFS, &
+                   ORBIT_EXIT_WALL, ORBIT_EXIT_SKIPPED, ORBIT_EXIT_NUMERICAL_CONFINED, &
+                      ORBIT_EXIT_NUMERICAL_DOMAIN, &
+                      ORBIT_EXIT_NUMERICAL_MAXITER, ORBIT_EXIT_NUMERICAL_LINEAR, &
+                      ORBIT_EXIT_NUMERICAL_EVENT, ORBIT_EXIT_NUMERICAL_FULL_ORBIT
     use params, only: canonical_grid_nr, canonical_grid_ntheta, &
         canonical_grid_nphi, canonical_ode_relerr
     use diag_counters, only: diag_counters_init, count_event, &

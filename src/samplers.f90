@@ -432,17 +432,17 @@ contains
             return
         end if
         if (size(idx) /= size(zstart, 2)) error stop 'Batch size mismatch'
-        open(newunit=unit, file=START_FILE, status='old', action='read')
+        open (newunit=unit, file=START_FILE, status='old', action='read')
         selected = 1
         do source_index = 1, idx(size(idx))
-            read(unit, *, iostat=status) source_row
+            read (unit, *, iostat=status) source_row
             if (status /= 0) error stop 'Cannot read selected start.dat source row'
             if (source_index /= idx(selected)) cycle
             zstart(:, selected) = source_row
             selected = selected + 1
             if (selected > size(idx)) exit
         end do
-        close(unit)
+        close (unit)
     end subroutine sample_random_batch
 
     subroutine sample_points_ants(use_special_ants_file)

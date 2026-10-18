@@ -1,7 +1,7 @@
 program test_collision_substeps
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use collis_alp, only: stost, coleff, efcolf, velrat, enrat, &
-        efcolf_grid, velrat_grid, enrat_grid, N_S_GRID
+                          efcolf_grid, velrat_grid, enrat_grid, N_S_GRID
     implicit none
 
     integer, parameter :: npart = 8192
@@ -17,7 +17,7 @@ program test_collision_substeps
     real(dp) :: target_energy, target_fourth, variance_component
 
     call random_seed(size=nseed)
-    allocate(seed(nseed), seed_after(nseed))
+    allocate (seed(nseed), seed_after(nseed))
     efcolf = [1.0_dp, 0.0_dp, 0.0_dp]
     ! Constant-diffusion small-speed limit of the same coefficients: the radial
     ! operator is the norm of a three-dimensional Ornstein-Uhlenbeck process.
@@ -62,7 +62,7 @@ program test_collision_substeps
         end do
         variance1 = (1.0_dp + 2.0_dp*target2)/3.0_dp - target1**2
         variance2 = 0.2_dp + 2.0_dp*target2/7.0_dp + &
-            18.0_dp*target4/35.0_dp - target2**2
+                    18.0_dp*target4/35.0_dp - target2**2
         write (*, '(a,f6.3,a,4es13.5)') 'pitch fraction=', resolutions(k), &
             ' measured/target P1,P2: ', average1, target1, average2, target2
         if (abs(average1 - target1) > 5.0_dp*sqrt(variance1/npart) .or. &
@@ -89,8 +89,8 @@ program test_collision_substeps
                 variance_component = (1.0_dp - exp(-1.0_dp))/(2.0_dp*enr)
                 target_energy = eq_energy + (initial(4)**2 - eq_energy)*exp(-1.0_dp)
                 target_fourth = initial(4)**4*exp(-2.0_dp) + &
-                    10.0_dp*initial(4)**2*exp(-1.0_dp)*variance_component + &
-                    15.0_dp*variance_component**2
+                               10.0_dp*initial(4)**2*exp(-1.0_dp)*variance_component + &
+                                15.0_dp*variance_component**2
             end if
             seed = 363
             call random_seed(put=seed)
@@ -100,11 +100,11 @@ program test_collision_substeps
             do i = 1, npart
                 call random_number(u)
                 velocity(1) = sigma*sqrt(-2.0_dp*log(max(u(1), tiny(1.0_dp))))* &
-                    cos(2.0_dp*pi*u(2))
+                              cos(2.0_dp*pi*u(2))
                 velocity(2) = sigma*sqrt(-2.0_dp*log(max(u(1), tiny(1.0_dp))))* &
-                    sin(2.0_dp*pi*u(2))
+                              sin(2.0_dp*pi*u(2))
                 velocity(3) = sigma*sqrt(-2.0_dp*log(max(u(3), tiny(1.0_dp))))* &
-                    cos(2.0_dp*pi*u(4))
+                              cos(2.0_dp*pi*u(4))
                 z = initial
                 z(4) = norm2(velocity)
                 z(5) = velocity(3)/z(4)

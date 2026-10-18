@@ -557,18 +557,18 @@ contains
         real(dp) :: draw
         logical :: old_batch
 
-        if (allocated(idx)) deallocate(idx)
+        if (allocated(idx)) deallocate (idx)
         if (particle_index_offset < 0) &
             error stop 'particle_index_offset must be nonnegative'
         if (batch_size < 1) error stop 'batch_size must be positive'
         if (ntestpart <= batch_size) return
         source_count = ntestpart
-        allocate(idx(batch_size))
-        inquire(file='batch.dat', exist=old_batch)
+        allocate (idx(batch_size))
+        inquire (file='batch.dat', exist=old_batch)
         if (reuse_batch .and. old_batch) then
-            open(newunit=unit, file='batch.dat', status='old', action='read')
+            open (newunit=unit, file='batch.dat', status='old', action='read')
             do selected = 1, batch_size
-                read(unit, *, iostat=status) idx(selected)
+                read (unit, *, iostat=status) idx(selected)
                 if (status /= 0) error stop 'Invalid batch.dat index list'
                 if (idx(selected) < 1 .or. idx(selected) > source_count) &
                     error stop 'Batch index outside start.dat source range'
@@ -577,11 +577,11 @@ contains
                         error stop 'Batch indices must be strictly increasing'
                 end if
             end do
-            close(unit)
+            close (unit)
         else
             reuse_batch = .false.
             call random_seed(size=seedsize)
-            allocate(batch_seed(seedsize))
+            allocate (batch_seed(seedsize))
             batch_seed = ran_seed
             call random_seed(put=batch_seed)
             selected = 0
@@ -596,11 +596,11 @@ contains
                     if (selected == batch_size) exit
                 end if
             end do
-            open(newunit=unit, file='batch.dat', status='replace', action='write')
+            open (newunit=unit, file='batch.dat', status='replace', action='write')
             do selected = 1, batch_size
-                write(unit, *) idx(selected)
+                write (unit, *) idx(selected)
             end do
-            close(unit)
+            close (unit)
         end if
         ntestpart = batch_size
     end subroutine init_batch

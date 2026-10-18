@@ -282,7 +282,7 @@ contains
                 azimuth = twopi*real(ur, wp)
                 alam = z(5)
                 z(5) = alam*cos(angle) + sqrt(1.0_wp - alam**2)* &
-                    sin(angle)*cos(azimuth)
+                       sin(angle)*cos(azimuth)
             end if
             if (energy) then
                 z(4) = p + fpeff*step
