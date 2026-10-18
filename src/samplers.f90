@@ -81,6 +81,24 @@ contains
         call load_starting_points(zstart, filename)
     end subroutine
 
+    subroutine sample_read_integration(zstart, filename)
+        ! Read (s, theta_B, zeta_B, |v|/v0, v_parallel/|v|) and convert only
+        ! the position to SIMPLE's stored reference-coordinate convention.
+        ! This permits exact reuse of externally generated Boozer particles.
+        use field_can_mod, only: integ_to_ref
+
+        real(dp), dimension(:, :), intent(inout) :: zstart
+        character(len=*), intent(in) :: filename
+        real(dp) :: xinteg(3)
+        integer :: ipart
+
+        call load_starting_points(zstart, filename)
+        do ipart = 1, size(zstart, 2)
+            xinteg = zstart(1:3, ipart)
+            call integ_to_ref(xinteg, zstart(1:3, ipart))
+        end do
+    end subroutine sample_read_integration
+
     ! Samplers ################################
     subroutine sample_volume_single(zstart, s_inner, s_outer)
         use params, only: isw_field_type, num_surf
@@ -124,6 +142,54 @@ contains
         call save_starting_points(zstart)
 
     end subroutine sample_volume_single
+
+    subroutine sample_fusion_birth(zstart, s_inner, s_outer, integration_coords)
+        use params, only: fusion_grid, num_surf, facE_al, n_d, n_e, &
+            am1, am2, Z1, Z2, sbeg
+        use fusion_source, only: build_birth_cdf, draw_birth, alpha_energy_joule
+        use field_can_mod, only: integ_to_ref
+        real(dp), intent(out) :: zstart(:, :)
+        real(dp), value, intent(in) :: s_inner, s_outer
+        logical, intent(in) :: integration_coords
+        real(dp), allocatable :: cdf(:)
+        real(dp) :: power, x(3)
+        integer :: ipart, unit, n
+
+        if (facE_al /= 1.0_dp .or. n_d /= 4.0_dp .or. n_e /= 2) &
+            error stop 'fusion births require 3.5 MeV alphas: facE_al=1, n_d=4, n_e=2'
+        if (am1 /= 2.0_dp .or. am2 /= 3.0_dp .or. &
+            Z1 /= 1.0_dp .or. Z2 /= 1.0_dp) &
+            error stop 'fusion births require species 1=D and species 2=T'
+        n = size(zstart, 2)
+        if (n < 1) error stop 'fusion births require at least one marker'
+        call build_birth_cdf(s_inner, s_outer, fusion_grid, cdf, power)
+        do ipart = 1, n
+            call draw_birth(s_inner, s_outer, fusion_grid, cdf, zstart(:, ipart))
+            if (integration_coords) then
+                x = zstart(1:3, ipart)
+                call integ_to_ref(x, zstart(1:3, ipart))
+            end if
+        end do
+        num_surf = 2
+        sbeg(1:2) = [s_inner, s_outer]
+        call save_starting_points(zstart)
+        open (newunit=unit, file='alpha_source.dat', status='replace')
+        write (unit, '(a)') '# Equal-weight D-T births; rows of start.dat are markers.'
+        write (unit, '(a)') '# Midpoint source cells, uniform positions within cells.'
+        write (unit, '(a)') '# alpha_power_W uses 3.5 MeV per alpha, not 3.52 MeV.'
+        write (unit, '(a,es24.16)') 'alpha_energy_MeV ', &
+            alpha_energy_joule/1.602176634e-13_dp
+        write (unit, '(a,es24.16)') 'alpha_power_W ', power
+        write (unit, '(a,es24.16)') 'alpha_birth_rate_per_s ', power/alpha_energy_joule
+        write (unit, '(a,es24.16)') 'marker_rate_per_s ', power/alpha_energy_joule/n
+        write (unit, '(a,es24.16)') 'marker_power_W ', power/n
+        write (unit, '(a,i0)') 'marker_count ', n
+        write (unit, '(a,2es24.16)') 's_bounds ', s_inner, s_outer
+        write (unit, '(a,3i8)') 'fusion_grid ', fusion_grid
+        close (unit)
+        print *, 'Total alpha power [W] = ', power
+        print *, 'Equal marker power [W] = ', power/n, ' (alpha_source.dat)'
+    end subroutine sample_fusion_birth
 
     subroutine sample_spectre_surface(zstart)
         !> Place markers on the SPECTRE control surface rho_g = sbeg(1), drawn
@@ -351,34 +417,32 @@ contains
     end subroutine sample_grid
 
     subroutine sample_random_batch(zstart, reuse_existing)
-        ! Get random batch from preexisting zstart, allows reuse.
-        use params, only: batch_size, ntestpart, zstart_dim1, idx
+        ! init_batch owns the persisted source-row indices; batch.dat contains
+        ! indices, never particle coordinates. Read selected rows from start.dat.
+        use params, only: idx
 
-        integer :: ran_begin, ran_end, ipart
-        real :: temp_ran
-        real(dp), dimension(:, :), intent(inout) :: zstart
-        real(dp), dimension(zstart_dim1, batch_size) :: zstart_batch
+        real(dp), intent(inout) :: zstart(:, :)
         logical, intent(in) :: reuse_existing
+        real(dp) :: source_row(size(zstart, 1))
+        integer :: unit, source_index, selected, status
 
-        if (reuse_existing .eqv. .True.) then
-            call load_starting_points(zstart_batch, START_FILE_BATCH)
-        else
-            call load_starting_points(zstart_batch, START_FILE)
-            call random_number(temp_ran)
-            ran_begin = INT(temp_ran)
-            ran_end = ran_begin + batch_size
-            if ((ran_end) .gt. (ntestpart)) then
-                ran_begin = ran_begin - (ran_end - ntestpart)
-            end if
-            do ipart = 0, batch_size
-                zstart(:, ipart) = zstart_batch(:, (ipart + ran_begin))
-            end do
+        if (.not. allocated(idx)) then
+            if (reuse_existing) error stop 'No selected indices for reused batch'
+            call load_starting_points(zstart, START_FILE)
+            return
         end if
-
-        do ipart = idx(0), idx(ntestpart)
-            read (1, *) zstart(:, ipart)
+        if (size(idx) /= size(zstart, 2)) error stop 'Batch size mismatch'
+        open (newunit=unit, file=START_FILE, status='old', action='read')
+        selected = 1
+        do source_index = 1, idx(size(idx))
+            read (unit, *, iostat=status) source_row
+            if (status /= 0) error stop 'Cannot read selected start.dat source row'
+            if (source_index /= idx(selected)) cycle
+            zstart(:, selected) = source_row
+            selected = selected + 1
+            if (selected > size(idx)) exit
         end do
-
+        close (unit)
     end subroutine sample_random_batch
 
     subroutine sample_points_ants(use_special_ants_file)

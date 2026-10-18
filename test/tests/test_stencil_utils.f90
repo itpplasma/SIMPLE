@@ -1,183 +1,51 @@
 program test_stencil_utils
   use stencil_utils
   implicit none
-  
+
   integer, parameter :: dp = kind(1.0d0)
-  
-  call test_stencil_order_2()
-  call test_stencil_order_4()
-  call test_stencil_order_6()
-  call test_stencil_scaling()
+
+  call test_stencil_polynomial_exactness()
   call test_stencil_invalid_order()
-  
+
   print *, "All stencil_utils tests passed!"
-  
+
 contains
 
-  subroutine test_stencil_order_2()
-    real(dp) :: stencil(-1:1)
-    real(dp) :: h_grid = 0.1_dp
-    real(dp), parameter :: tol = 1.0e-14_dp
-    
-    call init_derivative_stencil(1, h_grid, stencil)
-    
-    ! Check values
-    if (abs(stencil(-1) - (-0.5d0/h_grid)) > tol) then
-      print *, "ERROR: stencil(-1) incorrect for order 2"
-      print *, "Expected:", -0.5d0/h_grid, "Got:", stencil(-1)
-      error stop 1
-    end if
-    
-    if (abs(stencil(0)) > tol) then
-      print *, "ERROR: stencil(0) should be zero for order 2"
-      print *, "Got:", stencil(0)
-      error stop 1
-    end if
-    
-    if (abs(stencil(1) - (0.5d0/h_grid)) > tol) then
-      print *, "ERROR: stencil(1) incorrect for order 2"
-      print *, "Expected:", 0.5d0/h_grid, "Got:", stencil(1)
-      error stop 1
-    end if
-    
-    print *, "test_stencil_order_2: PASSED"
-  end subroutine test_stencil_order_2
-  
-  subroutine test_stencil_order_4()
-    real(dp) :: stencil(-2:2)
-    real(dp) :: h_grid = 0.1_dp
-    real(dp), parameter :: tol = 1.0e-14_dp
-    
-    call init_derivative_stencil(2, h_grid, stencil)
-    
-    ! Check values
-    if (abs(stencil(-2) - (1.d0/12.d0/h_grid)) > tol) then
-      print *, "ERROR: stencil(-2) incorrect for order 4"
-      error stop 1
-    end if
-    
-    if (abs(stencil(-1) - (-2.d0/3.d0/h_grid)) > tol) then
-      print *, "ERROR: stencil(-1) incorrect for order 4"
-      error stop 1
-    end if
-    
-    if (abs(stencil(0)) > tol) then
-      print *, "ERROR: stencil(0) should be zero for order 4"
-      error stop 1
-    end if
-    
-    if (abs(stencil(1) - (2.d0/3.d0/h_grid)) > tol) then
-      print *, "ERROR: stencil(1) incorrect for order 4"
-      error stop 1
-    end if
-    
-    if (abs(stencil(2) - (-1.d0/12.d0/h_grid)) > tol) then
-      print *, "ERROR: stencil(2) incorrect for order 4"
-      error stop 1
-    end if
-    
-    print *, "test_stencil_order_4: PASSED"
-  end subroutine test_stencil_order_4
-  
-  subroutine test_stencil_order_6()
-    real(dp) :: stencil(-3:3)
-    real(dp) :: h_grid = 0.1_dp
-    real(dp), parameter :: tol = 1.0e-14_dp
-    real(dp) :: sum_coeff
-    real(dp) :: derivative_linear
-    real(dp) :: derivative_cubic
-    real(dp) :: x_values(-3:3)
-    integer :: j
-    
-    call init_derivative_stencil(3, h_grid, stencil)
-    
-    ! Verify stencil by applying it to test functions
-    ! For a 6th order stencil, it should exactly differentiate polynomials up to degree 6
-    ! Test with f(x) = x^5 at x=0, derivative should be 0
-    ! Test with f(x) = x^3 at x=h, derivative should be 3*h^2
-    
-    ! First, verify the stencil satisfies mathematical properties
-    ! Property 1: Sum should be zero for derivative operator
-    sum_coeff = stencil(-3) + stencil(-2) + stencil(-1) + stencil(0) + &
-                stencil(1) + stencil(2) + stencil(3)
-    if (abs(sum_coeff) > tol) then
-      print *, "ERROR: Stencil coefficients don't sum to zero"
-      print *, "Sum:", sum_coeff
-      error stop 1
-    end if
-    
-    ! Property 2: Antisymmetry (stencil(-i) = -stencil(i))
-    if (abs(stencil(-3) + stencil(3)) > tol) then
-      print *, "ERROR: stencil not antisymmetric at ±3"
-      error stop 1
-    end if
-    if (abs(stencil(-2) + stencil(2)) > tol) then
-      print *, "ERROR: stencil not antisymmetric at ±2"
-      error stop 1
-    end if
-    if (abs(stencil(-1) + stencil(1)) > tol) then
-      print *, "ERROR: stencil not antisymmetric at ±1"
-      error stop 1
-    end if
-    
-    ! Property 3: Test on known function f(x) = x
-    ! Derivative should be exactly 1.0 for linear function
-    ! f(-3h) = -3h, f(-2h) = -2h, ..., f(3h) = 3h
-    
-    do j = -3, 3
-      x_values(j) = real(j, dp) * h_grid
+  subroutine test_stencil_polynomial_exactness()
+    ! A central stencil of half-width nh has order 2*nh: applied to any
+    ! polynomial of degree <= 2*nh it reproduces the exact first derivative.
+    real(dp), parameter :: h_values(2) = [0.1_dp, 0.037_dp]
+    real(dp), parameter :: x0 = 0.3_dp
+    real(dp), parameter :: tol = 1.0e-12_dp
+    real(dp) :: stencil(-3:3), deriv, exact
+    integer :: nh, ih, k, j
+
+    do nh = 1, 3
+      do ih = 1, size(h_values)
+        stencil = 0.0_dp
+        call init_derivative_stencil(nh, h_values(ih), stencil(-nh:nh))
+        do k = 0, 2*nh
+          deriv = 0.0_dp
+          do j = -nh, nh
+            deriv = deriv + stencil(j)*(x0 + real(j, dp)*h_values(ih))**k
+          end do
+          if (k == 0) then
+            exact = 0.0_dp
+          else
+            exact = real(k, dp)*x0**(k - 1)
+          end if
+          if (abs(deriv - exact) > tol) then
+            print *, "ERROR: stencil not exact for polynomial degree", k
+            print *, "nh =", nh, "h =", h_values(ih)
+            print *, "Expected:", exact, "Got:", deriv
+            error stop 1
+          end if
+        end do
+      end do
     end do
-    
-    derivative_linear = 0.0_dp
-    do j = -3, 3
-      derivative_linear = derivative_linear + stencil(j) * x_values(j)
-    end do
-    
-    if (abs(derivative_linear - 1.0_dp) > tol*10) then
-      print *, "ERROR: Stencil doesn't correctly differentiate f(x)=x"
-      print *, "Expected: 1.0, Got:", derivative_linear
-      error stop 1
-    end if
-    
-    ! Property 4: Test on f(x) = x^3
-    ! At x=0, derivative should be 0
-    do j = -3, 3
-      x_values(j) = (real(j, dp) * h_grid)**3
-    end do
-    
-    derivative_cubic = 0.0_dp
-    do j = -3, 3
-      derivative_cubic = derivative_cubic + stencil(j) * x_values(j)
-    end do
-    
-    ! For x^3 at x=0, derivative is 0
-    if (abs(derivative_cubic) > tol*100) then
-      print *, "ERROR: Stencil doesn't correctly differentiate f(x)=x^3 at x=0"
-      print *, "Expected: 0.0, Got:", derivative_cubic
-      error stop 1
-    end if
-    
-    print *, "test_stencil_order_6: PASSED"
-  end subroutine test_stencil_order_6
-  
-  subroutine test_stencil_scaling()
-    real(dp) :: stencil1(-1:1), stencil2(-1:1)
-    real(dp) :: h1 = 0.1_dp, h2 = 0.2_dp
-    real(dp), parameter :: tol = 1.0e-14_dp
-    
-    call init_derivative_stencil(1, h1, stencil1)
-    call init_derivative_stencil(1, h2, stencil2)
-    
-    ! Check that stencil scales inversely with h
-    if (abs(stencil1(1) * h1 - stencil2(1) * h2) > tol) then
-      print *, "ERROR: stencil does not scale properly with h"
-      print *, "stencil1(1)*h1 =", stencil1(1)*h1
-      print *, "stencil2(1)*h2 =", stencil2(1)*h2
-      error stop 1
-    end if
-    
-    print *, "test_stencil_scaling: PASSED"
-  end subroutine test_stencil_scaling
+
+    print *, "test_stencil_polynomial_exactness: PASSED"
+  end subroutine test_stencil_polynomial_exactness
 
   subroutine test_stencil_invalid_order()
     real(dp) :: stencil(-4:4)

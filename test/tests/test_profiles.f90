@@ -12,6 +12,7 @@ program test_profiles
 
     call test_power_series_evaluation(all_passed, n_failed)
     call test_two_power_evaluation(all_passed, n_failed)
+    call test_zero_density_operator(all_passed, n_failed)
     call test_flat_profile_coefficients(all_passed, n_failed)
     call test_peaked_profile_collision_rates(all_passed, n_failed)
     call test_flat_intermediate_values(all_passed, n_failed)
@@ -145,6 +146,41 @@ contains
             print *, '  PASS: flat profile at edge gives scale'
         end if
     end subroutine test_two_power_evaluation
+
+    subroutine test_zero_density_operator(passed, nfail)
+        logical, intent(inout) :: passed
+        integer, intent(inout) :: nfail
+        real(dp) :: v0, rates(4), ec(nsorts), vr(nsorts), er(nsorts)
+        real(dp) :: z(5), initial(5)
+        integer :: mode, ierr
+        logical :: vacuum_ok
+
+        call loacol_alpha(2.0_dp, 3.0_dp, 1.0_dp, 1.0_dp, 0.0_dp, 0.0_dp, &
+            1000.0_dp, 1000.0_dp, 1000.0_dp, 35000.0_dp, v0, &
+            rates(1), rates(2), rates(3), rates(4))
+        vacuum_ok = all(rates == 0.0_dp) .and. all(efcolf == 0.0_dp)
+        active_profile = POWER_SERIES
+        Te_scale = 1000.0_dp; Ti1_scale = 1000.0_dp; Ti2_scale = 1000.0_dp
+        Te_coef = 0.0_dp; Ti1_coef = 0.0_dp; Ti2_coef = 0.0_dp
+        Te_coef(1) = 1.0_dp; Ti1_coef(1) = 1.0_dp; Ti2_coef(1) = 1.0_dp
+        ni1_scale = 0.0_dp; ni2_scale = 0.0_dp
+        call init_collision_profiles(2.0_dp, 3.0_dp, 1.0_dp, 1.0_dp, 35000.0_dp, v0)
+        call get_local_coeffs(0.37_dp, ec, vr, er)
+        vacuum_ok = vacuum_ok .and. all(ec == 0.0_dp)
+        initial = [0.37_dp, 0.2_dp, 0.3_dp, 0.8_dp, -0.4_dp]
+        do mode = 1, 4
+            z = initial
+            call stost(z, 1.0e4_dp, mode, ierr)
+            vacuum_ok = vacuum_ok .and. ierr == 0 .and. all(z == initial)
+        end do
+        if (vacuum_ok) then
+            print *, '  PASS: zero-density rates and all collision modes are exact vacuum'
+        else
+            print *, '  FAIL: zero-density operator changes the particle state'
+            passed = .false.
+            nfail = nfail + 1
+        end if
+    end subroutine test_zero_density_operator
 
     subroutine test_flat_profile_coefficients(passed, nfail)
         logical, intent(inout) :: passed

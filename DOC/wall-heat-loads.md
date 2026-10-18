@@ -1,193 +1,120 @@
-# Wall Heat Load Physics
-
-This document describes the physics behind the wall heat load calculation in `pysimple.engineering`.
-
-## D-T Fusion Energy Balance
-
-Each deuterium-tritium fusion reaction produces 17.6 MeV:
-
-$$\text{D} + \text{T} \rightarrow \text{He}^{4} (3.5\,\text{MeV}) + n (14.1\,\text{MeV})$$
-
-- **Alpha particle** ($\alpha$): 3.5 MeV kinetic energy
-- **Neutron**: 14.1 MeV (escapes plasma, heats blanket)
-
-The alpha power is therefore:
-
-$$P_\alpha = \frac{P_\text{fusion}}{5}$$
-
-For a 3 GW fusion reactor: $P_\alpha \approx 600$ MW.
-
-## Alpha Particle Slowing Down
-
-Alphas are born at $E_0 = 3.5$ MeV and slow down via Coulomb collisions with background electrons and ions. The characteristic slowing-down time is:
-
-$$\tau_s = \frac{3(2\pi)^{3/2} \epsilon_0^2 m_\alpha}{e^4 Z_\alpha^2 n_e \ln\Lambda} \left(\frac{T_e}{m_e}\right)^{3/2}$$
-
-For typical reactor parameters ($n_e = 10^{20}$ m$^{-3}$, $T_e = 10$ keV), $\tau_s \approx 0.1-1$ s.
-
-The energy evolution follows:
-
-$$E(t) = E_0 \left(1 - t/\tau_s\right)^{2/3} \quad \text{for } t < \tau_s$$
-
-## Monte Carlo Heat Flux Calculation
-
-SIMPLE traces $N$ test particles representing the alpha population. Each particle carries a fraction of total alpha power:
-
-$$\text{Power per MC particle} = \frac{P_\alpha}{N}$$
-
-### Energy Weighting
-
-Particles that escape early (before significant slowing down) carry more energy than those that escape late. The normalized velocity at wall impact is:
-
-$$p = \frac{v}{v_0} = \sqrt{\frac{E}{E_0}}$$
-
-where $v_0$ is the birth velocity. The energy carried by particle $i$ at wall impact is:
-
-$$E_i = p_i^2 \cdot E_0$$
-
-Without collisions: $p = 1$ for all particles.
-With collisions: $p < 1$ for particles that slowed down before escaping.
-
-### Heat Flux Calculation
-
-For a wall bin with area $A_\text{bin}$, the energy-weighted heat flux is:
-
-$$q_\text{bin} = \frac{1}{A_\text{bin}} \sum_{i \in \text{bin}} p_i^2 \cdot \frac{P_\alpha}{N}$$
-
-Or equivalently:
-
-$$q_\text{bin} = \frac{\sum_{i \in \text{bin}} p_i^2}{N} \cdot \frac{P_\alpha}{A_\text{bin}}$$
-
-### Energy Loss Fraction
-
-The **particle loss fraction** is:
-
-$$f_\text{particle} = \frac{n_\text{lost}}{N}$$
-
-The **energy loss fraction** accounts for slowing down:
-
-$$f_\text{energy} = \frac{1}{N} \sum_{i \in \text{lost}} p_i^2$$
-
-Note: $f_\text{energy} \leq f_\text{particle}$ because $p_i^2 \leq 1$.
-
-The lost power is:
-
-$$P_\text{lost} = f_\text{energy} \cdot P_\alpha$$
-
-## Typical Values
-
-| Configuration | Peak Heat Flux | Reference |
-|--------------|----------------|-----------|
-| Infinity Two | ~2.5 MW/m$^2$ | Albert et al. (2024) |
-| ARIES-CS | 5-18 MW/m$^2$ | Ku & Boozer (2008) |
-| W7-X (experiments) | 0.1-1 MW/m$^2$ | Lazerson et al. (2021) |
-| Material limits | 5-10 MW/m$^2$ | Engineering constraint |
-
-## Wall Area Calculation
-
-The heat flux requires accurate wall surface area. Two methods are available:
-
-### Simple Torus Approximation
-
-For quick estimates, the code defaults to a simple torus:
-
-$$A = 4\pi^2 R_0 a$$
-
-where $R_0$ is major radius and $a$ is minor radius. This underestimates stellarator wall area by 1.5-2x due to 3D shaping.
-
-### Actual Geometry from Chartmap
-
-For accurate results, provide a chartmap file with the actual wall geometry:
-
-$$A = n_{fp} \iint \left|\frac{\partial \mathbf{r}}{\partial \theta} \times \frac{\partial \mathbf{r}}{\partial \zeta}\right| d\theta\, d\zeta$$
-
-The chartmap contains Cartesian coordinates $(x, y, z)$ on a $(\rho, \theta, \zeta)$ grid. The wall surface is at $\rho = 1$.
-
-### Resolution Matching
-
-When using a chartmap, the heat map bin resolution should not exceed the chartmap grid resolution. If the heat map has more bins than chartmap grid points, many bins will have zero computed area, leading to inaccurate flux calculations.
-
-The code issues a warning if the sum of bin areas is less than 90% of the total wall area:
-
-```
-UserWarning: Bin areas sum (X m^2) is less than 90% of wall area (Y m^2).
-Heat map resolution may exceed chartmap resolution, causing empty bins.
-Consider reducing n_theta/n_zeta or using a finer chartmap.
-```
-
-**Recommendation**: Use `n_theta` ≤ chartmap ntheta and `n_zeta` ≤ chartmap nzeta × nfp.
-
-## Guiding Center Limitation
-
-**Important**: SIMPLE tracks guiding center orbits, not full particle orbits. The reported wall positions are guiding center positions, not actual wall impact points.
-
-For 3.5 MeV alpha particles in a ~5 T field:
-
-$$\rho_\alpha = \frac{m_\alpha v_\perp}{Z_\alpha e B} \approx 5-10\,\text{cm}$$
-
-This means:
-- Heat load patterns are smeared by ~10 cm
-- Fine-scale wall features are not resolved
-- Peak flux may be underestimated due to averaging
-
-For high-resolution wall load studies (e.g., limiter tile design), finite Larmor radius effects should be added by:
-1. Adding a gyroradius offset in the direction perpendicular to B
-2. Or using a full-orbit code instead of guiding center
-
-## Code Implementation
-
-The `WallHeatMap` class in `pysimple.engineering` implements this calculation:
-
-```python
-from pysimple.engineering import WallHeatMap, compute_wall_area_from_chartmap
-
-# With actual wall geometry from chartmap (recommended)
-heat_map = WallHeatMap.from_netcdf(
-    "results.nc",
-    total_alpha_power_MW=600.0,  # 3 GW fusion -> 600 MW alpha
-    chartmap_file="wout.chartmap.nc",  # Actual 3D wall geometry
-)
-
-# Or with simple torus approximation (for quick estimates)
-heat_map_simple = WallHeatMap.from_netcdf(
-    "results.nc",
-    total_alpha_power_MW=600.0,
-    major_radius=1000.0,  # cm
-    minor_radius=100.0,   # cm
-)
-
-print(f"Particle loss fraction: {heat_map.loss_fraction:.1%}")
-print(f"Energy loss fraction: {heat_map.energy_loss_fraction:.1%}")
-print(f"Lost power: {heat_map.lost_power:.1f} MW")
-print(f"Peak flux: {heat_map.peak_flux:.2f} MW/m^2")
-print(f"Wall area: {heat_map.wall_area:.1f} m^2")
-```
-
-## Data Format
-
-The NetCDF results file from SIMPLE contains:
-
-| Variable | Shape | Description |
-|----------|-------|-------------|
-| `zend` | (5, N) | Final phase space: s, theta, zeta, p=v/v0, lambda |
-| `xend_cart` | (3, N) | Final Cartesian position (x, y, z) |
-| `class_lost` | (N,) | 1 if particle hit wall, 0 otherwise |
-| `times_lost` | (N,) | Time of wall impact (s) |
-
-The velocity ratio `zend[3]` = $p = v/v_0$ is crucial for energy weighting.
+# Heat-load estimators
+
+This page defines how SIMPLE's post-processing turns lost markers into
+deposited power and heat flux, on flux-surface bins or on STL wall triangles,
+and what limits the accuracy of these estimates.
+Usage: {doc}`/user-guide/wall-heat-loads`.
+
+## Marker power and energy
+
+For D-T, $P_\alpha = P_\text{fus}/5$. Marker $i$ represents the share
+$w_i/\sum_{k=1}^N w_k$ of the source alpha power, with relative weights
+$w_i \ge 0$; equal weights give $P_\alpha/N$. Equal weights represent the
+physical source only when births are sampled in proportion to it
+(`startmode = 7`, {doc}`/alpha-birth`).
+
+All markers start with the reference energy $E_0 = 3.5\,\text{MeV}/$`facE_al`,
+$v_0=\sqrt{2E_0/m}$. At the exit the marker carries
+
+$$
+\frac{E_i}{E_0} = p_i^2, \qquad p_i = \frac{v_i}{v_0} = \texttt{zend(4)} .
+$$
+
+Without collisions $p_i = 1$. With collisions the energy given to the
+background before the exit is not deposited on the wall; $p_i < 1$ on average,
+but energy diffusion can raise individual markers above $p_i = 1$. Mixed
+birth energies need a separate source convention and are not handled.
+
+The particle and energy loss fractions and the lost power are
+
+$$
+f_\text{particle} = \frac{n_\text{lost}}{N}, \qquad
+f_\text{energy} = \frac{\sum_{i\in\text{lost}} w_i p_i^2}{\sum_{k} w_k}, \qquad
+P_\text{lost} = f_\text{energy} P_\alpha .
+$$
+
+## Flux on flux-surface bins
+
+Lost markers that crossed the LCFS (exit code 1) are binned by their exit
+angles $(\vartheta_i, \varphi_i)$ = `zend(2:3)`. With equal weights
+
+$$
+q_\text{bin} = \frac{P_\alpha}{N A_\text{bin}} \sum_{i \in \text{bin}} p_i^2 .
+$$
+
+The bin area comes from the outermost chartmap surface
+$\mathbf r(\vartheta,\zeta)$ (the LCFS for a chartmap written by
+`vmec_to_chartmap.x`), stored for one field period and repeated $n_\text{fp}$
+times:
+
+$$
+A_\text{bin} = \iint_\text{bin}
+\left|\frac{\partial \mathbf r}{\partial \vartheta}\times
+\frac{\partial \mathbf r}{\partial \zeta}\right| \mathrm d\vartheta\,\mathrm d\zeta ,
+\qquad
+A = n_\text{fp}\int_0^{2\pi}\!\!\int_0^{2\pi/n_\text{fp}}
+\left|\partial_\vartheta \mathbf r\times\partial_\zeta \mathbf r\right|
+\mathrm d\zeta\,\mathrm d\vartheta .
+$$
+
+The integral is a sum over chartmap grid cells whose nodes lie in the bin, so
+a bin needs grid points: use at most `ntheta` poloidal and
+`nzeta`$\times n_\text{fp}$ toroidal bins of the chartmap, otherwise bins get
+zero area. Bin angles and chartmap angles must be the same coordinates (VMEC
+angles for `vmec_to_chartmap.x`).
+Implementation: `compute_bin_areas_from_chartmap` in `python/pysimple/engineering.py`.
+
+## Load on STL triangles
+
+A marker with `wall_hit == 1` deposits on its facet $j$ = `wall_hit_triangle`.
+For facet area $A_j$ (m²)
+
+$$
+P_j = P_\alpha\,\frac{\sum_{i:\,\text{hit}(i)=j} w_i\, p_i^2}{\sum_{k=1}^{N} w_k},
+\qquad q_j = \frac{P_j}{A_j}.
+$$
+
+The denominator runs over **all** source markers, including confined markers
+and losses that did not reach the STL. $\sum_j P_j$ is the deposited part of
+$P_\alpha$. No incidence cosine is applied: the power lands on the actual
+facet area, not a projected one. Weights come from `marker_weights`, else
+from a `marker_weight(particle)` variable in `results.nc` (SIMPLE does not
+write one), else all ones. Facets of zero area keep their index, receive no
+power and add no area; a recorded hit on one is an error.
+Implementation: `TriangleHeatLoad.from_netcdf` in `python/pysimple/wall_heat_load.py`.
+
+Metrics of `TriangleHeatLoad.summary`:
+
+| Metric | Definition |
+|---|---|
+| `peak_W_m2` | $\max_j q_j$ |
+| `p95_W_m2` | area-weighted 95th percentile over all facets, unhit included: sort $q_j$, take the first whose cumulative area reaches 95 % of the total |
+| `wetted_area_m2(t)` | $\sum A_j$ over facets with $q_j > t$ (default $t = 0$) |
+| `incidence_distribution(bins=18)` | hit count and deposited power in angle bins on $[0, \pi/2]$ |
+
+The incidence angle is $\arccos|\hat{\mathbf s}\cdot\hat{\mathbf n}|$ between
+the guiding-centre step chord $\hat{\mathbf s}$ and the facet normal
+$\hat{\mathbf n}$ (0 is normal incidence), not a gyrophase-resolved velocity.
+The normal follows the STL vertex winding and need not point outward. The
+loss time is interpolated linearly along the intersecting chord
+(`locate_wall_segment` in `src/simple_main.f90`).
+
+## Accuracy
+
+- **Counting noise.** A bin or facet with $k$ hits has relative error about
+  $1/\sqrt{k}$. No smoothing is applied; small facets with few hits produce
+  large peaks. Converge peak values in marker number.
+- **Guiding centre, not impact point.** Positions are guiding-centre
+  positions. The particle hits up to one gyroradius away,
+  $\rho_\alpha = m_\alpha c\, v_\perp/(Z_\alpha e B) \le 5.4$ cm for 3.5 MeV
+  alphas at 5 T. Fine wall features and peak locations below this scale are
+  not resolved.
+- **Hit energy.** With collisions, the hit keeps the momentum of the kicks
+  applied before the intersecting microstep; the energy has the time
+  resolution of the microstep.
 
 ## References
 
-1. **Lazerson, S.A., et al.** (2021). "Modeling of energetic particle transport in optimized stellarators." *Plasma Physics and Controlled Fusion* 63, 125033.
-   https://doi.org/10.1088/1361-6587/ac2b38
-
-2. **Albert, C.G., et al.** (2024). "Alpha particle confinement in Infinity Two." *Journal of Plasma Physics*.
-   https://doi.org/10.1017/S0022377824000163
-
-3. **Ku, L.P. & Boozer, A.H.** (2008). "Stellarator alpha particle loss calculations for ARIES-CS." *Fusion Science and Technology* 54, 673-693.
-   https://doi.org/10.13182/FST08-A1891
-
-4. **Drevlak, M., et al.** (2014). "Fast particle confinement with optimized coil currents in the W7-X stellarator." *Nuclear Fusion* 54, 073002.
-   https://doi.org/10.1088/0029-5515/54/7/073002
-
-5. **BEAMS3D code documentation**: https://princetonuniversity.github.io/STELLOPT/BEAMS3D
+- C. G. Albert et al., Symplectic methods for optimization of wall heat loads
+  by fusion alpha particles in stellarator reactors, Nucl. Mater. Energy 48,
+  102200 (2026), [doi:10.1016/j.nme.2026.102200](https://doi.org/10.1016/j.nme.2026.102200).
