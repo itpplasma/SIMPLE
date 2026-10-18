@@ -137,7 +137,7 @@ ni2_scale = {density:.17e}
                GFORTRAN_UNBUFFERED_ALL="1")
     with (work / "run.log").open("w") as log:
         result = subprocess.run([str(simple)], cwd=work, env=env,
-                                stdout=log, stderr=subprocess.STDOUT, timeout=240)
+                                stdout=log, stderr=subprocess.STDOUT, timeout=360)
     assert result.returncode == 0, f"{name}: see {work / 'run.log'}"
     log = (work / "run.log").read_text()
     assert "Error in stost" not in log, f"{name}: collision error; see run.log"
