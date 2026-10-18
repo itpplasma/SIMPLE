@@ -157,6 +157,19 @@ def run(
                     f"Untraced/numerically failed IDS markers: "
                     f"{list(zip(failed.tolist(), codes[failed].tolist()))}"
                 )
+            end = result["final_positions"]
+            radial_tolerance = max(1e-10, 10 * float(pysimple.params.relerr))
+            valid = (
+                np.all(np.isfinite(end), axis=0)
+                & (end[0] >= -radial_tolerance)
+                & (end[0] <= 1 + radial_tolerance)
+                & (end[3] > 0)
+                & (np.abs(end[4]) <= 1 + 100 * np.finfo(float).eps)
+            )
+            if not np.all(valid):
+                raise RuntimeError(
+                    f"Invalid final states for resolved IDS markers: {np.flatnonzero(~valid).tolist()}"
+                )
             final = np.empty_like(initial)
             final[:, :3] = pysimple.reference_to_cylindrical(
                 result["final_positions"][:3]
