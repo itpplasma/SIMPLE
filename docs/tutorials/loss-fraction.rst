@@ -66,7 +66,7 @@ The choices are:
    particles.
 ``isw_field_type = 2``, ``integmode = 1``
    Canonical Boozer coordinates with the symplectic Euler integrator, the
-   default production setting (:doc:`/model/integrators`).
+   setting used in this tutorial (:doc:`/model/integrators`).
 
 Copy it to both directories:
 
@@ -158,9 +158,11 @@ Save as ``tutorial1/plot_confined.py`` and run it in ``tutorial1`` with
    qa: loss fraction 0.121 +- 0.020
    qh: loss fraction 0.000 +- 0.000
 
-The plot shows when the losses happen. A zero loss fraction from 256 particles
-means that the loss fraction is below about :math:`1/N = 0.4\,\%` with
-moderate confidence, not that it vanishes.
+The plot shows when the losses happen. Zero losses from 256 independent
+markers give a one-sided 95 % binomial upper bound of
+:math:`1 - 0.05^{1/N} \simeq 3/N = 1.2\,\%`, rather than evidence that the
+loss probability vanishes. The plug-in standard error printed above is zero
+in this case and does not express that uncertainty.
 
 Step 6: Loss times of individual particles
 ------------------------------------------

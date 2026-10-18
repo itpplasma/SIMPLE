@@ -27,6 +27,8 @@ def loss_fraction(wout, **settings):
     t = result["loss_times"]
     lost = np.isfinite(t) & (t > 0) & (t < TRACE_TIME)
     n_resolved = np.isfinite(t).sum()
+    if n_resolved == 0:
+        raise RuntimeError("no numerically resolved particles")
     f = lost.sum() / n_resolved
     return f, np.sqrt(f * (1 - f) / n_resolved)
 

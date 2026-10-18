@@ -1,8 +1,9 @@
 Orbit classification
 ====================
 
-Without collisions, a guiding-centre orbit on a regular (non-chaotic) orbit
-stays confined for all times. SIMPLE can classify orbits as regular or chaotic
+Without collisions, a regular guiding-centre orbit stays confined if its
+invariant torus lies entirely inside the loss boundary. SIMPLE can classify
+orbits as regular or chaotic
 from a short part of their trajectory. This has two uses:
 
 * **Acceleration** of loss computations: regular trapped orbits are counted as

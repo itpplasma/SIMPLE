@@ -63,9 +63,11 @@ Accuracy
   particle impact point differs by up to a gyroradius, which smooths the
   heat-load pattern on the scale of a few centimetres for 3.5 MeV alphas in a
   reactor.
-* The chord of a microstep approximates the curved orbit. The error is of the
-  order of the step length times the curvature of the orbit; reduce the step
-  (``npoiper2``) for features smaller than the step length.
+* The chord of a microstep approximates the curved orbit. For a smooth orbit
+  with local curvature :math:`\kappa` and segment length :math:`\ell`, the
+  maximum distance from the arc to its chord is approximately
+  :math:`\kappa\ell^2/8`. Increase ``npoiper2`` to reduce the step length;
+  check convergence of wall hits, especially near tangential incidence.
 * The incidence angle is the angle of the guiding-centre chord with the wall,
   not of the particle velocity.
 

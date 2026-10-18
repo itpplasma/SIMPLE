@@ -119,8 +119,9 @@ speed is the birth speed
 
    v_0 = \sqrt{2 E_0 / m}.
 
-The integration time is the path length :math:`\tau = v_0 t`. The integrators
-work with velocities normalised to :math:`v_0/\sqrt{2}`, energies to
+The physical path-length time is :math:`\tau = v_0 t`. The symplectic
+integrators use :math:`\bar\tau = \tau/\sqrt{2}`, with velocities normalised
+to :math:`v_0/\sqrt{2}`, energies to
 :math:`E_0` and momenta divided by :math:`m v_0/\sqrt{2}`, which introduces the
 reference gyroradius :math:`\rho_0 = m c v_0 / (\sqrt{2} e)` (unit G cm) in
 the normalised momenta, :math:`\bar p_k = \bar v_\parallel h_k + A_k/\rho_0`.

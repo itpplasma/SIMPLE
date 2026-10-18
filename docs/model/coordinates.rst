@@ -82,7 +82,8 @@ Lagrangian therefore neglects :math:`h_r`, the standard approximation of
 Boozer guiding-centre codes. In return, :math:`A_\vartheta` and
 :math:`A_\varphi` are one-dimensional and :math:`h_\vartheta`,
 :math:`h_\varphi` depend on angles only through :math:`B`, which makes the
-evaluation fast. This is the default for production runs.
+evaluation fast. This is the choice used in the VMEC tutorials; the compiled
+default ``integ_coords`` selection resolves to canonical flux coordinates.
 
 Boozer chartmaps store :math:`B`, :math:`B_\vartheta`, :math:`B_\varphi`
 and :math:`A_\varphi` over a uniform grid together with the geometry; their

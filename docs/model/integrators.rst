@@ -10,9 +10,10 @@ between regular and chaotic orbits. A numerical method must therefore keep
 the long-time structure of the guiding-centre motion. Symplectic integrators
 conserve the symplectic form of the Hamiltonian system exactly (up to the
 tolerance of the implicit solve). As a consequence, phase-space volume is
-conserved, the energy error stays bounded without secular drift, and
-invariant tori of regular orbits are preserved at step sizes much larger than
-those of standard Runge-Kutta methods of the same accuracy. Albert, Kasilov
+conserved. For sufficiently small steps in smooth Hamiltonian regions,
+backward-error analysis explains the bounded long-time energy error; this
+does not guarantee stability at arbitrary step sizes or preserve every
+invariant torus. Albert, Kasilov
 and Kernbichler (2020, J. Comput. Phys.) introduced these integrators for
 guiding-centre orbits; together with early orbit classification they reduce
 the cost of loss computations by about one order of magnitude compared with
@@ -80,8 +81,11 @@ Adaptive Runge-Kutta (``integmode = 0``)
 Step size and output times
 --------------------------
 
-The microstep is :math:`h = 2\pi R_0 / \text{npoiper2}` in path length, 256
-steps per :math:`2\pi R_0` by default. The ``ntimstep`` macrosteps
+The physical path-length microstep is
+:math:`\Delta\tau = 2\pi R_0 / \text{npoiper2}`, 256 steps per
+:math:`2\pi R_0` by default. The symplectic schemes above use
+:math:`h = \Delta\tau/\sqrt{2}` in the internal normalised time
+(:doc:`guiding-centre`). The ``ntimstep`` macrosteps
 between 0 and ``trace_time`` contain an integer number of microsteps each;
 losses are recorded with the resolution of a microstep.
 

@@ -17,7 +17,7 @@ Typical use:
    pysimple.init("wout.nc", trace_time=1e-3)          # file and settings
    pysimple.init("wout.nc", config="simple.in", n_d=2)  # file and overrides
 
-   start = pysimple.sample_surface(256, s=0.5)        # (5, n) array
+   start = pysimple.sample_surface(256, s=0.6)        # (5, n) array
    result = pysimple.trace_parallel(start)            # OpenMP over particles
    pysimple.write_output()                            # simple.x output files
 
