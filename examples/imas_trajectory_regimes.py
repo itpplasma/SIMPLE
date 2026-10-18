@@ -375,6 +375,10 @@ def orbit_averages(orbit, field):
         theta = np.unwrap(
             np.arctan2(orbit["z"] - field.axis[1], orbit["r"] - field.axis[0])
         )
+        if abs(theta[-1] - theta[0]) < 2 * np.pi:
+            # Neither a bounce nor one poloidal transit inside the window.
+            result["class"] = "incomplete"
+            return result
         result["class"] = "passing"
         result["min_abs_pitch"] = float(np.min(np.abs(pitch)))
         if abs(theta[-1] - theta[0]) >= 4 * np.pi:
@@ -595,7 +599,8 @@ def marker_regime(record, duration):
         return "unresolved"
     if record["lost"]:
         return "lost"
-    classes = set(record["classes"].values())
+    # A window shorter than one bounce/transit does not contradict a class.
+    classes = set(record["classes"].values()) - {"incomplete"} or {"incomplete"}
     if len(classes) > 1:
         return "near_separatrix"
     if classes == {"passing"} and record["min_abs_pitch"] < 0.05:
@@ -676,9 +681,10 @@ def compare(
     for i, start in enumerate(positions):
         s = {k: v[i] for k, v in simple.items()}
         a = {k: v[i] for k, v in ascot.items()}
+        variant_status = {f"SIMPLE_{k}": o["status"] for k, o in s.items()}
+        variant_status.update({f"ASCOT5_{k}": o["status"] for k, o in a.items()})
         unresolved = any(
-            o["status"].startswith(("numerical", "unresolved"))
-            for o in [*s.values(), *a.values()]
+            v.startswith(("numerical", "unresolved")) for v in variant_status.values()
         )
         lost = any(o["loss_time"] is not None for o in [s["nominal"], a["nominal"]])
         horizons, growth = {}, {}
@@ -723,6 +729,7 @@ def compare(
             "marker": i,
             "start": start.tolist(),
             "unresolved": unresolved,
+            "variant_status": variant_status,
             "lost": lost,
             "status": {
                 "SIMPLE": s["nominal"]["status"],
@@ -837,9 +844,15 @@ def compare(
 
     summary = {
         "regime_counts": regimes,
-        "t_pred_s_quantiles_all": np.quantile(
-            [m["t_pred_s"] for m in markers], [0, 0.25, 0.5, 0.75, 1]
+        "t_pred_s_quantiles_resolved": np.quantile(
+            [m["t_pred_s"] for m in markers if not m["unresolved"]],
+            [0, 0.25, 0.5, 0.75, 1],
         ).tolist(),
+        "unresolved_markers": [
+            {"marker": m["marker"], "start": m["start"], "status": m["variant_status"]}
+            for m in markers
+            if m["unresolved"]
+        ],
         "regular_markers": len(regular),
         "regular_deterministic_accepted": int(
             sum(m["deterministic_accepted"] for m in regular)
