@@ -101,10 +101,12 @@ diagnostics, and four-thread SPECTRE spline tests with real HDF5 fixtures:
 
 ```bash
 /usr/bin/time -p make test-fast CONFIG=Release \
-    LIBNEO_REF=f6090e8150c2f5b1c0afde09baadf79b50b1ffe7 \
-    FLAGS='-DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF -DENABLE_OPENMP=ON' \
+    FLAGS='-DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF -DENABLE_OPENMP=ON -DLIBNEO_REF=f6090e8150c2f5b1c0afde09baadf79b50b1ffe7' \
     TEST='^(test_config_reference|test_finite_check|test_profiles|test_deterministic_seed|test_orbit_invariants|test_stencil_utils|test_orbit_symplectic_base|test_newton_solver_status|test_spectre_fo_spline_tok2vol|test_spectre_fo_spline_ncsx_freeboundary|test_diag_albert)$'
 ```
+
+The pin is included in `FLAGS`: assigning `FLAGS` on Make's command line
+overrides the Makefile's append for a separate `LIBNEO_REF` argument.
 
 The complete fast suite includes integration cases with 900-second timeouts
 (`test/tests/CMakeLists.txt:1087,1098`); it was not run on the shared login node.
