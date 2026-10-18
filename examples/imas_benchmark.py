@@ -20,19 +20,27 @@ from datetime import datetime, timezone
 
 import numpy as np
 
+# Published example equilibria: (immutable URL, SHA256, COCOS of the file).
+# Downloaded on first use into --cache; nothing is stored in Git.
 SOURCES = {
-    "aug": (
-        "https://raw.githubusercontent.com/itpplasma/GORILLA/"
-        "2f2d2802011ab895bfad8c188ca652ca5b7222c6/MHD_EQUILIBRIA/g_file_for_test",
-        "45ee20bd2b02cec81b247728d8870ce0ee470930bfe8b864e7b2a2d2f7195dce",
-        5,
+    # DIII-D shot 145419 at 2100 ms (EFIT), OMAS sample data, MIT licence.
+    # Conventional single-null tokamak of ASDEX Upgrade size; EFIT stores |q|.
+    "diii-d": (
+        "https://raw.githubusercontent.com/gafusion/omas/"
+        "f11358ecb710be8db84ab08e16e4bf468f52ff8b/omas/samples/g145419.02100",
+        "087aefddacac4337d54347e1e73085ef3b21c254176885726841a4521174f81f",
+        1,
     ),
-    "iter": (
-        "https://raw.githubusercontent.com/SCOREC/Fusion_Public/"
-        "a2228fa9763046b1a628b773d32d2201f7466693/samples/ITER_10MA_xgca/ITER_10MA.geqdsk",
-        "b82e54394b2705717e842fa581705aae181bc1c00301d95417185d7bc1ecec97",
-        7,
+    # ITER hybrid scenario (Citrin et al 2010 Nucl. Fusion 50 115007; CRONOS,
+    # CHEASE), TORAX third-party data under LICENSE_PINT (MIT).
+    "iter-hybrid": (
+        "https://raw.githubusercontent.com/google-deepmind/torax/"
+        "beab14be873d272f94c97aeb741ff093ccab8746/torax/data/third_party/geo/"
+        "iterhybrid_cocos17.eqdsk",
+        "02d948b51525156d883e5afd7085b7c5b68304341be49360d88405d3151ac367",
+        17,
     ),
+    # SPARC equilibrium-library case 1300 (0.2 MA scan), SPARCPublic, MIT.
     "sparc": (
         "https://raw.githubusercontent.com/cfs-energy/SPARCPublic/"
         "5b913b8216d05346b22e2e1e87c2ff100761613f/EQlibrary/sparc_1300.EQDSK_PsiOver2pi_negIp_negBt_negFpol",
@@ -75,9 +83,11 @@ def fetch(case, cache):
 
 
 def equilibrium_from_geqdsk(path, cocos, *, version="4.1.1"):
-    """Benchmark glue for the three explicitly identified source conventions.
+    """Benchmark glue for explicitly identified right-handed COCOS conventions.
 
     The original R,phi,Z axes are right handed; no sign is guessed from an IDS.
+    Both DD3 (COCOS 11) and DD4 (COCOS 17) have sigma_rho_theta_phi = +1, so
+    sign(q) = sign(Ip B0); EFIT-style files that store |q| are thereby covered.
     Profiles and flux are converted independently of either code's IDS reader.
     """
     from libneo.eqdsk_base import read_eqdsk
@@ -85,8 +95,9 @@ def equilibrium_from_geqdsk(path, cocos, *, version="4.1.1"):
     import imas
     from pysimple.imas._common import initialize
 
-    if cocos not in (3, 5, 7):
-        raise ValueError("This benchmark supports explicitly identified COCOS 3/5/7")
+    sigma_bp = {1: 1, 3: -1, 5: 1, 7: -1, 11: 1, 13: -1, 15: 1, 17: -1}
+    if cocos not in sigma_bp:
+        raise ValueError("This benchmark supports right-handed COCOS 1/3/5/7/1x")
     d = read_eqdsk(path)
     eq = imas.IDSFactory(version=version).new("equilibrium")
     initialize(eq, [0.0])
@@ -95,13 +106,19 @@ def equilibrium_from_geqdsk(path, cocos, *, version="4.1.1"):
     eq.time_slice.resize(1)
     t = eq.time_slice[0]
     t.time = 0.0
-    scale = 2 * np.pi * (-1 if cocos == 5 else 1)
-    qscale = 1 if cocos == 7 else -1
-    if version.startswith("3."):
+    # Target sigma_Bp is +1 for DD3 (COCOS 11) and -1 for DD4 (COCOS 17).
+    scale = (2 * np.pi if cocos < 10 else 1) * sigma_bp[cocos]
+    if not version.startswith("3."):
         scale = -scale
+    if np.ptp(np.sign(d["qprof"])) != 0:
+        raise ValueError(f"q changes sign in {path}")
     p1 = t.profiles_1d
     p1.psi = scale * np.linspace(d["PsiaxisVs"], d["PsiedgeVs"], d["nrgr"])
-    p1.f, p1.pressure, p1.q = d["fprof"], d["ptotprof"], qscale * d["qprof"]
+    p1.f, p1.pressure, p1.q = (
+        d["fprof"],
+        d["ptotprof"],
+        np.sign(d["Ip"] * d["Btor_at_R0"]) * np.abs(d["qprof"]),
+    )
     from scipy.integrate import cumulative_trapezoid
 
     toroidal = cumulative_trapezoid(np.asarray(p1.q), np.asarray(p1.psi), initial=0)
