@@ -58,3 +58,8 @@ Numerical settings
 
 The :doc:`/performance/efss-hpc/index` gives measured OpenMP scaling,
 profiles and commands for reproducing the comparison.
+
+.. toctree::
+   :maxdepth: 1
+
+   /performance/efss-hpc/index

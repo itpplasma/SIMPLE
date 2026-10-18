@@ -19,3 +19,4 @@ outputs. The physics and numerics behind each option are in
    gpu
    performance
    /hpc/cineca
+   /hpc/pitagora

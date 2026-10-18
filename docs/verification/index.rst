@@ -52,3 +52,8 @@ includes
 * separately invoked golden-record tests, which compare the current output
   with a reference version for a set of cases (``test/golden_record``,
   ``make test-regression``).
+
+.. toctree::
+   :maxdepth: 1
+
+   /verification
