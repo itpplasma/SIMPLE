@@ -56,6 +56,5 @@ Numerical settings
   ``canonical_grid_nphi`` set the grid of the Meiss and Albert
   transformation. Change one at a time in resolution studies.
 
-The note ``docs/performance/non_soa_cpu_regression.md``
-(:doc:`/performance/non_soa_cpu_regression`) documents a CPU throughput comparison
-between versions.
+The :doc:`/performance/efss-hpc/index` gives measured OpenMP scaling,
+profiles and commands for reproducing the comparison.

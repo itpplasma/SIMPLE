@@ -19,7 +19,6 @@ endif
 BUILD_NINJA := $(BUILD_DIR)/build.ninja
 PYTHON_FOR_TESTS := $(if $(wildcard .venv/bin/python),$(CURDIR)/.venv/bin/python,python)
 SIMPLE_GVEC_QA_CACHE_ROOT ?= $(HOME)/data/SIMPLE/gvec_qa_roundtrip
-SIMPLE_FIGURE8_DATA_ROOT ?= $(HOME)/data/QUASR/SIMPLE/figure8
 SIMPLE_DATA_REPO ?= $(HOME)/data
 SIMPLE_DATA_GVEC_QA_DIR ?= $(SIMPLE_DATA_REPO)/TESTS/SIMPLE/gvec_qa_roundtrip
 
