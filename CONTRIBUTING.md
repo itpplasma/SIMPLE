@@ -84,9 +84,10 @@ export CC=gcc-16 CXX=g++-16 FC=gfortran
 
 Use `./setup-venv.sh --no-pysimple` to install only the Python dependencies.
 
-Without this environment the Python tests fail with `ModuleNotFoundError`; use
-`make test-nopy` to exclude tests labelled `python`. Some remaining test
-wrappers still use the Python standard library.
+Keep the environment available for `make test-nopy` too. That target excludes
+tests labelled `python`, but unlabelled wrappers can still need Python
+packages; for example, the NCSX VMEC/Meiss comparison imports `numpy`,
+`netCDF4` and `matplotlib`.
 
 ## Running tests
 
@@ -101,7 +102,7 @@ rebuild with deterministic floating point (`SIMPLE_DETERMINISTIC_FP=ON`) first.
 | `make test` | All tests except `regression`, including slow and Python tests. |
 | `make test-nopy` | As `make test`, excluding tests labelled `python`. |
 | `make test-regression` | Tests labelled `regression`, including golden-record comparisons. |
-| `make test-golden` | Golden-record tests only (label `golden_record`). |
+| `make test-regression TEST=golden_record_` | Golden-record tests only (name filter). |
 | `make test-all` | Every registered test. |
 
 Select tests by name with `TEST=<regex>`, for example
@@ -112,7 +113,10 @@ use the Fast profile.
 
 The golden-record tests clone and build `main` in the build tree, run the cases
 in `test/golden_record/*/simple.in` with both builds and compare the outputs.
-The first run therefore needs network access and several minutes.
+The first run therefore needs network access and several minutes. Use the
+filtered `test-regression` command above for golden-record comparisons:
+`test-golden` does not export `GOLDEN_LIBNEO_REF` to the reference runner,
+which can select a different libneo revision from the current build.
 
 ## Tests to add
 
