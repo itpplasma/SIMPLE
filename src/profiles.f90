@@ -9,6 +9,7 @@ module simple_profiles
 
     character(len=32) :: profile_type = "power_series"
     integer :: active_profile = POWER_SERIES
+    real(dp), allocatable, private :: table_radius(:), table_values(:, :)
 
     real(dp) :: Te_scale = 1.0d4
     real(dp) :: Ti1_scale = 1.0d4
@@ -59,6 +60,8 @@ contains
         integer, save :: defaults_unit
         logical, save :: recorded = .false.
 
+        if (allocated(table_radius)) deallocate (table_radius, table_values)
+
         if (.not. recorded) then
             open (newunit=defaults_unit, status='scratch', delim='apostrophe')
             write (defaults_unit, nml=profiles)
@@ -78,11 +81,44 @@ contains
         end select
     end subroutine select_active_profile
 
+    !> Library plasma table: reference radius, Te, Ti1, Ti2 [eV], ni1, ni2 [m^-3].
+    subroutine set_profile_table(n, table, status)
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+        integer, intent(in) :: n
+        real(dp), intent(in) :: table(6, n)
+        integer, intent(out) :: status
+
+        status = 1
+        if (n < 2) return
+        if (.not. all(ieee_is_finite(table))) return
+        if (any(table(2:6, :) < 0.0_dp)) return
+        if (table(1, 1) /= 0.0_dp .or. table(1, n) /= 1.0_dp) return
+        if (any(table(1, 2:n) <= table(1, 1:n - 1))) return
+        if (allocated(table_radius)) deallocate (table_radius, table_values)
+        allocate (table_radius(n), table_values(5, n))
+        table_radius = table(1, :)
+        table_values = table(2:6, :)
+        status = 0
+    end subroutine set_profile_table
+
     subroutine get_plasma_params(s, Te, Ti1, Ti2, ni1, ni2)
+        use plag_coeff_sub, only: plag_coeff
         real(dp), intent(in) :: s
         real(dp), intent(out) :: Te, Ti1, Ti2, ni1, ni2
+        real(dp) :: radius, coefficient(0:0, 2), values(5)
+        integer :: i
 
-        if (active_profile == TWO_POWER) then
+        if (allocated(table_radius)) then
+            radius = max(0.0_dp, min(1.0_dp, s))
+            i = max(1, min(size(table_radius) - 1, count(table_radius <= radius)))
+            call plag_coeff(2, 0, radius, table_radius(i:i + 1), coefficient)
+            values = matmul(table_values(:, i:i + 1), coefficient(0, :))
+            Te = values(1)
+            Ti1 = values(2)
+            Ti2 = values(3)
+            ni1 = values(4)
+            ni2 = values(5)
+        else if (active_profile == TWO_POWER) then
             call get_two_power(s, Te, Ti1, Ti2, ni1, ni2)
         else
             call get_power_series(s, Te, Ti1, Ti2, ni1, ni2)

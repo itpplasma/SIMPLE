@@ -13,7 +13,7 @@ module simple_api
         times_lost, trap_par, perp_inv, iclass, class_passing, class_lost, &
         ntimstep, bmod00, bmin, bmax, reallocate_arrays, reset_config, &
         finalize_config, isw_field_type, integ_coords, field_input, config
-    use simple_profiles, only: read_profiles, reset_profiles
+    use simple_profiles, only: read_profiles, reset_profiles, set_profile_table
     use magfie_sub, only: TEST, CANFLUX, BOOZER
     use field_boozer_chartmap, only: is_boozer_chartmap
     use field_can_mod, only: integ_to_ref
@@ -28,13 +28,15 @@ module simple_api
     private
 
     public :: simple_reset_config, simple_read_config, simple_set_config, &
-        simple_init, &
-        simple_sample, simple_sample_surface, simple_sample_volume, &
-        simple_set_start, simple_trace, simple_classify, simple_get_results, &
-        simple_get_classification, simple_write_output, simple_trace_orbit, &
-        simple_orbit_frequencies, simple_invariants_from_state, &
-        simple_states_from_invariants, simple_potato_invariants, &
-        simple_trace_to_cut
+              simple_init, &
+              simple_sample, simple_sample_surface, simple_sample_volume, &
+              simple_set_start, simple_trace, simple_classify, simple_get_results, &
+              simple_get_classification, simple_write_output, simple_trace_orbit, &
+              simple_orbit_frequencies, simple_invariants_from_state, &
+              simple_states_from_invariants, simple_potato_invariants, &
+              simple_trace_to_cut, simple_reference_info, simple_wall_supported, &
+              simple_cylindrical_to_reference, simple_reference_to_cylindrical, &
+              simple_set_profile_table
 
     integer, parameter :: FIELD_NONE = 0, FIELD_SAMPLING = 1, FIELD_TRACING = 2
 
@@ -43,6 +45,111 @@ module simple_api
     real(dp), save :: sampling_surface = -1.0_dp
 
 contains
+
+    logical function simple_wall_supported()
+        use stl_wall_intersection, only: stl_wall_available
+
+        simple_wall_supported = stl_wall_available
+    end function simple_wall_supported
+
+    subroutine simple_set_profile_table(n, table, status)
+        integer, intent(in) :: n
+        real(dp), intent(in) :: table(6, n)
+        integer, intent(out) :: status
+
+        call set_profile_table(n, table, status)
+    end subroutine simple_set_profile_table
+
+    !> Physical reference-coordinate metadata: lengths to metres, radial kind
+    !> 1 = VMEC s, 2 = chart rho. Normalized TEST and SPECTRE are unsupported.
+    subroutine simple_reference_info(length_to_m, radial_kind, status)
+        use reference_coordinates, only: ref_coords
+        use libneo_coordinates, only: chartmap_coordinate_system_t
+        use chartmap_metadata, only: chartmap_metadata_t, read_chartmap_metadata
+        use params, only: coord_input
+        use magfie_sub, only: SPECTRE
+
+        real(dp), intent(out) :: length_to_m
+        integer, intent(out) :: radial_kind, status
+        type(chartmap_metadata_t) :: metadata
+
+        length_to_m = 0.01_dp
+        radial_kind = 1
+        status = 1
+        if (isw_field_type == TEST .or. isw_field_type == SPECTRE) return
+        if (.not. allocated(ref_coords)) return
+        select type (cs => ref_coords)
+        class is (chartmap_coordinate_system_t)
+            call read_chartmap_metadata(coord_input, metadata)
+            length_to_m = metadata%cart_scale_to_m
+            radial_kind = 2
+        class default
+            continue
+        end select
+        status = 0
+    end subroutine simple_reference_info
+
+    !> Convert physical (R [m], phi [rad], Z [m]) to native reference coordinates.
+    !> Return one inverse status per point; invalid results are NaN.
+    subroutine simple_cylindrical_to_reference(n, cylindrical, reference, status)
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_value, &
+                                                                          ieee_quiet_nan
+        use reference_coordinates, only: ref_coords
+
+        integer, intent(in) :: n
+        real(dp), intent(in) :: cylindrical(3, n)
+        real(dp), intent(out) :: reference(3, n)
+        integer, intent(out) :: status(n)
+        real(dp) :: scale, point(3), result(3)
+        integer :: i, radial_kind, info_status
+
+        reference = ieee_value(0.0_dp, ieee_quiet_nan)
+        status = -1
+        call simple_reference_info(scale, radial_kind, info_status)
+        if (info_status /= 0) return
+        do i = 1, n
+            if (.not. all(ieee_is_finite(cylindrical(:, i)))) cycle
+            if (cylindrical(1, i) <= 0.0_dp) cycle
+            point = cylindrical(:, i)
+            point(1) = point(1)/scale
+            point(3) = point(3)/scale
+            call ref_coords%from_cyl(point, result, status(i))
+            if (status(i) /= 0) cycle
+            if (.not. all(ieee_is_finite(result))) then
+                status(i) = -1
+                cycle
+            end if
+            reference(:, i) = result
+        end do
+    end subroutine simple_cylindrical_to_reference
+
+    !> Convert native reference coordinates to physical (R [m], phi [rad], Z [m]).
+    subroutine simple_reference_to_cylindrical(n, reference, cylindrical, status)
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_value, &
+                                                                          ieee_quiet_nan
+        use reference_coordinates, only: ref_coords
+
+        integer, intent(in) :: n
+        real(dp), intent(in) :: reference(3, n)
+        real(dp), intent(out) :: cylindrical(3, n)
+        integer, intent(out) :: status(n)
+        real(dp) :: scale, point(3)
+        integer :: i, radial_kind, info_status
+
+        cylindrical = ieee_value(0.0_dp, ieee_quiet_nan)
+        status = -1
+        call simple_reference_info(scale, radial_kind, info_status)
+        if (info_status /= 0) return
+        do i = 1, n
+            if (.not. all(ieee_is_finite(reference(:, i)))) cycle
+            call ref_coords%evaluate_cyl(reference(:, i), point)
+            if (.not. all(ieee_is_finite(point))) cycle
+            point(1) = point(1)*scale
+            point(3) = point(3)*scale
+            cylindrical(:, i) = point
+            status(i) = 0
+        end do
+    end subroutine simple_reference_to_cylindrical
 
     !> Restore all &config and &profiles values to their compiled defaults.
     subroutine simple_reset_config()

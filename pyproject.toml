@@ -7,12 +7,16 @@ name = "pysimple"
 version = "1.5.1"
 dependencies = ["numpy", "f90wrap==0.3.0"]
 optional-dependencies.plotting = ["matplotlib>=3.9", "netCDF4>=1.7"]
+optional-dependencies.imas = ["imas-python>=2.3,<3", "imas-data-dictionaries>=4.1.1",
+                              "netCDF4>=1.7", "scipy>=1.15",
+                              "libneo @ git+https://github.com/itpplasma/libneo.git@069f366f5c265e7f2d0a400f5b79d88ba78af58c"]
 classifiers = [
     "License :: OSI Approved :: MIT License",
 ]
 
 [project.scripts]
 simple-plot = "pysimple.cli:main"
+simple-imas = "pysimple.imas.actor:main"
 
 [tool.scikit-build]
 build.verbose = true

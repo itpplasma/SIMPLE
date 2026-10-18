@@ -10,6 +10,7 @@ program test_profiles
     all_passed = .true.
     n_failed = 0
 
+    call test_tabulated_profiles()
     call test_power_series_evaluation(all_passed, n_failed)
     call test_two_power_evaluation(all_passed, n_failed)
     call test_zero_density_operator(all_passed, n_failed)
@@ -29,6 +30,30 @@ program test_profiles
     end if
 
 contains
+
+    subroutine test_tabulated_profiles()
+        real(dp) :: table(6, 3), te, ti1, ti2, ni1, ni2
+        integer :: status
+
+        call reset_profiles()
+        table(1, :) = [0.0_dp, 0.25_dp, 1.0_dp]
+        table(2, :) = [1000.0_dp, 2000.0_dp, 5000.0_dp]
+        table(3, :) = 3000.0_dp
+        table(4, :) = 4000.0_dp
+        table(5, :) = [1e19_dp, 2e19_dp, 5e19_dp]
+        table(6, :) = 2e19_dp
+        call set_profile_table(3, table, status)
+        if (status /= 0) error stop 'Valid tabulated profiles rejected'
+        call get_plasma_params(0.5_dp, te, ti1, ti2, ni1, ni2)
+        if (abs(te - 3000.0_dp) > 1e-9_dp) error stop 'Profile interpolation'
+        if (abs(ni1/1e19_dp - 3.0_dp) > 1e-12_dp) error stop 'Density units'
+        table(1, 2) = 0.0_dp
+        call set_profile_table(3, table, status)
+        if (status == 0) error stop 'Duplicate radial abscissa accepted'
+        call reset_profiles()
+        call get_plasma_params(0.0_dp, te, ti1, ti2, ni1, ni2)
+        if (abs(te - 1e4_dp) > 1e-9_dp) error stop 'Profile reset retained IDS table'
+    end subroutine test_tabulated_profiles
 
     ! Flat profiles reproduce the scalar collision operator up to floating-point
     ! round-off, not bit-for-bit: the grid is built by an independent per-node

@@ -6,6 +6,23 @@ fit together.
 
 Update this file when coordinates or field-loading paths change.
 
+The optional IMAS actor imports axisymmetric rectangular equilibrium IDS through
+libneo's G-EQDSK-to-Boozer converter. It maps DD3 COCOS11 and DD4 COCOS17 to
+COCOS3 explicitly, preserving SI lengths and flux normalization. Cartesian
+chartmap geometry covers the full toroidal period even for an axisymmetric field;
+the covariant toroidal field is G, not the transform normalization G + iota*I.
+Uniform rho and the independent uniform s abscissa for A_phi are distinct grids.
+
+`simple_cylindrical_to_reference` and `simple_reference_to_cylindrical` expose
+the loaded libneo reference coordinate map with `(R [m], phi [rad], Z [m])` at
+the boundary. VMEC reference radius is s; chartmap reference radius is rho.
+Failed inverses return a per-marker status and Python raises an error. Normalized
+TEST and SPECTRE references are rejected by this physical-coordinate API.
+These transforms do not change the integrator-coordinate conventions.
+In particular, the tabulated collision profile abscissa remains s for both VMEC
+and Boozer integration, so IDS rho_tor_norm is squared before loading profiles.
+See the IMAS workflow in `python/README.rst` for supported IDS and weight semantics.
+
 Fusion birth sampling (`startmode = 7`) uses the VMEC volume Jacobian in
 `(s,theta,phi)` for VMEC input, or the field-derived Boozer Jacobian
 `torflux*(iota*B_theta+B_zeta)/B^2` in integration `(s,theta_B,zeta_B)` for

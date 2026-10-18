@@ -677,7 +677,7 @@ Source: ``src/params.f90:213``.
 &profiles
 ---------
 
-Source: ``src/profiles.f90:36``.
+Source: ``src/profiles.f90:37``.
 
 .. list-table::
    :header-rows: 1
