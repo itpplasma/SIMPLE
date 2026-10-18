@@ -124,6 +124,8 @@ unchanged).
   your change. Do not use
   `fprettify --enable-replacements` together with a line-length option; it can
   split tokens across continuation lines.
+- CI checks changed Fortran lines with `fprettify -c .fprettify`; run
+  `python tools/check_changed_lines.py` before pushing.
 - One space before an inline comment. Use `!>` for documentation comments on
   modules, types and procedures.
 
@@ -152,8 +154,9 @@ Python code is the `pysimple` package (`python/pysimple/`), the tools in
 
 - CI uses Python 3.12. Start modules with a docstring and
   `from __future__ import annotations` **(new code)**.
-- Follow PEP 8 with a line length of 88 characters. The current CI workflows
-  do not run Python lint or formatting checks.
+- Follow PEP 8 with a line length of 88 characters. CI runs `ruff check` and
+  `ruff format` on changed lines in `python/` and `tools/`
+  (`tools/check_changed_lines.py`).
 - Public functions have type hints and a docstring in plain prose that names
   units, shapes and raised exceptions **(new code)**. The API reference is
   built from the package docstrings with Sphinx (`docs/`).

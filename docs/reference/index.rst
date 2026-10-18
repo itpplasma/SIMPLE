@@ -6,8 +6,8 @@ Reference
 
    input-parameters
    /input-reference
-   /overview
+   numerical-settings
+   /boozer-chartmap-schema
    /api/index
    /examples
-   /boozer-chartmap-schema
    publications
