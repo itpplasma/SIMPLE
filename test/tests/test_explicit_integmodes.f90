@@ -22,22 +22,22 @@ program test_explicit_integmodes
 
     use, intrinsic :: iso_fortran_env, only: dp => real64, error_unit
     use orbit_symplectic, only: symplectic_integrator_t, orbit_sympl_init, &
-        orbit_timestep_sympl
+                                orbit_timestep_sympl
     use orbit_symplectic_base, only: RADAU15, GBS16, CASHKARP45, TDRK24, TDRK24A
     use field_can_mod, only: eval_field => evaluate, field_can_from_name, &
-        field_can_t, field_can_init, get_val
+                             field_can_t, field_can_init, get_val
 
     implicit none
 
     integer, parameter :: NMODE = 4
     integer, parameter :: MODES(NMODE) = [RADAU15, GBS16, CASHKARP45, TDRK24A]
     character(len=16), parameter :: NAMES(NMODE) = &
-        [character(len=16) :: 'Gauss-Radau', 'Bulirsch-Stoer', 'Cash-Karp', 'TDRK adaptive']
+    [character(len=16) :: 'Gauss-Radau', 'Bulirsch-Stoer', 'Cash-Karp', 'TDRK adaptive']
 
     real(dp), parameter :: Z0(4) = [0.1_dp, 0.7_dp, 0.1_dp, 0.0_dp]
     real(dp), parameter :: VPAR0 = 0.8_dp
     real(dp), parameter :: DT = 500.0_dp
-    integer,  parameter :: NSTEP = 100
+    integer, parameter :: NSTEP = 100
 
     real(dp) :: zloose(4, NMODE), ztight(4, NMODE)
     real(dp) :: hloose(NMODE), htight(NMODE)
@@ -73,7 +73,7 @@ program test_explicit_integmodes
         end if
     end do
     write (*, '(a,es10.3)') '  cross-method spread at rtol 1e-11, max component ', &
-        maxval([(maxval(ztight(k, :)) - minval(ztight(k, :)), k = 1, 4)])
+        maxval([(maxval(ztight(k, :)) - minval(ztight(k, :)), k=1, 4)])
 
     ! Fixed-step TDRK: no tolerance to tighten, so the invariant has to improve
     ! under refinement instead. trace holds the macro-step DT fixed and splits it

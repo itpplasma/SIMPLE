@@ -1,11 +1,11 @@
 module orbit_symplectic_quasi
 
 use util, only: pi
-use field_can_mod, only: eval_field => evaluate, field_can_t, get_derivatives, &
-  get_derivatives2
+    use field_can_mod, only: eval_field => evaluate, field_can_t, get_derivatives, &
+                             get_derivatives2
 use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
-  orbit_timestep_quasi_i, coeff_rk_gauss, coeff_rk_lobatto, f_rk_lobatto, sympl_rmax, &
-  SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN, SYMPLECTIC_STEP_MAXITER
+   orbit_timestep_quasi_i, coeff_rk_gauss, coeff_rk_lobatto, f_rk_lobatto, sympl_rmax, &
+             SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN, SYMPLECTIC_STEP_MAXITER
 use fortnum_multiroot, only: multiroot_hybrids
 use fortnum_status, only: fortnum_status_t
 use diag_counters, only: count_event, EVT_R_NEGATIVE
@@ -37,17 +37,17 @@ procedure(orbit_timestep_quasi_i), pointer :: orbit_timestep_quasi => null()
 ! the thread happened to run before it, so the same particle gives different
 ! evaluation counts (and, through the controller's history, slightly different
 ! trajectories) depending on scheduling. orbit_sympl_init resets it.
-real(dp) :: explicit_h_carry = 0d0
-  !$omp threadprivate(explicit_h_carry)
+    real(dp) :: explicit_h_carry = 0d0
+    !$omp threadprivate(explicit_h_carry)
 
 contains
 
-subroutine reset_explicit_step_carry
-  explicit_h_carry = 0d0
-end subroutine reset_explicit_step_carry
+    subroutine reset_explicit_step_carry
+        explicit_h_carry = 0d0
+    end subroutine reset_explicit_step_carry
 
-  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-  !
+    !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+    !
 ! Restore the chart invariants the rest of SIMPLE maintains inside a step, and
 ! report the status the caller's boundary bisection expects.
 !
@@ -76,33 +76,33 @@ end subroutine reset_explicit_step_carry
 ! bisection re-runs the step up to 64 times on ever smaller fractions of dt,
 ! and without this the carry would come back at bisection scale and throttle
 ! every later step of the orbit.
-subroutine explicit_step_finish(h_entry, ierr)
-  real(dp), intent(in) :: h_entry
-  integer, intent(out) :: ierr
+    subroutine explicit_step_finish(h_entry, ierr)
+        real(dp), intent(in) :: h_entry
+        integer, intent(out) :: ierr
 
-  ! A non-finite state has to be caught before the comparisons below, because
-  ! every comparison against NaN is false: NaN > sympl_rmax does not fire, so a
-  ! NaN orbit would be waved through as a good step and reported as confined.
-  ! The adaptive drivers usually fail first -- a NaN error norm never satisfies
-  ! err <= 1, so the step is rejected until the size underflows -- but the
-  ! fixed-step TDRK has no error estimate to fail, and nothing else on this path
-  ! inspects the state.
-  if (any(si%z(1:4) /= si%z(1:4))) then
-    ierr = SYMPLECTIC_STEP_MAXITER
-    explicit_h_carry = h_entry
-    return
-  end if
+        ! A non-finite state has to be caught before the comparisons below, because
+        ! every comparison against NaN is false: NaN > sympl_rmax does not fire, so a
+        ! NaN orbit would be waved through as a good step and reported as confined.
+        ! The adaptive drivers usually fail first -- a NaN error norm never satisfies
+        ! err <= 1, so the step is rejected until the size underflows -- but the
+        ! fixed-step TDRK has no error estimate to fail, and nothing else on this path
+        ! inspects the state.
+        if (any(si%z(1:4) /= si%z(1:4))) then
+            ierr = SYMPLECTIC_STEP_MAXITER
+            explicit_h_carry = h_entry
+            return
+        end if
 
-  if (si%z(1) < 0d0) then
-    call count_event(EVT_R_NEGATIVE)
-    si%z(1) = -si%z(1)
-    si%z(2) = si%z(2) + pi
-  end if
+        if (si%z(1) < 0d0) then
+            call count_event(EVT_R_NEGATIVE)
+            si%z(1) = -si%z(1)
+            si%z(2) = si%z(2) + pi
+        end if
 
-  ierr = SYMPLECTIC_STEP_OK
-  if (si%z(1) > sympl_rmax) ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
-  if (ierr /= SYMPLECTIC_STEP_OK) explicit_h_carry = h_entry
-end subroutine explicit_step_finish
+        ierr = SYMPLECTIC_STEP_OK
+        if (si%z(1) > sympl_rmax) ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+        if (ierr /= SYMPLECTIC_STEP_OK) explicit_h_carry = h_entry
+    end subroutine explicit_step_finish
 
   !
   ! Wrapper routines for ODEPACK
@@ -612,35 +612,35 @@ subroutine f_ode(tau, z, zdot)
 
 end subroutine f_ode
 
-  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-  !
+    !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+    !
 ! Index into the packed symmetric second-derivative arrays d2H, d2pth, d2vpar.
 !
 ! field_can_base documents the order as
 !   1:(r,r) 2:(r,th) 3:(r,ph) 4:(th,th) 5:(th,ph) 6:(ph,ph)
 !   7:(pph,r) 8:(pph,th) 9:(pph,ph) 10:(pph,pph)
 ! over the variables (r, th, ph, pph) = (1, 2, 3, 4).
-pure function d2idx(i, j) result(k)
-  integer, intent(in) :: i, j
-  integer :: k
-  integer :: lo, hi
+    pure function d2idx(i, j) result(k)
+        integer, intent(in) :: i, j
+        integer :: k
+        integer :: lo, hi
 
-  lo = min(i, j)
-  hi = max(i, j)
+        lo = min(i, j)
+        hi = max(i, j)
 
-  if (hi == 4) then
-    k = 6 + lo            ! (r,pph)=7, (th,pph)=8, (ph,pph)=9, (pph,pph)=10
-  else if (lo == 1) then
-    k = hi                ! (r,r)=1, (r,th)=2, (r,ph)=3
-  else if (lo == 2) then
-    k = hi + 2            ! (th,th)=4, (th,ph)=5
-  else
-    k = 6                 ! (ph,ph)
-  end if
-end function d2idx
+        if (hi == 4) then
+            k = 6 + lo            ! (r,pph)=7, (th,pph)=8, (ph,pph)=9, (pph,pph)=10
+        else if (lo == 1) then
+            k = hi                ! (r,r)=1, (r,th)=2, (r,ph)=3
+        else if (lo == 2) then
+            k = hi + 2            ! (th,th)=4, (th,ph)=5
+        else
+            k = 6                 ! (ph,ph)
+        end if
+    end function d2idx
 
-  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-  !
+    !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+    !
 ! Second time derivative of the canonical guiding-centre state,
 !
 !   G(z) = F'(z) F(z),
@@ -663,67 +663,67 @@ end function d2idx
 ! hth and hph are geometric and carry no pph dependence, hence the explicit zero
 ! in the fourth slot of their gradients rather than an out-of-bounds read of a
 ! three-element array.
-subroutine g_ode(tau, z, g)
-  real(dp), intent(in)  :: tau
-  real(dp), intent(in)  :: z(:)
-  real(dp), intent(out) :: g(:)
+    subroutine g_ode(tau, z, g)
+        real(dp), intent(in)  :: tau
+        real(dp), intent(in)  :: z(:)
+        real(dp), intent(out) :: g(:)
 
-  real(dp) :: Hprime, dHprime(4), dhth4(4), dhph4(4)
-  real(dp) :: zdot(4), dF(4, 4)
-  integer  :: j
+        real(dp) :: Hprime, dHprime(4), dhth4(4), dhph4(4)
+        real(dp) :: zdot(4), dF(4, 4)
+        integer  :: j
 
-  call eval_field(f, z(1), z(2), z(3), 2)
-  call get_derivatives2(f, z(4))
+        call eval_field(f, z(1), z(2), z(3), 2)
+        call get_derivatives2(f, z(4))
 
-  Hprime = f%dH(1)/f%dpth(1)
+        Hprime = f%dH(1)/f%dpth(1)
 
-  dhth4(1:3) = f%dhth
-  dhth4(4)   = 0d0
-  dhph4(1:3) = f%dhph
-  dhph4(4)   = 0d0
+        dhth4(1:3) = f%dhth
+        dhth4(4) = 0d0
+        dhph4(1:3) = f%dhph
+        dhph4(4) = 0d0
 
-  zdot(1) = -(f%dH(2) - f%hth/f%hph*f%dH(3))/f%dpth(1)
-  zdot(2) = Hprime
-  zdot(3) = (f%vpar - Hprime*f%hth)/f%hph
-  zdot(4) = -(f%dH(3) - Hprime*f%dpth(3))
+        zdot(1) = -(f%dH(2) - f%hth/f%hph*f%dH(3))/f%dpth(1)
+        zdot(2) = Hprime
+        zdot(3) = (f%vpar - Hprime*f%hth)/f%hph
+        zdot(4) = -(f%dH(3) - Hprime*f%dpth(3))
 
-  ! Hprime is a quotient of two state-dependent quantities, so both numerator
-  ! and denominator contribute. This is the term a hand derivation usually drops.
-  do j = 1, 4
-    dHprime(j) = (f%d2H(d2idx(1, j))*f%dpth(1) &
-                - f%dH(1)*f%d2pth(d2idx(1, j)))/f%dpth(1)**2
-  end do
+        ! Hprime is a quotient of two state-dependent quantities, so both numerator
+        ! and denominator contribute. This is the term a hand derivation usually drops.
+        do j = 1, 4
+            dHprime(j) = (f%d2H(d2idx(1, j))*f%dpth(1) &
+                          - f%dH(1)*f%d2pth(d2idx(1, j)))/f%dpth(1)**2
+        end do
 
-  do j = 1, 4
-    dF(1, j) = -((f%d2H(d2idx(2, j)) &
-               - (dhth4(j)/f%hph - f%hth*dhph4(j)/f%hph**2)*f%dH(3) &
-               - f%hth/f%hph*f%d2H(d2idx(3, j)))*f%dpth(1) &
-               - (f%dH(2) - f%hth/f%hph*f%dH(3))*f%d2pth(d2idx(1, j))) &
-               /f%dpth(1)**2
+        do j = 1, 4
+            dF(1, j) = -((f%d2H(d2idx(2, j)) &
+                          - (dhth4(j)/f%hph - f%hth*dhph4(j)/f%hph**2)*f%dH(3) &
+                          - f%hth/f%hph*f%d2H(d2idx(3, j)))*f%dpth(1) &
+                         - (f%dH(2) - f%hth/f%hph*f%dH(3))*f%d2pth(d2idx(1, j))) &
+                       /f%dpth(1)**2
 
-    dF(2, j) = dHprime(j)
+            dF(2, j) = dHprime(j)
 
-    dF(3, j) = ((f%dvpar(j) - dHprime(j)*f%hth - Hprime*dhth4(j))*f%hph &
-               - (f%vpar - Hprime*f%hth)*dhph4(j))/f%hph**2
+            dF(3, j) = ((f%dvpar(j) - dHprime(j)*f%hth - Hprime*dhth4(j))*f%hph &
+                        - (f%vpar - Hprime*f%hth)*dhph4(j))/f%hph**2
 
-    dF(4, j) = -(f%d2H(d2idx(3, j)) - dHprime(j)*f%dpth(3) &
-               - Hprime*f%d2pth(d2idx(3, j)))
-  end do
+            dF(4, j) = -(f%d2H(d2idx(3, j)) - dHprime(j)*f%dpth(3) &
+                         - Hprime*f%d2pth(d2idx(3, j)))
+        end do
 
-  g(1:4) = matmul(dF, zdot)
-end subroutine g_ode
+        g(1:4) = matmul(dF, zdot)
+    end subroutine g_ode
 
-  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-  !
+    !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+    !
 ! Adapter from g_ode to fortnum's ode_rhs2_t.
-subroutine g_ode_fortnum(t, y, g, ctx)
-  real(dp), intent(in)  :: t
-  real(dp), intent(in)  :: y(:)
-  real(dp), intent(out) :: g(:)
-  class(*), intent(in), optional :: ctx
+    subroutine g_ode_fortnum(t, y, g, ctx)
+        real(dp), intent(in)  :: t
+        real(dp), intent(in)  :: y(:)
+        real(dp), intent(out) :: g(:)
+        class(*), intent(in), optional :: ctx
 
-  call g_ode(t, y, g)
-end subroutine g_ode_fortnum
+        call g_ode(t, y, g)
+    end subroutine g_ode_fortnum
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
@@ -741,65 +741,65 @@ subroutine orbit_timestep_rk45(ierr)
   end do
 end subroutine orbit_timestep_rk45
 
-  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-  !
+    !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+    !
 ! Adapter from f_ode to fortnum's ode_rhs_t, which carries an optional context
 ! argument that this right-hand side does not need.
-subroutine f_ode_fortnum(t, y, dydt, ctx)
-  real(dp), intent(in)  :: t
-  real(dp), intent(in)  :: y(:)
-  real(dp), intent(out) :: dydt(:)
-  class(*), intent(in), optional :: ctx
+    subroutine f_ode_fortnum(t, y, dydt, ctx)
+        real(dp), intent(in)  :: t
+        real(dp), intent(in)  :: y(:)
+        real(dp), intent(out) :: dydt(:)
+        class(*), intent(in), optional :: ctx
 
-  call f_ode(t, y, dydt)
-end subroutine f_ode_fortnum
+        call f_ode(t, y, dydt)
+    end subroutine f_ode_fortnum
 
-  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-  !
+    !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+    !
 ! Gauss-Radau (IAS15-style, 15th order) on the same canonical Hamiltonian the
 ! symplectic schemes use.
-subroutine orbit_timestep_radau15(ierr)
-  !
-  use fortnum_ode_gauss_radau, only : ode_integrate_radau
-  use fortnum_ode, only : ode_problem_t, ode_solution_t
-  use fortnum_status, only : fortnum_status_t, FORTNUM_OK
-  integer, intent(out) :: ierr
-  integer :: ktau, nlast
-  type(ode_problem_t) :: problem
-  type(ode_solution_t) :: solution
-  type(fortnum_status_t) :: status
-  real(dp) :: h_entry
+    subroutine orbit_timestep_radau15(ierr)
+        !
+        use fortnum_ode_gauss_radau, only: ode_integrate_radau
+        use fortnum_ode, only: ode_problem_t, ode_solution_t
+        use fortnum_status, only: fortnum_status_t, FORTNUM_OK
+        integer, intent(out) :: ierr
+        integer :: ktau, nlast
+        type(ode_problem_t) :: problem
+        type(ode_solution_t) :: solution
+        type(fortnum_status_t) :: status
+        real(dp) :: h_entry
 
-  ierr = 0
-  ktau = 0
-  problem%rhs => f_ode_fortnum
-  problem%rtol = si%rtol
-  problem%atol = si%atol
-  allocate(problem%y0(4))
-  do while(ktau .lt. si%ntau)
-    h_entry = explicit_h_carry
-    problem%t0 = ktau*si%dt
-    problem%t1 = (ktau+1)*si%dt
-    problem%y0 = si%z(1:4)
-    problem%h0 = explicit_h_carry
-    call ode_integrate_radau(problem, solution, status)
-    if (status%code /= FORTNUM_OK) then
-      ierr = SYMPLECTIC_STEP_MAXITER
-      explicit_h_carry = h_entry
-      return
-    end if
-    nlast = size(solution%t)
-    si%z(1:4) = solution%y(:, nlast)
-    if (nlast > 1) explicit_h_carry = solution%h(nlast)
-    call explicit_step_finish(h_entry, ierr)
-    if (ierr /= SYMPLECTIC_STEP_OK) return
-    ktau = ktau+1
-  end do
-  call sync_field_to_state
-end subroutine orbit_timestep_radau15
+        ierr = 0
+        ktau = 0
+        problem%rhs => f_ode_fortnum
+        problem%rtol = si%rtol
+        problem%atol = si%atol
+        allocate (problem%y0(4))
+        do while (ktau .lt. si%ntau)
+            h_entry = explicit_h_carry
+            problem%t0 = ktau*si%dt
+            problem%t1 = (ktau + 1)*si%dt
+            problem%y0 = si%z(1:4)
+            problem%h0 = explicit_h_carry
+            call ode_integrate_radau(problem, solution, status)
+            if (status%code /= FORTNUM_OK) then
+                ierr = SYMPLECTIC_STEP_MAXITER
+                explicit_h_carry = h_entry
+                return
+            end if
+            nlast = size(solution%t)
+            si%z(1:4) = solution%y(:, nlast)
+            if (nlast > 1) explicit_h_carry = solution%h(nlast)
+            call explicit_step_finish(h_entry, ierr)
+            if (ierr /= SYMPLECTIC_STEP_OK) return
+            ktau = ktau + 1
+        end do
+        call sync_field_to_state
+    end subroutine orbit_timestep_radau15
 
-  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-  !
+    !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+    !
 ! Re-evaluate the field at the converged end-of-step state.
 !
 ! Only z(1:4) are integrated; the caller reconstructs the parallel velocity as
@@ -811,57 +811,57 @@ end subroutine orbit_timestep_radau15
 ! 3.3e-4 and got no better from rtol 1e-8 to 1e-10.
 !
 ! One evaluation per macro-step, against the hundreds a step already costs.
-subroutine sync_field_to_state
-  real(dp) :: zdot_discard(4)
+    subroutine sync_field_to_state
+        real(dp) :: zdot_discard(4)
 
-  call f_ode(0d0, si%z(1:4), zdot_discard)
-end subroutine sync_field_to_state
+        call f_ode(0d0, si%z(1:4), zdot_discard)
+    end subroutine sync_field_to_state
 
-  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-  !
+    !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+    !
 ! Gragg-Bulirsch-Stoer extrapolation on the same canonical Hamiltonian.
-subroutine orbit_timestep_gbs16(ierr)
-  !
-  use fortnum_ode_extrapolation, only : ode_integrate_gbs
-  use fortnum_ode, only : ode_problem_t, ode_solution_t
-  use fortnum_status, only : fortnum_status_t, FORTNUM_OK
-  integer, intent(out) :: ierr
-  integer :: ktau, nlast
-  type(ode_problem_t) :: problem
-  type(ode_solution_t) :: solution
-  type(fortnum_status_t) :: status
-  real(dp) :: h_entry
+    subroutine orbit_timestep_gbs16(ierr)
+        !
+        use fortnum_ode_extrapolation, only: ode_integrate_gbs
+        use fortnum_ode, only: ode_problem_t, ode_solution_t
+        use fortnum_status, only: fortnum_status_t, FORTNUM_OK
+        integer, intent(out) :: ierr
+        integer :: ktau, nlast
+        type(ode_problem_t) :: problem
+        type(ode_solution_t) :: solution
+        type(fortnum_status_t) :: status
+        real(dp) :: h_entry
 
-  ierr = 0
-  ktau = 0
-  problem%rhs => f_ode_fortnum
-  problem%rtol = si%rtol
-  problem%atol = si%atol
-  allocate(problem%y0(4))
-  do while(ktau .lt. si%ntau)
-    h_entry = explicit_h_carry
-    problem%t0 = ktau*si%dt
-    problem%t1 = (ktau+1)*si%dt
-    problem%y0 = si%z(1:4)
-    problem%h0 = explicit_h_carry
-    call ode_integrate_gbs(problem, solution, status)
-    if (status%code /= FORTNUM_OK) then
-      ierr = SYMPLECTIC_STEP_MAXITER
-      explicit_h_carry = h_entry
-      return
-    end if
-    nlast = size(solution%t)
-    si%z(1:4) = solution%y(:, nlast)
-    if (nlast > 1) explicit_h_carry = solution%h(nlast)
-    call explicit_step_finish(h_entry, ierr)
-    if (ierr /= SYMPLECTIC_STEP_OK) return
-    ktau = ktau+1
-  end do
-  call sync_field_to_state
-end subroutine orbit_timestep_gbs16
+        ierr = 0
+        ktau = 0
+        problem%rhs => f_ode_fortnum
+        problem%rtol = si%rtol
+        problem%atol = si%atol
+        allocate (problem%y0(4))
+        do while (ktau .lt. si%ntau)
+            h_entry = explicit_h_carry
+            problem%t0 = ktau*si%dt
+            problem%t1 = (ktau + 1)*si%dt
+            problem%y0 = si%z(1:4)
+            problem%h0 = explicit_h_carry
+            call ode_integrate_gbs(problem, solution, status)
+            if (status%code /= FORTNUM_OK) then
+                ierr = SYMPLECTIC_STEP_MAXITER
+                explicit_h_carry = h_entry
+                return
+            end if
+            nlast = size(solution%t)
+            si%z(1:4) = solution%y(:, nlast)
+            if (nlast > 1) explicit_h_carry = solution%h(nlast)
+            call explicit_step_finish(h_entry, ierr)
+            if (ierr /= SYMPLECTIC_STEP_OK) return
+            ktau = ktau + 1
+        end do
+        call sync_field_to_state
+    end subroutine orbit_timestep_gbs16
 
-  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-  !
+    !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+    !
 ! Two-derivative Runge-Kutta on the canonical Hamiltonian: the Runge-Kutta-
 ! Nystrom transplant.
 !
@@ -880,38 +880,38 @@ end subroutine orbit_timestep_gbs16
 ! estimate yet, so the accuracy parameter is the step count rather than a
 ! tolerance. npoiper2 therefore sets resolution here exactly as it does for the
 ! symplectic integrators, which also makes the two directly comparable.
-subroutine orbit_timestep_tdrk24(ierr)
-  !
-  use fortnum_ode_tdrk, only : tdrk_integrate_fixed
-  use fortnum_status, only : fortnum_status_t, FORTNUM_OK
-  integer, intent(out) :: ierr
-  integer :: ktau, nfev_f, nfev_g
-  real(dp) :: yend(4)
-  type(fortnum_status_t) :: status
-  real(dp) :: h_entry
+    subroutine orbit_timestep_tdrk24(ierr)
+        !
+        use fortnum_ode_tdrk, only: tdrk_integrate_fixed
+        use fortnum_status, only: fortnum_status_t, FORTNUM_OK
+        integer, intent(out) :: ierr
+        integer :: ktau, nfev_f, nfev_g
+        real(dp) :: yend(4)
+        type(fortnum_status_t) :: status
+        real(dp) :: h_entry
 
-  ierr = 0
-  ktau = 0
-  do while(ktau .lt. si%ntau)
-    h_entry = explicit_h_carry
-    call tdrk_integrate_fixed(f_ode_fortnum, g_ode_fortnum, &
-      ktau*si%dt, (ktau+1)*si%dt, si%z(1:4), 1, 4, .false., yend, &
-      nfev_f, nfev_g, status)
-    if (status%code /= FORTNUM_OK) then
-      ierr = SYMPLECTIC_STEP_MAXITER
-      explicit_h_carry = h_entry
-      return
-    end if
-    si%z(1:4) = yend
-    call explicit_step_finish(h_entry, ierr)
-    if (ierr /= SYMPLECTIC_STEP_OK) return
-    ktau = ktau+1
-  end do
-  call sync_field_to_state
-end subroutine orbit_timestep_tdrk24
+        ierr = 0
+        ktau = 0
+        do while (ktau .lt. si%ntau)
+            h_entry = explicit_h_carry
+            call tdrk_integrate_fixed(f_ode_fortnum, g_ode_fortnum, &
+                         ktau*si%dt, (ktau + 1)*si%dt, si%z(1:4), 1, 4, .false., yend, &
+                                      nfev_f, nfev_g, status)
+            if (status%code /= FORTNUM_OK) then
+                ierr = SYMPLECTIC_STEP_MAXITER
+                explicit_h_carry = h_entry
+                return
+            end if
+            si%z(1:4) = yend
+            call explicit_step_finish(h_entry, ierr)
+            if (ierr /= SYMPLECTIC_STEP_OK) return
+            ktau = ktau + 1
+        end do
+        call sync_field_to_state
+    end subroutine orbit_timestep_tdrk24
 
-  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-  !
+    !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+    !
 ! Two-derivative Runge-Kutta with error control: the same method as
 ! orbit_timestep_tdrk24, driven by a tolerance instead of a step count.
 !
@@ -924,39 +924,39 @@ end subroutine orbit_timestep_tdrk24
 ! Both modes are kept. Fixed step is what makes TDRK comparable to the
 ! symplectic schemes at matched resolution; tolerance control is what makes it
 ! comparable to Gauss-Radau, Bulirsch-Stoer and Cash-Karp at matched accuracy.
-subroutine orbit_timestep_tdrk24a(ierr)
-  !
-  use fortnum_ode_tdrk, only : tdrk_integrate_adaptive
-  use fortnum_status, only : fortnum_status_t, FORTNUM_OK
-  integer, intent(out) :: ierr
-  integer :: ktau, nfev_f, nfev_g, naccept, nreject
-  real(dp) :: yend(4), hlast
-  type(fortnum_status_t) :: status
-  real(dp) :: h_entry
+    subroutine orbit_timestep_tdrk24a(ierr)
+        !
+        use fortnum_ode_tdrk, only: tdrk_integrate_adaptive
+        use fortnum_status, only: fortnum_status_t, FORTNUM_OK
+        integer, intent(out) :: ierr
+        integer :: ktau, nfev_f, nfev_g, naccept, nreject
+        real(dp) :: yend(4), hlast
+        type(fortnum_status_t) :: status
+        real(dp) :: h_entry
 
-  ierr = 0
-  ktau = 0
-  do while(ktau .lt. si%ntau)
-    h_entry = explicit_h_carry
-    call tdrk_integrate_adaptive(f_ode_fortnum, g_ode_fortnum, &
-      ktau*si%dt, (ktau+1)*si%dt, si%z(1:4), si%rtol, si%atol, &
-      explicit_h_carry, yend, hlast, nfev_f, nfev_g, naccept, nreject, status)
-    if (status%code /= FORTNUM_OK) then
-      ierr = SYMPLECTIC_STEP_MAXITER
-      explicit_h_carry = h_entry
-      return
-    end if
-    si%z(1:4) = yend
-    explicit_h_carry = hlast
-    call explicit_step_finish(h_entry, ierr)
-    if (ierr /= SYMPLECTIC_STEP_OK) return
-    ktau = ktau+1
-  end do
-  call sync_field_to_state
-end subroutine orbit_timestep_tdrk24a
+        ierr = 0
+        ktau = 0
+        do while (ktau .lt. si%ntau)
+            h_entry = explicit_h_carry
+            call tdrk_integrate_adaptive(f_ode_fortnum, g_ode_fortnum, &
+                            ktau*si%dt, (ktau + 1)*si%dt, si%z(1:4), si%rtol, si%atol, &
+                explicit_h_carry, yend, hlast, nfev_f, nfev_g, naccept, nreject, status)
+            if (status%code /= FORTNUM_OK) then
+                ierr = SYMPLECTIC_STEP_MAXITER
+                explicit_h_carry = h_entry
+                return
+            end if
+            si%z(1:4) = yend
+            explicit_h_carry = hlast
+            call explicit_step_finish(h_entry, ierr)
+            if (ierr /= SYMPLECTIC_STEP_OK) return
+            ktau = ktau + 1
+        end do
+        call sync_field_to_state
+    end subroutine orbit_timestep_tdrk24a
 
-  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-  !
+    !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+    !
 ! Cash-Karp RK5(4) on the 4D canonical chart.
 !
 ! integmode = 0 already runs a Cash-Karp, but on the 5D drift-kinetic form with
@@ -966,51 +966,51 @@ end subroutine orbit_timestep_tdrk24a
 ! symplectic schemes, Gauss-Radau, Bulirsch-Stoer and TDRK, which is what makes
 ! the work-precision comparison a comparison of methods rather than of
 ! formulations.
-subroutine orbit_timestep_cashkarp45(ierr)
-  !
-  use fortnum_ode, only : ode_integrate, ode_problem_t, ode_workspace_t, &
-    ode_solution_t
-  use fortnum_status, only : fortnum_status_t, FORTNUM_OK
-  integer, intent(out) :: ierr
-  integer :: ktau, nlast
-  type(ode_problem_t) :: problem
-  type(ode_workspace_t) :: workspace
-  type(ode_solution_t) :: solution
-  type(fortnum_status_t) :: status
-  real(dp) :: h_entry
+    subroutine orbit_timestep_cashkarp45(ierr)
+        !
+        use fortnum_ode, only: ode_integrate, ode_problem_t, ode_workspace_t, &
+                               ode_solution_t
+        use fortnum_status, only: fortnum_status_t, FORTNUM_OK
+        integer, intent(out) :: ierr
+        integer :: ktau, nlast
+        type(ode_problem_t) :: problem
+        type(ode_workspace_t) :: workspace
+        type(ode_solution_t) :: solution
+        type(fortnum_status_t) :: status
+        real(dp) :: h_entry
 
-  ierr = 0
-  ktau = 0
-  problem%rhs => f_ode_fortnum
-  problem%rtol = si%rtol
-  problem%atol = si%atol
-  allocate(problem%y0(4))
-  do while(ktau .lt. si%ntau)
-    h_entry = explicit_h_carry
-    problem%t0 = ktau*si%dt
-    problem%t1 = (ktau+1)*si%dt
-    problem%y0 = si%z(1:4)
-    problem%h0 = explicit_h_carry
-    call ode_integrate(problem, workspace, solution, status)
-    if (status%code /= FORTNUM_OK) then
-      ierr = SYMPLECTIC_STEP_MAXITER
-      explicit_h_carry = h_entry
-      return
-    end if
-    nlast = solution%nsteps + 1
-    si%z(1:4) = solution%y(:, nlast)
-    ! solution%h is trimmed to nsteps entries, one FEWER than solution%t and
-    ! solution%y, because a step size belongs to the interval between two
-    ! recorded points rather than to a point. ode_integrate_radau and
-    ! ode_integrate_gbs allocate nsteps+1 for both, so the same expression is
-    ! in bounds there; here nlast would read one past the end and carry
-    ! whatever that memory held into the next macro-step's initial step size.
-    if (solution%nsteps > 0) explicit_h_carry = solution%h(solution%nsteps)
-    call explicit_step_finish(h_entry, ierr)
-    if (ierr /= SYMPLECTIC_STEP_OK) return
-    ktau = ktau+1
-  end do
-  call sync_field_to_state
-end subroutine orbit_timestep_cashkarp45
+        ierr = 0
+        ktau = 0
+        problem%rhs => f_ode_fortnum
+        problem%rtol = si%rtol
+        problem%atol = si%atol
+        allocate (problem%y0(4))
+        do while (ktau .lt. si%ntau)
+            h_entry = explicit_h_carry
+            problem%t0 = ktau*si%dt
+            problem%t1 = (ktau + 1)*si%dt
+            problem%y0 = si%z(1:4)
+            problem%h0 = explicit_h_carry
+            call ode_integrate(problem, workspace, solution, status)
+            if (status%code /= FORTNUM_OK) then
+                ierr = SYMPLECTIC_STEP_MAXITER
+                explicit_h_carry = h_entry
+                return
+            end if
+            nlast = solution%nsteps + 1
+            si%z(1:4) = solution%y(:, nlast)
+            ! solution%h is trimmed to nsteps entries, one FEWER than solution%t and
+            ! solution%y, because a step size belongs to the interval between two
+            ! recorded points rather than to a point. ode_integrate_radau and
+            ! ode_integrate_gbs allocate nsteps+1 for both, so the same expression is
+            ! in bounds there; here nlast would read one past the end and carry
+            ! whatever that memory held into the next macro-step's initial step size.
+            if (solution%nsteps > 0) explicit_h_carry = solution%h(solution%nsteps)
+            call explicit_step_finish(h_entry, ierr)
+            if (ierr /= SYMPLECTIC_STEP_OK) return
+            ktau = ktau + 1
+        end do
+        call sync_field_to_state
+    end subroutine orbit_timestep_cashkarp45
 
 end module orbit_symplectic_quasi

@@ -42,7 +42,7 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
     ! a different right-hand side and coordinates, so its accuracy and cost are
     ! not commensurable with anything here.
     integer, parameter :: RADAU15 = 20, GBS16 = 21, CASHKARP45 = 22, &
-             TDRK24 = 24, TDRK24A = 25
+                          TDRK24 = 24, TDRK24A = 25
     integer, parameter :: SYMPLECTIC_STEP_OK = 0
     integer, parameter :: SYMPLECTIC_STEP_OUTSIDE_DOMAIN = 1
     integer, parameter :: SYMPLECTIC_STEP_MAXITER = 2
