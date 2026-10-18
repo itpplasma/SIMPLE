@@ -147,6 +147,162 @@ jobs:
           path: |
             build/Testing/
 
+  gcc-matrix:
+    permissions:
+      contents: read
+    name: GCC ${{ matrix.gcc }} / ${{ matrix.target }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && inputs.full == 'true') ||
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - gcc: 13
+            config: Fast
+            target: test-smoke
+            coverage: 'OFF'
+          - gcc: 14
+            config: Debug
+            target: test-fast
+            coverage: 'ON'
+    env:
+      CC: gcc-${{ matrix.gcc }}
+      CXX: g++-${{ matrix.gcc }}
+      FC: gfortran-${{ matrix.gcc }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install GCC toolchain and system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc-${{ matrix.gcc }} g++-${{ matrix.gcc }} gfortran-${{ matrix.gcc }} \
+            git-lfs cmake ninja-build pkg-config lcov \
+            libgsl-dev libhdf5-dev libfftw3-dev libnetcdf-dev libnetcdff-dev \
+            libopenblas-dev liblapack-dev openmpi-bin libopenmpi-dev
+          python -m pip install numpy
+
+      - name: Build and run tests
+        env:
+          LIBNEO_INPUT_REF: ${{ inputs.libneo_ref }}
+          FLAGS: >-
+            -DENABLE_COVERAGE=${{ matrix.coverage }}
+            -DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF
+        run: |
+          make ${{ matrix.target }} CONFIG=${{ matrix.config }} \
+            LIBNEO_REF="$LIBNEO_INPUT_REF"
+
+      - name: Generate coverage report and summary
+        if: matrix.coverage == 'ON' && !cancelled()
+        run: |
+          cmake --build build --target coverage
+          {
+            echo '## Fast-suite coverage (GCC ${{ matrix.gcc }})'
+            echo '```text'
+            lcov --summary build/coverage_filtered.info
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage artifact
+        if: matrix.coverage == 'ON' && !cancelled()
+        uses: actions/upload-artifact@v6
+        with:
+          name: fast-suite-coverage
+          if-no-files-found: error
+          path: |
+            build/coverage.info
+            build/coverage_filtered.info
+
+  intel-ifx:
+    permissions:
+      contents: read
+    name: Intel ifx smoke tests (non-blocking)
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'workflow_dispatch'
+    continue-on-error: true
+    timeout-minutes: 30
+    container:
+      image: intel/oneapi-hpckit:latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            git make python3-pip \
+            cmake \
+            ninja-build \
+            pkg-config \
+            libgsl-dev \
+            libhdf5-dev \
+            libfftw3-dev \
+            libnetcdf-dev \
+            libnetcdff-dev \
+            libopenblas-dev \
+            liblapack-dev \
+            openmpi-bin \
+            libopenmpi-dev
+
+      - name: Build and run smoke tests with ifx
+        shell: bash
+        run: |
+          source /opt/intel/oneapi/setvars.sh
+          python3 -m pip install --break-system-packages numpy
+          make clean
+          make test-smoke CONFIG=Fast \
+            FLAGS='-DSIMPLE_DETERMINISTIC_FP=OFF -DCMAKE_Fortran_COMPILER=ifx -DCMAKE_C_COMPILER=icx -DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF'
+
+  llvm-flang:
+    permissions:
+      contents: read
+    name: LLVM flang smoke tests (non-blocking)
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'workflow_dispatch'
+    continue-on-error: true
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install LLVM flang and build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            flang-18 libomp-18-dev \
+            clang-18 \
+            cmake \
+            ninja-build \
+            pkg-config \
+            libgsl-dev \
+            libhdf5-dev \
+            libfftw3-dev \
+            libnetcdf-dev \
+            libnetcdff-dev \
+            libopenblas-dev \
+            liblapack-dev \
+            openmpi-bin \
+            libopenmpi-dev
+
+      - name: Build and run smoke tests with LLVM flang
+        run: |
+          python -m pip install numpy
+          make clean
+          make test-smoke CONFIG=Fast \
+            FLAGS='-DSIMPLE_DETERMINISTIC_FP=OFF -DCMAKE_Fortran_COMPILER=flang-new-18 -DCMAKE_C_COMPILER=clang-18 -DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF'
+
   cgal-wall:
     name: CGAL Wall Unit Tests
     runs-on: ubuntu-24.04
