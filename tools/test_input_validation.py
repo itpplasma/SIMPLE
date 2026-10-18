@@ -43,6 +43,7 @@ class InputValidationTests(unittest.TestCase):
             "&config field_input='it''s!/a=b.nc', debug=F /",
             "&config sbeg(2:4)=3*0.2, sbeg(1024)=0.1 /",
             "&config sbeg(4:2:-1)=0.1 0.2 0.3 /",
+            "&config sbeg(:1:-1)=0.1, sbeg(1024::-1)=0.2 /",
             "&config sbeg=,0.2,2*,0.3, nper=, /",
             "&config nper=10 nper=20 /",  # Fortran permits later assignments.
             "&config\n debug=.TRUE. ! slash / in a comment\n /",
@@ -65,6 +66,9 @@ class InputValidationTests(unittest.TestCase):
             ("&config nper=1,2 /", "at most 1"),
             ("&config sbeg(1025)=0.2 /", "outside 1:1024"),
             ("&config sbeg(1:2)=3*0.2 /", "at most 2"),
+            ("&config sbeg(::-1)=0.1 /", "at most 0"),
+            ("&config sbeg(:1:-1)=0.1,0.2 /", "at most 1"),
+            ("&config sbeg(1023::-1)=0.1 /", "at most 0"),
             ("&config sbeg=999999999999*0.2 /", "at most 1024"),
             ("&config sbeg(1:2:0)=0.2 /", "stride"),
             ("&config sbeg=0*0.2 /", "repetition count"),

@@ -189,8 +189,9 @@ def capacity(item: dict, indices: list[str] | None) -> int:
         step = int(parts[2]) if len(parts) == 3 and parts[2] else 1
         if step == 0:
             raise InputError("array stride must be nonzero")
-        start = int(parts[0]) if parts[0] else (1 if step > 0 else extent)
-        end = int(parts[1]) if parts[1] else (extent if step > 0 else 1)
+        # Fortran defaults to the declared bounds, regardless of stride sign.
+        start = int(parts[0]) if parts[0] else 1
+        end = int(parts[1]) if parts[1] else extent
         if not (1 <= start <= extent and 1 <= end <= extent):
             raise InputError(f"section {text} is outside 1:{extent}")
         return len(range(start, end + (1 if step > 0 else -1), step))
