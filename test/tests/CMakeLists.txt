@@ -57,6 +57,15 @@ if(TARGET fortplot::fortplot)
         LABELS "unit;integration" TIMEOUT 120)
 endif()
 
+# Reporting helpers have no dependency on the optional pysimple backend.
+if(SIMPLE_ENABLE_PYTHON_TOOLS)
+    add_test(NAME test_verification_report
+        COMMAND ${Python3_EXECUTABLE} -m pytest
+            ${CMAKE_SOURCE_DIR}/test/python/test_verification_report.py -q)
+    set_tests_properties(test_verification_report PROPERTIES
+        LABELS "unit;python" TIMEOUT 30)
+endif()
+
 set(BOOZER_CHARTMAP_PYTHON "${Python3_EXECUTABLE}")
 if(EXISTS "${CMAKE_SOURCE_DIR}/.venv/bin/python")
     set(BOOZER_CHARTMAP_PYTHON "${CMAKE_SOURCE_DIR}/.venv/bin/python")
