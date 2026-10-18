@@ -14,6 +14,7 @@ docstrings of ``pysimple`` and the examples are the scripts in ``examples/``.
    api/index
    examples
    boozer-chartmap-schema
+   CINECA deployment guide <https://github.com/itpplasma/SIMPLE/blob/main/docs/hpc/cineca.md>
 
 Indices and tables
 ------------------
