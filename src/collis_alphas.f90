@@ -114,6 +114,10 @@ contains
         velrat_out(3) = v0/vte
 
         dense = densi1*Z1 + densi2*Z2
+        if (dense == 0.0_wp) then
+            efcolf_out = 0.0_wp
+            return
+        end if
         alami1 = 23.d0 - log(max(epsilon(1.d0), &
                                  sqrt(densi1*Z1**2/tempi1)*2.d0*Z1*(4.d0 + am1)/(4.d0*tempi1 + am1*ealpha)))
         alami2 = 23.d0 - log(max(epsilon(1.d0), &
@@ -162,8 +166,14 @@ contains
             tempe_loc = max(Te, 1.0d0)
             tempi1_loc = max(Ti1, 1.0d0)
             tempi2_loc = max(Ti2, 1.0d0)
-            densi1_loc = max(ni1*1.0d-6, 1.0d0)
-            densi2_loc = max(ni2*1.0d-6, 1.0d0)
+            ! Preserve exact vacuum; retain the floor for positive densities.
+            if (ni1 == 0.0_wp .and. ni2 == 0.0_wp) then
+                densi1_loc = 0.0_wp
+                densi2_loc = 0.0_wp
+            else
+                densi1_loc = max(ni1*1.0d-6, 1.0d0)
+                densi2_loc = max(ni2*1.0d-6, 1.0d0)
+            end if
 
             call compute_collision_coeffs(am1, am2, Z1, Z2, &
                                           densi1_loc, densi2_loc, &

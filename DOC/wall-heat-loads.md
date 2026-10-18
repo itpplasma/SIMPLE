@@ -143,7 +143,9 @@ down with finite-energy wall losses; the trace spans about 71 reference
 transit times. Hits must occur after ten reference transit times, and the
 slowing-down check selects hits after twenty. These reference times use the
 birth speed, rather than each marker's pitch-dependent bounce period. This is
-a guiding-centre regression fixture, not a reactor prediction.
+a guiding-centre regression fixture, not a reactor prediction. When both ion
+densities are exactly zero, the collision coefficients and rates are zero;
+this preserves a true vacuum instead of applying the positive-density floor.
 
 Cylindrical chartmaps must retain the full toroidal angle in Cartesian
 positions and bases. The fix in [libneo #429](https://github.com/itpplasma/libneo/pull/429)
@@ -165,8 +167,8 @@ CMAKE_BUILD_PARALLEL_LEVEL=8 make test CONFIG=Fast \
 ```
 
 CTest generates the chartmap fixture automatically. The test checks the
-collisionless momentum invariant, the original 20 $\mu$s negligible-density
-limit (the collision table floors density at 1 cm$^{-3}$), reduced
+collisionless momentum invariant, the exact zero-density collision limit over
+the full 0.5 ms trace, reduced
 energy on delayed wall hits, and identical particle results in two seeded
 one-thread runs. It writes `build/test/tests/collisional_stl_wall/wall_hits.csv`
 with mode, marker, hit energy fraction, hit time in seconds, and incidence
