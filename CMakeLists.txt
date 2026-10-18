@@ -410,7 +410,6 @@ if (ENABLE_COVERAGE)
                     --ignore-errors mismatch 
                     --ignore-errors unused
                 COMMAND ${LCOV_PATH} --remove coverage.info
-                    "/home/ert/code/libneo/*"
                     "*/libneo/*"
                     "*/test/*"
                     "/usr/*"
