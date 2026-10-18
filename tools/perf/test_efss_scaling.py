@@ -6,6 +6,7 @@ import unittest
 import numpy as np
 
 from efss_scaling import phase_seconds, physics
+from compare_efss_runs import compare
 
 
 class MeasurementParsing(unittest.TestCase):
@@ -29,6 +30,35 @@ class MeasurementParsing(unittest.TestCase):
             np.savetxt(directory / 'confined_fraction.dat', [[0, np.nan, .5, 0]])
             with self.assertRaises(ValueError):
                 physics(directory)
+
+
+class BackendComparison(unittest.TestCase):
+    def test_status_tolerance_and_start_identity(self):
+        with tempfile.TemporaryDirectory() as name:
+            cpu, gpu = Path(name) / 'cpu', Path(name) / 'gpu'
+            starts = np.arange(100).reshape(20, 5)
+            for directory in (cpu, gpu):
+                directory.mkdir()
+                np.savetxt(directory / 'start.dat', starts)
+                np.savetxt(directory / 'confined_fraction.dat', [[0, .4, .4, 20]])
+                np.savetxt(directory / 'unresolved_fraction.dat', [[0, 0, 20]])
+            self.assertTrue(compare(cpu, gpu)['passed'])
+            np.savetxt(gpu / 'confined_fraction.dat', [[0, .4, .2, 20]])
+            self.assertFalse(compare(cpu, gpu)['passed'])
+            np.savetxt(gpu / 'start.dat', starts + 1)
+            with self.assertRaises(AssertionError):
+                compare(cpu, gpu)
+
+    def test_unresolved_cannot_hide_disagreement(self):
+        with tempfile.TemporaryDirectory() as name:
+            cpu, gpu = Path(name) / 'cpu', Path(name) / 'gpu'
+            for directory in (cpu, gpu):
+                directory.mkdir()
+                np.savetxt(directory / 'start.dat', np.zeros((20, 5)))
+                np.savetxt(directory / 'confined_fraction.dat', [[0, .4, .4, 20]])
+                np.savetxt(directory / 'unresolved_fraction.dat', [[0, 0, 20]])
+            np.savetxt(gpu / 'unresolved_fraction.dat', [[0, .2, 20]])
+            self.assertFalse(compare(cpu, gpu)['passed'])
 
 
 if __name__ == '__main__':
