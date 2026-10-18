@@ -1,0 +1,42 @@
+{
+  "physics_commit": "fe2de273681642ed1f651d3c14c5e23e398fb458",
+  "dependencies": {
+    "libneo": "f6090e8150c2f5b1c0afde09baadf79b50b1ffe7",
+    "fortnum": "1a52e13c5e28b09d083947a6ec7e8a1dcf9d502e",
+    "fortplot": "5daec54649e305fd09bc1ef8345511d5692a1889",
+    "fortio": "38add03dc691a7cd4715cd3e611ad42422e46091"
+  },
+  "flags": {
+    "build/simple_main": [
+      "FLAGS = -O3 -Jinclude -fPIC -fdiagnostics-color=always -g -fbacktrace -Wall -Wextra -fPIC -cpp -Wimplicit-interface -Wno-external-argument-mismatch -fmax-errors=5 -Wno-unused-dummy-argument -ffree-line-length-132 -Werror=line-truncation -O3 -ffast-math -ffp-contract=fast -funroll-loops -march=x86-64-v2 -mtune=native -Wtrampolines -Werror=trampolines -fopenmp -fpreprocessed"
+    ],
+    "build/libneo_representative": [
+      "FLAGS = -O3 -J_deps/libneo-build/include -fPIC -fdiagnostics-color=always -g -fbacktrace -fPIC -cpp -fno-realloc-lhs -fmax-errors=1 -ffree-line-length-132 -O3 -DNDEBUG -funroll-loops -ftree-vectorize -ffast-math -ffp-contract=fast -march=x86-64-v2 -mtune=generic -Wtrampolines -Werror=trampolines -fpreprocessed"
+    ],
+    "build/fortnum_representative": [
+      "FLAGS = -O3 -J_deps/fortnum-build/include -fPIC -fdiagnostics-color=always -g -fbacktrace -ftrampoline-impl=heap -fno-fast-math -ffp-contract=off -fpreprocessed"
+    ],
+    "build/fortio_representative": [
+      "FLAGS = -O3 -J_deps/fortio-build/modules -fPIC -fdiagnostics-color=always -g -fbacktrace -fPIC -cpp -fno-realloc-lhs -fmax-errors=1 -ffree-line-length-132 -O3 -DNDEBUG -funroll-loops -ftree-vectorize -ffast-math -ffp-contract=fast -march=x86-64-v2 -mtune=generic -Wtrampolines -Werror=trampolines -frealloc-lhs -fpreprocessed"
+    ],
+    "build-cuda/simple_main": [
+      "FLAGS = -O3 -Jinclude -fPIC -g -fbacktrace -Wall -Wextra -fPIC -cpp -Wimplicit-interface -Wno-external-argument-mismatch -fmax-errors=5 -Wno-unused-dummy-argument -ffree-line-length-132 -Werror=line-truncation -O3 -ffast-math -ffp-contract=fast -funroll-loops -march=x86-64-v2 -mtune=native -Wtrampolines -Werror=trampolines -fopenmp -fpreprocessed"
+    ],
+    "build-cuda/cuda_native": [
+      "DEFINES = -DUSE_FORTPLOT -Dsimple_cuda_native_rk54_EXPORTS",
+      "FLAGS = -O3 -DNDEBUG -std=c++17 \"--generate-code=arch=compute_120,code=[compute_120,sm_120]\" -Xcompiler=-fPIC -g -O3 --generate-line-info --extra-device-vectorization -Xptxas=-v"
+    ],
+    "build-cuda/libneo_representative": [
+      "FLAGS = -O3 -Jlibneo/include -fPIC -g -fbacktrace -fPIC -cpp -fno-realloc-lhs -fmax-errors=1 -ffree-line-length-132 -O3 -DNDEBUG -funroll-loops -ftree-vectorize -ffast-math -ffp-contract=fast -march=x86-64-v2 -mtune=generic -Wtrampolines -Werror=trampolines -fpreprocessed"
+    ],
+    "build-cuda/fortnum_representative": [
+      "FLAGS = -O3 -J_deps/fortnum-build/include -fPIC -g -fbacktrace -ftrampoline-impl=heap -fno-fast-math -ffp-contract=off -fpreprocessed"
+    ],
+    "build-cuda/fortio_representative": [
+      "FLAGS = -O3 -J_deps/fortio-build/modules -fPIC -g -fbacktrace -fPIC -cpp -fno-realloc-lhs -fmax-errors=1 -ffree-line-length-132 -O3 -DNDEBUG -funroll-loops -ftree-vectorize -ffast-math -ffp-contract=fast -march=x86-64-v2 -mtune=generic -Wtrampolines -Werror=trampolines -frealloc-lhs -fpreprocessed"
+    ],
+    "build_executable_sha256": "af055967a45eedf13255c81ff27360a0f21f03ecfef6a215591c3e70d7b59f97",
+    "build-cuda_executable_sha256": "adea282199f1834385d53cb7401957af451104dba5532c6e55b024cb36ecbd20"
+  },
+  "measurement_tool_commit": "a2086dffc9db50edaa6c171d50d0dc1649dea173"
+}

@@ -26,6 +26,7 @@ import tempfile
 import time
 
 import numpy as np
+from spectre_test_utils import axis_volume
 
 # Construction identity: confined-marker p^2 drift. The coarse-grid Meiss chart
 # stays at ~2.5e-10 (measured); a broken construction drifts to O(0.1).
@@ -109,8 +110,7 @@ def parse_grid(out):
                 ode_steps=int(m.group(7)), ode_relerr=float(m.group(8)))
 
 
-def main():
-    binary, tok2vol = sys.argv[1], sys.argv[2]
+def check(binary, tok2vol):
     failures = []
 
     # Default: axisymmetric tok2vol auto-clamps the phi grid.
@@ -210,4 +210,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    with axis_volume(sys.argv[2]) as field:
+        check(sys.argv[1], field)

@@ -83,8 +83,6 @@ contains
         ! mode_secders = 1: second derivatives only in d/dr^2
         ! mode_secders = 2: all second derivatives, including mixed
         !
-        ! tested in test_magfie.f90, 2018-10-23, C. Albert <albert@alumni.tugraz.at>
-        !
 
         type(field_can_t), intent(inout) :: f
         double precision, intent(in) :: r, th_c, ph_c

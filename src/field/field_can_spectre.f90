@@ -19,6 +19,7 @@ module field_can_spectre
     use field_base, only: magnetic_field_t
     use field_spectre, only: spectre_field_t
     use field_can_base, only: field_can_t, n_field_evaluations, twopi
+    use finite_check, only: is_finite
     use field_can_meiss, only: meiss_volume_t, init_meiss, get_meiss_coordinates, &
                                harvest_meiss_volume, cleanup_meiss
     use coordinate_scaling, only: identity_scaling_t
@@ -54,21 +55,9 @@ module field_can_spectre
     !> for high-order convergence, lower for RK45-only or memory-bound runs).
     integer, parameter :: AXISYM_NPHI = 8, NPHI_FULL = 32
     real(dp), parameter :: AXIS_OFFSET = 1.0e-3_dp
-    !> Sheet-adjacent regularization band, the canonical analogue of the RK45
-    !> path's drift_band (spectre_orbit): the guiding-center 1-form degenerates
-    !> (dpth/dr = 0, i.e. Bstar_par -> 0) in a thin unphysical layer next to
-    !> each interface, where every state on the degeneracy manifold is a
-    !> spurious root of the implicit steppers as h -> 0. Inside the band A and
-    !> Bmod are extended linearly in r from the band edge while the radial slope
-    !> of h_theta, h_phi is blended quadratically to zero over one band width
-    !> (C1 everywhere, so the implicit-step residuals stay smooth); at and
-    !> beyond the interface dpth/dr = sqrtg*Bmod/(ro0*h_phi) > 0 independent of
-    !> pitch, so the canonical structure is non-degenerate by construction and
-    !> all conservation properties survive. The interface jump itself still
-    !> uses the true both-side |B| via magfie. The width is chosen so the
-    !> band-edge h gradients are subcritical (ro0*vpar*curl h < B) for 3.5 MeV
-    !> alphas on the test equilibria: a monotone blend of a subcritical slope
-    !> stays subcritical, so no degeneracy re-enters the blend zone.
+    !> C1 radial extension used by canonical field evaluation at volume edges.
+    !> This boundary regularization is retained for single-volume tracing and
+    !> per-volume field diagnostics; it supplies no interface crossing model.
     real(dp), parameter :: EDGE_BAND = 5.0e-2_dp
     real(dp), parameter :: A_SCALE = TESLA_TO_GAUSS*M_TO_CM**2
     real(dp), parameter :: H_SCALE = M_TO_CM
@@ -77,27 +66,12 @@ module field_can_spectre
     type(meiss_volume_t), allocatable :: spectre_volumes(:)
     integer :: spectre_mvol = 0
 
-    !> Home-volume lock for multi-volume symplectic stepping (#441). Newton
-    !> iterates of an implicit step may probe past an interior interface, where
-    !> the int(r) dispatch would evaluate the neighbour volume's discontinuous
-    !> field; with the lock set, evaluation stays on the home volume's splines,
-    !> clamped at its edge (the canonical analogue of velo_can_clamped on the
-    !> RK45 path). Each traced marker owns one thread.
+    !> Pin Newton trials and coordinate transforms to the guiding centre owner.
     integer :: lock_lvol = 0
     !$omp threadprivate(lock_lvol)
 
 contains
 
-    elemental logical function ieee_is_finite(value)
-        real(dp), intent(in) :: value
-
-        integer(int64), parameter :: exponent_mask = &
-            int(z'7FF0000000000000', int64)
-        integer(int64) :: bits
-
-        bits = transfer(value, bits)
-        ieee_is_finite = iand(bits, exponent_mask) /= exponent_mask
-    end function ieee_is_finite
 
     subroutine set_spectre_volume_lock(lvol)
         !> lvol > 0 pins field evaluation to that volume; 0 restores dispatch on
@@ -361,7 +335,7 @@ contains
         real(dp) :: x(3), y(2), dy(3, 2), phi, phi_next, target
         real(dp) :: residual, correction, best_phi, best_residual, denom
 
-        if (.not. all(ieee_is_finite(xref))) then
+        if (.not. all(is_finite(xref))) then
             xinteg = xref
             call count_event(EVT_SPECTRE_INVALID_STATE)
             return
@@ -380,8 +354,8 @@ contains
                  modulo(phi, twopi)]
             call evaluate_batch_splines_3d_der(spectre_volumes(lvol)%spl_transform, &
                                                x, y, dy)
-            if (.not. ieee_is_finite(y(1)) .or. &
-                .not. ieee_is_finite(dy(3, 1))) exit
+            if (.not. is_finite(y(1)) .or. &
+                .not. is_finite(dy(3, 1))) exit
             residual = modulo(phi + y(1) - target + 0.5_dp*twopi, twopi) - &
                 0.5_dp*twopi
             if (abs(residual) < best_residual) then
@@ -392,7 +366,7 @@ contains
             if (abs(denom) <= 100.0_dp*epsilon(1.0_dp)) exit
             correction = max(-0.5_dp*twopi, min(0.5_dp*twopi, residual/denom))
             phi_next = phi - correction
-            if (.not. ieee_is_finite(phi_next)) exit
+            if (.not. is_finite(phi_next)) exit
             phi = phi_next
             if (abs(correction) < TOL) then
                 xinteg(3) = phi + twopi*anint((xref(3) - phi)/twopi)
