@@ -63,10 +63,15 @@ program test_sympl_testfield
     implicit none
 
     type(tracer_t) :: norb
-    character(*), parameter :: vmec_file = WOUT_FILE
+    character(len=:), allocatable :: vmec_file
     integer, parameter :: ans_s = 5, ans_tp = 5, amultharm = 5
-    integer :: ierr
+    integer :: ierr, path_length
     real(dp) :: initial_si_z(4)
+
+    call get_command_argument(1, length=path_length)
+    if (path_length < 1) error stop 'Expected VMEC fixture path'
+    allocate(character(len=path_length) :: vmec_file)
+    call get_command_argument(1, vmec_file)
 
     ! Configure symplectic GC with TEST field to ensure initialization succeeds
     isw_field_type = TEST
