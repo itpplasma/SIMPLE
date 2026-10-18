@@ -11,6 +11,7 @@ docstrings of ``pysimple`` and the examples are the scripts in ``examples/``.
    :caption: Contents
 
    overview
+   verification
    api/index
    examples
    boozer-chartmap-schema
