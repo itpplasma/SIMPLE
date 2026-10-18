@@ -15,6 +15,8 @@ configuration studies and stellarator optimization.
   available combinations are described in the [user guide](https://itpplasma.github.io/SIMPLE/latest/user-guide/index.html).
 - OpenMP parallelism, an optional CUDA backend and the `pysimple` Python interface.
 
+![SIMPLE workflow](docs/_static/figures/pipeline.svg)
+
 ## Install and run
 
 Install GNU Fortran, CMake, Ninja, NetCDF-C/Fortran and BLAS/LAPACK, then:

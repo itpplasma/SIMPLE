@@ -633,10 +633,15 @@ add_test(NAME test_stencil_utils COMMAND test_stencil_utils.x)
 
 
     if(SIMPLE_ENABLE_CGAL)
+        configure_file(${CMAKE_SOURCE_DIR}/test/fixtures/wall_facet_order.stl
+            wall_facet_order.stl COPYONLY)
+        configure_file(${CMAKE_SOURCE_DIR}/test/fixtures/wall_facet_order_binary.stl
+            wall_facet_order_binary.stl COPYONLY)
         add_executable(test_stl_wall_intersection.x test_stl_wall_intersection.f90)
         target_link_libraries(test_stl_wall_intersection.x simple testing_utils)
         add_test(NAME test_stl_wall_intersection COMMAND test_stl_wall_intersection.x)
-        set_tests_properties(test_stl_wall_intersection PROPERTIES LABELS "unit;wall")
+        set_tests_properties(test_stl_wall_intersection PROPERTIES
+            LABELS "unit;wall" FIXTURES_SETUP stl_wall_hits)
     endif()
 
 add_executable(test_sorting.x test_sorting.f90)

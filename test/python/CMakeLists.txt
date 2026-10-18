@@ -30,3 +30,10 @@ add_pytest(test_plotting "plotting" 120)
 add_pytest(test_cli "plotting" 120)
 add_pytest(test_golden_orbit_results "golden" 120)
 add_pytest(test_step_convergence "tools" 120)
+
+add_pytest(test_triangle_heat_load "engineering;wall" 120)
+if(SIMPLE_ENABLE_CGAL)
+    set_tests_properties(test_triangle_heat_load PROPERTIES
+        ENVIRONMENT "${PYSIMPLE_PATH};SIMPLE_WALL_FIXTURE=${CMAKE_BINARY_DIR}/test/tests"
+        FIXTURES_REQUIRED stl_wall_hits)
+endif()
