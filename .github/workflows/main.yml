@@ -156,9 +156,9 @@ jobs:
   gcc-matrix:
     permissions:
       contents: read
-    name: GCC ${{ matrix.gcc }} / ${{ matrix.target }}
+    name: GCC ${{ matrix.gcc }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     if: >-
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'workflow_dispatch' && inputs.full == 'true') ||
@@ -168,18 +168,17 @@ jobs:
       matrix:
         include:
           - gcc: 13
-            config: Fast
-            target: test-smoke
             coverage: 'OFF'
           - gcc: 14
-            config: Fast
-            target: test-fast
             coverage: 'ON'
     env:
       CC: gcc-${{ matrix.gcc }}
       CXX: g++-${{ matrix.gcc }}
       FC: gfortran-${{ matrix.gcc }}
       OMP_NUM_THREADS: 2
+      # Keep PR additions small; collect full coverage on main/full dispatch.
+      COVERAGE: ${{ matrix.coverage == 'ON' && github.event_name != 'pull_request' && 'ON' || 'OFF' }}
+      TEST_TARGET: ${{ matrix.coverage == 'ON' && github.event_name != 'pull_request' && 'test-fast' || 'test-smoke' }}
 
     steps:
       - uses: actions/checkout@v6
@@ -200,14 +199,14 @@ jobs:
         env:
           LIBNEO_INPUT_REF: ${{ inputs.libneo_ref }}
           FLAGS: >-
-            -DENABLE_COVERAGE=${{ matrix.coverage }}
+            -DENABLE_COVERAGE=${{ env.COVERAGE }}
             -DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF
         run: |
-          make ${{ matrix.target }} CONFIG=${{ matrix.config }} \
+          make "$TEST_TARGET" CONFIG=Fast \
             LIBNEO_REF="$LIBNEO_INPUT_REF"
 
       - name: Generate coverage report and summary
-        if: matrix.coverage == 'ON' && !cancelled()
+        if: env.COVERAGE == 'ON' && !cancelled()
         run: |
           cmake --build build --target coverage
           {
@@ -218,7 +217,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload coverage artifact
-        if: matrix.coverage == 'ON' && !cancelled()
+        if: env.COVERAGE == 'ON' && !cancelled()
         uses: actions/upload-artifact@v6
         with:
           name: fast-suite-coverage
