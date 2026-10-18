@@ -11,10 +11,10 @@ endif
 # $(origin) distinguishes a command-line assignment from an env import.
 unexport LIBNEO_REF LIBNEO_PATH
 ifeq ($(origin LIBNEO_REF),command line)
-  FLAGS += -DLIBNEO_REF=$(LIBNEO_REF)
+  override FLAGS += -DLIBNEO_REF=$(LIBNEO_REF)
 endif
 ifeq ($(origin LIBNEO_PATH),command line)
-  FLAGS += -DLIBNEO_SOURCE_DIR=$(LIBNEO_PATH)
+  override FLAGS += -DLIBNEO_SOURCE_DIR=$(LIBNEO_PATH)
 endif
 BUILD_NINJA := $(BUILD_DIR)/build.ninja
 PYTHON_FOR_TESTS := $(if $(wildcard .venv/bin/python),$(CURDIR)/.venv/bin/python,python)
