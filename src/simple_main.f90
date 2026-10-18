@@ -371,10 +371,19 @@ contains
 
     !> Select the field used for sampling and integrate the starting field line.
     subroutine init_sampling_field
-        use magfie_sub, only: TEST, VMEC, SPECTRE, init_magfie
+        use magfie_sub, only: TEST, VMEC, BOOZER, SPECTRE, init_magfie
         use samplers, only: init_starting_surf
         use timing, only: print_phase_time
 
+        if (startmode == 7) then
+            if (run_input_kind() == INPUT_TEST .or. &
+                run_input_kind() == INPUT_SPECTRE) &
+                error stop 'fusion births require VMEC or a Boozer chartmap'
+            if (run_input_kind() == INPUT_CHARTMAP .and. isw_field_type /= BOOZER) &
+                error stop 'fusion births on a chartmap require Boozer coordinates'
+            if (gpu_compact_init) &
+                error stop 'fusion births require gpu_compact_init=.false.'
+        end if
         select case (run_input_kind())
         case (INPUT_TEST)
             call init_magfie(TEST)
@@ -1393,7 +1402,8 @@ contains
     subroutine sample_particles(xstart_is_integ_coords)
         use samplers, only: sample, START_FILE, sample_grid, &
             sample_read_integration, &
-            sample_surface_fieldline, sample_surface_fieldline_from_integ
+            sample_surface_fieldline, sample_surface_fieldline_from_integ, &
+            sample_fusion_birth
 
         logical, intent(in), optional :: xstart_is_integ_coords
         logical :: convert_surface_starts
@@ -1422,6 +1432,21 @@ contains
 
         elseif (4 == startmode) then
             call sample(zstart, reuse_batch)
+
+        elseif (7 == startmode) then
+            select case (num_surf)
+            case (0)
+                call sample_fusion_birth(zstart, 0.0_dp, 1.0_dp, &
+                    convert_surface_starts)
+            case (1)
+                call sample_fusion_birth(zstart, 0.0_dp, sbeg(1), &
+                    convert_surface_starts)
+            case (2)
+                call sample_fusion_birth(zstart, sbeg(1), sbeg(2), &
+                    convert_surface_starts)
+            case default
+                error stop 'fusion births require num_surf=0, 1 or 2'
+            end select
 
         elseif (5 == startmode) then
             if (0 == num_surf) then

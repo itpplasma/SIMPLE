@@ -61,6 +61,7 @@ module params
     integer          :: ibins
     logical          :: generate_start_only = .False.
     integer          :: startmode = 1
+    integer :: fusion_grid(3) = (/128, 32, 32/)
     real(dp) :: grid_density = 0d0
     logical          :: special_ants_file = .False.
 
@@ -212,7 +213,7 @@ module params
     namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
         trace_time, num_surf, sbeg, phibeg, thetabeg, contr_pp, &
         facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm, &
-        isw_field_type, generate_start_only, startmode, grid_density, &
+        isw_field_type, generate_start_only, startmode, fusion_grid, grid_density, &
         special_ants_file, integmode, orbit_model, orbit_coord, relerr, &
         gpu_mode, gpu_backend, gpu_method, gpu_start_coordinates, &
         gpu_landreman, gpu_compact_init, gpu_work_order, gpu_num_devices, &
