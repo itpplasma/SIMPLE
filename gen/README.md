@@ -11,6 +11,17 @@ cmake --build /scratch/axis-generator --parallel 8
 fprettify -c .fprettify src/generated/axis_map_generated.f90
 ```
 
+For an existing FortSym build with compatible module files, the same small
+generator can also be compiled against its public module/library interface:
+
+```sh
+gfortran -I/path/to/fortsym/build/include gen/generate_axis_maps.f90 \
+  -L/path/to/fortsym/build/lib -Wl,-rpath,/path/to/fortsym/build/lib \
+  -lfortsym -o /scratch/generate_axis_maps
+/scratch/generate_axis_maps src/generated
+fprettify -c .fprettify src/generated/axis_map_generated.f90
+```
+
 This emits `src/generated/axis_map_generated.f90`, module `axis_map_generated`,
 with six scalar subroutines (each prefix is `axis_flux` or `axis_rho`):
 
