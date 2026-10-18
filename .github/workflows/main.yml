@@ -187,7 +187,7 @@ jobs:
             git-lfs cmake ninja-build pkg-config lcov \
             libgsl-dev libhdf5-dev libfftw3-dev libnetcdf-dev libnetcdff-dev \
             libopenblas-dev liblapack-dev openmpi-bin libopenmpi-dev
-          python -m pip install numpy
+          python -m pip install numpy netCDF4
 
       - name: Build and run tests
         env:
@@ -298,7 +298,7 @@ jobs:
 
       - name: Build and run smoke tests with LLVM flang
         run: |
-          python -m pip install numpy
+          python -m pip install numpy netCDF4
           make clean
           make test-smoke CONFIG=Fast \
             FLAGS='-DSIMPLE_DETERMINISTIC_FP=OFF -DCMAKE_Fortran_COMPILER=flang-new-18 -DCMAKE_C_COMPILER=clang-18 -DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF'
@@ -346,7 +346,7 @@ jobs:
       - name: Install minimal Python dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install numpy
+          python -m pip install numpy netCDF4
 
       - name: Run CGAL Wall Unit Tests (CGAL enabled, minimal)
         run: |
