@@ -26,6 +26,11 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
     integer, parameter :: SYMPLECTIC_STEP_EVENT_NOT_CONVERGED = 5
     integer, parameter :: SYMPLECTIC_STEP_BOUNDARY_LIMITED = 6
     logical :: symplectic_newton_warning_mode = .true.
+    ! exp/axis-reject (benchmark only, set from the environment in params):
+    ! SIMPLE_AXIS_REJECT=0 restores main; SIMPLE_AXIS_HALVING_ONLY=1 disables
+    ! the RK recovery after exhausted symplectic step halving.
+    logical :: axis_reject_floored = .true.
+    logical :: axis_halving_only = .false.
     real(dp), parameter :: symplectic_newton_warning_factor = 100.0_dp
     real(dp), parameter :: symplectic_spectre_newton_warning_factor = 10.0_dp
     real(dp) :: boundary_event_fraction_tolerance = -1d0

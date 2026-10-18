@@ -41,7 +41,7 @@ module simple_main
     use diag_counters, only: diag_counters_init, count_event, &
         EVT_WARNING_STEP_SKIP, EVT_SYMPLECTIC_RK_RECOVERY, &
         EVT_SYMPLECTIC_RESUME, EVT_TOROIDAL_REGULARIZATION, &
-        EVT_AXIS_FO_BRIDGE
+        EVT_AXIS_FO_BRIDGE, EVT_RK_RECOVERY_STEP
     use progress_monitor, only: progress_init, progress_tick, progress_finalize
     use restart_mod, only: particle_done, read_restart_data, restore_confined_counts
     use chartmap_metadata, only: chartmap_metadata_t, read_chartmap_metadata
@@ -54,7 +54,8 @@ module simple_main
         SYMPLECTIC_STEP_BOUNDARY, &
         SYMPLECTIC_STEP_OUTSIDE_DOMAIN, SYMPLECTIC_STEP_MAXITER, &
         SYMPLECTIC_STEP_LINEAR_SOLVE, SYMPLECTIC_STEP_EVENT_NOT_CONVERGED, &
-        SYMPLECTIC_STEP_BOUNDARY_LIMITED, symplectic_newton_warning_mode
+        SYMPLECTIC_STEP_BOUNDARY_LIMITED, symplectic_newton_warning_mode, &
+        axis_halving_only
 
     implicit none
 
@@ -2515,6 +2516,7 @@ contains
             end if
             if (integmode <= 0 .or. rk_recovery_local%active) then
                 if (rk_recovery_local%active) then
+                    call count_event(EVT_RK_RECOVERY_STEP)
                     call orbit_timestep_recovery(anorb%fo, z, dtaumin, relerr, &
                         merge(rk_recovery_local%momentum_reference, &
                         z_step_start(4), &
@@ -2597,7 +2599,16 @@ contains
                         anorb%si%last_step_fraction
                     exit
                 end if
-                if (ierr_orbit .ne. 0 .and. &
+                if (ierr_orbit .ne. 0 .and. axis_halving_only .and. &
+                    symplectic_newton_warning_mode) then
+                    ! exp/axis-reject V2: halving only, no RK recovery.
+                    z = z_step_start
+                    anorb%si = si_step_start
+                    anorb%f = f_step_start
+                    call hold_isolated_warning_failure(z, z_step_start, &
+                        ierr_orbit, hold_streak_local, numerical_hold, &
+                        numerical_hold_any_local)
+                else if (ierr_orbit .ne. 0 .and. &
                     symplectic_newton_warning_mode) then
                     ! A failed symplectic map has restored its last accepted
                     ! state. Advance that same interval with the established
@@ -2849,6 +2860,7 @@ contains
             end if
             if (integmode <= 0 .or. rk_recovery_local%active) then
                 if (rk_recovery_local%active) then
+                    call count_event(EVT_RK_RECOVERY_STEP)
                     call orbit_timestep_recovery(anorb%fo, z, dtaumin, relerr, &
                         merge(rk_recovery_local%momentum_reference, &
                         z_step_start(4), &

@@ -22,7 +22,8 @@ module diag_counters
         EVT_WARNING_MAXIT_REJECT_100, EVT_WARNING_MAXIT_REJECT_1E4, &
         EVT_WARNING_MAXIT_REJECT_LARGE, EVT_WARNING_MAXIT_NONFINITE, &
         EVT_RETRY_EXHAUSTED, EVT_WARNING_AXIS_CROSSING_ACCEPT, &
-        EVT_TOROIDAL_REGULARIZATION, EVT_AXIS_FO_BRIDGE, N_EVENT
+        EVT_TOROIDAL_REGULARIZATION, EVT_AXIS_FO_BRIDGE, EVT_RETRY_HALVING, &
+        EVT_AXIS_FLOOR_REJECT, EVT_RK_RECOVERY_STEP, N_EVENT
     public :: diag_counters_init, count_event, diag_counters_total, &
         diag_counters_reset, event_name
 
@@ -52,7 +53,11 @@ module diag_counters
     integer, parameter :: EVT_WARNING_AXIS_CROSSING_ACCEPT = 21
     integer, parameter :: EVT_TOROIDAL_REGULARIZATION = 22
     integer, parameter :: EVT_AXIS_FO_BRIDGE = 23
-    integer, parameter :: N_EVENT = 23
+    ! exp/axis-reject benchmark counters
+    integer, parameter :: EVT_RETRY_HALVING = 24
+    integer, parameter :: EVT_AXIS_FLOOR_REJECT = 25
+    integer, parameter :: EVT_RK_RECOVERY_STEP = 26
+    integer, parameter :: N_EVENT = 26
 
     ! Whole cache lines per thread column keep neighbouring threads from sharing
     ! a line. The event id indexes within a column; STRIDE >= N_EVENT.
@@ -147,6 +152,12 @@ contains
             name = 'toroidal_regularization'
         case (EVT_AXIS_FO_BRIDGE)
             name = 'axis_fo_bridge'
+        case (EVT_RETRY_HALVING)
+            name = 'retry_halving'
+        case (EVT_AXIS_FLOOR_REJECT)
+            name = 'axis_floor_reject'
+        case (EVT_RK_RECOVERY_STEP)
+            name = 'rk_recovery_step'
         case default
             name = 'unknown'
         end select

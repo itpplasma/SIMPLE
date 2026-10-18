@@ -27,7 +27,9 @@ use diag_counters, only: count_event, EVT_NEWTON1_MAXIT, EVT_NEWTON2_MAXIT, &
   EVT_MIDPOINT_MAXIT, EVT_WARNING_MAXIT_ACCEPT, &
   EVT_WARNING_MAXIT_REJECT_100, EVT_WARNING_MAXIT_REJECT_1E4, &
   EVT_WARNING_MAXIT_REJECT_LARGE, EVT_WARNING_MAXIT_NONFINITE, &
-  EVT_RETRY_EXHAUSTED, EVT_WARNING_AXIS_CROSSING_ACCEPT
+  EVT_RETRY_EXHAUSTED, EVT_WARNING_AXIS_CROSSING_ACCEPT, EVT_RETRY_HALVING, &
+  EVT_AXIS_FLOOR_REJECT
+use orbit_symplectic_base, only: axis_reject_floored
 
 implicit none
 
@@ -96,6 +98,9 @@ logical function accept_warning_axis_crossing(si, x, xlast, tolref, rtol)
   real(dp), parameter :: axis_radius = 1.0e-6_dp
 
   accept_warning_axis_crossing = .false.
+  ! exp/axis-reject: the accepted state is the update from a floored iterate,
+  ! not a root (PLAN.md item 1 on fix/spectre); fail the step instead.
+  if (axis_reject_floored) return
   if (.not. symplectic_newton_warning_mode .or. rtol <= 0.0_dp) return
   if (si%z(1) < 0.0_dp .or. si%z(1) > axis_radius) return
   if (.not. finite_newton_iterate(x)) return
@@ -169,6 +174,7 @@ recursive subroutine advance_retry_interval(si, f, stepper, interval, depth, &
   ! For a fixed subdivision, the two accepted maps remain symplectic and cover
   ! the original interval exactly. State-dependent subdivision is a warning-mode
   ! recovery path, not a globally fixed symplectic map.
+  call count_event(EVT_RETRY_HALVING)
   call advance_retry_interval(si, f, stepper, 0.5_dp*interval, depth + 1, &
     status, child_fraction)
   if (status == SYMPLECTIC_STEP_BOUNDARY) then
@@ -571,9 +577,11 @@ recursive subroutine newton1(si, f, x, maxit, xlast, status)
   real(dp) :: tolref(n)
   integer :: kit
   logical :: converged, linear_failed, boundary_limited, step_boundary_limited
+  logical :: floored
 
   status = SYMPLECTIC_STEP_MAXITER
   boundary_limited = .false.
+  floored = .false.
 
   tolref(1) = 1d0
   tolref(2) = dabs(1d1*torflux/f%ro0)
@@ -588,7 +596,10 @@ recursive subroutine newton1(si, f, x, maxit, xlast, status)
     ! field extension to s < 0 for the solver itself. Intermediate
     ! negative iterates are floored as before; a converged negative
     ! solution is committed as an axis crossing by the caller (#370).
-    if (x(1) < 0d0) x(1) = 0.01d0
+    if (x(1) < 0d0) then
+      x(1) = 0.01d0
+      floored = .true.
+    end if
 
     call eval_field(f, x(1), si%z(2), si%z(3), 2)
     call get_derivatives2(f, x(2))
@@ -618,9 +629,12 @@ recursive subroutine newton1(si, f, x, maxit, xlast, status)
     end if
   else
     call count_event(EVT_NEWTON1_MAXIT)
-    if (accept_warning_maxiter(x, xlast, tolref, si%rtol, &
-        si%warning_factor)) &
+    if (axis_reject_floored .and. floored) then
+      call count_event(EVT_AXIS_FLOOR_REJECT)
+    else if (accept_warning_maxiter(x, xlast, tolref, si%rtol, &
+        si%warning_factor)) then
       status = SYMPLECTIC_STEP_OK
+    end if
   end if
 end subroutine
 
@@ -642,10 +656,11 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast, status)
 
   real(dp) :: xabs(n), tolref(n), fabs(n), correction(n)
   real(dp) :: det, step_scale
-  logical :: boundary_limited, step_limited
+  logical :: boundary_limited, step_limited, floored
 
   status = SYMPLECTIC_STEP_MAXITER
   boundary_limited = .false.
+  floored = .false.
 
   do kit = 1, maxit
     if(x(1) > sympl_rmax) then
@@ -654,7 +669,10 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast, status)
     end if
     ! Transient guard for intermediate iterates; the converged-negative
     ! case is handled by the caller via a chart switch (#370).
-    if(x(1) < 0.0) x(1) = 0.01
+    if(x(1) < 0.0) then
+      x(1) = 0.01
+      floored = .true.
+    end if
     call f_sympl_euler2(si, f, n, x, fvec, 1)
     fabs = dabs(fvec)
     call jac_sympl_euler2(si, f, x, fjac)
@@ -714,8 +732,12 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast, status)
     end if
   else
     call count_event(EVT_NEWTON2_MAXIT)
-    if (accept_warning_maxiter(x, xlast, tolref, rtol, si%warning_factor)) &
+    if (axis_reject_floored .and. floored) then
+      call count_event(EVT_AXIS_FLOOR_REJECT)
+    else if (accept_warning_maxiter(x, xlast, tolref, rtol, &
+        si%warning_factor)) then
       status = SYMPLECTIC_STEP_OK
+    end if
   end if
 end subroutine
 
@@ -805,11 +827,12 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
   real(dp) :: fvec(n), fjac(n,n)
 
   real(dp) :: xabs(n), tolref(n), fabs(n), step_scale
-  logical :: boundary_limited, step_limited
+  logical :: boundary_limited, step_limited, floored
 
   xlast = x
   status = SYMPLECTIC_STEP_MAXITER
   boundary_limited = .false.
+  floored = .false.
 
   tolref(1) = 1d0
   tolref(2) = twopi
@@ -824,6 +847,7 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
     end if
     ! Transient guards for intermediate iterates; the converged-negative
     ! case is handled by the caller via a chart switch (#370).
+    if (x(1) < 0.0 .or. x(5) < 0.0) floored = .true.
     if(x(1) < 0.0) x(1) = 0.01
     if(x(5) < 0.0) x(5) = 0.01
     call f_midpoint_part1(si, f, n, x, fvec)
@@ -872,7 +896,9 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
     end if
   else
     call count_event(EVT_MIDPOINT_MAXIT)
-    if (accept_warning_axis_crossing(si, x, xlast, tolref, rtol)) then
+    if (axis_reject_floored .and. floored) then
+      call count_event(EVT_AXIS_FLOOR_REJECT)
+    else if (accept_warning_axis_crossing(si, x, xlast, tolref, rtol)) then
       status = SYMPLECTIC_STEP_OK
     else if (accept_warning_maxiter(x, xlast, tolref, rtol, &
         si%warning_factor)) then

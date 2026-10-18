@@ -16,7 +16,8 @@ module params
                                      CASH_KARP, DORMAND_PRINCE, &
                                      boundary_event_fraction_tolerance, &
                                      boundary_event_radial_tolerance, &
-                                     symplectic_newton_warning_mode
+                                     symplectic_newton_warning_mode, &
+                                     axis_reject_floored, axis_halving_only
     use vmecin_sub, only: stevvo
     use callback, only: output_error, output_orbits_macrostep
 
@@ -284,6 +285,20 @@ contains
         read (defaults_unit, nml=config)
     end subroutine reset_config
 
+    subroutine read_axis_experiment_env
+        ! exp/axis-reject benchmark switches; not a supported interface.
+        character(16) :: value
+        integer :: length, status
+
+        call get_environment_variable('SIMPLE_AXIS_REJECT', value, length, status)
+        if (status == 0 .and. length > 0) axis_reject_floored = trim(value) /= '0'
+        call get_environment_variable('SIMPLE_AXIS_HALVING_ONLY', value, length, &
+            status)
+        if (status == 0 .and. length > 0) axis_halving_only = trim(value) == '1'
+        print '(a,l1,a,l1)', ' exp/axis-reject: axis_reject_floored=', &
+            axis_reject_floored, ' axis_halving_only=', axis_halving_only
+    end subroutine read_axis_experiment_env
+
     subroutine finalize_config
         ! Resolve aliases, normalize and validate the current &config values.
         call warn_removed_config_keys
@@ -295,6 +310,7 @@ contains
         gpu_start_coordinates = to_lower(trim(gpu_start_coordinates))
 
         call reset_seed_if_deterministic
+        call read_axis_experiment_env
 
         if (integmode > 0 .and. symplectic_newton_warning_mode) then
             print *, 'WARNING: symplectic integrators accept bounded Newton ', &
