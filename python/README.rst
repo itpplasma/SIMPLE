@@ -163,6 +163,81 @@ its IDS reader performs that conversion. SIMPLE keeps radians. ASCOT and SIMPLE
 have different solver models and output-distribution semantics; compare matched
 physics, actual end times, boundaries and weights before comparing results.
 
+IDS orbit benchmarks
+--------------------
+
+``examples/imas_benchmark.py`` compares SIMPLE with compiled ASCOT5 through
+its IDS equilibrium/marker readers. ``--gorilla /path/to/GORILLA`` adds the
+native GORILLA polynomial pusher on the same converted chartmap. Build the
+external codes using their own instructions. ASCOT's real DD3/DD4 import
+corrections are in https://github.com/ascot4fusion/ascot5/pull/238; the tested
+revision is ``6355721de093cd76d434a96940196404a46054ab``. The GORILLA checkout
+must support ``grid_kind=6`` (tested revision
+``2f2d2802011ab895bfad8c188ca652ca5b7222c6``).
+
+The runner generates circular flux surfaces at aspect ratios 10 and 100,
+or downloads the following public inputs using immutable URLs and SHA256
+checksums in its ``SOURCES`` table:
+
+* ASDEX Upgrade shot 26884 at 4.3 s, from GORILLA's public test equilibrium.
+* ITER 10 MA design equilibrium, from SCOREC's Fusion_Public examples.
+* SPARC equilibrium-library case 1300, from CFS SPARCPublic. This scan case
+  has 0.2 MA current and is not the nominal SPARC reference discharge.
+
+The original files remain in ``~/.cache/simple/imas-benchmarks``. Choose a
+new output directory outside the repository for each run; repository-local
+download and output directories are rejected. No dataset or generated file
+needs to be committed::
+
+    python examples/imas_benchmark.py --case aug --output /tmp/ids-aug-r48 \
+        --gorilla /path/to/GORILLA
+    python examples/imas_benchmark.py --case aug --resolution 96 --step 5e-9 \
+        --output /tmp/ids-aug-r96 --gorilla /path/to/GORILLA
+
+Use ``--case circular``, ``large-aspect``, ``iter`` or ``sparc`` for the other
+toroidal cases. The default markers are 10 keV deuterium ions, spanning
+trapped/passing pitches at three starting radii. ``--species alpha --energy
+3500000 --dense --duration 1e-4`` covers 54 fast-alpha starts through the
+near-axis, core and edge regions. Repeat with smaller ASCOT timesteps and
+larger chartmap/GORILLA meshes before attributing differences to a solver.
+
+Collisional comparisons additionally pass the same flat 10 keV DT
+``core_profiles`` IDS through both codes' interfaces::
+
+    python examples/imas_benchmark.py --case circular --collisions \
+        --species alpha --energy 3500000 --dense --copies 20 \
+        --duration 1e-3 --step 5e-7 --output /tmp/ids-collisions
+
+Copies retain the total source weight and use independent native marker
+streams. Reported Monte Carlo errors use variance between copies of each
+fixed initial state. Compare population loss fractions, remaining energy and
+pitch moments; individual trajectories use independent collision streams.
+GORILLA's core collisionless pusher is excluded from that comparison.
+
+``--case cylinder --duration 1e-6 --step 1e-10`` checks ASCOT guiding-centre
+translation and full-orbit gyromotion against exact uniform-field solutions.
+The cylinder axis is Cartesian X, avoiding ASCOT's documented gyrophase-basis
+singularity when B is parallel to Cartesian Z. SIMPLE's IDS converter needs
+closed toroidal flux surfaces, so the straight-cylinder entry explicitly
+reports this capability limit.
+
+Each output directory contains the real input/output IDS files, external-code
+inputs/logs, state CSV and a JSON report. Reports preserve code revisions,
+end conditions, actual final times, losses, invariants and timing. Trajectory
+errors include only markers that completed at the same physical time; lost
+and failed markers cannot masquerade as matched trajectories. SIMPLE and
+ASCOT tracing times are separated from field initialization. GORILLA's time
+includes repeated mesh initialization for its single-orbit plotting interface
+and must not be treated as a kernel speed comparison.
+
+SIMPLE's nonrelativistic guiding-centre model and legacy physical constants
+differ from ASCOT's relativistic model. The benchmark matches marker mass to
+SIMPLE's integer proton-mass convention, but retains each solver's native
+energy/charge constants. Field interpolation and boundary-conversion errors
+also need convergence checks. A completed run supplies comparison evidence;
+it does not establish experimental validation or declare every difference
+acceptable.
+
 Fortran
 -------
 
