@@ -176,6 +176,7 @@ jobs:
       CXX: g++-${{ matrix.gcc }}
       FC: gfortran-${{ matrix.gcc }}
       OMP_NUM_THREADS: 2
+      CTEST_PARALLEL_LEVEL: 2
       # Keep PR additions small; collect full coverage on main/full dispatch.
       COVERAGE: ${{ matrix.coverage == 'ON' && github.event_name != 'pull_request' && 'ON' || 'OFF' }}
       TEST_TARGET: ${{ matrix.coverage == 'ON' && github.event_name != 'pull_request' && 'test-fast' || 'test-smoke' }}
