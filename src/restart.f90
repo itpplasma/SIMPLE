@@ -1,6 +1,6 @@
 module restart_mod
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    use finite_check, only: is_finite
     use params, only: ntestpart, times_lost, orbit_exit_code, &
         boundary_event_radial_residual, boundary_event_time_width, &
         trap_par, perp_inv, zend, &
@@ -36,7 +36,7 @@ contains
             read (unit, *, iostat=ios) idx, tl, tp, s1, pi_val, ze
             if (ios /= 0) exit
             if (idx < 1 .or. idx > ntestpart) cycle
-            if (.not. ieee_is_finite(tl) .or. tl < 0.0d0) cycle
+            if (.not. is_finite(tl) .or. tl < 0.0d0) cycle
             times_lost(idx) = tl
             if (tl >= trace_time) then
                 particle_done(idx) = .true.
@@ -57,7 +57,7 @@ contains
                     radial_residual, time_width
                 if (ios /= 0) exit
                 if (idx < 1 .or. idx > ntestpart) cycle
-                if (.not. ieee_is_finite(exit_time) .or. exit_time < 0d0) cycle
+                if (.not. is_finite(exit_time) .or. exit_time < 0d0) cycle
                 if (abs(exit_time - times_lost(idx)) > &
                     16d0*epsilon(exit_time)*max(1d0, abs(exit_time))) cycle
                 orbit_exit_code(idx) = exit_code

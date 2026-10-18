@@ -1,0 +1,18 @@
+{
+  "runtime_revision": "7626cd8",
+  "runtime_sources_verified_against_revision": true,
+  "source_hashes": {
+    "concept/fo_gc_derivations/D_canonical_switch/src/gc_fo_switch.f90": "8ea84054f50e7cdae82c86d094b0aa27c21155482815c8edfb095baac7093e11",
+    "concept/fo_gc_derivations/D_canonical_switch/src/spectre_jets.f90": "0132f6c59b22e8f34f3b6dbea80a76349d70ea1c4672606b938d8262d02ad5be",
+    "concept/fo_gc_derivations/D_canonical_switch/generated/gc_switch_generated.f90": "b742b29307f1cda65c0e5649f42f3700a291427b37664c4c068f8addcd32c289",
+    "concept/fo_gc_derivations/D_canonical_switch/tests/switch_study.f90": "3323667a445745d85cbaa13fa452131fecccd8b7231a3ae2f9399fff0f39a851",
+    "concept/fo_gc_derivations/D_canonical_switch/scripts/run_study.py": "e75ceb4ca91bec4fb43520bb234ff7ed89a10d3a343203a897d4638facbca78d"
+  },
+  "libneo_revision": "c92b33667b299062473855f7ebe0fe9a59b627ec",
+  "command": "python concept/fo_gc_derivations/D_canonical_switch/scripts/run_study.py",
+  "fixture_hashes": {
+    "ncsx_freeboundary.h5": "225976b7c5e2f5cd9480b2e2d233fda2a68a590028f36f24cd63f17aa29b24d9",
+    "tok2vol_sheet.h5": "e5f25b82d7d068ff9eb989293c994447a3b8e1a830907629ec60e72af16f47f5",
+    "spectre_test.h5": "57218f07930b6dc30b06375edeb6db823b4e42322116c4b48e09f8c9c622b5a7"
+  }
+}

@@ -1,17 +1,17 @@
-Examples
-========
+Example scripts
+===============
 
-The snippets below are pulled directly from the example scripts inside the
-repository.  They rely exclusively on the public :mod:`simple` API, ensuring the
-documentation never drifts from runnable code.
+Complete ``pysimple`` scripts from ``examples/``, run by
+``test/python/test_examples.py``. Run them from ``examples/``; they read
+``test/test_data/wout.nc``, the equilibrium of
+:doc:`/getting-started/quickstart`.
 
-Simple session trace
---------------------
+Surface trace
+-------------
 
 .. literalinclude:: ../examples/simple_api.py
    :language: python
    :caption: examples/simple_api.py
-   :linenos:
 
 Fast classification
 -------------------
@@ -19,7 +19,6 @@ Fast classification
 .. literalinclude:: ../examples/classify_fast.py
    :language: python
    :caption: examples/classify_fast.py
-   :linenos:
 
 Fractal classification
 ----------------------
@@ -27,7 +26,6 @@ Fractal classification
 .. literalinclude:: ../examples/classify_fractal.py
    :language: python
    :caption: examples/classify_fractal.py
-   :linenos:
 
 Macrostep orbit trace
 ---------------------
@@ -35,7 +33,3 @@ Macrostep orbit trace
 .. literalinclude:: ../examples/orbit_macro.py
    :language: python
    :caption: examples/orbit_macro.py
-   :linenos:
-
-All examples are exercised directly in the pytest suite,
-so the documentation mirrors the tested code paths one-to-one.
