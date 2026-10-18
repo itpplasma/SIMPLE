@@ -1851,7 +1851,8 @@ subroutine attempt_midpoint_step(si, f, status)
 
   si%z = x(1:4)
   if (extrap_field) then
-    f%pth = f%pth + f%dpth(1)*(x(1)-xlast(1) + x(5)-xlast(5)) &
+    ! f holds the endpoint field, not the independent midpoint radius x(5).
+    f%pth = f%pth + f%dpth(1)*(x(1)-xlast(1)) &
       + f%dpth(2)*(x(2)-xlast(2)) + f%dpth(3)*(x(3)-xlast(3)) &
       + f%dpth(4)*(x(4)-xlast(4))
   else
@@ -2033,7 +2034,8 @@ recursive subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
       end if
       si%z = x(1:4)
       if (extrap_field) then
-        f%pth = f%pth + f%dpth(1)*(x(1)-xlast(1) + x(5)-xlast(5)) &
+        ! Only the endpoint coordinates enter the carried momentum.
+        f%pth = f%pth + f%dpth(1)*(x(1)-xlast(1)) &
           + f%dpth(2)*(x(2)-xlast(2)) + f%dpth(3)*(x(3)-xlast(3)) &
           + f%dpth(4)*(x(4)-xlast(4))
       else
@@ -2225,7 +2227,7 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
                       + fs(k)%d2pth(5)*dz(3) &
                       + fs(k)%d2pth(8)*dz(4)
 
-        fs(k)%dpth(3) = fs(k)%dpth(3) + fs(k)%d2pth(2)*dz(1) &
+        fs(k)%dpth(3) = fs(k)%dpth(3) + fs(k)%d2pth(3)*dz(1) &
                       + fs(k)%d2pth(5)*dz(2) &
                       + fs(k)%d2pth(6)*dz(3) &
                       + fs(k)%d2pth(9)*dz(4)
@@ -2247,7 +2249,8 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
 
         fs(k)%vpar = fs(k)%vpar + fs(k)%dvpar(1)*dz(1) &  ! d/dr
                    + fs(k)%dvpar(2)*dz(2) &
-                   + fs(k)%dvpar(3)*dz(3)
+                   + fs(k)%dvpar(3)*dz(3) &
+                   + fs(k)%dvpar(4)*dz(4)
 
         fs(k)%hth = fs(k)%hth + fs(k)%dhth(1)*dz(1) &  ! d/dr
                       + fs(k)%dhth(2)*dz(2) &

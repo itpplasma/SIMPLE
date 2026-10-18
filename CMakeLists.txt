@@ -73,11 +73,64 @@ endif()
 option(ENABLE_PYTHON_INTERFACE "Enables the Python-Wrapper." ON)
 option(SIMPLE_TESTING "Enable testing." ON)
 option(ENABLE_OPENMP "Enable OpenMP compiler flags." ON)
-option(ENABLE_COVERAGE "Enable code coverage analysis (Debug/Profile builds only)" OFF)
+option(ENABLE_COVERAGE "Enable GNU code coverage analysis" OFF)
 option(SIMPLE_DETERMINISTIC_FP "Disable fast-math for reproducible floating-point" OFF)
 option(SIMPLE_ENABLE_PYTHON_TOOLS "Enable Python helpers (tests/data generation)" ON)
 option(SIMPLE_ENABLE_OPENACC "Enable OpenACC offload (NVHPC only)" OFF)
+option(SIMPLE_ENABLE_CUDA
+    "Build direct-CUDA guiding-center kernels" OFF)
 option(SIMPLE_ENABLE_DEBUG_OUTPUT "Enable debug output in hot loops" OFF)
+
+if(SIMPLE_ENABLE_CUDA)
+    # CUDA 12 no longer provides a useful default for the Turing-and-newer
+    # devices used by the native path. Keep the public build to one switch,
+    # while allowing a site to override this cache value for another GPU.
+    set(CMAKE_CUDA_ARCHITECTURES 75 CACHE STRING
+        "CUDA architectures for native SIMPLE kernels")
+    enable_language(CXX)
+    include(CheckLanguage)
+    check_language(CUDA)
+    if(NOT CMAKE_CUDA_COMPILER)
+        message(FATAL_ERROR "SIMPLE_ENABLE_CUDA requires a CUDA compiler")
+    endif()
+    enable_language(CUDA)
+    find_package(CUDAToolkit REQUIRED)
+
+    # Create this target before project-wide Fortran link dependencies are
+    # introduced below. The standalone C ABI is intentionally usable by the
+    # Landreman Python harness without pulling NetCDF/HDF5 or SIMPLE itself;
+    # the related loss-threshold protocol is described at
+    # https://arxiv.org/abs/2606.19523.
+    add_library(simple_cuda_firm_rk54 SHARED
+        src/simple_cuda_firm_rk54.cu
+        src/simple_cuda_firm_rk54.h)
+    target_include_directories(simple_cuda_firm_rk54 PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    find_package(OpenMP COMPONENTS CXX REQUIRED)
+    target_link_libraries(simple_cuda_firm_rk54 PUBLIC
+        CUDA::cudart OpenMP::OpenMP_CXX)
+    target_compile_options(simple_cuda_firm_rk54 PRIVATE
+        $<$<COMPILE_LANGUAGE:CUDA>:-O3;--generate-line-info;--extra-device-vectorization;-Xptxas=-v;-Xcompiler=-fopenmp>)
+    set_target_properties(simple_cuda_firm_rk54 PROPERTIES
+        CUDA_STANDARD 17
+        CUDA_STANDARD_REQUIRED ON
+        CUDA_SEPARABLE_COMPILATION OFF
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+
+    add_library(simple_cuda_native_rk54 SHARED
+        src/simple_cuda_native_rk54.cu
+        src/simple_cuda_native_rk54.h)
+    target_include_directories(simple_cuda_native_rk54 PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(simple_cuda_native_rk54 PUBLIC CUDA::cudart)
+    target_compile_options(simple_cuda_native_rk54 PRIVATE
+        $<$<COMPILE_LANGUAGE:CUDA>:-O3;--generate-line-info;--extra-device-vectorization;-Xptxas=-v>)
+    set_target_properties(simple_cuda_native_rk54 PROPERTIES
+        CUDA_STANDARD 17
+        CUDA_STANDARD_REQUIRED ON
+        CUDA_SEPARABLE_COMPILATION OFF
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+endif()
 
 if(SIMPLE_DETERMINISTIC_FP)
     set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -101,23 +154,36 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     add_compile_definitions(SIMPLE_NVHPC)
 
     if(SIMPLE_ENABLE_OPENACC)
-        # Memory model for OpenACC. "managed" places allocatables in CUDA
-        # managed memory so derived-type allocatable components (e.g. batch
-        # spline %coeff) stay coherent host<->device without manual deep-copy
-        # update clauses, which nvfortran does not perform for such components.
-        # "unified" additionally covers module/static data (needs HMM driver).
-        set(SIMPLE_OPENACC_MEM "unified" CACHE STRING
+        # Memory model for OpenACC. "managed" is supported by the standard
+        # cluster GPUs. "unified" additionally covers module/static data but
+        # needs an HMM-capable driver and is an explicit override.
+        set(SIMPLE_OPENACC_MEM "managed" CACHE STRING
             "OpenACC memory model: managed|unified|separate")
-        message(STATUS "OpenACC enabled for NVHPC compiler (mem:${SIMPLE_OPENACC_MEM})")
+        set(SIMPLE_OPENACC_GPU_ARCH "ccnative" CACHE STRING
+            "NVHPC OpenACC GPU architecture (for example ccnative or cc75)")
+        # Keep the managed-memory spelling identical to the standard libneo
+        # OpenACC checkout. NVHPC accepts the newer spelling too, but mixing
+        # the two spellings across linked targets has caused illegal-address
+        # failures at runtime on older cluster toolchains.
+        if(SIMPLE_OPENACC_MEM STREQUAL "managed")
+            set(_simple_openacc_mem_option "managed")
+        else()
+            set(_simple_openacc_mem_option "mem:${SIMPLE_OPENACC_MEM}")
+        endif()
+        message(STATUS "OpenACC enabled for NVHPC compiler (arch:${SIMPLE_OPENACC_GPU_ARCH}, mem:${SIMPLE_OPENACC_MEM})")
+        set(SIMPLE_OPENACC_GPU_FLAG
+            "-gpu=${SIMPLE_OPENACC_GPU_ARCH},${_simple_openacc_mem_option}")
+        set(ENABLE_OPENACC ON CACHE BOOL "Enable OpenACC compiler flags." FORCE)
+        set(LIBNEO_OPENACC_MEM "${SIMPLE_OPENACC_MEM}" CACHE STRING
+            "OpenACC memory model for libneo" FORCE)
+        set(FORTNUM_GPU_BACKEND OPENACC CACHE STRING
+            "GPU backend for Fortnum" FORCE)
         add_compile_options(
             $<$<COMPILE_LANGUAGE:Fortran>:-acc>
-            $<$<COMPILE_LANGUAGE:Fortran>:-gpu=ccnative,mem:${SIMPLE_OPENACC_MEM}>
             $<$<COMPILE_LANGUAGE:C>:-acc>
-            $<$<COMPILE_LANGUAGE:C>:-gpu=ccnative,mem:${SIMPLE_OPENACC_MEM}>
         )
         add_link_options(
             -acc
-            -gpu=ccnative,mem:${SIMPLE_OPENACC_MEM}
         )
     endif()
 endif()
@@ -183,27 +249,38 @@ if(SIMPLE_DETERMINISTIC_FP)
         "Use deterministic floating-point options in libneo" FORCE)
 endif()
 
-# fortnum provides the multidimensional root finder (multiroot_hybrids) that
-# replaced the bundled MINPACK hybrd1 in orbit_symplectic_quasi, and the ODE
-# integrators behind the explicit integmodes.
-#
-# This must be declared BEFORE libneo. libneo declares fortnum too, and
-# FetchContent honours the first declaration it sees and silently discards
-# later ones -- so with libneo first, the pin here has no effect and the build
-# gets whatever revision libneo happens to track. The failure is invisible in a
-# working-tree build, where find_or_fetch(libneo) resolves to a local checkout
-# that is usually already up to date, and appears only in a clean clone, as a
-# missing .mod file for whichever module SIMPLE needs and libneo's fortnum
-# lacks.
-#
-# The guard stays for the case where an enclosing project already provides
-# fortnum: there, that one wins deliberately.
+# SIMPLE_ENABLE_OPENACC is the authoritative switch.  Otherwise libneo
+# enables OpenACC automatically for nvfortran, even for CPU builds and for
+# SIMPLE's native CUDA path.  That legacy interpolation path is not used by
+# SIMPLE's CUDA kernels and fails with some current NVHPC releases.
+if(NOT SIMPLE_ENABLE_OPENACC)
+    set(ENABLE_OPENACC OFF CACHE BOOL
+        "Disable libneo OpenACC when SIMPLE does not enable OpenACC" FORCE)
+endif()
+
+set(_dependency_versions_file "${CMAKE_CURRENT_SOURCE_DIR}/cmake/dependency_versions.json")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${_dependency_versions_file}")
+file(READ "${_dependency_versions_file}" _dependency_versions)
+foreach(_dependency IN ITEMS fortnum fortplot)
+    string(TOUPPER "${_dependency}" _dependency_upper)
+    if(NOT DEFINED ${_dependency_upper}_REF)
+        string(JSON ${_dependency_upper}_REF GET "${_dependency_versions}" ${_dependency})
+    endif()
+endforeach()
+
+# fortnum provides the root finder, the ODE integrators behind the explicit
+# integmodes, and the allocation-free GPU RK5(4) device
+# integrator used by SIMPLE. libneo declares fortnum as well, so this must be
+# declared first: FetchContent keeps the first declaration and silently ignores
+# later pins. Without this ordering, a clean clone can resolve an older
+# libneo-selected fortnum and miss fortnum_ode_rk54_device.mod.
 if(NOT TARGET fortnum)
     include(FetchContent)
     FetchContent_Declare(
         fortnum
         GIT_REPOSITORY https://github.com/lazy-fortran/fortnum.git
-        GIT_TAG c481d8e494d0c2ea8e9897bb77b39a1161b41c71
+        GIT_TAG ${FORTNUM_REF}
     )
     FetchContent_MakeAvailable(fortnum)
 endif()
@@ -254,10 +331,13 @@ endif()
 # Fetch fortplot for diagnostic plotting (disabled for nvfortran due to compatibility issues)
 if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     include(FetchContent)
+    # SIMPLE uses the native plotting API and does not need the fortarray adapter.
+    set(FORTPLOT_BUILD_FORTARRAY_ADAPTER OFF CACHE BOOL
+        "Build the optional fortarray plotting adapter")
     FetchContent_Declare(
         fortplot
         GIT_REPOSITORY https://github.com/lazy-fortran/fortplot.git
-        GIT_TAG feabb592faf39bac8167b9193413912f2bb8ca48
+        GIT_TAG ${FORTPLOT_REF}
     )
     FetchContent_MakeAvailable(fortplot)
     add_compile_definitions(USE_FORTPLOT)
@@ -305,15 +385,20 @@ if (ENABLE_OPENMP)
     link_libraries(OpenMP::OpenMP_Fortran)
 endif()
 
-# Coverage analysis configuration (only for Debug/Profile builds)
+# Coverage analysis uses the selected build profile, including normal Fast builds.
 if (ENABLE_COVERAGE)
-    if (CMAKE_BUILD_TYPE MATCHES "Debug|Profile")
+    if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
         message(STATUS "Coverage analysis enabled for ${CMAKE_BUILD_TYPE} build")
         
         # Create interface library for coverage flags to scope them to specific targets
         add_library(coverage_flags INTERFACE)
-        target_compile_options(coverage_flags INTERFACE --coverage -fprofile-arcs -ftest-coverage)
+        # OpenMP workers must not race when updating gcov counters.
+        target_compile_options(coverage_flags INTERFACE
+            --coverage -fprofile-arcs -ftest-coverage -fprofile-update=atomic)
         target_link_options(coverage_flags INTERFACE --coverage -lgcov)
+        # Apply to SIMPLE targets declared below, after external dependencies.
+        # Coverage must not depend on Debug-only initialization/trap options.
+        link_libraries(coverage_flags)
         
         # Add custom target for coverage data generation
         find_program(LCOV_PATH lcov)
@@ -326,7 +411,6 @@ if (ENABLE_COVERAGE)
                     --ignore-errors mismatch 
                     --ignore-errors unused
                 COMMAND ${LCOV_PATH} --remove coverage.info
-                    "/home/ert/code/libneo/*"
                     "*/libneo/*"
                     "*/test/*"
                     "/usr/*"
@@ -342,7 +426,7 @@ if (ENABLE_COVERAGE)
             message(WARNING "lcov not found - coverage target will not be available")
         endif()
     else()
-        message(WARNING "Coverage analysis requires Debug or Profile build type (current: ${CMAKE_BUILD_TYPE})")
+        message(FATAL_ERROR "Coverage analysis requires GNU Fortran")
     endif()
 endif()
 
@@ -417,28 +501,6 @@ else()
 endif()
 
 # Trampoline error flags will be applied per-target to avoid affecting subprojects
-
-# Auto-download pyplot-fortran single file during build
-set(PYPLOT_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty)
-set(PYPLOT_MODULE_FILE ${PYPLOT_SOURCE_DIR}/pyplot_module.F90)
-
-# Download pyplot_module.F90 if it doesn't exist
-if(NOT EXISTS ${PYPLOT_MODULE_FILE})
-    message(STATUS "Downloading pyplot_module.F90...")
-    file(MAKE_DIRECTORY ${PYPLOT_SOURCE_DIR})
-    file(DOWNLOAD
-        "https://raw.githubusercontent.com/jacobwilliams/pyplot-fortran/refs/heads/master/src/pyplot_module.F90"
-        ${PYPLOT_MODULE_FILE}
-        SHOW_PROGRESS
-    )
-endif()
-
-# Create pyplot library from downloaded source
-add_library(pyplot STATIC ${PYPLOT_MODULE_FILE})
-set_target_properties(pyplot PROPERTIES
-    Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/include
-)
-target_include_directories(pyplot PUBLIC ${CMAKE_BINARY_DIR}/include)
 
 add_subdirectory(src)
 include_directories("${CMAKE_BINARY_DIR}/src")

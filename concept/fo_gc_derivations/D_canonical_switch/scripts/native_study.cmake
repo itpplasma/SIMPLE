@@ -1,0 +1,11 @@
+if(DEFINED ENV{SIMPLE_SWITCH_INPUT})
+    set(INPUT "$ENV{SIMPLE_SWITCH_INPUT}")
+endif()
+if(DEFINED ENV{SIMPLE_SWITCH_OUTPUT})
+    set(OUTPUT "$ENV{SIMPLE_SWITCH_OUTPUT}")
+endif()
+execute_process(COMMAND "${STUDY}" INPUT_FILE "${INPUT}"
+    OUTPUT_FILE "${OUTPUT}" RESULT_VARIABLE status)
+if(NOT status EQUAL 0)
+    message(FATAL_ERROR "Canonical switch diagnostic failed: ${status}")
+endif()

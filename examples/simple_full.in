@@ -1,87 +1,224 @@
+! Complete reference of the simple.in namelists. Every key is listed with its default value;
+! a run needs only the keys that differ (see examples/simple.in).
+! test_config_reference checks this file against the compiled defaults.
 &config
-notrace_passing = 0      ! skip tracing passing prts if notrace_passing=1
-nper = 1000              ! number of periods for initial field line
-npoiper = 100            ! number of points per period on this field line
-ntimstep = 10000         ! number of time steps per slowing down time
-ntestpart = 25         ! number of test particles
-! bmod_ref = 5d4           ! rescale field to fix Boozer $B_{00}$ on
-!                            starting surface to bmod_ref in Gauss -- removed,
-!                            now the actual field from VMEC is used one can
-!                            rather scale it with vmec_B_scale
-trace_time = 1d-3        ! slowing down time, s
-sbeg = 0.6d0, 0.7d0     ! starting s (normalized toroidal flux) for particles. The particles will be distributed equally along these flux surfaces.
-num_surf = 2             ! number of flux surfaces. Value 0, distributes in volume.
-phibeg = 0.d0            ! starting phi for field line
-thetabeg = 0.d0          ! starting theta for field line
-contr_pp = -1.0d0        ! control of passing particle fraction
-facE_al = 1.0            ! test particle energy reduction factor
-npoiper2 = 128	         ! points per period for integrator step
-n_e = 2                  ! test particle charge number (the same as Z)
-n_d = 4                  ! test particle mass number (the same as A)
-netcdffile = 'wout.nc'   ! name of VMEC file in NETCDF format
-ns_s = 5                 ! spline order for 3D quantities over s variable
-ns_tp = 5                ! spline order for 3D quantities over theta and phi
-multharm = 5             ! angular grid factor (n_grid=multharm*n_harm_max where n_harm_max - maximum Fourier index
-isw_field_type = 2       ! -1: Testing, 0: Canonical, 1: VMEC, 2: Boozer, 3: Meiss, 4: Albert
-generate_start_only = .False. ! If .True., only initialisation is done and particle coordinates are written to file, SIMPLE does not run.
-startmode = 1            !  mode for initial conditions: 
-!                         1=only on one fieldline ("local"),
-!                         2=read and run, 
-!                         3=read ANTS and run
-!                         4=read and run a batch,
-!                         5=distribute in volume ("global")
-grid_density = 0d0       ! for startmode 1 only, between 0.0 to 0.99, when 0.0 then no grid is made.
-special_ants_file = .False. ! if .True., a different start file is read (defined in samplers.f90), .False. uses standard filename (defined in samplers.f90)
-integmode = 1            ! integrator: -1 = RK VMEC, 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Midpoint, 4-7 = Gauss1-4, 15 = Lobatto3, 20 = Gauss-Radau, 21 = Bulirsch-Stoer, 22 = Cash-Karp, 24 = TDRK (fixed step), 25 = TDRK (adaptive)
-relerr = 1d-13           ! tolerance for integrator. Set to 1d-13 for symplectic.
-tcut = -1d0              ! time when to do cut for classification, usually 1d-1, or -1 if no cuts desired
-debug = .False.          ! produce debugging output (.True./.False.). Use only in non-parallel mode!
-class_plot = .False.     ! write starting points at phi=const cut for classification plot (.True./.False.)
-cut_in_per = 0d0         ! normalized phi-cut position within field period, [0:1], used if class_plot=.True.
-fast_class = .False.     ! if .True. quit immeadiately after fast classification and don't trace orbits to the end
-vmec_B_scale = 1.0d0     ! factor to scale the B field from VMEC
-vmec_RZ_scale = 1.0d0    ! factor to scale the device size from VMEC
-swcoll = .False.         ! if .True. enables collisions. This is incompatible with classification.
-am1 = 2.0d0,             ! atomic mass of the first background species for collisions
-am2 = 3.0d0,             ! atomic mass of the second background species for collisions
-Z1 = 1.0d0,              ! charge number of the first background species for collisions
-Z2 = 1.0d0,              ! charge number of the second background species for collisions
-densi1 = 0.5d14,         ! density of the first background species for collisions (cm^-3)
-densi2 = 0.5d14,         ! density of the second background species for collisions (cm^-3)
-tempi1 = 1.0d4,          ! temperature of the first background species for collisions (eV)
-tempi2 = 1.0d4,          ! temperature of the second background species for collisions (eV)
-tempe = 1.0d4            ! electron temperature for collisions (eV)
-deterministic = .True.  ! if .True. put seed for the same random walk
-old_axis_healing = .True.  ! How to heal VMEC axis. Leave .True. until new version is fully tested.
-old_axis_healing_boundary = .True.  ! How to heal VMEC axis. Leave .True. until new version is fully tested.
-batch_size = 1000 ! Use only a portion of all particles. Ignored if larger than ntestpart.
-ran_seed = 12345   ! Random seed to get batch_size amounts of random indices from ntestpart.
-reuse_batch = .False. ! Reuse batch from last run. Previous indices are stored in batch.dat, new batch generated if batch.dat not found.
-output_orbits_macrostep = .False. ! Output orbit positions to fort.9XXXX
-output_error = .False. ! Output additional error diagnostics
+! Particles and sampling
+ntestpart = 1024                 ! number of test particles (markers)
+n_e = 2                          ! test particle charge number Z
+n_d = 4d0                        ! test particle mass number A (proton masses)
+facE_al = 1d0                    ! energy divisor: particle energy = 3.5 MeV / facE_al
+startmode = 1                    ! initial conditions, see the list below
+!   1 = random on field line on surface sbeg(1), volume-weighted (grid if grid_density set)
+!   2 = read start.dat (s, theta, phi in reference coordinates, v/v0, v_par/v)
+!   3 = read ANTS-format start file (see special_ants_file)
+!   4 = random batch of start.dat (see batch_size, reuse_batch)
+!   5 = uniform random s in the range set by num_surf, random angles
+!   6 = read start.dat with positions in integration coordinates (e.g. Boozer)
+!   7 = D-T fusion births from &profiles and the volume Jacobian; see docs/alpha-birth.md
+!   Modes 1, 5 and 7 write start.dat. Random pitch v_par/v in [-1, 1].
+fusion_grid = 128, 32, 32        ! mode 7 midpoint cells: s, poloidal, toroidal (full torus)
+sbeg = 1024*0.5d0                ! start surfaces: normalized toroidal flux s (SPECTRE: rho_g
+!                                  unless spectre_sbeg_is_toroidal_flux; TEST field: r/a)
+num_surf = 1                     ! startmode 5/7 range: 0 = [0,1], 1 = [0,sbeg(1)],
+!                                  2 = [sbeg(1),sbeg(2)]; mode 5 clamps s >= 0.01.
+!                                  /= 1: Bmin/Bmax per surface
+phibeg = 0d0                     ! toroidal angle of the start field line, rad (startmode 1)
+thetabeg = 0d0                   ! poloidal angle of the start field line, rad (startmode 1)
+nper = 1000                      ! field periods followed along the start field line
+npoiper = 100                    ! points per field period on the start field line
+grid_density = 0d0               ! startmode 1: in (0,1) places markers on a (theta, phi) grid
+!                                  with int(1/grid_density-1)**2 points (overrides ntestpart);
+!                                  0 = random sampling
+special_ants_file = .false.      ! startmode 3: .true. reads start_ants.dat, .false. start.dat
+generate_start_only = .false.    ! .true.: write start.dat and stop without tracing
+notrace_passing = 0              ! 1 = do not trace passing particles; they count as confined
+contr_pp = -1d0                  ! passing particles with trapping parameter <= contr_pp
+!                                  are not traced and count as confined (dimensionless)
+
+! Time stepping and integrator
+trace_time = 1d-1                ! total tracing time, s
+ntimstep = 10000                 ! macrosteps over trace_time (rows of confined_fraction.dat)
+npoiper2 = 256                   ! integration microsteps per path length 2*pi*R0 at speed v0
+macrostep_time_grid = 'linear'   ! macrostep spacing: 'linear' or 'log' (last/first interval
+!                                  = 10, same total number of microsteps)
+integmode = 1                    ! integrator: 0 = RK45 (adaptive, non-canonical),
+!                                  1 = symplectic Euler (explicit-implicit),
+!                                  2 = symplectic Euler (implicit-explicit), 3 = midpoint,
+!                                  4-7 = Gauss 1-4 stages, 15 = Lobatto IIIA-IIIB 3 stages,
+!                                  20 = Gauss-Radau, 21 = Bulirsch-Stoer, 22 = Cash-Karp,
+!                                  24 = TDRK (fixed step), 25 = TDRK (adaptive),
+!                                  -1 = RK45 without loading the field_input field object.
+!                                  Values > 0 require a canonical integ_coords (not 1 or 5)
+relerr = 1d-13                   ! relative tolerance of the implicit (Newton) and RK solves
+orbit_model = 0                  ! 0 = guiding center, 7 = full orbit (Boris pusher)
+orbit_coord = 0                  ! chart for orbit_model = 7; must then be 1 (Boozer/chartmap)
+symplectic_newton_warning_mode = .true. ! .true.: accept bounded Newton corrections after maxit
+!                                  and retry failed steps (see DOC/config.md);
+!                                  .false.: end the marker at the first exhausted recovery
+boundary_event_fraction_tolerance = -1d0 ! fractional-step tolerance of the s = 1 event,
+!                                  dimensionless; positive, or -1 = derived from relerr
+boundary_event_radial_tolerance = -1d0   ! radial residual tolerance of the s = 1 event in
+!                                  integration coordinates; positive, or -1 = from relerr
+
+! Field and coordinates
+field_input = ''                 ! field file: VMEC wout (.nc), Boozer chartmap (.nc),
+!                                  SPECTRE (.h5) or coils file; '' = use netcdffile
+coord_input = ''                 ! reference coordinate file: VMEC wout or chartmap (.nc);
+!                                  '' = netcdffile, then field_input
+netcdffile = ''                  ! VMEC wout file; deprecated fallback for field_input and
+!                                  coord_input; '' = 'wout.nc' where a VMEC file is required
+integ_coords = -1000             ! integration coordinates: -1 = TEST (analytic tokamak),
+!                                  0 = CANFLUX (canonical flux), 1 = VMEC, 2 = BOOZER,
+!                                  3 = MEISS, 4 = ALBERT, 5 = REFCOORDS (field_input splined
+!                                  on coord_input), 6 = SPECTRE; -1000 = unset, use
+!                                  isw_field_type
+isw_field_type = 0               ! deprecated alias of integ_coords, same codes
+ns_s = 5                         ! spline order over s (VMEC R, Z, lambda; Boozer chartmap)
+ns_tp = 5                        ! spline order over the angles (VMEC; Boozer chartmap)
+multharm = 5                     ! VMEC angular spline grid: n_theta = m_max*multharm + 1,
+!                                  n_phi = n_max*multharm + 1
+vmec_B_scale = 1d0               ! factor applied to the VMEC magnetic field
+vmec_RZ_scale = 1d0              ! factor applied to the VMEC R and Z (device size)
+canonical_grid_nr = 62           ! MEISS/ALBERT canonical map grid, radial; 6..512
+canonical_grid_ntheta = 63       ! MEISS/ALBERT canonical map grid, poloidal; 6..512
+canonical_grid_nphi = 64         ! MEISS/ALBERT canonical map grid, toroidal; 6..512;
+!                                  nr*ntheta*nphi <= 2097152
+canonical_ode_relerr = 1d-11     ! relative tolerance of the canonical transformation ODE
+
+! VMEC axis healing (near-axis continuation of the VMEC harmonics)
+axis_healing = ''                ! 'legacy', 'legacy_adaptive', 'powerlaw' or 'polyfit'
+!                                  (recommended); '' = map the deprecated switches below
+s_axis_heal = 1d-2               ! normalized toroidal flux below which 'powerlaw' and
+!                                  'polyfit' replace the harmonics
+axis_healing_polyfit_degree = 3  ! polynomial degree in s for 'polyfit'
+old_axis_healing = .true.        ! deprecated; legacy modes: .true. = parabolic,
+!                                  .false. = linear extrapolation to the axis
+old_axis_healing_boundary = .true. ! deprecated; with axis_healing = '':
+!                                  .true. = 'legacy', .false. = 'legacy_adaptive'
+axis_healing_power_law = .false. ! deprecated; with axis_healing = '': .true. = 'powerlaw'
+rho_axis_heal = -1d0             ! deprecated; > 0 sets s_axis_heal = rho_axis_heal**2
+
+! Classification
+tcut = -1d0                      ! classification cut time, s; > 0 enables regular/chaotic
+!                                  classification at tcut, -1 = off
+nturns = 8                       ! tip-footprint recurrences for J_parallel/ideal-orbit tests
+fast_class = .false.             ! .true.: stop tracing trapped orbits classified regular by
+!                                  J_parallel; they count as confined (ignored with class_plot)
+class_plot = .false.             ! .true.: move starts to the cut phi and write classification
+!                                  plot data to fort.10000-10022, 20000, 40012-50032
+cut_in_per = 0d0                 ! cut phi as a fraction of one field period, [0, 1]
+
+! Collisions (&config scalars)
+swcoll = .false.                 ! .true.: collisions with the background plasma (&profiles);
+!                                  incompatible with classification and full orbit
+am1 = 2d0                        ! mass number of background ion species 1
+am2 = 3d0                        ! mass number of background ion species 2
+Z1 = 1d0                         ! charge number of background ion species 1
+Z2 = 1d0                         ! charge number of background ion species 2
+densi1 = 5d13                    ! not used: densities come from &profiles (ni1_scale)
+densi2 = 5d13                    ! not used: densities come from &profiles (ni2_scale)
+tempi1 = 1d4                     ! not used: temperatures come from &profiles (Ti1_scale)
+tempi2 = 1d4                     ! not used: temperatures come from &profiles (Ti2_scale)
+tempe = 1d4                      ! not used: temperatures come from &profiles (Te_scale)
+deterministic = .false.          ! .true.: seed the random generator with ran_seed
+
+! Output
+output_results_netcdf = .false.  ! .true.: also write results.nc
+output_orbits_macrostep = .false. ! .true.: write each orbit at every macrostep to orbits.nc
+output_error = .false.           ! read but not used
+debug = .false.                  ! per-particle diagnostic output; only in builds with
+!                                  SIMPLE_ENABLE_DEBUG_OUTPUT
+
+! Batch/restart
+batch_size = 2000000000          ! if < ntestpart: trace a random subset of batch_size
+!                                  particles (indices in batch.dat); ntestpart = batch_size
+ran_seed = 42                    ! seed of the batch index draw and of deterministic runs
+particle_index_offset = 0       ! original rows before a contiguous external shard
+reuse_batch = .false.            ! .true.: reuse the batch indices from batch.dat if present
+restart = .false.                ! .true.: resume from times_lost.dat and orbit_exit_code.dat;
+!                                  particles that reached trace_time are not traced again
+checkpoint_interval = 10d0       ! read for input compatibility; no effect
+
+! Walls and charts
+wall_input = ''                  ! STL wall file; '' = no wall; requires chartmap coord_input
+wall_units = 'm'                 ! length unit of the STL file: 'm' or 'mm'
+chart_boundary_kind = 'auto'     ! meaning of the chartmap outer boundary: 'lcfs' (loss,
+!                                  exit code 1), 'wall' (exit code 2), 'domain' (numerical
+!                                  exit 101), 'auto' = 'lcfs' if the chart rho_lcfs = 1,
+!                                  else 'domain'
+
+! SPECTRE
+crossing_level = 3               ! full orbit near interfaces (integmode > 0);
+!                                  fixed-mu levels 0/1 were removed
+spectre_fo_entry_larmor = 1.5d0  ! crossing_level 3: enter full orbit closer than
+!                                  this many radial gyroradii to an interface
+spectre_fo_tolerance = 1d-9      ! relative tolerance of the 'rk45' full orbit
+spectre_fo_grid = 32, 64, 32     ! per-volume FO spline points: rho, theta, zeta
+spectre_sbeg_is_toroidal_flux = .false. ! startmode 1: .true. reads sbeg(1) as normalized
+!                                  toroidal flux, .false. as rho_g
+spectre_ncon_r = 48              ! per-volume Meiss construction grid, radial (integmode > 0)
+spectre_ncon_th = 48             ! per-volume Meiss construction grid, poloidal
+spectre_ncon_phi = -1            ! per-volume construction grid, toroidal; -1 = automatic
+!                                  (8 if axisymmetric, else 32); > 0 = fixed
+spectre_ncon_order = 5           ! spline order of the per-volume construction
+spectre_ncon_ode_max_steps = 1000000 ! step limit of the per-volume construction ODE
+spectre_ncon_ode_relerr = 1d-2   ! relative tolerance of the per-volume construction ODE
+
+! GPU (requires integ_coords = 2, no collisions, wall, orbit output or classification)
+gpu_mode = 'off'                 ! 'off' (CPU/OpenMP), 'production', or 'benchmark'
+!                                  (OpenACC kernel against the CPU path)
+gpu_backend = 'cuda-native'      ! 'cuda-native', 'openacc' or 'auto' (= 'cuda-native')
+gpu_method = 'dopri'             ! 'dopri', 'cash-karp', 'euler', 'midpoint' or 'auto';
+!                                  cuda-native supports only 'dopri' and 'cash-karp'
+gpu_start_coordinates = 'reference' ! start.dat positions: 'reference' or 'boozer'
+gpu_landreman = .true.           ! segmented loss objective (arXiv:2606.19523); losses
+!                                  weighted by exp(-t/gpu_loss_tau); required by cuda-native
+gpu_compact_init = .false.       ! compact initializer: cuda-native, Boozer chartmap
+!                                  field_input, gpu_start_coordinates = 'boozer', no wall
+gpu_work_order = .true.          ! OpenACC: sort markers by estimated work between segments
+gpu_num_devices = 1              ! OpenACC: number of GPUs (more than 1 is experimental)
+gpu_t_block = 1d-3               ! segment duration, s; in (0, trace_time]
+gpu_loss_tau = 1d-1              ! decay time of the loss weight exp(-t/gpu_loss_tau), s
+gpu_maxloss = 2d-2               ! stop when the weighted loss fraction exceeds this value
+gpu_min_timestep = 1d-10         ! minimum RK step, s
+gpu_pilot_fraction = 4d-2        ! OpenACC: pilot trace length as a fraction of gpu_t_block
+!                                  for work ordering; [0, 0.25]
+gpu_particle_profile = ''        ! CSV path for per-particle states, field evaluations and
+!                                  loss times; '' = none
+
+! Removed keys: read for old input files and ignored; a non-default value prints a warning.
+local = .true.
+loopskip = 0
+bmod_ref = 5d4
+macrostep_log_ratio = 1d3
 /
 
 &profiles
-! Radial plasma profiles for collision calculations.
-! profile_type can be "power_series" or "two_power".
-! Default values give uniform profiles matching the old scalar parameters above.
-profile_type = "two_power"
+! Radial profiles f(s) for collisions and mode 7 births; s = normalized toroidal flux.
+! Mode 7: species 1 = deuterium, species 2 = tritium.
+profile_type = 'power_series'    ! 'power_series' or 'two_power'; other values = power_series
+Te_scale = 1d4                   ! electron temperature scale, eV
+Ti1_scale = 1d4                  ! ion species 1 temperature scale, eV
+Ti2_scale = 1d4                  ! ion species 2 temperature scale, eV
+ni1_scale = 5d19                 ! ion species 1 density scale, m^-3
+ni2_scale = 5d19                 ! ion species 2 density scale, m^-3
 
-! Scale factors (on-axis values)
-Te_scale = 1.0d4      ! electron temperature in eV
-Ti1_scale = 1.0d4     ! ion species 1 temperature in eV
-Ti2_scale = 1.0d4     ! ion species 2 temperature in eV
-ni1_scale = 0.5d20    ! ion species 1 density in m^-3
-ni2_scale = 0.5d20    ! ion species 2 density in m^-3
+! power_series: f(s) = scale * sum_{n=1..10} coef(n) * s**(n-1)
+Te_coef = 1d0, 9*0d0             ! electron temperature coefficients
+Ti1_coef = 1d0, 9*0d0            ! ion species 1 temperature coefficients
+Ti2_coef = 1d0, 9*0d0            ! ion species 2 temperature coefficients
+ni1_coef = 1d0, 9*0d0            ! ion species 1 density coefficients
+ni2_coef = 1d0, 9*0d0            ! ion species 2 density coefficients
 
-! Two-power profile: f(s) = scale * (1 - s^p1)^p2
-! p2 = 0 gives flat profile, p2 > 0 gives peaked profile
-Te_p1 = 1.0d0,  Te_p2 = 0.0d0   ! flat electron temperature
-Ti1_p1 = 1.0d0, Ti1_p2 = 0.0d0  ! flat ion 1 temperature
-Ti2_p1 = 1.0d0, Ti2_p2 = 0.0d0  ! flat ion 2 temperature
-ni1_p1 = 1.0d0, ni1_p2 = 0.0d0  ! flat ion 1 density
-ni2_p1 = 1.0d0, ni2_p2 = 0.0d0  ! flat ion 2 density
-
-! Power series profile: f(s) = scale * sum(coef(n) * s^(n-1))
-! Te_coef = 1.0d0, 0.0d0, ...  ! coefficient array (up to 10 terms)
+! two_power: f(s) = scale * (1 - s**p1)**p2; p2 = 0 gives a flat profile
+Te_p1 = 1d0                      ! electron temperature exponent p1
+Te_p2 = 0d0                      ! electron temperature exponent p2
+Ti1_p1 = 1d0                     ! ion species 1 temperature exponent p1
+Ti1_p2 = 0d0                     ! ion species 1 temperature exponent p2
+Ti2_p1 = 1d0                     ! ion species 2 temperature exponent p1
+Ti2_p2 = 0d0                     ! ion species 2 temperature exponent p2
+ni1_p1 = 1d0                     ! ion species 1 density exponent p1
+ni1_p2 = 0d0                     ! ion species 1 density exponent p2
+ni2_p1 = 1d0                     ! ion species 2 density exponent p1
+ni2_p2 = 0d0                     ! ion species 2 density exponent p2
 /

@@ -27,7 +27,7 @@ fi
 RUN_DIR_REF="$GOLDEN_RECORD_BASE_DIR/runs/run_$REF_VER"
 RUN_DIR_CUR="$GOLDEN_RECORD_BASE_DIR/runs/run_$CUR_VER"
 TEST_DATA_DIR="$GOLDEN_RECORD_BASE_DIR/test_data"
-GOLDEN_LIBNEO_REF=${GOLDEN_LIBNEO_REF:-e2b281b1bc9f9f48f9526622445e0b2c0f8a4984}
+GOLDEN_LIBNEO_REF=${GOLDEN_LIBNEO_REF:-66ef89c2b59420bb8fbd14aa0838d5e88082bef8}
 
 # Find test cases - they should be copied by CMake to the golden_record directory
 if [ -n "$SINGLE_CASE" ]; then
@@ -170,6 +170,19 @@ build() {
     local PROJECT_ROOT="$1"
     echo "Building SIMPLE in $PROJECT_ROOT"
     cd $PROJECT_ROOT
+
+    # Keep historical plotting sources buildable without changing numerical flags.
+    if grep -Eq \
+        '^[[:space:]]*add_library[[:space:]]*\([[:space:]]*pyplot([[:space:]]|\))' \
+        CMakeLists.txt; then
+        local PYPLOT_PATCH="$SCRIPT_DIR/reference_patches/pyplot_line_length.patch"
+        if git apply --check "$PYPLOT_PATCH" 2>/dev/null; then
+            git apply "$PYPLOT_PATCH" || return $?
+        elif ! git apply --reverse --check "$PYPLOT_PATCH" 2>/dev/null; then
+            echo "Reference build patch does not apply cleanly: $PYPLOT_PATCH"
+            return 1
+        fi
+    fi
 
     if ! git merge-base --is-ancestor cc5872a855820e6fa2065a5f9aa7e17604e45d77 HEAD; then
         local REFERENCE_PATCH

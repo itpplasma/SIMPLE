@@ -1,0 +1,393 @@
+{
+  "cases": {
+    "ncsx_fo_default": {
+      "markers": 256,
+      "threads": 16,
+      "duration_s": 0.002,
+      "setup_s": 10.967528233013581,
+      "trace_s": 436.5947592169978,
+      "v0_cm_s": 40943158.42348732,
+      "physical_losses": 101,
+      "numerical_stops": 0,
+      "fo_entries": 0,
+      "fo_exits": 0,
+      "fo_failures": 0,
+      "warning_hold_count": 0,
+      "run": {
+        "root": "/home/ert/code/SIMPLE",
+        "output": "/home/ert/code/SIMPLE/build/study/spectre-full/ncsx_fo_default",
+        "starts": null,
+        "field": "ncsx",
+        "sampling": "volume",
+        "mode": "fo",
+        "grid": [
+          32,
+          64,
+          32
+        ],
+        "markers": 256,
+        "duration": 0.002,
+        "threads": 16,
+        "tolerance": 1e-09,
+        "entry": 3,
+        "source_revision": "0247ff3df59f28023aa956e0a11c9a781092e156",
+        "measurement_diff": "",
+        "source_hashes": {
+          "concept/spectre_loss_study/study_spectre_orbits.f90": "5bc5a3384f77eabaef78430bcb6a8d920b27d949ee805e65b57e4003b7a07df0",
+          "src/spectre_sympl_orbit.f90": "bfe1ed5ee3d0cc67ef2d0049ebffd0f917514c4ab8704cb0580f4830f38d9819",
+          "src/spectre_fo_hybrid.f90": "42a747169a781c33bde864f55d3f63919230522c41a2b97e400e335694b7b314",
+          "src/spectre_fo_field.f90": "b665d804a8d0bac65583b64df104be951478b45e94e3011fcdbb86c5de35c897"
+        },
+        "fixture_sha256": "225976b7c5e2f5cd9480b2e2d233fda2a68a590028f36f24cd63f17aa29b24d9",
+        "process_s": 451.3616650819895,
+        "returncode": 0,
+        "load_average": [
+          6.46337890625,
+          10.54736328125,
+          8.50634765625
+        ],
+        "command": [
+          "make",
+          "test",
+          "CONFIG=Fast",
+          "TEST=^study_spectre_orbits$",
+          "VERBOSE=1"
+        ],
+        "libneo_revision": "c92b33667b299062473855f7ebe0fe9a59b627ec"
+      },
+      "fo_time_fraction": 1.000000000002022,
+      "maximum_shell_error": 5.970155379853015e-05,
+      "worker_wall_fraction": 0.7450485809279601
+    },
+    "ncsx_fo_fine": {
+      "markers": 256,
+      "threads": 16,
+      "duration_s": 0.002,
+      "setup_s": 14.405806719994871,
+      "trace_s": 440.5469352439977,
+      "v0_cm_s": 40943158.42348732,
+      "physical_losses": 99,
+      "numerical_stops": 0,
+      "fo_entries": 0,
+      "fo_exits": 0,
+      "fo_failures": 0,
+      "warning_hold_count": 0,
+      "run": {
+        "root": "/home/ert/code/SIMPLE",
+        "output": "/home/ert/code/SIMPLE/build/study/spectre-full/ncsx_fo_fine",
+        "starts": "build/study/spectre-full/ncsx_fo_default/study_starts.csv",
+        "field": "ncsx",
+        "sampling": "volume",
+        "mode": "fo",
+        "grid": [
+          48,
+          96,
+          48
+        ],
+        "markers": 256,
+        "duration": 0.002,
+        "threads": 16,
+        "tolerance": 1e-09,
+        "entry": 3,
+        "source_revision": "0247ff3df59f28023aa956e0a11c9a781092e156",
+        "measurement_diff": "",
+        "source_hashes": {
+          "concept/spectre_loss_study/study_spectre_orbits.f90": "5bc5a3384f77eabaef78430bcb6a8d920b27d949ee805e65b57e4003b7a07df0",
+          "src/spectre_sympl_orbit.f90": "bfe1ed5ee3d0cc67ef2d0049ebffd0f917514c4ab8704cb0580f4830f38d9819",
+          "src/spectre_fo_hybrid.f90": "42a747169a781c33bde864f55d3f63919230522c41a2b97e400e335694b7b314",
+          "src/spectre_fo_field.f90": "b665d804a8d0bac65583b64df104be951478b45e94e3011fcdbb86c5de35c897"
+        },
+        "fixture_sha256": "225976b7c5e2f5cd9480b2e2d233fda2a68a590028f36f24cd63f17aa29b24d9",
+        "process_s": 458.7024713869905,
+        "returncode": 0,
+        "load_average": [
+          6.09912109375,
+          11.72998046875,
+          10.43359375
+        ],
+        "command": [
+          "make",
+          "test",
+          "CONFIG=Fast",
+          "TEST=^study_spectre_orbits$",
+          "VERBOSE=1"
+        ],
+        "libneo_revision": "c92b33667b299062473855f7ebe0fe9a59b627ec"
+      },
+      "fo_time_fraction": 1.000000000002026,
+      "maximum_shell_error": 5.970175007075085e-05,
+      "worker_wall_fraction": 0.7413815552912891
+    },
+    "ncsx_hybrid_default": {
+      "markers": 256,
+      "threads": 16,
+      "duration_s": 0.002,
+      "setup_s": 11.012669882999035,
+      "trace_s": 218.946984669019,
+      "v0_cm_s": 40943158.42348732,
+      "physical_losses": 99,
+      "numerical_stops": 0,
+      "fo_entries": 851,
+      "fo_exits": 799,
+      "fo_failures": 0,
+      "warning_hold_count": 0,
+      "run": {
+        "root": "/home/ert/code/SIMPLE",
+        "output": "/home/ert/code/SIMPLE/build/study/spectre-full/ncsx_hybrid_default",
+        "starts": "build/study/spectre-full/ncsx_fo_default/study_starts.csv",
+        "field": "ncsx",
+        "sampling": "volume",
+        "mode": "hybrid",
+        "grid": [
+          32,
+          64,
+          32
+        ],
+        "markers": 256,
+        "duration": 0.002,
+        "threads": 16,
+        "tolerance": 1e-09,
+        "entry": 3,
+        "source_revision": "0247ff3df59f28023aa956e0a11c9a781092e156",
+        "measurement_diff": "",
+        "source_hashes": {
+          "concept/spectre_loss_study/study_spectre_orbits.f90": "5bc5a3384f77eabaef78430bcb6a8d920b27d949ee805e65b57e4003b7a07df0",
+          "src/spectre_sympl_orbit.f90": "bfe1ed5ee3d0cc67ef2d0049ebffd0f917514c4ab8704cb0580f4830f38d9819",
+          "src/spectre_fo_hybrid.f90": "42a747169a781c33bde864f55d3f63919230522c41a2b97e400e335694b7b314",
+          "src/spectre_fo_field.f90": "b665d804a8d0bac65583b64df104be951478b45e94e3011fcdbb86c5de35c897"
+        },
+        "fixture_sha256": "225976b7c5e2f5cd9480b2e2d233fda2a68a590028f36f24cd63f17aa29b24d9",
+        "process_s": 233.72501889700652,
+        "returncode": 0,
+        "load_average": [
+          5.80712890625,
+          10.1005859375,
+          10.20166015625
+        ],
+        "command": [
+          "make",
+          "test",
+          "CONFIG=Fast",
+          "TEST=^study_spectre_orbits$",
+          "VERBOSE=1"
+        ],
+        "libneo_revision": "c92b33667b299062473855f7ebe0fe9a59b627ec"
+      },
+      "fo_time_fraction": 0.2986293266227396,
+      "maximum_shell_error": 0.0004999999999856231,
+      "worker_wall_fraction": 0.46699930680418367
+    },
+    "g3v3_fo_default": {
+      "markers": 256,
+      "threads": 16,
+      "duration_s": 0.002,
+      "setup_s": 8.63821561000077,
+      "trace_s": 105.17119505198207,
+      "v0_cm_s": 40943158.42348732,
+      "physical_losses": 53,
+      "numerical_stops": 0,
+      "fo_entries": 0,
+      "fo_exits": 0,
+      "fo_failures": 0,
+      "warning_hold_count": 0,
+      "run": {
+        "root": "/home/ert/code/SIMPLE",
+        "output": "/home/ert/code/SIMPLE/build/study/spectre-full/g3v3_fo_default",
+        "starts": null,
+        "field": "g3v3",
+        "sampling": "volume",
+        "mode": "fo",
+        "grid": [
+          32,
+          64,
+          32
+        ],
+        "markers": 256,
+        "duration": 0.002,
+        "threads": 16,
+        "tolerance": 1e-09,
+        "entry": 3,
+        "source_revision": "324840b39591816cc946b5be115649172f464dcd",
+        "measurement_diff": "",
+        "source_hashes": {
+          "concept/spectre_loss_study/study_spectre_orbits.f90": "5bc5a3384f77eabaef78430bcb6a8d920b27d949ee805e65b57e4003b7a07df0",
+          "src/spectre_sympl_orbit.f90": "bfe1ed5ee3d0cc67ef2d0049ebffd0f917514c4ab8704cb0580f4830f38d9819",
+          "src/spectre_fo_hybrid.f90": "42a747169a781c33bde864f55d3f63919230522c41a2b97e400e335694b7b314",
+          "src/spectre_fo_field.f90": "b665d804a8d0bac65583b64df104be951478b45e94e3011fcdbb86c5de35c897"
+        },
+        "fixture_sha256": "57218f07930b6dc30b06375edeb6db823b4e42322116c4b48e09f8c9c622b5a7",
+        "process_s": 117.69661373400595,
+        "returncode": 0,
+        "load_average": [
+          13.56396484375,
+          11.88720703125,
+          10.85205078125
+        ],
+        "command": [
+          "make",
+          "test",
+          "CONFIG=Fast",
+          "TEST=^study_spectre_orbits$",
+          "VERBOSE=1"
+        ],
+        "libneo_revision": "c92b33667b299062473855f7ebe0fe9a59b627ec"
+      },
+      "fo_time_fraction": 0.9999999999999009,
+      "maximum_shell_error": 1.3370497603859555e-05,
+      "worker_wall_fraction": 0.880166040882627
+    },
+    "g3v3_fo_fine": {
+      "markers": 256,
+      "threads": 16,
+      "duration_s": 0.002,
+      "setup_s": 12.167452172987396,
+      "trace_s": 109.01824764799676,
+      "v0_cm_s": 40943158.42348732,
+      "physical_losses": 53,
+      "numerical_stops": 0,
+      "fo_entries": 0,
+      "fo_exits": 0,
+      "fo_failures": 0,
+      "warning_hold_count": 0,
+      "run": {
+        "root": "/home/ert/code/SIMPLE",
+        "output": "/home/ert/code/SIMPLE/build/study/spectre-full/g3v3_fo_fine",
+        "starts": "build/study/spectre-full/g3v3_fo_default/study_starts.csv",
+        "field": "g3v3",
+        "sampling": "volume",
+        "mode": "fo",
+        "grid": [
+          48,
+          96,
+          48
+        ],
+        "markers": 256,
+        "duration": 0.002,
+        "threads": 16,
+        "tolerance": 1e-09,
+        "entry": 3,
+        "source_revision": "324840b39591816cc946b5be115649172f464dcd",
+        "measurement_diff": "",
+        "source_hashes": {
+          "concept/spectre_loss_study/study_spectre_orbits.f90": "5bc5a3384f77eabaef78430bcb6a8d920b27d949ee805e65b57e4003b7a07df0",
+          "src/spectre_sympl_orbit.f90": "bfe1ed5ee3d0cc67ef2d0049ebffd0f917514c4ab8704cb0580f4830f38d9819",
+          "src/spectre_fo_hybrid.f90": "42a747169a781c33bde864f55d3f63919230522c41a2b97e400e335694b7b314",
+          "src/spectre_fo_field.f90": "b665d804a8d0bac65583b64df104be951478b45e94e3011fcdbb86c5de35c897"
+        },
+        "fixture_sha256": "57218f07930b6dc30b06375edeb6db823b4e42322116c4b48e09f8c9c622b5a7",
+        "process_s": 128.5997583460121,
+        "returncode": 0,
+        "load_average": [
+          15.517578125,
+          13.978515625,
+          11.806640625
+        ],
+        "command": [
+          "make",
+          "test",
+          "CONFIG=Fast",
+          "TEST=^study_spectre_orbits$",
+          "VERBOSE=1"
+        ],
+        "libneo_revision": "c92b33667b299062473855f7ebe0fe9a59b627ec"
+      },
+      "fo_time_fraction": 0.9999999999999007,
+      "maximum_shell_error": 1.3370503061715944e-05,
+      "worker_wall_fraction": 0.8838659791677969
+    },
+    "g3v3_hybrid_default": {
+      "markers": 256,
+      "threads": 16,
+      "duration_s": 0.002,
+      "setup_s": 8.717780609003967,
+      "trace_s": 48.47167004898074,
+      "v0_cm_s": 40943158.42348732,
+      "physical_losses": 48,
+      "numerical_stops": 0,
+      "fo_entries": 589,
+      "fo_exits": 510,
+      "fo_failures": 0,
+      "warning_hold_count": 0,
+      "run": {
+        "root": "/home/ert/code/SIMPLE",
+        "output": "/home/ert/code/SIMPLE/build/study/spectre-full/g3v3_hybrid_default",
+        "starts": "build/study/spectre-full/g3v3_fo_default/study_starts.csv",
+        "field": "g3v3",
+        "sampling": "volume",
+        "mode": "hybrid",
+        "grid": [
+          32,
+          64,
+          32
+        ],
+        "markers": 256,
+        "duration": 0.002,
+        "threads": 16,
+        "tolerance": 1e-09,
+        "entry": 3,
+        "source_revision": "324840b39591816cc946b5be115649172f464dcd",
+        "measurement_diff": "",
+        "source_hashes": {
+          "concept/spectre_loss_study/study_spectre_orbits.f90": "5bc5a3384f77eabaef78430bcb6a8d920b27d949ee805e65b57e4003b7a07df0",
+          "src/spectre_sympl_orbit.f90": "bfe1ed5ee3d0cc67ef2d0049ebffd0f917514c4ab8704cb0580f4830f38d9819",
+          "src/spectre_fo_hybrid.f90": "42a747169a781c33bde864f55d3f63919230522c41a2b97e400e335694b7b314",
+          "src/spectre_fo_field.f90": "b665d804a8d0bac65583b64df104be951478b45e94e3011fcdbb86c5de35c897"
+        },
+        "fixture_sha256": "57218f07930b6dc30b06375edeb6db823b4e42322116c4b48e09f8c9c622b5a7",
+        "process_s": 61.06430899898987,
+        "returncode": 0,
+        "load_average": [
+          14.10791015625,
+          13.890625,
+          11.9140625
+        ],
+        "command": [
+          "make",
+          "test",
+          "CONFIG=Fast",
+          "TEST=^study_spectre_orbits$",
+          "VERBOSE=1"
+        ],
+        "libneo_revision": "c92b33667b299062473855f7ebe0fe9a59b627ec"
+      },
+      "fo_time_fraction": 0.3878323611222365,
+      "maximum_shell_error": 1.3048601837262197e-05,
+      "worker_wall_fraction": 0.8047456603105883
+    }
+  },
+  "comparisons": {
+    "ncsx_fo_default": {
+      "reference": "ncsx_fo_fine",
+      "paired_mismatches": 4,
+      "paired_loss_fraction_difference": 0.0078125,
+      "paired_standard_error": 0.0078125,
+      "maximum_paired_loss_time_s": 0.0010779068877937196,
+      "zero_mismatch_95_percent_upper_bound": null
+    },
+    "ncsx_hybrid_default": {
+      "reference": "ncsx_fo_fine",
+      "paired_mismatches": 6,
+      "paired_loss_fraction_difference": 0.0,
+      "paired_standard_error": 0.009587062360592131,
+      "maximum_paired_loss_time_s": 0.0012353825122514298,
+      "zero_mismatch_95_percent_upper_bound": null
+    },
+    "g3v3_fo_default": {
+      "reference": "g3v3_fo_fine",
+      "paired_mismatches": 0,
+      "paired_loss_fraction_difference": 0.0,
+      "paired_standard_error": 0.0,
+      "maximum_paired_loss_time_s": 2.136156269233469e-12,
+      "zero_mismatch_95_percent_upper_bound": 0.011633876163163248
+    },
+    "g3v3_hybrid_default": {
+      "reference": "g3v3_fo_fine",
+      "paired_mismatches": 5,
+      "paired_loss_fraction_difference": -0.01953125,
+      "paired_standard_error": 0.008665862769678052,
+      "maximum_paired_loss_time_s": 0.00020701751018757653,
+      "zero_mismatch_95_percent_upper_bound": null
+    }
+  },
+  "scope": "Current hybrid controls, not a phase-consistent or symplectic proof; volume-sampled GC starts with 0.1 <= rho <= Mvol-0.05 and the deterministic production entry phase. FO stops at the particle edge; GC segments use the guiding-centre edge convention."
+}

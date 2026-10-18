@@ -1,0 +1,61 @@
+{
+  "fo_samples": 9264,
+  "leaf_samples": [
+    [
+      "__batch_interpolate_3d_MOD_evaluate_batch_splines_3d_der_core_general",
+      8012
+    ],
+    [
+      "[unknown]",
+      434
+    ],
+    [
+      "__spectre_fo_field_MOD_local_from_values",
+      320
+    ],
+    [
+      "__spectre_fo_hybrid_MOD_dp_trial",
+      146
+    ],
+    [
+      "__spectre_fo_field_MOD_spectre_fo_field_local",
+      61
+    ],
+    [
+      "libc_feholdsetround_sse_ctx",
+      50
+    ],
+    [
+      "__spectre_fo_field_MOD_spectre_fo_field_locate",
+      38
+    ],
+    [
+      "do_sin",
+      29
+    ],
+    [
+      "__spectre_fo_field_MOD_cross",
+      28
+    ],
+    [
+      "do_cos",
+      22
+    ],
+    [
+      "__spectre_fo_hybrid_MOD_gc_map",
+      20
+    ],
+    [
+      "memcpy@plt",
+      16
+    ]
+  ],
+  "inclusive_stacks": {
+    "spectre_fo_field_locate": 2072,
+    "gc_map": 2791,
+    "dp_trial": 4988
+  },
+  "sampling_hz": 199,
+  "call_graph": "dwarf,16384",
+  "workload": "16 NCSX sheet FO markers, 200 us, 8 threads, setup excluded by FO call-chain filter"
+}

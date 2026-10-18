@@ -70,65 +70,26 @@ message(STATUS "Python numpy include dir: ${Python_NumPy_INCLUDE_DIRS}")
 message(STATUS "Python libraries: ${Python_LIBRARIES}")
 message(STATUS "Python binary output dir: ${CMAKE_CURRENT_BINARY_DIR}")
 
+# pysimple wraps the library API and the &config variables. The other modules
+# supply the integrator and status constants.
 set(FILES_TO_WRAP
-    simple_main.f90
-    simple.f90
-    orbit_frequencies.f90
-    samplers.f90
-    cut_detector.f90
-    callback.f90
-    orbit_symplectic_base.f90
-    orbit_symplectic.f90
-    field_can.f90
-    get_canonical_coordinates.F90
-    coordinates/stencil_utils.f90
-    coordinates/array_utils.f90
+    simple_api.f90
     params.f90
-    params_wrapper.f90
-    magfie_wrapper.f90
+    orbit_symplectic_base.f90
+    orbit_frequencies.f90
+    orbit_invariants.f90
 )
 
-# Add libneo files to wrap
-set(LIBNEO_SOURCE_DIR ${libneo_SOURCE_DIR})
-
-set(_cc_mod "${LIBNEO_SOURCE_DIR}/src/vmec_support/canonical_coordinates_mod.f90")
-if(NOT EXISTS "${_cc_mod}")
-    set(_cc_mod "${LIBNEO_SOURCE_DIR}/src/canonical_coordinates_mod.f90")
-endif()
-list(APPEND FILES_TO_WRAP "${_cc_mod}")
-
-set(EXCLUDE_BASENAMES
-    # Empty
-)
-
-# Separate SIMPLE and libneo files
-set(SIMPLE_FILES_TO_WRAP)
-set(LIBNEO_FILES_TO_WRAP)
-
-foreach(file ${FILES_TO_WRAP})
-    if(file MATCHES "^${LIBNEO_SOURCE_DIR}")
-        list(APPEND LIBNEO_FILES_TO_WRAP ${file})
-    else()
-        list(APPEND SIMPLE_FILES_TO_WRAP ${file})
-    endif()
-endforeach()
-
-# Add PROJECT_SOURCE_DIR/src/ prefix to SIMPLE files only
-list(TRANSFORM SIMPLE_FILES_TO_WRAP PREPEND ${PROJECT_SOURCE_DIR}/src/)
-
-# Combine the lists
-set(FILES_TO_WRAP ${SIMPLE_FILES_TO_WRAP} ${LIBNEO_FILES_TO_WRAP})
+list(TRANSFORM FILES_TO_WRAP PREPEND ${PROJECT_SOURCE_DIR}/src/)
 
 foreach(file ${FILES_TO_WRAP})
     get_filename_component(basename ${file} NAME_WE)
     list(APPEND PREPROCESSED_SOURCES
         ${CMAKE_CURRENT_BINARY_DIR}/${basename}.f90.i
     )
-    if(NOT ${basename} IN_LIST EXCLUDE_BASENAMES)
-        list(APPEND F90WRAP_OUTPUT
-            ${CMAKE_CURRENT_BINARY_DIR}/f90wrap_${basename}.f90.f90
-        )
-    endif()
+    list(APPEND F90WRAP_OUTPUT
+        ${CMAKE_CURRENT_BINARY_DIR}/f90wrap_${basename}.f90.f90
+    )
 endforeach()
 
 set(F2PY_MODULE_NAME "_simple_backend")
@@ -169,7 +130,7 @@ add_custom_command(OUTPUT ${F90WRAP_OUTPUT}
         --f90wrap
         -m simple_backend
         -k ${CMAKE_CURRENT_SOURCE_DIR}/f2py_f2cmap
-        ${CMAKE_CURRENT_BINARY_DIR}/*.f90.i
+        ${PREPROCESSED_SOURCES}
         > ${CMAKE_CURRENT_BINARY_DIR}/f90wrap.log 2>&1
 	DEPENDS ${PREPROCESSED_SOURCES}
     COMMENT "Processing preprocessed sources with f90wrap"

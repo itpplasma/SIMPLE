@@ -1,0 +1,73 @@
+{
+  "task": "E",
+  "date": "2026-10-14",
+  "simple_base": "957d5a86d807f4cba3f176fb2532e8bfc08ea8e5",
+  "simple_branch": "feat/gc-higher-order",
+  "fortsym_branch": "feat/lie-pullback",
+  "fortsym_commit": "1372fbd1e8dd2f072ed34a0f82eef60dc68d74cd",
+  "fortsym_changes": "none required; existing native algebra reused",
+  "representation": "D2 Pi1=-mu curl(b)/2, Pi2=0; zeta=-phi_natural-K, J=epsilon*mu",
+  "transform": "T2can=C o T2^-1; reconstruction T2 o C^-1",
+  "versions": {
+    "python": "3.14.7",
+    "numpy": "2.5.4",
+    "scipy": "1.18.1",
+    "sympy": "1.14.0"
+  },
+  "OMP_NUM_THREADS": {
+    "native_fortran_tests": 16,
+    "canonical_checks": 1,
+    "orders_1_2": 1,
+    "orders_firstplus": 4,
+    "energy": 1,
+    "cost": 1,
+    "fortsym_ctest": 16
+  },
+  "OPENBLAS_NUM_THREADS": 1,
+  "checks": {
+    "native_fortran": "PASS (unchanged D2 core)",
+    "old_symbolic": "23+30 exact checks PASS",
+    "canonical_symbolic": "29 exact identities/obstructions PASS",
+    "canonical_oracles": "24 field/order/method cases PASS",
+    "regeneration": "byte-identical generated canonical kernels",
+    "fortsym": "3/3 native Lie/products/rigorous-products CTests PASS",
+    "orbits": "180 raw field/order/method/epsilon measurements; 36 fits; 12 finest sheet step-halving checks PASS",
+    "long_time": "48 field/order/method/step cases on [0,4000] PASS",
+    "result_gate": "canonical-check-results PASS"
+  },
+  "maximum_orbit_error_difference": 0.005830659851408404,
+  "maximum_finest_step_halving_difference": 0.005718782037607006,
+  "maximum_exponent_difference": 0.0008775137325014448,
+  "maximum_symplectic_defect": 2.220446049250313e-16,
+  "maximum_fd_symplectic_defect": 1.0289564755794345e-09,
+  "maximum_energy_window_ratio": 1.0000312100598365,
+  "limits": [
+    "local smooth nondegenerate charts, mu>0; sheet 0<r<=1 and no crossing",
+    "full connection cannot be removed by a scalar gauge; radial component can be removed locally",
+    "radial inverse displacement O(epsilon^2); u generally O(epsilon), phase offset O(1)",
+    "fourth magnetic derivatives generally needed for analytic H2 Hessian",
+    "Python standalone integration; no production speedup or global error bounds claimed",
+    "no new Fo/model lane under explicit single-run/no-model constraint; native checks used"
+  ],
+  "scope": "SIMPLE src/build and fortsym source untouched; no protected hosts, agents, other models or pushes",
+  "sources": {
+    "Makefile": "3ef8f0ea5d3cdf732e3a00d07ab5b9e4c70cf99f92910f0d113c629c5b5eeb00",
+    "README.md": "9ef52490e5aef86608e43d7fa93d28f72ec67f4f9a26b1c72c71bd6a494603fc",
+    "gen/derive_canonical.py": "cfec9f7ae1dfc8ff090c846b210704d54af9ca1a6865f11fea8bf8bce233b680",
+    "gen/gc_canonical.py": "9a1842c2716af56705816de37ac3a83849f9d4087ea21d6cdb4e82b6befa8b03",
+    "gen/prove_canonical.py": "b630f86dc4ef1526cdbd6c8b6438ca3d530f002a952208bf10259890ff8dd586",
+    "generated/canonical_kernels.py": "8ae1ffa57d4dbfdb299797edcfc97181f5c35b70425207e7eb729f2b320cfe87",
+    "tests/canonical_checks.py": "e8b65687db733d2f1ac47c2ee81703e3d1dc50c4784ff6a0ff2546d6389a11b1",
+    "tests/canonical_study.py": "d481febf3b24e6d7de63becb7e7298d519b8b487b83858852e0059520612abb1",
+    "tests/check_canonical_results.py": "1ed444b69a1a786313a403a2207697692114f1bbfe18ab4e14b45929a32f4683",
+    "results/canonical_symbolic.json": "4f239e5a6edbbb45c1012506865aa3b4f3661abbfaa927a2583781f830624d6b",
+    "results/canonical_checks.json": "f25b28782a83fa6df5aa87245703b3f44b441513c0819b9c23e21d3a7bcbf4ae",
+    "results/canonical_orders.json": "35e323bfe0bbc971dab66beef4d100f687d9387ebd3796817556f70c212c4bc8",
+    "results/canonical_energy.json": "861224002a083371bbae4171939f48acad873fc0c9f84cf8c5f3073e573a56de",
+    "results/canonical_cost.json": "1d962a6c8b1d0ae667e0ee49e1b23d6f7b059519b99b8481980088d8d52ca864",
+    "gen/derive_gc.f90": "b4775b9fec1af6cf30442df6497419233b96ac7b112470710d9d9e99463804f9",
+    "gc_api.f90": "a5ba130d8dbe79cff5e09fa2bdf68937352c034185fa7e9303fab5e335af36c3",
+    "generated/gc_generated.f90": "2067ae6dab198dae0a3e3ddf7d0d40d0c006899303729fc544d2c569c9a1c192",
+    "tests/orbit_study.py": "bf9e9e5d77799e0fb6279b59208a5d41ea0591263baf1f114b85809af7680f0b"
+  }
+}

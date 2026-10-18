@@ -50,14 +50,33 @@ contains
 
         read (unit, nml=profiles, iostat=ios)
         close (unit)
+        call select_active_profile
+    end subroutine read_profiles
 
+    subroutine reset_profiles
+        ! Restore every &profiles value to its compiled default. The first call
+        ! records the defaults, so call it before changing any value.
+        integer, save :: defaults_unit
+        logical, save :: recorded = .false.
+
+        if (.not. recorded) then
+            open (newunit=defaults_unit, status='scratch', delim='apostrophe')
+            write (defaults_unit, nml=profiles)
+            recorded = .true.
+        end if
+        rewind (defaults_unit)
+        read (defaults_unit, nml=profiles)
+        call select_active_profile
+    end subroutine reset_profiles
+
+    subroutine select_active_profile
         select case (trim(profile_type))
         case ("two_power")
             active_profile = TWO_POWER
         case default
             active_profile = POWER_SERIES
         end select
-    end subroutine read_profiles
+    end subroutine select_active_profile
 
     subroutine get_plasma_params(s, Te, Ti1, Ti2, ni1, ni2)
         real(dp), intent(in) :: s
