@@ -203,8 +203,9 @@ needs to be committed::
     python examples/imas_benchmark.py --suite all --jobs 2 \
         --gorilla /path/to/GORILLA --output /tmp/ids-full-suite
 
-The full suite runs 30 cases, with separate field/timestep refinements,
-fast-alpha losses and 1080-marker collision ensembles. ``suite.json`` records
+The full suite runs 30 cases plus 10 regime cases, with separate
+field/timestep refinements, fast-alpha losses and 1080-marker collision
+ensembles. ``suite.json`` records
 every exit status, including failures. Individual cases can be run with::
 
     python examples/imas_benchmark.py --case diii-d --output /tmp/ids-diii-d-r48 \
@@ -218,6 +219,23 @@ trapped/passing pitches at three starting radii. ``--species alpha --energy
 3500000 --dense --duration 1e-4`` covers 54 fast-alpha starts through the
 near-axis, core and edge regions. Repeat with smaller ASCOT timesteps and
 larger chartmap/GORILLA meshes before attributing differences to a solver.
+
+Pointwise trajectory agreement is meaningful only up to each orbit's
+predictability horizon. ``--regimes`` (``--suite regimes``: 10 keV deuterium
+and 3.5 MeV alphas, 100 microseconds, every case) reruns each code with a
+1 micrometre start displacement and a different numerical resolution (SIMPLE
+``relerr``, ASCOT step halving). It classifies each marker as regular
+passing/trapped, near-separatrix, sensitive or lost, and compares positions,
+invariants and bounce/transit averages only for regular orbits inside the
+horizon. A relativistic-equivalent SIMPLE run (mass gamma*m at ASCOT's speed)
+separates field differences from the nonrelativistic model. ``--stat-markers
+512`` adds a seeded random cohort for paired loss statistics (Wilson
+intervals, exact McNemar, Kolmogorov-Smirnov/Anderson-Darling loss times and
+strike points, confined moments). Results are written to ``regimes.json``::
+
+    python examples/imas_benchmark.py --case diii-d --regimes --species alpha \
+        --energy 3500000 --dense --resolution 96 --duration 1e-4 --step 5e-9 \
+        --stat-markers 512 --output /tmp/ids-regimes-diii-d
 
 Collisional comparisons additionally pass the same flat 10 keV DT
 ``core_profiles`` IDS through both codes' interfaces::
