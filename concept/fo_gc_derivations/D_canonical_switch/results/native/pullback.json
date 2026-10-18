@@ -1,0 +1,637 @@
+{
+  "records": [
+    {
+      "fixture": "analytic",
+      "case": 0,
+      "order": 0,
+      "epsilon": 0.02,
+      "defect": 1.110223025e-16
+    },
+    {
+      "fixture": "analytic",
+      "case": 0,
+      "order": 0,
+      "epsilon": 0.01,
+      "defect": 1.110223025e-16
+    },
+    {
+      "fixture": "analytic",
+      "case": 0,
+      "order": 0,
+      "epsilon": 0.005,
+      "defect": 1.110223025e-16
+    },
+    {
+      "fixture": "analytic",
+      "case": 0,
+      "order": 0,
+      "epsilon": 0.0025,
+      "defect": 1.110223025e-16
+    },
+    {
+      "fixture": "analytic",
+      "case": 0,
+      "order": 1,
+      "epsilon": 0.02,
+      "defect": 3.469446952e-18
+    },
+    {
+      "fixture": "analytic",
+      "case": 0,
+      "order": 1,
+      "epsilon": 0.01,
+      "defect": 1.734723476e-18
+    },
+    {
+      "fixture": "analytic",
+      "case": 0,
+      "order": 1,
+      "epsilon": 0.005,
+      "defect": 8.67361738e-19
+    },
+    {
+      "fixture": "analytic",
+      "case": 0,
+      "order": 1,
+      "epsilon": 0.0025,
+      "defect": 4.33680869e-19
+    },
+    {
+      "fixture": "analytic",
+      "case": 1,
+      "order": 0,
+      "epsilon": 0.02,
+      "defect": 0.003473213476
+    },
+    {
+      "fixture": "analytic",
+      "case": 1,
+      "order": 0,
+      "epsilon": 0.01,
+      "defect": 0.001736606738
+    },
+    {
+      "fixture": "analytic",
+      "case": 1,
+      "order": 0,
+      "epsilon": 0.005,
+      "defect": 0.0008683033689
+    },
+    {
+      "fixture": "analytic",
+      "case": 1,
+      "order": 0,
+      "epsilon": 0.0025,
+      "defect": 0.0004341516844
+    },
+    {
+      "fixture": "analytic",
+      "case": 1,
+      "order": 1,
+      "epsilon": 0.02,
+      "defect": 5.57302951e-05
+    },
+    {
+      "fixture": "analytic",
+      "case": 1,
+      "order": 1,
+      "epsilon": 0.01,
+      "defect": 1.390790952e-05
+    },
+    {
+      "fixture": "analytic",
+      "case": 1,
+      "order": 1,
+      "epsilon": 0.005,
+      "defect": 3.473894348e-06
+    },
+    {
+      "fixture": "analytic",
+      "case": 1,
+      "order": 1,
+      "epsilon": 0.0025,
+      "defect": 8.680882082e-07
+    },
+    {
+      "fixture": "analytic",
+      "case": 2,
+      "order": 0,
+      "epsilon": 0.02,
+      "defect": 0.006366352618
+    },
+    {
+      "fixture": "analytic",
+      "case": 2,
+      "order": 0,
+      "epsilon": 0.01,
+      "defect": 0.003186459608
+    },
+    {
+      "fixture": "analytic",
+      "case": 2,
+      "order": 0,
+      "epsilon": 0.005,
+      "defect": 0.001594050629
+    },
+    {
+      "fixture": "analytic",
+      "case": 2,
+      "order": 0,
+      "epsilon": 0.0025,
+      "defect": 0.0007972305204
+    },
+    {
+      "fixture": "analytic",
+      "case": 2,
+      "order": 1,
+      "epsilon": 0.02,
+      "defect": 7.627092762e-05
+    },
+    {
+      "fixture": "analytic",
+      "case": 2,
+      "order": 1,
+      "epsilon": 0.01,
+      "defect": 1.909596674e-05
+    },
+    {
+      "fixture": "analytic",
+      "case": 2,
+      "order": 1,
+      "epsilon": 0.005,
+      "defect": 4.777517818e-06
+    },
+    {
+      "fixture": "analytic",
+      "case": 2,
+      "order": 1,
+      "epsilon": 0.0025,
+      "defect": 1.194820023e-06
+    },
+    {
+      "fixture": "analytic",
+      "case": 3,
+      "order": 0,
+      "epsilon": 0.02,
+      "defect": 0.007243391577
+    },
+    {
+      "fixture": "analytic",
+      "case": 3,
+      "order": 0,
+      "epsilon": 0.01,
+      "defect": 0.003617717008
+    },
+    {
+      "fixture": "analytic",
+      "case": 3,
+      "order": 0,
+      "epsilon": 0.005,
+      "defect": 0.001807860362
+    },
+    {
+      "fixture": "analytic",
+      "case": 3,
+      "order": 0,
+      "epsilon": 0.0025,
+      "defect": 0.0009036802147
+    },
+    {
+      "fixture": "analytic",
+      "case": 3,
+      "order": 1,
+      "epsilon": 0.02,
+      "defect": 0.0001082473594
+    },
+    {
+      "fixture": "analytic",
+      "case": 3,
+      "order": 1,
+      "epsilon": 0.01,
+      "defect": 2.697543372e-05
+    },
+    {
+      "fixture": "analytic",
+      "case": 3,
+      "order": 1,
+      "epsilon": 0.005,
+      "defect": 6.732956472e-06
+    },
+    {
+      "fixture": "analytic",
+      "case": 3,
+      "order": 1,
+      "epsilon": 0.0025,
+      "defect": 1.681870068e-06
+    },
+    {
+      "fixture": "ncsx",
+      "case": 1,
+      "order": 0,
+      "epsilon": 0.02,
+      "defect": 0.01756233682
+    },
+    {
+      "fixture": "ncsx",
+      "case": 1,
+      "order": 0,
+      "epsilon": 0.01,
+      "defect": 0.008757653409
+    },
+    {
+      "fixture": "ncsx",
+      "case": 1,
+      "order": 0,
+      "epsilon": 0.005,
+      "defect": 0.004372764802
+    },
+    {
+      "fixture": "ncsx",
+      "case": 1,
+      "order": 0,
+      "epsilon": 0.0025,
+      "defect": 0.002184844594
+    },
+    {
+      "fixture": "ncsx",
+      "case": 1,
+      "order": 1,
+      "epsilon": 0.02,
+      "defect": 0.002155619709
+    },
+    {
+      "fixture": "ncsx",
+      "case": 1,
+      "order": 1,
+      "epsilon": 0.01,
+      "defect": 0.0005407520104
+    },
+    {
+      "fixture": "ncsx",
+      "case": 1,
+      "order": 1,
+      "epsilon": 0.005,
+      "defect": 0.0001353871706
+    },
+    {
+      "fixture": "ncsx",
+      "case": 1,
+      "order": 1,
+      "epsilon": 0.0025,
+      "defect": 3.38696394e-05
+    },
+    {
+      "fixture": "ncsx",
+      "case": 2,
+      "order": 0,
+      "epsilon": 0.02,
+      "defect": 0.01850239289
+    },
+    {
+      "fixture": "ncsx",
+      "case": 2,
+      "order": 0,
+      "epsilon": 0.01,
+      "defect": 0.009105791724
+    },
+    {
+      "fixture": "ncsx",
+      "case": 2,
+      "order": 0,
+      "epsilon": 0.005,
+      "defect": 0.004508812618
+    },
+    {
+      "fixture": "ncsx",
+      "case": 2,
+      "order": 0,
+      "epsilon": 0.0025,
+      "defect": 0.002242150949
+    },
+    {
+      "fixture": "ncsx",
+      "case": 2,
+      "order": 1,
+      "epsilon": 0.02,
+      "defect": 0.002877334207
+    },
+    {
+      "fixture": "ncsx",
+      "case": 2,
+      "order": 1,
+      "epsilon": 0.01,
+      "defect": 0.0007201571741
+    },
+    {
+      "fixture": "ncsx",
+      "case": 2,
+      "order": 1,
+      "epsilon": 0.005,
+      "defect": 0.0001801899621
+    },
+    {
+      "fixture": "ncsx",
+      "case": 2,
+      "order": 1,
+      "epsilon": 0.0025,
+      "defect": 4.506983295e-05
+    },
+    {
+      "fixture": "ncsx",
+      "case": 3,
+      "order": 0,
+      "epsilon": 0.02,
+      "defect": 0.01400032151
+    },
+    {
+      "fixture": "ncsx",
+      "case": 3,
+      "order": 0,
+      "epsilon": 0.01,
+      "defect": 0.007001884098
+    },
+    {
+      "fixture": "ncsx",
+      "case": 3,
+      "order": 0,
+      "epsilon": 0.005,
+      "defect": 0.003499536588
+    },
+    {
+      "fixture": "ncsx",
+      "case": 3,
+      "order": 0,
+      "epsilon": 0.0025,
+      "defect": 0.001749176367
+    },
+    {
+      "fixture": "ncsx",
+      "case": 3,
+      "order": 1,
+      "epsilon": 0.02,
+      "defect": 0.006155329883
+    },
+    {
+      "fixture": "ncsx",
+      "case": 3,
+      "order": 1,
+      "epsilon": 0.01,
+      "defect": 0.001553147234
+    },
+    {
+      "fixture": "ncsx",
+      "case": 3,
+      "order": 1,
+      "epsilon": 0.005,
+      "defect": 0.0003901189014
+    },
+    {
+      "fixture": "ncsx",
+      "case": 3,
+      "order": 1,
+      "epsilon": 0.0025,
+      "defect": 9.77609335e-05
+    },
+    {
+      "fixture": "g3v3",
+      "case": 1,
+      "order": 0,
+      "epsilon": 0.02,
+      "defect": 0.00357106231
+    },
+    {
+      "fixture": "g3v3",
+      "case": 1,
+      "order": 0,
+      "epsilon": 0.01,
+      "defect": 0.001785531155
+    },
+    {
+      "fixture": "g3v3",
+      "case": 1,
+      "order": 0,
+      "epsilon": 0.005,
+      "defect": 0.0008927655776
+    },
+    {
+      "fixture": "g3v3",
+      "case": 1,
+      "order": 0,
+      "epsilon": 0.0025,
+      "defect": 0.0004463827888
+    },
+    {
+      "fixture": "g3v3",
+      "case": 1,
+      "order": 1,
+      "epsilon": 0.02,
+      "defect": 0.0001415325527
+    },
+    {
+      "fixture": "g3v3",
+      "case": 1,
+      "order": 1,
+      "epsilon": 0.01,
+      "defect": 3.53900018e-05
+    },
+    {
+      "fixture": "g3v3",
+      "case": 1,
+      "order": 1,
+      "epsilon": 0.005,
+      "defect": 8.848283596e-06
+    },
+    {
+      "fixture": "g3v3",
+      "case": 1,
+      "order": 1,
+      "epsilon": 0.0025,
+      "defect": 2.212164113e-06
+    },
+    {
+      "fixture": "g3v3",
+      "case": 2,
+      "order": 0,
+      "epsilon": 0.02,
+      "defect": 0.003998696443
+    },
+    {
+      "fixture": "g3v3",
+      "case": 2,
+      "order": 0,
+      "epsilon": 0.01,
+      "defect": 0.001999348222
+    },
+    {
+      "fixture": "g3v3",
+      "case": 2,
+      "order": 0,
+      "epsilon": 0.005,
+      "defect": 0.0009996741108
+    },
+    {
+      "fixture": "g3v3",
+      "case": 2,
+      "order": 0,
+      "epsilon": 0.0025,
+      "defect": 0.0004998370554
+    },
+    {
+      "fixture": "g3v3",
+      "case": 2,
+      "order": 1,
+      "epsilon": 0.02,
+      "defect": 0.0001166945799
+    },
+    {
+      "fixture": "g3v3",
+      "case": 2,
+      "order": 1,
+      "epsilon": 0.01,
+      "defect": 2.914127126e-05
+    },
+    {
+      "fixture": "g3v3",
+      "case": 2,
+      "order": 1,
+      "epsilon": 0.005,
+      "defect": 7.281065618e-06
+    },
+    {
+      "fixture": "g3v3",
+      "case": 2,
+      "order": 1,
+      "epsilon": 0.0025,
+      "defect": 1.819722156e-06
+    },
+    {
+      "fixture": "g3v3",
+      "case": 3,
+      "order": 0,
+      "epsilon": 0.02,
+      "defect": 0.004501506877
+    },
+    {
+      "fixture": "g3v3",
+      "case": 3,
+      "order": 0,
+      "epsilon": 0.01,
+      "defect": 0.002250753438
+    },
+    {
+      "fixture": "g3v3",
+      "case": 3,
+      "order": 0,
+      "epsilon": 0.005,
+      "defect": 0.001125376719
+    },
+    {
+      "fixture": "g3v3",
+      "case": 3,
+      "order": 0,
+      "epsilon": 0.0025,
+      "defect": 0.0005626883596
+    },
+    {
+      "fixture": "g3v3",
+      "case": 3,
+      "order": 1,
+      "epsilon": 0.02,
+      "defect": 0.000104648077
+    },
+    {
+      "fixture": "g3v3",
+      "case": 3,
+      "order": 1,
+      "epsilon": 0.01,
+      "defect": 2.610157535e-05
+    },
+    {
+      "fixture": "g3v3",
+      "case": 3,
+      "order": 1,
+      "epsilon": 0.005,
+      "defect": 6.517149943e-06
+    },
+    {
+      "fixture": "g3v3",
+      "case": 3,
+      "order": 1,
+      "epsilon": 0.0025,
+      "defect": 1.628210844e-06
+    }
+  ],
+  "rates": [
+    {
+      "fixture": "analytic",
+      "case": 0,
+      "order0": 0.0,
+      "order1": 1.0,
+      "jacobian_error": 1.1582513e-11
+    },
+    {
+      "fixture": "analytic",
+      "case": 1,
+      "order0": 1.0,
+      "order1": 2.0009601,
+      "jacobian_error": 1.3893179e-11
+    },
+    {
+      "fixture": "analytic",
+      "case": 2,
+      "order0": 0.99944276,
+      "order1": 1.9992014,
+      "jacobian_error": 1.7135465e-11
+    },
+    {
+      "fixture": "analytic",
+      "case": 3,
+      "order0": 1.0005977,
+      "order1": 2.001754,
+      "jacobian_error": 2.0528494e-11
+    },
+    {
+      "fixture": "ncsx",
+      "case": 1,
+      "order0": 1.0015068,
+      "order1": 1.9984513,
+      "jacobian_error": 7.9985092e-09
+    },
+    {
+      "fixture": "ncsx",
+      "case": 2,
+      "order0": 1.0109505,
+      "order1": 1.9990389,
+      "jacobian_error": 1.935778e-09
+    },
+    {
+      "fixture": "ncsx",
+      "case": 3,
+      "order0": 1.0005337,
+      "order1": 1.9948964,
+      "jacobian_error": 1.0484014e-09
+    },
+    {
+      "fixture": "g3v3",
+      "case": 1,
+      "order0": 1.0,
+      "order1": 1.9999058,
+      "jacobian_error": 9.7254099e-10
+    },
+    {
+      "fixture": "g3v3",
+      "case": 2,
+      "order0": 1.0,
+      "order1": 2.0006369,
+      "jacobian_error": 3.9478567e-10
+    },
+    {
+      "fixture": "g3v3",
+      "case": 3,
+      "order0": 1.0,
+      "order1": 2.0013887,
+      "jacobian_error": 4.5113809e-10
+    }
+  ],
+  "scope": "Numerical local first-order two-form scaling in fixed study normalization; not production integration."
+}

@@ -1,0 +1,50 @@
+{
+ "lean": "concept/gc_symplectic_proof/lean/GcSymplectic.lean",
+ "fortran": "src/orbit_symplectic_base.f90",
+ "variants": {
+  "GAUSS1": {
+   "stages": 1,
+   "max_abs_code_minus_exact_upper_bound": 0.0,
+   "max_enclosure_width": 0.0,
+   "max_abs_binary64_symplectic_defect": 0.0,
+   "binary64_defect_is_exactly_zero": true,
+   "pass": true
+  },
+  "GAUSS2": {
+   "stages": 2,
+   "max_abs_code_minus_exact_upper_bound": 9.049035600698035e-16,
+   "max_enclosure_width": 1.0371692129768569e-61,
+   "max_abs_binary64_symplectic_defect": 1.0408340855860843e-17,
+   "binary64_defect_is_exactly_zero": false,
+   "pass": true
+  },
+  "GAUSS3": {
+   "stages": 3,
+   "max_abs_code_minus_exact_upper_bound": 3.992021570678569e-17,
+   "max_enclosure_width": 4.148676851907428e-62,
+   "max_abs_binary64_symplectic_defect": 1.6418317346791735e-17,
+   "binary64_defect_is_exactly_zero": false,
+   "pass": true
+  },
+  "GAUSS4": {
+   "stages": 4,
+   "max_abs_code_minus_exact_upper_bound": 2.3925407421254193e-17,
+   "max_enclosure_width": 5.8353806881651735e-61,
+   "max_abs_binary64_symplectic_defect": 8.053412006970524e-18,
+   "binary64_defect_is_exactly_zero": false,
+   "pass": true
+  },
+  "LOBATTO3": {
+   "stages": 3,
+   "max_abs_code_minus_exact_upper_bound": 3.700743415417188e-17,
+   "max_enclosure_width": 0.0,
+   "max_abs_binary64_symplectic_defect": 1.3877787807814457e-17,
+   "binary64_defect_is_exactly_zero": false,
+   "pass": true
+  }
+ },
+ "bounds": {
+  "coefficient": 1e-14,
+  "defect": 1e-15
+ }
+}

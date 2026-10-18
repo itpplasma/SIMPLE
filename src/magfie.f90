@@ -249,7 +249,7 @@ subroutine magfie_generic_refcoords(field, x, bmod, sqrtg, bder, hcovar, &
     call field%evaluate(xm, am, hm, bm)
     denominator = xp(i) - xm(i)
     dBmod(i) = (bp - bm)/denominator
-    dhcov(:, i) = (hp - hm)/denominator
+    dhcov(i, :) = (hp - hm)/denominator
   end do
   bder = dBmod/max(bmod, 1.0d-30)
   call field%coords%metric_tensor(x, g, ginv, sqrtg_abs)
@@ -296,7 +296,6 @@ subroutine magfie_spectre(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
 
   real(dp) :: hcov(3), Bmod_si, sqgBctr(3), sqrtg_si
   real(dp) :: dhcov_si(3, 3), dBmod_si(3), dhcov(3, 3)
-  integer :: j
 
   if (.not. allocated(spectre_field)) then
     print *, 'magfie_spectre: spectre_field not set'
@@ -321,9 +320,9 @@ subroutine magfie_spectre(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
   ! hcurl^i = eps^ijk d_j h_k / sqrt(g). The covariant derivative d h_i/dx carries
   ! the same M_TO_CM length factor as hcovar; compute_hcurl divides by the cm
   ! sqrt(g), so hcurl comes out contravariant in Gaussian-CGS like hctrvr.
-  do j = 1, 3
-    dhcov(:, j) = dhcov_si(:, j)*M_TO_CM
-  end do
+  ! libneo returns dhcov_si(i, j) = d h_i/dx_j; compute_hcurl takes the
+  ! derivative index first.
+  dhcov = transpose(dhcov_si)*M_TO_CM
   call compute_hcurl(sqrtg, dhcov, hcurl)
 end subroutine magfie_spectre
 
@@ -363,6 +362,8 @@ end subroutine inverse_metric_scaled
 
 
 subroutine compute_hcurl(sqrtg, dh, hcurl)
+  !> Contravariant curl h^i = eps^ijk d_j h_k / sqrt(g) with the derivative
+  !> index first: dh(j, k) = d h_k / d x_j.
   real(dp), intent(in) :: sqrtg
   real(dp), intent(in) :: dh(3, 3)
   real(dp), intent(out) :: hcurl(3)

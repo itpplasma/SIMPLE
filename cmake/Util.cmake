@@ -63,7 +63,11 @@ function(find_or_fetch DEPENDENCY)
 
     if(_use_local)
         if("${_dep_lower}" STREQUAL "libneo")
-            set(LIBNEO_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
+            # SIMPLE controls its own tests with SIMPLE_TESTING. Keep libneo's
+            # tests out of the parent target namespace, including older libneo
+            # revisions that inherit BUILD_TESTING from the consumer.
+            set(LIBNEO_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+            set(BUILD_TESTING OFF)
         endif()
         add_subdirectory("${_source_dir}" "${CMAKE_CURRENT_BINARY_DIR}/${_dep_lower}" EXCLUDE_FROM_ALL)
         return()
@@ -98,7 +102,10 @@ function(find_or_fetch DEPENDENCY)
             get_branch_or_main(${_repo_url} _branch)
         endif()
 
-        set(LIBNEO_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
+        # See the local-source case above. BUILD_TESTING is scoped to this
+        # function so SIMPLE's own SIMPLE_TESTING setting is unaffected.
+        set(LIBNEO_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+        set(BUILD_TESTING OFF)
 
         FetchContent_Declare(${_dep_lower}
             GIT_REPOSITORY ${_repo_url}

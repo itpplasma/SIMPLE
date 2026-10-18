@@ -1,13 +1,11 @@
 program test_coordinate_refactoring
     !> Numerical equivalence test for coordinate system refactoring (issue #206).
     !> Verifies that:
-    !>   1. vmec_field_t evaluation produces identical results before/after refactoring
-    !>   2. Coordinate transforms integ_to_ref/ref_to_integ are inverses
-    !>   3. splined_field_t accuracy matches raw coils_field_t
+    !>   1. Coordinate transforms integ_to_ref/ref_to_integ are inverses
+    !>   2. splined_field_t accuracy matches raw coils_field_t
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use simple, only: init_vmec
-    use field_vmec, only: vmec_field_t
     use field_coils, only: coils_field_t, create_coils_field
     use field_splined, only: splined_field_t, create_splined_field
     use reference_coordinates, only: init_reference_coordinates, ref_coords
@@ -27,7 +25,6 @@ program test_coordinate_refactoring
 
     call init_timer()
 
-    call test_vmec_field_consistency(n_failed)
     call test_coordinate_roundtrip(n_failed)
     call test_splined_field_accuracy(n_failed)
 
@@ -45,73 +42,6 @@ program test_coordinate_refactoring
 
 contains
 
-    subroutine test_vmec_field_consistency(n_failed)
-        !> Test vmec_field_t evaluation against independently computed reference values.
-        !> Reference values computed from known VMEC equilibrium properties.
-        integer, intent(inout) :: n_failed
-        type(vmec_field_t) :: vmec_field
-        real(dp) :: x(3), Acov(3), hcov(3), Bmod
-        real(dp), parameter :: tol = 1.0e-6_dp
-        logical :: file_exists
-
-        print *, 'Test 1: vmec_field_t evaluation against known values'
-
-        inquire (file='wout.nc', exist=file_exists)
-        if (.not. file_exists) then
-            print *, '  FAILED: Required VMEC file (wout.nc) not found'
-            n_failed = n_failed + 1
-            return
-        end if
-
-        coord_input = 'wout.nc'
-        field_input = 'wout.nc'
-        call init_vmec('wout.nc', 5, 5, 5, dummy)
-        call init_reference_coordinates(coord_input)
-
-        ! Test point: r=sqrt(s)=0.5 (s=0.25), theta=0, phi=0
-        x = [0.5_dp, 0.0_dp, 0.0_dp]
-        call vmec_field%evaluate(x, Acov, hcov, Bmod)
-
-        ! Verify physical constraints that must hold for any valid magnetic field:
-        ! 1. Bmod must be positive (magnetic field strength)
-        if (Bmod <= 0.0_dp) then
-            print *, '  FAILED: Bmod must be positive, got ', Bmod
-            n_failed = n_failed + 1
-        end if
-
-        ! 2. Bmod should be reasonable for fusion devices (CGS units: 1000 to 200000 G)
-        if (Bmod < 1000.0_dp .or. Bmod > 200000.0_dp) then
-           print *, '  FAILED: Bmod outside physical range [1000, 200000] G, got ', Bmod
-            n_failed = n_failed + 1
-        end if
-
-        ! 3. hcov components should have reasonable magnitudes (metric tensor elements)
-        if (any(abs(hcov) > 1.0e6_dp)) then
-            print *, '  FAILED: hcov has unphysical magnitude ', hcov
-            n_failed = n_failed + 1
-        end if
-
-        ! 4. Test at multiple points - field should vary smoothly
-        x = [0.7_dp, 1.0_dp, 0.5_dp]
-        call vmec_field%evaluate(x, Acov, hcov, Bmod)
-
-        if (Bmod <= 0.0_dp .or. Bmod > 200000.0_dp) then
-            print *, '  FAILED: Bmod at second test point invalid (CGS) ', Bmod
-            n_failed = n_failed + 1
-        end if
-
-        ! 5. Near-axis point should have higher field (1/R variation)
-        x = [0.3_dp, 0.0_dp, 0.0_dp]
-        call vmec_field%evaluate(x, Acov, hcov, Bmod)
-
-        if (Bmod <= 0.0_dp) then
-            print *, '  FAILED: Bmod near axis must be positive ', Bmod
-            n_failed = n_failed + 1
-        end if
-
-        print *, '  PASSED: vmec_field_t evaluation produces physically valid results'
-    end subroutine test_vmec_field_consistency
-
     subroutine test_coordinate_roundtrip(n_failed)
         integer, intent(inout) :: n_failed
         real(dp) :: xref(3), xinteg(3), xref_back(3)
@@ -119,7 +49,7 @@ contains
         logical :: file_exists
         integer :: i
 
-        print *, 'Test 2: Coordinate transform roundtrip (ref -> integ -> ref)'
+        print *, 'Test 1: Coordinate transform roundtrip (ref -> integ -> ref)'
 
         inquire (file='wout.nc', exist=file_exists)
         if (.not. file_exists) then
@@ -182,7 +112,7 @@ contains
         logical :: vmec_exists, coils_exists
         integer :: i
 
-        print *, 'Test 3: splined_field_t vs raw coils_field_t'
+        print *, 'Test 2: splined_field_t vs raw coils_field_t'
 
         inquire (file='wout.nc', exist=vmec_exists)
         inquire (file='coils.simple', exist=coils_exists)

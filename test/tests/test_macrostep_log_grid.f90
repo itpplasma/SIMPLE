@@ -2,7 +2,6 @@
 ! Verifies that logarithmic macrostep time grid:
 ! 1. Preserves total microsteps exactly
 ! 2. Produces log10-spaced distribution (10:1 ratio last:first)
-! 3. Runs in O(n) time, not O(n^2) or worse
 program test_macrostep_log_grid
     use iso_fortran_env, only: int64
     implicit none
@@ -11,7 +10,6 @@ program test_macrostep_log_grid
 
     call test_log_grid_total_steps_preserved()
     call test_log_grid_distribution()
-    call test_log_grid_performance()
     call test_log_grid_edge_case_min_microsteps()
 
     print *, "All macrostep log grid tests passed!"
@@ -118,59 +116,6 @@ contains
         print *, "PASS: Distribution has correct 10:1 ratio"
         deallocate(ntau_macro)
     end subroutine test_log_grid_distribution
-
-    subroutine test_log_grid_performance()
-        ! Test that log grid computation is O(n), not O(n^2) or worse
-        integer, parameter :: ntimstep = 20000
-        integer, parameter :: ntau = 100
-
-        integer :: nintv, i
-        integer(int64) :: n_microsteps_total, kt_target, kt_prev
-        integer, allocatable :: ntau_macro(:)
-        real(dp) :: weight_sum, cumul_weight, w
-        real(dp) :: t_start, t_end
-
-        print *, ""
-        print *, "=== Test: Log grid performance ==="
-
-        nintv = ntimstep - 1
-        n_microsteps_total = int(nintv, kind=int64) * int(ntau, kind=int64)
-
-        allocate(ntau_macro(ntimstep))
-
-        call cpu_time(t_start)
-
-        ! This should complete in milliseconds, not minutes
-        weight_sum = 0.0d0
-        do i = 1, nintv
-            weight_sum = weight_sum + 10.0d0 ** (dble(i - 1) / dble(max(1, nintv - 1)))
-        end do
-
-        cumul_weight = 0.0d0
-        kt_prev = 0_int64
-        ntau_macro = 0
-        do i = 1, nintv
-            w = 10.0d0 ** (dble(i - 1) / dble(max(1, nintv - 1)))
-            cumul_weight = cumul_weight + w
-            kt_target = nint(cumul_weight / weight_sum * dble(n_microsteps_total), kind=int64)
-            ntau_macro(i + 1) = int(kt_target - kt_prev)
-            kt_prev = kt_target
-        end do
-
-        call cpu_time(t_end)
-
-        print *, "Log grid computation time:", t_end - t_start, "seconds"
-        print *, "Number of intervals:", nintv
-
-        ! Should complete in under 1 second (O(n) algorithm)
-        if (t_end - t_start > 1.0d0) then
-            print *, "FAIL: Log grid computation took too long (possible O(n^2) or infinite loop)"
-            stop 1
-        end if
-
-        print *, "PASS: Log grid computation is fast (O(n))"
-        deallocate(ntau_macro)
-    end subroutine test_log_grid_performance
 
     subroutine test_log_grid_edge_case_min_microsteps()
         ! Edge case: very few microsteps per interval

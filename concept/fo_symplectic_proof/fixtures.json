@@ -1,0 +1,25 @@
+{
+  "test/tests/data/ncsx_freeboundary.h5": {
+    "sha256": "225976b7c5e2f5cd9480b2e2d233fda2a68a590028f36f24cd63f17aa29b24d9",
+    "Nfp": 3,
+    "Ntor": 2,
+    "nonzero_toroidal_modes": 18,
+    "nonaxisymmetric_embedding_max_m": 0.11393353863574068
+  },
+  "build/_deps/libneo-src/test/spectre/data/spectre_test.h5": {
+    "sha256": "57218f07930b6dc30b06375edeb6db823b4e42322116c4b48e09f8c9c622b5a7",
+    "Nfp": 5,
+    "Ntor": 2,
+    "nonzero_toroidal_modes": 18,
+    "nonaxisymmetric_embedding_max_m": 0.25
+  },
+  "search": {
+    "HDF5_candidates": 12181,
+    "locations": [
+      "test/",
+      "../spectre/",
+      "~/data/"
+    ],
+    "note": "SPECTRE comparison reference.h5 files lack geometry; full G3V3L3Fi found in pinned libneo and data copies."
+  }
+}
