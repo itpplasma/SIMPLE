@@ -98,7 +98,7 @@ def test_empty_or_partial_test_selection_fails(tmp_path):
         vr.consumer_checks(MissingTests())
 
 
-@pytest.mark.parametrize("exception", [False, True])
+@pytest.mark.parametrize("exception", [None, ValueError, IndexError, KeyError])
 def test_report_failure_returns_nonzero_and_preserves_explanation(
     monkeypatch, tmp_path, exception
 ):
@@ -109,7 +109,7 @@ def test_report_failure_returns_nonzero_and_preserves_explanation(
 
     def checks(runner):
         if exception:
-            raise ValueError("missing numerical evidence")
+            raise exception("missing numerical evidence")
         return [
             vr.row("deliberate numerical failure", "oracle", "bound", "error", False)
         ]
@@ -123,3 +123,29 @@ def test_report_failure_returns_nonzero_and_preserves_explanation(
     assert (
         "missing numerical evidence" if exception else "deliberate numerical failure"
     ) in report
+
+
+def test_provenance_uses_configured_libneo_source(monkeypatch, tmp_path):
+    build = tmp_path / "build"
+    build.mkdir()
+    source = tmp_path / "local-libneo"
+    source.mkdir()
+    (build / "CMakeCache.txt").write_text(
+        f"libneo_SOURCE_DIR:STATIC={source}\n"
+        "CMAKE_Fortran_COMPILER:FILEPATH=gfortran\n"
+    )
+    (build / "simple.x").write_bytes(b"consumer")
+    monkeypatch.setattr(vr, "REPO", tmp_path)
+    monkeypatch.setattr(vr.platform, "platform", lambda: "test platform")
+
+    def check_output(command, **kwargs):
+        if command[0] == "gfortran":
+            return "test compiler\n"
+        if command[1] == "-C":
+            if Path(command[2]) != source:
+                raise FileNotFoundError(command[2])
+            return "local-libneo-revision\n"
+        return "" if command[1] == "diff" else "consumer-revision\n"
+
+    monkeypatch.setattr(vr.subprocess, "check_output", check_output)
+    assert "- libneo: `local-libneo-revision`" in vr.provenance()

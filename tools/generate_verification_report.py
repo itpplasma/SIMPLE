@@ -445,7 +445,10 @@ def provenance() -> list[str]:
         for line in cache.splitlines()
         if any(line.startswith(k + ":") for k in keys)
     ]
-    libneo = git("-C", "build/_deps/libneo-src", "rev-parse", "HEAD")
+    source_match = re.search(r"^libneo_SOURCE_DIR:[^=]+=(.+)$", cache, re.M)
+    if source_match is None:
+        raise ValueError("libneo source directory missing from CMakeCache.txt")
+    libneo = git("-C", source_match[1], "rev-parse", "HEAD")
     compiler_match = re.search(r"^CMAKE_Fortran_COMPILER:[^=]+=(.+)$", cache, re.M)
     if compiler_match is None:
         raise ValueError("Fortran compiler missing from CMakeCache.txt")
@@ -549,7 +552,14 @@ def main() -> int:
             "",
         ]
         code = int(any(check["status"] == "FAIL" for check in checks))
-    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
+    except (
+        OSError,
+        ValueError,
+        IndexError,
+        KeyError,
+        RuntimeError,
+        subprocess.SubprocessError,
+    ) as exc:
         lines += [
             "",
             "## FAIL: incomplete verification",
