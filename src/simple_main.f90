@@ -2455,7 +2455,7 @@ contains
         logical, intent(out), optional :: numerical_hold_any
         type(rk_recovery_state_t), intent(inout), optional :: rk_recovery
 
-        integer :: hold_streak_local, ktau, recovery_method
+        integer :: hold_streak_local, ktau, recovery_method, symplectic_status
         integer :: ierr_coll, collision_hold_start
         real(dp) :: z_step_start(5), z_step_end(5), loss_fraction
         real(dp) :: u_event(3)
@@ -2568,16 +2568,19 @@ contains
                 f_step_start = anorb%f
                 call advance_symplectic_with_retry(anorb%si, anorb%f, &
                     orbit_timestep_sympl, ierr_orbit)
-                if (ierr_orbit == 0) then
+                if (ierr_orbit == 0 .or. &
+                    ierr_orbit == SYMPLECTIC_STEP_BOUNDARY) then
+                    symplectic_status = ierr_orbit
+                    ierr_orbit = 0
                     call to_standard_z_coordinates(anorb, z)
                     z_step_end = z
-                    ! z(4) is reconstructed from H, which the map conserves
-                    ! only to O(dt^order), already within one step; the RK
-                    ! momentum-drift gate does not apply to symplectic steps.
+                    ! Resolve truncation error within the same momentum sanity
+                    ! bound as recovery, before accepting an endpoint or hit.
+                    ! pabs stays fixed between physical collision kicks.
                     call validate_rk_step_or_reference_boundary(z_step_start, &
-                        z_step_end, anorb%fper, z=z, &
-                        event_fraction=loss_fraction, ierr=ierr_orbit, &
-                        reference_boundary=reference_boundary)
+                                      z_step_end, anorb%fper, si_step_start%pabs, z=z, &
+                                        event_fraction=loss_fraction, ierr=ierr_orbit, &
+                                                  reference_boundary=reference_boundary)
                     if (reference_boundary .and. ierr_orbit == 1) then
                         call integ_to_ref(z(1:3), u_event)
                         anorb%si%last_step_fraction = loss_fraction
@@ -2588,6 +2591,8 @@ contains
                     else if (ierr_orbit /= 0) then
                         anorb%si = si_step_start
                         anorb%f = f_step_start
+                    else if (symplectic_status == SYMPLECTIC_STEP_BOUNDARY) then
+                        ierr_orbit = SYMPLECTIC_STEP_BOUNDARY
                     end if
                 end if
                 if (ierr_orbit == SYMPLECTIC_STEP_BOUNDARY) then
@@ -2812,7 +2817,7 @@ contains
         logical, intent(out), optional :: numerical_hold_any
         type(rk_recovery_state_t), intent(inout), optional :: rk_recovery
 
-        integer :: hold_streak_local, ktau, recovery_method
+        integer :: hold_streak_local, ktau, recovery_method, symplectic_status
         integer :: ierr_coll, collision_hold_start
         real(dp) :: u_ref_prev(3), u_ref_cur(3), x_cur(3), x_cur_m(3)
         real(dp) :: z_step_start(5), z_step_end(5), segment_duration
@@ -2908,16 +2913,19 @@ contains
                 f_step_start = anorb%f
                 call advance_symplectic_with_retry(anorb%si, anorb%f, &
                     orbit_timestep_sympl, ierr_orbit, segment_duration)
-                if (ierr_orbit == 0) then
+                if (ierr_orbit == 0 .or. &
+                    ierr_orbit == SYMPLECTIC_STEP_BOUNDARY) then
+                    symplectic_status = ierr_orbit
+                    ierr_orbit = 0
                     call to_standard_z_coordinates(anorb, z)
                     z_step_end = z
-                    ! z(4) is reconstructed from H, which the map conserves
-                    ! only to O(dt^order), already within one step; the RK
-                    ! momentum-drift gate does not apply to symplectic steps.
+                    ! Resolve truncation error within the same momentum sanity
+                    ! bound as recovery, before accepting an endpoint or hit.
+                    ! pabs stays fixed between physical collision kicks.
                     call validate_rk_step_or_reference_boundary(z_step_start, &
-                        z_step_end, anorb%fper, z=z, &
-                        event_fraction=boundary_fraction, ierr=ierr_orbit, &
-                        reference_boundary=reference_boundary)
+                                      z_step_end, anorb%fper, si_step_start%pabs, z=z, &
+                                    event_fraction=boundary_fraction, ierr=ierr_orbit, &
+                                                  reference_boundary=reference_boundary)
                     if (reference_boundary .and. ierr_orbit == 1) then
                         anorb%si%last_step_fraction = boundary_fraction
                         anorb%si%last_event_fraction_width = 1.d0
@@ -2925,6 +2933,8 @@ contains
                     else if (ierr_orbit /= 0) then
                         anorb%si = si_step_start
                         anorb%f = f_step_start
+                    else if (symplectic_status == SYMPLECTIC_STEP_BOUNDARY) then
+                        ierr_orbit = SYMPLECTIC_STEP_BOUNDARY
                     end if
                 end if
                 if (ierr_orbit == SYMPLECTIC_STEP_BOUNDARY) then
