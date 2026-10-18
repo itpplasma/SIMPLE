@@ -57,6 +57,15 @@ if(TARGET fortplot::fortplot)
         LABELS "unit;integration" TIMEOUT 120)
 endif()
 
+# Reporting helpers have no dependency on the optional pysimple backend.
+if(SIMPLE_ENABLE_PYTHON_TOOLS)
+    add_test(NAME test_verification_report
+        COMMAND ${Python3_EXECUTABLE} -m pytest
+            ${CMAKE_SOURCE_DIR}/test/python/test_verification_report.py -q)
+    set_tests_properties(test_verification_report PROPERTIES
+        LABELS "unit;python" TIMEOUT 30)
+endif()
+
 set(BOOZER_CHARTMAP_PYTHON "${Python3_EXECUTABLE}")
 if(EXISTS "${CMAKE_SOURCE_DIR}/.venv/bin/python")
     set(BOOZER_CHARTMAP_PYTHON "${CMAKE_SOURCE_DIR}/.venv/bin/python")
@@ -376,6 +385,17 @@ add_test(NAME test_config_reference
     COMMAND test_config_reference.x ${CMAKE_SOURCE_DIR}/examples/simple_full.in
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_config_reference PROPERTIES LABELS "unit")
+
+add_test(NAME test_input_reference
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/generate_input_reference.py
+        --root ${CMAKE_SOURCE_DIR} --libneo-source ${libneo_SOURCE_DIR} --check)
+set_tests_properties(test_input_reference PROPERTIES LABELS "unit;python"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+add_test(NAME test_input_validation
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/test_input_validation.py)
+set_tests_properties(test_input_validation PROPERTIES LABELS "unit;python"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 add_executable(test_finite_check.x test_finite_check.f90)
 target_link_libraries(test_finite_check.x simple)

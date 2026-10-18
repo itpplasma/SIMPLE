@@ -86,6 +86,17 @@ class TestNetCDFResultsOutput:
                 assert 'trace_time' in ds.ncattrs()
                 assert ds.ntestpart == 8
 
+            # Smoke-test the post-processing command on the real short-run output.
+            pytest.importorskip("matplotlib")
+            from matplotlib import pyplot as plt
+            from pysimple import cli
+
+            for command in ("losses", "classes"):
+                image = tmp_path / f"{command}.png"
+                assert cli.main([command, str(tmp_path), "-o", str(image)]) == 0
+                assert image.stat().st_size > 0
+            plt.close("all")
+
         finally:
             os.chdir(original_dir)
 
