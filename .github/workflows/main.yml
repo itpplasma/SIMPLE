@@ -176,7 +176,8 @@ jobs:
       CXX: g++-${{ matrix.gcc }}
       FC: gfortran-${{ matrix.gcc }}
       OMP_NUM_THREADS: 2
-      CTEST_PARALLEL_LEVEL: 2
+      # Fast-suite spline fixtures each exceed 10 GiB on 16 GiB hosted runners.
+      CTEST_PARALLEL_LEVEL: ${{ matrix.coverage == 'ON' && '1' || '2' }}
       # Keep PR additions small; collect full coverage on main/full dispatch.
       COVERAGE: ${{ matrix.coverage == 'ON' && github.event_name != 'pull_request' && 'ON' || 'OFF' }}
       TEST_TARGET: ${{ matrix.coverage == 'ON' && github.event_name != 'pull_request' && 'test-fast' || 'test-smoke' }}
