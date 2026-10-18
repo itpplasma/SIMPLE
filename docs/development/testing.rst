@@ -10,27 +10,18 @@ Test targets
 All targets except ``test-all`` first rebuild with deterministic floating
 point (``SIMPLE_DETERMINISTIC_FP=ON``).
 
-.. list-table::
-   :header-rows: 1
-   :widths: 30 70
-
-   * - Command
-     - Runs
-   * - ``make test-fast``
-     - everything except labels ``slow``, ``regression``, ``performance``;
-       run before every push
-   * - ``make test``
-     - everything except ``regression``
-   * - ``make test-nopy``
-     - as ``make test`` without label ``python``
-   * - ``make test-slow``
-     - label ``slow`` only
-   * - ``make test-smoke``
-     - label ``smoke`` (sub-minute gate used by libneo)
-   * - ``make test-regression``
-     - label ``regression``: golden records against ``main``
-   * - ``make test-all``
-     - every test, in the current build configuration
+=========================  ==================================================
+Command                    Runs
+=========================  ==================================================
+``make test-fast``         all but labels ``slow``, ``regression``,
+                           ``performance``; run before every push
+``make test``              all but ``regression``
+``make test-nopy``         as ``make test`` without label ``python``
+``make test-slow``         label ``slow``
+``make test-smoke``        label ``smoke`` (sub-minute gate used by libneo)
+``make test-regression``   label ``regression``: golden records vs ``main``
+``make test-all``          every test, current build configuration
+=========================  ==================================================
 
 ``TEST=<regex>`` selects tests by name, ``VERBOSE=1`` shows all output and
 ``CONFIG=Fast`` selects the build profile. The regex passes through ``make``:
@@ -41,25 +32,21 @@ Tests labelled ``python`` and some unlabelled wrappers need the packages from
 Kinds of tests and labels
 -------------------------
 
-.. list-table::
-   :header-rows: 1
-   :widths: 22 33 45
-
-   * - Kind (label)
-     - Location
-     - Checks
-   * - Unit (``unit``)
-     - ``test/tests/test_*.f90``
-     - one procedure against an independent oracle
-   * - Integration, system (``integration``, ``system``)
-     - ``test/tests/``
-     - several modules or ``simple.x`` on a small case; physical invariants
-   * - Python (``python``)
-     - ``test/python/test_*.py`` (pytest)
-     - ``pysimple``, ``tools/``, agreement of ``pysimple`` and ``simple.x``
-   * - Golden record (``golden_record``, ``regression``)
-     - ``test/golden_record/<case>/simple.in``
-     - end-to-end output against ``main``
+=========================================  =====================================
+Kind (labels)                              Location: checks
+=========================================  =====================================
+Unit (``unit``)                            ``test/tests/test_*.f90``: one
+                                           procedure against an independent
+                                           oracle
+Integration (``integration``, ``system``)  ``test/tests/``: several modules or
+                                           ``simple.x`` on a small case;
+                                           physical invariants
+Python (``python``)                        ``test/python/test_*.py`` (pytest):
+                                           ``pysimple``, ``tools/``, agreement
+                                           of ``pysimple`` and ``simple.x``
+Golden record (``regression``)             ``test/golden_record/<case>/``:
+                                           end-to-end output against ``main``
+=========================================  =====================================
 
 Add ``slow`` to tests that run longer than about a minute. Register Fortran
 tests in ``test/tests/CMakeLists.txt`` and pytest files with ``add_pytest`` in
@@ -83,31 +70,25 @@ Oracles and tolerances
 Invariants to keep
 ------------------
 
-.. list-table::
-   :header-rows: 1
-   :widths: 28 72
-
-   * - Subsystem
-     - Must hold after a change
-   * - Coordinate transforms
-     - ``ref -> integ -> ref`` roundtrip, periodicity, explicit
-       :math:`s`, :math:`\sqrt{s}` or :math:`\rho` at every interface
-   * - VMEC, Boozer, chartmap
-     - same start surface, same short-time orbit within tolerance,
-       statistically equal loss fraction
-   * - Symplectic integrators
-     - bounded invariants, no drift beyond the reference envelope
-   * - Collisions
-     - Maxwellian fixed point, analytic pitch and energy relaxation, seeded
-       reproducibility
-   * - Wall losses
-     - same wall hit in Cartesian and coordinate space
-   * - NetCDF output
-     - unchanged meaning, units and frame of ``zend``, ``xend_cart``,
-       ``wall_hit_cart``
-   * - GPU and OpenMP
-     - CPU path unchanged when acceleration is off, short-run CPU/GPU
-       agreement, long-run statistical agreement, no CPU slowdown
+=======================  ===================================================
+Subsystem                Must hold after a change
+=======================  ===================================================
+Coordinate transforms    ``ref -> integ -> ref`` roundtrip, periodicity,
+                         explicit :math:`s`, :math:`\sqrt{s}` or :math:`\rho`
+                         at every interface
+VMEC, Boozer, chartmap   same start surface, same short-time orbit within
+                         tolerance, statistically equal loss fraction
+Symplectic integrators   bounded invariants, no drift beyond the reference
+                         envelope
+Collisions               Maxwellian fixed point, analytic pitch and energy
+                         relaxation, seeded reproducibility
+Wall losses              same wall hit in Cartesian and coordinate space
+NetCDF output            unchanged meaning, units and frame of ``zend``,
+                         ``xend_cart``, ``wall_hit_cart``
+GPU and OpenMP           CPU path unchanged when acceleration is off,
+                         short-run CPU/GPU agreement, long-run statistical
+                         agreement, no CPU slowdown
+=======================  ===================================================
 
 Golden records
 --------------
