@@ -89,6 +89,29 @@ result = pysimple.trace_parallel(pysimple.sample())
 
 See `python/README.rst` and `examples/simple_api.py`.
 
+### Changed-line lint
+
+Pull requests check only added/modified lines, so legacy formatting outside the
+change does not block review. Install the two local tools and run the same check from
+the repository root (replace `origin/main` with another base revision when
+needed):
+
+```bash
+python -m pip install fprettify==0.3.7 ruff==0.14.1
+python tools/check_changed_lines.py --base origin/main
+```
+
+The checker compares tracked working files (including staged and unstaged edits)
+against the merge base; stage new files with `git add` first. Free-form Fortran is
+checked against `fprettify` output using `.fprettify`. Python files under
+`python/` and `tools/` use Ruff lint and format checks. Formatter edits and lint
+diagnostics are filtered to changed source lines; files are never rewritten.
+Run the checker's regression tests with:
+
+```bash
+python -m unittest discover -s test/python -p test_changed_line_lint.py -v
+```
+
 ## CPU quickstart
 
 Copy `examples/simple.in` and provide a VMEC file named `wout.nc`:
