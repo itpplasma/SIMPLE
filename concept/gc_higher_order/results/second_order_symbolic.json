@@ -1,0 +1,170 @@
+{
+  "sympy": "1.14.0",
+  "checks": [
+    {
+      "identity": "slab fourth-order sigma4 solvability",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "slab periodic homological equation partial_theta sigma4=Q",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "slab particle energy pullback coefficient 0",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "slab particle energy pullback coefficient 1",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "slab particle energy pullback coefficient 2",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "slab canonical momentum pullback coefficient 0",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "slab canonical momentum pullback coefficient 1",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "slab canonical momentum pullback coefficient 2",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "slab canonical momentum pullback coefficient 3",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "independent slab magnetic action pullback coefficient 0",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "independent slab magnetic action pullback coefficient 1",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "independent slab magnetic action pullback coefficient 2",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "16-point Fourier orthogonality frequency 1",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "16-point Fourier orthogonality frequency 2",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "16-point Fourier orthogonality frequency 3",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "16-point Fourier orthogonality frequency 4",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "16-point Fourier orthogonality frequency 5",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "16-point Fourier orthogonality frequency 6",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "16-point Fourier orthogonality frequency 7",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "16-point Fourier orthogonality frequency 8",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "16-point Fourier orthogonality frequency 9",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "16-point Fourier orthogonality frequency 10",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "16-point Fourier orthogonality frequency 11",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "16-point Fourier orthogonality frequency 12",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "negative Fourier primitive mode 1",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "negative Fourier primitive mode 2",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "negative Fourier primitive mode 3",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "negative Fourier primitive mode 4",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "negative Fourier primitive mode 5",
+      "status": "proved",
+      "method": "SymPy exact"
+    },
+    {
+      "identity": "negative Fourier primitive mode 6",
+      "status": "proved",
+      "method": "SymPy exact"
+    }
+  ],
+  "slab": {
+    "sigma4": "3*g**2*mu**2*sin(2*phi)/(8*(B0 + X*g)**3)",
+    "G2_theta": "-3*g**2*mu*sin(2*phi)/(4*(B0 + X*g)**3)",
+    "G3_parallel": "0",
+    "rho2": [
+      "sqrt(2)*g**2*mu*sqrt(mu*(B0 + X*g))*(-4*sin(phi) + sin(3*phi))/(8*(B0 + X*g)**4)",
+      "sqrt(2)*g**2*mu*sqrt(mu*(B0 + X*g))*(6*cos(phi) - cos(3*phi))/(8*(B0 + X*g)**4)",
+      "0"
+    ],
+    "v2": [
+      "-sqrt(2)*g**2*mu*sqrt(mu*(B0 + X*g))*(12*cos(phi)**3 - cos(phi))/(8*(B0 + X*g)**3)",
+      "sqrt(2)*g**2*mu*sqrt(mu*(B0 + X*g))*(12*sin(phi)**3 - 15*sin(phi))/(8*(B0 + X*g)**3)",
+      "0"
+    ]
+  }
+}

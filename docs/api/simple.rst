@@ -1,8 +1,5 @@
-pysimple package
-================
-
-Python API
-----------
+pysimple
+========
 
 .. automodule:: pysimple
    :members:

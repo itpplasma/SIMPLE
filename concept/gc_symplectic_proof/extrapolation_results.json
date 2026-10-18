@@ -1,0 +1,95 @@
+{
+  "baseline_revision": "9c62300",
+  "production_source_unchanged": true,
+  "command": "make test CONFIG=Fast TEST='^test_gc_field_extrapolation$' VERBOSE=1",
+  "red": {
+    "exit_status": 2,
+    "records": [
+      "Gauss 1 axial=T correction/error/bound    6.457E-06   2.071E-08   8.339E-10",
+      "Gauss 2 axial=T correction/error/bound    1.525E-05   2.566E-08   4.651E-09",
+      "Gauss 3 axial=T correction/error/bound    1.934E-05   2.565E-08   7.477E-09",
+      "Gauss 4 axial=T correction/error/bound    2.133E-05   2.565E-08   9.095E-09",
+      "Gauss 1 axial=F correction/error/bound    1.726E-10   5.012E-13   4.441E-14",
+      "Gauss 2 axial=F correction/error/bound    4.254E-10   6.946E-13   4.441E-14",
+      "Gauss 3 axial=F correction/error/bound    6.959E-10   4.716E-13   4.442E-14",
+      "Gauss 4 axial=F correction/error/bound    8.951E-10   4.614E-13   4.442E-14",
+      "Midpoint multivolume=F tol/correction/error/bound    1.000E-03   2.241E-04   8.893E-06   5.022E-07",
+      "Midpoint multivolume=F tol/correction/error/bound    1.000E-05   3.440E-09   3.416E-10   4.453E-14",
+      "Midpoint multivolume=T tol/correction/error/bound    1.000E-03   2.241E-04   8.893E-06   5.022E-07",
+      "Midpoint multivolume=T tol/correction/error/bound    1.000E-05   3.440E-09   3.416E-10   4.453E-14"
+    ]
+  },
+  "green": {
+    "exit_status": 0,
+    "records": [
+      "Gauss 1 axial=T correction/error/bound    6.457E-06   5.207E-13   8.339E-10",
+      "Gauss 2 axial=T correction/error/bound    1.525E-05   1.468E-12   4.651E-09",
+      "Gauss 3 axial=T correction/error/bound    1.934E-05   1.508E-12   7.477E-09",
+      "Gauss 4 axial=T correction/error/bound    2.133E-05   1.508E-12   9.095E-09",
+      "Gauss 1 axial=F correction/error/bound    1.726E-10   0.000E+00   4.441E-14",
+      "Gauss 2 axial=F correction/error/bound    4.254E-10   0.000E+00   4.441E-14",
+      "Gauss 3 axial=F correction/error/bound    6.959E-10   0.000E+00   4.442E-14",
+      "Gauss 4 axial=F correction/error/bound    8.951E-10   0.000E+00   4.442E-14",
+      "Midpoint multivolume=F tol/correction/error/bound    1.000E-03   2.241E-04   1.050E-09   5.022E-07",
+      "Midpoint multivolume=F tol/correction/error/bound    1.000E-05   3.440E-09   5.551E-17   4.453E-14",
+      "Midpoint multivolume=T tol/correction/error/bound    1.000E-03   2.241E-04   1.050E-09   5.022E-07",
+      "Midpoint multivolume=T tol/correction/error/bound    1.000E-05   3.440E-09   5.551E-17   4.453E-14"
+    ]
+  },
+  "isolated_regressions": {
+    "midpoint_extra_radius": {
+      "exit_status": 2,
+      "rejected": true,
+      "records": [
+        "Gauss 1 axial=T correction/error/bound    6.457E-06   5.207E-13   8.339E-10",
+        "Gauss 2 axial=T correction/error/bound    1.525E-05   1.468E-12   4.651E-09",
+        "Gauss 3 axial=T correction/error/bound    1.934E-05   1.508E-12   7.477E-09",
+        "Gauss 4 axial=T correction/error/bound    2.133E-05   1.508E-12   9.095E-09",
+        "Gauss 1 axial=F correction/error/bound    1.726E-10   0.000E+00   4.441E-14",
+        "Gauss 2 axial=F correction/error/bound    4.254E-10   0.000E+00   4.441E-14",
+        "Gauss 3 axial=F correction/error/bound    6.959E-10   0.000E+00   4.442E-14",
+        "Gauss 4 axial=F correction/error/bound    8.951E-10   0.000E+00   4.442E-14",
+        "Midpoint multivolume=F tol/correction/error/bound    1.000E-03   2.241E-04   8.893E-06   5.022E-07",
+        "Midpoint multivolume=F tol/correction/error/bound    1.000E-05   3.440E-09   3.416E-10   4.453E-14",
+        "Midpoint multivolume=T tol/correction/error/bound    1.000E-03   2.241E-04   8.893E-06   5.022E-07",
+        "Midpoint multivolume=T tol/correction/error/bound    1.000E-05   3.440E-09   3.416E-10   4.453E-14"
+      ]
+    },
+    "gauss_mixed_derivative": {
+      "exit_status": 2,
+      "rejected": true,
+      "records": [
+        "Gauss 1 axial=T correction/error/bound    6.457E-06   2.071E-08   8.339E-10",
+        "Gauss 2 axial=T correction/error/bound    1.525E-05   2.566E-08   4.651E-09",
+        "Gauss 3 axial=T correction/error/bound    1.934E-05   2.565E-08   7.477E-09",
+        "Gauss 4 axial=T correction/error/bound    2.133E-05   2.565E-08   9.095E-09",
+        "Gauss 1 axial=F correction/error/bound    1.726E-10   2.977E-13   4.441E-14",
+        "Gauss 2 axial=F correction/error/bound    4.254E-10   3.213E-13   4.441E-14",
+        "Gauss 3 axial=F correction/error/bound    6.959E-10   3.048E-13   4.442E-14",
+        "Gauss 4 axial=F correction/error/bound    8.951E-10   3.044E-13   4.442E-14",
+        "Midpoint multivolume=F tol/correction/error/bound    1.000E-03   2.241E-04   1.050E-09   5.022E-07",
+        "Midpoint multivolume=F tol/correction/error/bound    1.000E-05   3.440E-09   5.551E-17   4.453E-14",
+        "Midpoint multivolume=T tol/correction/error/bound    1.000E-03   2.241E-04   1.050E-09   5.022E-07",
+        "Midpoint multivolume=T tol/correction/error/bound    1.000E-05   3.440E-09   5.551E-17   4.453E-14"
+      ]
+    },
+    "gauss_missing_parallel_momentum": {
+      "exit_status": 2,
+      "rejected": true,
+      "records": [
+        "Gauss 1 axial=T correction/error/bound    6.457E-06   5.207E-13   8.339E-10",
+        "Gauss 2 axial=T correction/error/bound    1.525E-05   1.468E-12   4.651E-09",
+        "Gauss 3 axial=T correction/error/bound    1.934E-05   1.508E-12   7.477E-09",
+        "Gauss 4 axial=T correction/error/bound    2.133E-05   1.508E-12   9.095E-09",
+        "Gauss 1 axial=F correction/error/bound    1.726E-10   5.012E-13   4.441E-14",
+        "Gauss 2 axial=F correction/error/bound    4.254E-10   6.946E-13   4.441E-14",
+        "Gauss 3 axial=F correction/error/bound    6.959E-10   4.716E-13   4.442E-14",
+        "Gauss 4 axial=F correction/error/bound    8.951E-10   4.614E-13   4.442E-14",
+        "Midpoint multivolume=F tol/correction/error/bound    1.000E-03   2.241E-04   1.050E-09   5.022E-07",
+        "Midpoint multivolume=F tol/correction/error/bound    1.000E-05   3.440E-09   5.551E-17   4.453E-14",
+        "Midpoint multivolume=T tol/correction/error/bound    1.000E-03   2.241E-04   1.050E-09   5.022E-07",
+        "Midpoint multivolume=T tol/correction/error/bound    1.000E-05   3.440E-09   5.551E-17   4.453E-14"
+      ]
+    }
+  }
+}

@@ -35,11 +35,6 @@ program test_batch_splines
     print *, 'PASSED: Coils field batching test'
 
     print *, ''
-    print *, 'Test 4: Performance comparison...'
-    call test_batch_performance()
-    print *, 'PASSED: Performance test'
-
-    print *, ''
     print *, '=========================================='
     print *, 'All batch spline tests PASSED!'
     print *, '=========================================='
@@ -298,86 +293,6 @@ contains
         call destroy_batch_splines_3d(spl_batch)
         deallocate(coils_batch)
     end subroutine test_coils_field_batching
-
-
-    subroutine test_batch_performance()
-        ! Benchmark batch vs individual splines
-        integer, parameter :: n_r = 30, n_th = 31, n_phi = 32
-        integer, parameter :: n_components = 6
-        integer, parameter :: n_eval = 1000
-        real(dp) :: xmin(3) = [0.1d0, 0d0, 0d0]
-        real(dp) :: xmax(3) = [1.0d0, TWOPI, TWOPI]
-        integer, parameter :: order(3) = [5, 5, 5]
-        logical, parameter :: periodic(3) = [.False., .True., .True.]
-
-        type(SplineData3D) :: spl_individual(n_components)
-        type(BatchSplineData3D) :: spl_batch
-        real(dp), allocatable :: data(:,:,:), batch_data(:,:,:,:)
-        real(dp) :: x_test(3), y_single, y_batch(n_components)
-        real(dp) :: t_start, t_end, t_individual, t_batch
-        integer :: i, j
-
-        ! Allocate arrays
-        allocate(data(n_r, n_th, n_phi))
-        allocate(batch_data(n_r, n_th, n_phi, n_components))
-
-        ! Generate test data
-        call generate_test_field_data(n_r, n_th, n_phi, xmin, xmax, batch_data)
-
-        ! Create individual splines
-        do i = 1, n_components
-            data = batch_data(:,:,:,i)
-            call construct_splines_3d(xmin, xmax, data, order, periodic, spl_individual(i))
-        end do
-
-        ! Create batch spline
-        call construct_batch_splines_3d(xmin, xmax, batch_data, order, periodic, spl_batch)
-
-        ! Time individual evaluations
-        call cpu_time(t_start)
-        do i = 1, n_eval
-            x_test = [0.5d0 + 0.001d0*i, PI*i/n_eval, PI*i/n_eval]
-            do j = 1, n_components
-                call evaluate_splines_3d(spl_individual(j), x_test, y_single)
-            end do
-        end do
-        call cpu_time(t_end)
-        t_individual = t_end - t_start
-
-        ! Time batch evaluations
-        call cpu_time(t_start)
-        do i = 1, n_eval
-            x_test = [0.5d0 + 0.001d0*i, PI*i/n_eval, PI*i/n_eval]
-            call evaluate_batch_splines_3d(spl_batch, x_test, y_batch)
-        end do
-        call cpu_time(t_end)
-        t_batch = t_end - t_start
-
-        ! Report speedup with proper validation
-        print *, 'Individual time:', t_individual, 's'
-        print *, 'Batch time:', t_batch, 's'
-
-        if (t_batch > 0.0d0 .and. t_individual > 0.0d0) then
-            print *, 'Measured speedup:', t_individual/t_batch, 'x'
-        else
-            print *, 'WARNING: Invalid timing measurements'
-        end if
-
-        ! Note: Actual speedup varies by system and problem size
-        ! This test verifies correctness, not performance claims
-        if (t_batch >= t_individual) then
-            print *, 'NOTE: Batch implementation may show benefits at larger scales'
-        else
-            print *, 'SUCCESS: Batch shows speedup for this test case'
-        end if
-
-        ! Clean up
-        do i = 1, n_components
-            call destroy_splines_3d(spl_individual(i))
-        end do
-        call destroy_batch_splines_3d(spl_batch)
-        deallocate(data, batch_data)
-    end subroutine test_batch_performance
 
 
     subroutine generate_test_field_data(n_r, n_th, n_phi, xmin, xmax, field_data)

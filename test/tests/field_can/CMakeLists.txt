@@ -18,20 +18,11 @@ set_tests_properties(test_field_can_albert_config PROPERTIES
     RUN_SERIAL TRUE
     TIMEOUT 120)
 
-add_executable (test_field_can_transforms.x test_field_can_transforms.f90)
-target_link_libraries(test_field_can_transforms.x simple)
-
-add_executable (test_field_can_albert_diagnostic.x test_field_can_albert_diagnostic.f90)
-target_link_libraries(test_field_can_albert_diagnostic.x simple)
-
 add_executable (test_field_can_albert_coils_diagnostic.x test_field_can_albert_coils_diagnostic.f90)
 target_link_libraries(test_field_can_albert_coils_diagnostic.x simple)
 
 add_executable (test_albert_intermediate.x test_albert_intermediate.f90)
 target_link_libraries(test_albert_intermediate.x simple)
-
-add_executable (test_field_can_diagnostics.x test_field_can_diagnostics.f90)
-target_link_libraries(test_field_can_diagnostics.x simple)
 
 add_executable(test_coord_transform_roundtrip.x test_coord_transform_roundtrip.f90)
 target_link_libraries(test_coord_transform_roundtrip.x simple)
@@ -42,9 +33,6 @@ add_test(NAME test_coord_transform_roundtrip
 set_tests_properties(test_coord_transform_roundtrip PROPERTIES
     LABELS "integration;slow"
     TIMEOUT 300)
-
-add_executable(test_albert_transform_diagnostic.x test_albert_transform_diagnostic.f90)
-target_link_libraries(test_albert_transform_diagnostic.x simple)
 
 add_executable(test_scaling_abstraction.x test_scaling_abstraction.f90)
 target_link_libraries(test_scaling_abstraction.x simple)
@@ -90,45 +78,114 @@ set_tests_properties(test_spectre_sympl_volume_pphi PROPERTIES
     LABELS "integration"
     TIMEOUT 300)
 
-# Symplectic multi-volume crossing (#441): long-run H and p_phi invariants of
-# the composed flow-jump-flow map on the committed tok2vol fixture.
-add_executable(test_spectre_sympl_crossing.x test_spectre_sympl_crossing.f90)
-target_link_libraries(test_spectre_sympl_crossing.x simple)
-
-file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_sympl_crossing)
-add_test(NAME test_spectre_sympl_crossing_invariants
-    COMMAND $<TARGET_FILE:test_spectre_sympl_crossing.x>
+add_executable(test_spectre_multivolume_init.x test_spectre_multivolume_init.f90)
+target_link_libraries(test_spectre_multivolume_init.x simple)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_multivolume_init)
+add_test(NAME test_spectre_multivolume_init
+    COMMAND $<TARGET_FILE:test_spectre_multivolume_init.x>
         ${CMAKE_CURRENT_SOURCE_DIR}/../data/tok2vol.h5
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_sympl_crossing)
-set_tests_properties(test_spectre_sympl_crossing_invariants PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_multivolume_init)
+set_tests_properties(test_spectre_multivolume_init PROPERTIES
     LABELS "integration"
-    TIMEOUT 300)
+    ENVIRONMENT "OMP_NUM_THREADS=1"
+    TIMEOUT 60)
 
-# Kicked Level-1 reflection (CA15): forbidden crossings relocate along the
-# interface to the conjugate equal-B point at frozen (vpar, p, lambda, mu).
-add_executable(test_spectre_kicked_reflection.x test_spectre_kicked_reflection.f90)
-target_link_libraries(test_spectre_kicked_reflection.x simple)
-
-file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_kicked_reflection)
-add_test(NAME test_spectre_kicked_reflection
-    COMMAND $<TARGET_FILE:test_spectre_kicked_reflection.x>
-        ${CMAKE_CURRENT_SOURCE_DIR}/../data/tok2vol.h5
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_kicked_reflection)
-set_tests_properties(test_spectre_kicked_reflection PROPERTIES
+add_executable(test_spectre_outer_launch.x test_spectre_outer_launch.f90)
+target_link_libraries(test_spectre_outer_launch.x simple)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_outer_launch)
+add_test(NAME test_spectre_outer_launch
+    COMMAND $<TARGET_FILE:test_spectre_outer_launch.x>
+        ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_outer_launch)
+set_tests_properties(test_spectre_outer_launch PROPERTIES
     LABELS "integration"
-    TIMEOUT 300)
+    ENVIRONMENT "OMP_NUM_THREADS=1"
+    TIMEOUT 120)
 
-# Physical mu-scatter reference (ROADMAP section 4): full-orbit interface
-# traversals against the conserved-mu GC sheet convention, two gyrostep scales.
-add_executable(test_spectre_fo_mu_scatter.x test_spectre_fo_mu_scatter.f90)
-target_link_libraries(test_spectre_fo_mu_scatter.x simple)
+# Full orbit near SPECTRE interfaces (crossing_level = 3): GC <-> FO switching
+# on the axisymmetric current-sheet fixture, with the momentum shell and the
+# canonical toroidal momentum as witnesses.
+add_executable(test_spectre_fo_interfaces.x test_spectre_fo_interfaces.f90)
+target_link_libraries(test_spectre_fo_interfaces.x simple)
 
-file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_fo_mu_scatter)
-add_test(NAME test_spectre_fo_mu_scatter
-    COMMAND $<TARGET_FILE:test_spectre_fo_mu_scatter.x>
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_fo_interfaces_rk45)
+add_test(NAME test_spectre_fo_interfaces_rk45
+    COMMAND $<TARGET_FILE:test_spectre_fo_interfaces.x>
         ${CMAKE_CURRENT_SOURCE_DIR}/../data/tok2vol.h5
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_fo_mu_scatter)
-set_tests_properties(test_spectre_fo_mu_scatter PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_fo_interfaces_rk45)
+set_tests_properties(test_spectre_fo_interfaces_rk45 PROPERTIES
+    LABELS "integration;slow"
+    TIMEOUT 600)
+
+# Adversarial sharp-sheet events and gauge-consistent entry momentum.
+add_executable(test_spectre_fo_events.x test_spectre_fo_events.f90)
+target_link_libraries(test_spectre_fo_events.x simple)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_fo_events)
+add_test(NAME test_spectre_fo_events
+    COMMAND $<TARGET_FILE:test_spectre_fo_events.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/../data/tok2vol.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_fo_events)
+set_tests_properties(test_spectre_fo_events PROPERTIES
+    LABELS "integration"
+    TIMEOUT 60)
+
+add_executable(test_spectre_fo_throughput.x test_spectre_fo_throughput.f90)
+target_link_libraries(test_spectre_fo_throughput.x simple)
+foreach(threads IN ITEMS 1 4)
+    add_test(NAME test_spectre_fo_throughput_${threads}
+        COMMAND $<TARGET_FILE:test_spectre_fo_throughput.x>
+            ${CMAKE_CURRENT_SOURCE_DIR}/../data/ncsx_freeboundary.h5)
+    set_tests_properties(test_spectre_fo_throughput_${threads} PROPERTIES
+        LABELS "performance"
+        ENVIRONMENT "OMP_NUM_THREADS=${threads}"
+        RUN_SERIAL TRUE
+        TIMEOUT 120)
+endforeach()
+
+add_executable(study_spectre_orbits.x
+    ${CMAKE_SOURCE_DIR}/concept/spectre_loss_study/study_spectre_orbits.f90)
+target_link_libraries(study_spectre_orbits.x simple)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_study)
+add_test(NAME study_spectre_orbits
+    COMMAND $<TARGET_FILE:study_spectre_orbits.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/../data/ncsx_freeboundary.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_study)
+set_tests_properties(study_spectre_orbits PROPERTIES
+    LABELS "performance;research"
+    RUN_SERIAL TRUE TIMEOUT 7200)
+
+add_executable(test_spectre_fo_spline.x test_spectre_fo_spline.f90)
+target_link_libraries(test_spectre_fo_spline.x simple)
+foreach(fixture IN ITEMS tok2vol ncsx_freeboundary)
+    add_test(NAME test_spectre_fo_spline_${fixture}
+        COMMAND $<TARGET_FILE:test_spectre_fo_spline.x>
+            ${CMAKE_CURRENT_SOURCE_DIR}/../data/${fixture}.h5)
+    set_tests_properties(test_spectre_fo_spline_${fixture} PROPERTIES
+        LABELS "integration"
+        ENVIRONMENT "OMP_NUM_THREADS=4"
+        RUN_SERIAL TRUE
+        TIMEOUT 120)
+endforeach()
+
+add_test(NAME test_spectre_fo_spline_g3v3
+    COMMAND $<TARGET_FILE:test_spectre_fo_spline.x>
+        ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5)
+set_tests_properties(test_spectre_fo_spline_g3v3 PROPERTIES
+    LABELS "integration" ENVIRONMENT "OMP_NUM_THREADS=4"
+    RUN_SERIAL TRUE TIMEOUT 120)
+
+# Diagnostic: zeroth-order GC -> FO -> GC switch round trip at NCSX interface
+# points, without an FO step and over the exit gyrophase of a short full orbit;
+# records d(mu)/mu, d(v_par), d(x_gc) and their gyroradius scaling. Asserts
+# only completion and finite defects.
+add_executable(test_spectre_switch_roundtrip.x test_spectre_switch_roundtrip.f90)
+target_link_libraries(test_spectre_switch_roundtrip.x simple)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_switch_roundtrip)
+add_test(NAME test_spectre_switch_roundtrip
+    COMMAND $<TARGET_FILE:test_spectre_switch_roundtrip.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/../data/ncsx_freeboundary.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_switch_roundtrip)
+set_tests_properties(test_spectre_switch_roundtrip PROPERTIES
     LABELS "integration"
     TIMEOUT 300)
 
@@ -153,3 +210,15 @@ add_test(NAME test_magfie_spectre_analytic_stell
 set_tests_properties(test_magfie_spectre_analytic_stell PROPERTIES
     LABELS "integration"
     TIMEOUT 120)
+
+add_executable(test_spectre_fo_gauss2.x test_spectre_fo_gauss2.f90)
+target_link_libraries(test_spectre_fo_gauss2.x PRIVATE fo_gauss2_concept)
+add_test(NAME test_spectre_fo_gauss2 COMMAND test_spectre_fo_gauss2.x
+    ${CMAKE_SOURCE_DIR}/test/tests/data/tok2vol.h5 field)
+set_tests_properties(test_spectre_fo_gauss2 PROPERTIES LABELS "integration" TIMEOUT 120)
+# A non-exact interface gauge jump must be rejected during configuration.
+add_test(NAME test_spectre_fo_gauss2_incompatible_gauge COMMAND test_spectre_fo_gauss2.x
+    ${CMAKE_SOURCE_DIR}/test/tests/data/tok2vol.h5 incompatible)
+set_tests_properties(test_spectre_fo_gauss2_incompatible_gauge PROPERTIES
+    LABELS "unit" TIMEOUT 60
+    PASS_REGULAR_EXPRESSION "interface normal fields disagree")

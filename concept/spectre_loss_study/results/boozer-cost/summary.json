@@ -1,0 +1,120 @@
+{
+ "wout_url": "https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_li383_low_res_reference.nc",
+ "duration_s": 0.002,
+ "threads": 16,
+ "cases": {
+  "x10_default": {
+   "model": "boozer_gc",
+   "integmode": 1,
+   "npoiper2": 256,
+   "markers": 2560,
+   "losses": 515,
+   "trace_s": 5.387166082626209,
+   "setup_s": 2.9041998751927167,
+   "particle_s": 4.382674446516538,
+   "core_s_per_particle_s": 19.66713667051612,
+   "vs_boozer_default": 1.0,
+   "vs_boozer_same_step": 0.1377711328416461
+  },
+  "x10_mid256": {
+   "model": "boozer_gc",
+   "integmode": 3,
+   "npoiper2": 256,
+   "markers": 2560,
+   "losses": 526,
+   "trace_s": 10.17063287482597,
+   "setup_s": 2.9041998751927167,
+   "particle_s": 4.3760254284060505,
+   "core_s_per_particle_s": 37.18674140714244,
+   "vs_boozer_default": 1.8908060705598668,
+   "vs_boozer_same_step": 0.2604984943248943
+  },
+  "x10_matched": {
+   "model": "boozer_gc",
+   "integmode": 3,
+   "npoiper2": 1024,
+   "markers": 2560,
+   "losses": 527,
+   "trace_s": 39.05092941690236,
+   "setup_s": 2.9041998751927167,
+   "particle_s": 4.376918409156192,
+   "core_s_per_particle_s": 142.7522316530669,
+   "vs_boozer_default": 7.258414584929037,
+   "vs_boozer_same_step": 1.0
+  },
+  "hybrid": {
+   "model": "spectre_hybrid",
+   "entry_larmor": 3.0,
+   "markers": 256,
+   "losses": 98,
+   "numerical_stops": 0,
+   "fo_failures": 0,
+   "warning_holds": 0,
+   "trace_s": 191.47821900015697,
+   "setup_s": 9.475170999998227,
+   "particle_s": 0.3332505324478314,
+   "fo_time_fraction": 0.29989167116138554,
+   "core_s_per_particle_s": 3851.5958446384448,
+   "thread_efficiency": 0.41895965135810187,
+   "load_average": [
+    9.490234375,
+    10.40771484375,
+    8.53857421875
+   ],
+   "pure_gc_markers": 77,
+   "pure_gc_core_s_per_particle_s": 384.9945129836662,
+   "pure_gc_us_per_step": 8.04754416771052,
+   "pure_gc_step_ns": 20.90301003342337,
+   "vs_boozer_default": 195.83917624432559,
+   "vs_boozer_same_step": 26.980985165955524
+  },
+  "gcprobe": {
+   "model": "spectre_hybrid",
+   "entry_larmor": 0.01,
+   "markers": 256,
+   "losses": 104,
+   "numerical_stops": 0,
+   "fo_failures": 0,
+   "warning_holds": 0,
+   "trace_s": 32.404214000096545,
+   "setup_s": 9.379995000083,
+   "particle_s": 0.33360691806470033,
+   "fo_time_fraction": 0.024838140148449525,
+   "core_s_per_particle_s": 699.8206552626003,
+   "thread_efficiency": 0.4502983238528012,
+   "load_average": [
+    9.69384765625,
+    10.32763671875,
+    8.61376953125
+   ],
+   "pure_gc_markers": 151,
+   "pure_gc_core_s_per_particle_s": 399.51681834351706,
+   "pure_gc_us_per_step": 8.35109535045569,
+   "pure_gc_step_ns": 20.902988227332038,
+   "vs_boozer_default": 35.58325072870077,
+   "vs_boozer_same_step": 4.902344763081435
+  },
+  "fo": {
+   "model": "spectre_fo",
+   "entry_larmor": 3.0,
+   "markers": 256,
+   "losses": 101,
+   "numerical_stops": 0,
+   "fo_failures": 0,
+   "warning_holds": 0,
+   "trace_s": 349.84414800000377,
+   "setup_s": 9.470642999978736,
+   "particle_s": 0.3349993518528529,
+   "fo_time_fraction": 1.0000000000020262,
+   "core_s_per_particle_s": 11629.303723878886,
+   "thread_efficiency": 0.6959901345125818,
+   "load_average": [
+    10.06201171875,
+    13.40966796875,
+    11.052734375
+   ],
+   "vs_boozer_default": 591.3063969964114,
+   "vs_boozer_same_step": 81.46495217070773
+  }
+ }
+}

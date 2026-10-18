@@ -1,0 +1,48 @@
+{
+  "date": "2026-10-15",
+  "boundary_fix_commit": "535bc9e",
+  "scope_fix_commit": "5e88fe5",
+  "ledger_commit": "c957615",
+  "outer_exclusion_reversion": {
+    "command": "make test CONFIG=Fast TEST='^(test_spectre_outer_launch|test_spectre_multivolume_init)$' VERBOSE=1",
+    "failed": 2,
+    "total": 2,
+    "errors": [
+      "hybrid wall orbit differs from direct FO",
+      "outside particle is not lost immediately"
+    ]
+  },
+  "integrated_broad": {
+    "command": "make test CONFIG=Fast TEST='(spectre|test_simple_api)' VERBOSE=1",
+    "passed": 24,
+    "total": 25,
+    "seconds": 350.56,
+    "failure": "test_spectre_sympl_volume: initial wall repair affected the separate single-volume GC contract"
+  },
+  "integrated_scope_rerun": {
+    "command": "make test CONFIG=Fast TEST='^(test_spectre_sympl_volume|test_spectre_outer_launch|test_spectre_multivolume_init)$' VERBOSE=1",
+    "passed": 3,
+    "total": 3,
+    "seconds": 27.39,
+    "note": "Original single-volume starts, energy and bounds unchanged. Other 22 affected results reused; multi-volume equations unchanged."
+  },
+  "focused_pr": {
+    "base": "perf/spectre-fo-logical-spline@47d3fb0",
+    "fix": "fda97de",
+    "passed": 9,
+    "total": 9,
+    "seconds": 87.83,
+    "scope_rerun_revision": "5bc01da",
+    "scope_rerun_passed": 3,
+    "scope_rerun_total": 3,
+    "scope_rerun_seconds": 29.01,
+    "python_interface": "OFF; Python fixture helper uses the existing root Python 3.14 environment"
+  },
+  "limits": [
+    "Full suite not repeated after boundary repair; affected checks and current-generation prior results reused.",
+    "CI not awaited. Domain/senior review remains required for promotion.",
+    "Gremlin status unavailable: Gremlin state provider error: 2; native Make/CMake authority used.",
+    "The separate single-volume GC loss convention is preserved.",
+    "Phase-consistent production switching and pathwise GC-step convergence remain open."
+  ]
+}
