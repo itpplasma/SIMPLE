@@ -7,7 +7,7 @@ module simple_main
         ORBIT_FO_NUMERICAL
     use diag_mod, only: icounter
     use collis_alp, only: loacol_alpha, stost, init_collision_profiles, &
-        configure_lorentz_nustar, stost_lorentz
+                          configure_lorentz_nustar, stost_lorentz
     use magfie_sub, only: ALBERT, SPECTRE
     use samplers, only: sample
     use field_can_mod, only: field_can_t, evaluate_field => evaluate, &
@@ -1378,8 +1378,8 @@ contains
 
     subroutine init_collisions
         use params, only: am1, am2, Z1, Z2, particle_energy_eV_effective, &
-            collision_model, nu_star_standard, lorentz_major_radius_cm, &
-            lorentz_iota, lorentz_nu, dchichi, slowrate, &
+                          collision_model, nu_star_standard, lorentz_major_radius_cm, &
+                          lorentz_iota, lorentz_nu, dchichi, slowrate, &
             dchichi_norm, slowrate_norm, v0
         use simple_profiles, only: Te_scale, Ti1_scale, Ti2_scale, &
             ni1_scale, ni2_scale
@@ -1390,9 +1390,9 @@ contains
         ealpha = particle_energy_eV_effective
         if (trim(collision_model) == 'lorentz_nustar') then
             call configure_lorentz_nustar(nu_star_standard, &
-                lorentz_major_radius_cm, lorentz_iota, v0)
+                                          lorentz_major_radius_cm, lorentz_iota, v0)
             lorentz_nu = nu_star_standard*abs(lorentz_iota)*v0 &
-                /lorentz_major_radius_cm
+                         /lorentz_major_radius_cm
             dchichi = lorentz_nu
             slowrate = 0.0_dp
             dchichi_norm = lorentz_nu/v0

@@ -1,7 +1,7 @@
 program test_radial_electric_potential
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use field_can_base, only: field_can_t, apply_radial_electric_potential, &
-        set_radial_electric_potential_slope
+                              set_radial_electric_potential_slope
     use field_can_mod, only: get_derivatives, get_derivatives2
     implicit none
 

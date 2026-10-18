@@ -45,7 +45,7 @@ contains
 
         call getran(1, ur)
         dalam = sqrt(2.0_wp*lorentz_dhh*coala*dtauc)*real(ur, wp) &
-            - 2.0_wp*alam*lorentz_dhh*dtauc
+                - 2.0_wp*alam*lorentz_dhh*dtauc
         alam = alam + dalam
         if (alam > 1.0_wp) then
             alam = 2.0_wp - alam

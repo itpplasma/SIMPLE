@@ -3,7 +3,7 @@ program test_profiles
     use simple_profiles
     use collis_alp
     use params, only: facE_al, particle_energy_eV, resolve_particle_energy, &
-        deterministic, ran_seed, reset_seed_if_deterministic
+                      deterministic, ran_seed, reset_seed_if_deterministic
     implicit none
 
     logical :: all_passed
@@ -161,7 +161,7 @@ contains
         nu = nustar*abs(iota)*vref/radius
         p1_exact = lambda0*exp(-nu*real(nstep, dp)*dt)
         p2_exact = 0.5_dp*(3.0_dp*lambda0**2 - 1.0_dp) &
-            *exp(-3.0_dp*nu*real(nstep, dp)*dt)
+                   *exp(-3.0_dp*nu*real(nstep, dp)*dt)
         if (abs(p1_mean - p1_exact) > moment_tolerance .or. &
             abs(p2_mean - p2_exact) > moment_tolerance) then
             print *, '  FAIL: moments numerical/exact', p1_mean, p1_exact, &

@@ -336,10 +336,10 @@ contains
         status = nf90_put_att(ncid, nf90_global, 'facE_al', facE_al)
         call check_nc(status, 'put_att facE_al')
         status = nf90_put_att(ncid, nf90_global, 'particle_energy_eV_input', &
-            particle_energy_eV)
+                              particle_energy_eV)
         call check_nc(status, 'put_att particle_energy_eV_input')
         status = nf90_put_att(ncid, nf90_global, 'particle_energy_eV', &
-            particle_energy_eV_effective)
+                              particle_energy_eV_effective)
         call check_nc(status, 'put_att particle_energy_eV')
         status = nf90_put_att(ncid, nf90_global, 'particle_mass_number', n_d)
         call check_nc(status, 'put_att particle_mass_number')
@@ -348,20 +348,20 @@ contains
         status = nf90_put_att(ncid, nf90_global, 'v0', v0)
         call check_nc(status, 'put_att v0')
         status = nf90_put_att(ncid, nf90_global, 'collision_model', &
-            trim(collision_model))
+                              trim(collision_model))
         call check_nc(status, 'put_att collision_model')
         status = nf90_put_att(ncid, nf90_global, 'nu_star_standard', &
-            nu_star_standard)
+                              nu_star_standard)
         call check_nc(status, 'put_att nu_star_standard')
         status = nf90_put_att(ncid, nf90_global, 'lorentz_major_radius_cm', &
-            lorentz_major_radius_cm)
+                              lorentz_major_radius_cm)
         call check_nc(status, 'put_att lorentz_major_radius_cm')
         status = nf90_put_att(ncid, nf90_global, 'lorentz_iota', lorentz_iota)
         call check_nc(status, 'put_att lorentz_iota')
         status = nf90_put_att(ncid, nf90_global, 'lorentz_nu_s-1', lorentz_nu)
         call check_nc(status, 'put_att lorentz_nu_s-1')
         status = nf90_put_att(ncid, nf90_global, &
-            'radial_electric_potential_slope', radial_electric_potential_slope)
+                     'radial_electric_potential_slope', radial_electric_potential_slope)
         call check_nc(status, 'put_att radial_electric_potential_slope')
         status = nf90_put_att(ncid, nf90_global, 'integmode', integmode)
         call check_nc(status, 'put_att integmode')

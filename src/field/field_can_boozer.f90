@@ -1,7 +1,7 @@
 module field_can_boozer
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use field_can_base, only: field_can_t, n_field_evaluations, twopi, &
-        apply_radial_electric_potential
+                              apply_radial_electric_potential
 
     implicit none
 

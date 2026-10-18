@@ -488,15 +488,15 @@ contains
 
 	    subroutine params_init
 	        real(dp) :: E_alpha
-            integer :: energy_status
+        integer :: energy_status
 	        integer :: L1i
 	        real(dp) :: weight_sum, cumul_weight, w
 	        integer :: i, nintv
 	        integer(8) :: kt_target, kt_prev
 	        character(16) :: grid_kind
-            call resolve_particle_energy(E_alpha, energy_status)
-            if (energy_status /= 0) error stop 'Invalid particle energy configuration'
-            particle_energy_eV_effective = E_alpha
+        call resolve_particle_energy(E_alpha, energy_status)
+        if (energy_status /= 0) error stop 'Invalid particle energy configuration'
+        particle_energy_eV_effective = E_alpha
 
 	        if (isw_field_type == TEST) then
             ! TEST field uses normalized units: B0=1, R0=1, a=0.5
