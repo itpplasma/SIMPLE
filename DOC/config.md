@@ -69,3 +69,17 @@ are listed in `examples/simple_full.in`.
   their original ordering/identity rather than treating local row numbers as
   global IDs. Offset plus source row must be between 1 and 2147483646.
   Different deterministic streams are not a proof of statistical independence.
+
+* The full Coulomb operator subcycles each collision interval using coefficients
+  at the current momentum. `stost`'s optional `max_substep_fraction` (default
+  0.1, supported range 0 < fraction <= 0.25) controls numerical resolution:
+  `dhh*h <= fraction^2`, `abs(fpeff)*h <= fraction*p`, and, when energy
+  diffusion is active, `sqrt(6*dpp*h) <= fraction*p`. These bounds are selected
+  before random draws. They introduce no thermalization or energy cutoff.
+  Pitch diffusion uses an isotropic random rotation through
+  `sqrt(4*dhh*h)` rather than an Euler pitch kick followed by reflection or a
+  random reset. Its generator is the same Lorentz pitch operator, to first
+  weak order in the substep. Energy diffusion and drift retain their existing
+  generator and uniform, unit-variance radial noise. A substep underflow or
+  the 100000-substep budget limit returns an explicit error with the original
+  state restored. Exact vacuum leaves both the state and RNG untouched.
