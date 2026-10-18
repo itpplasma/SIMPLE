@@ -1,0 +1,39 @@
+name: Feature request
+description: A new capability or a change of existing behaviour.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What do you want to compute or do that SIMPLE does not support?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: >-
+        Inputs, outputs and behaviour you have in mind. Name the coordinate
+        and unit conventions where relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation
+      description: >-
+        How could the result be checked: an analytic case, a reference code,
+        a published result or a conserved quantity?
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - I would like to implement this myself
+        - I can help with testing or validation
+        - I am only suggesting it
