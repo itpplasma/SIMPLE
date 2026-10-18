@@ -41,6 +41,9 @@ module simple_api
     type(tracer_t), save :: tracer
     integer, save :: active_field = FIELD_NONE
     real(dp), save :: sampling_surface = -1.0_dp
+    !> reallocate_arrays resets the starting-line arrays (xstart, volstart) that
+    !> init_starting_surf fills, so they must be integrated again before sampling.
+    logical, save :: starting_line_stale = .true.
 
 contains
 
@@ -98,6 +101,7 @@ contains
         call validate_orbit_model_config
         call init_run(tracer)
         call init_sampling_field
+        starting_line_stale = .false.
         active_field = FIELD_SAMPLING
         sampling_surface = sbeg(1)
     end subroutine simple_init
@@ -108,7 +112,7 @@ contains
         real(dp), intent(out) :: z(5, n)
 
         call allocate_particles(n)
-        call use_sampling_field
+        call use_sampling_field(needs_starting_line=.true.)
         call sample_start
         z = zstart(1:5, 1:n)
     end subroutine simple_sample
@@ -294,6 +298,7 @@ contains
 
         ntestpart = n
         call reallocate_arrays
+        starting_line_stale = .true.
     end subroutine allocate_particles
 
     subroutine set_start_surface(s)
@@ -310,14 +315,22 @@ contains
         end if
     end subroutine set_start_surface
 
-    subroutine use_sampling_field
+    subroutine use_sampling_field(needs_starting_line)
         ! The starting field line depends on sbeg(1); integrate it only when the
-        ! sampling field is not active on that surface.
+        ! sampling field is not active on that surface, or when the caller
+        ! samples and the line arrays were reset by reallocate_arrays.
+        logical, intent(in), optional :: needs_starting_line
+        logical :: refill
+
         if (active_field == FIELD_NONE) error stop 'simple_api: call simple_init first'
-        if (active_field == FIELD_SAMPLING) then
+        refill = .false.
+        if (present(needs_starting_line)) refill = needs_starting_line .and. &
+                                                   starting_line_stale
+        if (active_field == FIELD_SAMPLING .and. .not. refill) then
             if (abs(sbeg(1) - sampling_surface) <= 0.0_dp) return
         end if
         call init_sampling_field
+        starting_line_stale = .false.
         active_field = FIELD_SAMPLING
         sampling_surface = sbeg(1)
     end subroutine use_sampling_field
