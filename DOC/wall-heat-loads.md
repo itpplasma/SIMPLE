@@ -120,7 +120,9 @@ in $[-0.2, 0.2]$, selecting trapped orbits rather than prompt passing losses.
 
 The stored collisionless reference is 21 hits (tolerance two markers), with
 mean hit time 237.55 $\mu$s (3% tolerance). Reference hits span 81.40 to
-420.45 $\mu$s, beyond ten birth-speed reference transits.
+420.45 $\mu$s, beyond ten birth-speed reference transits. The finite-density
+reference gives 24 hits from 96.13 to 467.19 $\mu$s; 23 hits after twenty
+reference transits have mean $E_\mathrm{hit}/E_0 = 0.29369$.
 
 The fixture profiles and time scales are:
 
@@ -137,7 +139,7 @@ The fixture profiles and time scales are:
 The rate uses the implemented collision coefficients at $p=1$, including both
 ion species and electrons. Constant power-series coefficients make it uniform
 throughout the chart. A fraction of the birth relaxation time resolves slowing
-down while the markers remain suprathermal; the trace spans about 71 reference
+down with finite-energy wall losses; the trace spans about 71 reference
 transit times. Hits must occur after ten reference transit times, and the
 slowing-down check selects hits after twenty. These reference times use the
 birth speed, rather than each marker's pitch-dependent bounce period. This is
