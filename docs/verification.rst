@@ -104,7 +104,7 @@ pytest and SciPy are used by the report helper tests. The Python/Fortran
 .. code-block:: console
 
    make build-deterministic CONFIG=Fast
-   make test CONFIG=Fast TEST='^test_verification_report$'
+   make test CONFIG=Fast TEST='^test_verification_report$$'
    python tools/generate_verification_report.py
 
 Read ``build/output/verification-report/verification-report.md`` alongside its

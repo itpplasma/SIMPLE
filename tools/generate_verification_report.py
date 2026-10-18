@@ -135,7 +135,8 @@ def metric(log: str, pattern: str) -> float:
 
 
 def consumer_checks(runner: Runner) -> list[dict]:
-    pattern = "^(" + "|".join(TESTS) + ")$"
+    # Make expands command-line variables; $$ preserves the CTest end anchor.
+    pattern = "^(" + "|".join(TESTS) + ")$$"
     log = runner.run(
         ["make", "test", "CONFIG=Fast", f"TEST={pattern}", "VERBOSE=1"],
         REPO,

@@ -242,7 +242,7 @@ jobs:
         run: make build-deterministic CONFIG=Fast FLAGS='-DENABLE_PYTHON_INTERFACE=OFF'
 
       - name: Test report helpers
-        run: make test CONFIG=Fast TEST='^test_verification_report$'
+        run: make test CONFIG=Fast TEST='^test_verification_report$$'
 
       - name: Generate report
         run: python tools/generate_verification_report.py
