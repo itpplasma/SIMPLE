@@ -19,7 +19,7 @@ program test_chartmap_wall_losses
     !> Outputs NetCDF file for visualization of loss positions and times.
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    !$ use omp_lib, only: omp_get_max_threads
+!$  use omp_lib, only: omp_get_max_threads
     use netcdf
     use simple, only: init_vmec
     use util, only: twopi
@@ -92,7 +92,7 @@ program test_chartmap_wall_losses
     print *, 'Comparing loss fractions: VMEC vs Chartmap vs Meiss'
     print *, '========================================================'
     max_threads = 1
-    !$ max_threads = omp_get_max_threads()
+!$  max_threads = omp_get_max_threads()
     print '(A,I0)', ' OpenMP max threads: ', max_threads
     print *
 
