@@ -67,3 +67,12 @@ and total confined fractions of all markers. The script computes them at full
 time resolution from `times_lost` and checks them against SIMPLE's
 `confined_fraction.dat`. Strongly passing markers with trapping parameter at
 or below `contr_pp = -1` (the default) count as confined without tracing.
+
+The checked-in figure was regenerated with GNU 16.1 on macOS, the Fortran
+sources of SIMPLE `fe2de27`, and libneo
+`f6090e8150c2f5b1c0afde09baadf79b50b1ffe7` in the `Fast` profile. This run
+had 194 LCFS losses (157 initially trapped, 37 initially passing), 1260
+completed markers, 1546 skipped markers, and no numerical-failure exits.
+The original generation reported 193 losses. `deterministic = .true.` fixes
+the random seed; it does not guarantee identical trajectories across
+toolchains and dependency revisions.

@@ -81,7 +81,7 @@ def run_simple(workdir: Path, exe: Path) -> None:
 
 
 def lcfs(wout_path: Path, ntheta: int, nphi: int):
-    """Return R, Z, phi of the VMEC LCFS on a full-torus (theta, phi) grid."""
+    """Return a full-torus angle grid and VMEC LCFS Fourier coefficients."""
     import netCDF4
 
     with netCDF4.Dataset(wout_path) as w:
@@ -210,7 +210,6 @@ def plot(workdir: Path, out: Path) -> None:
     simple_style.use()
     res, cf = load_results(workdir)
     lost = res["orbit_exit_code"] == 1
-    t_l = res["times_lost"][lost]
     zl = res["zend"][lost]
     if not np.allclose(zl[:, 0], 1.0, atol=1e-6):
         raise SystemExit("lost markers do not end on s = 1")
@@ -255,7 +254,10 @@ def plot(workdir: Path, out: Path) -> None:
                ncol=2, handletextpad=0.3, columnspacing=1.2)
 
     ax = fig.add_axes([0.67, 0.17, 0.27, 0.66])
-    t = np.geomspace(1e-6, t_end, 2000)
+    # Include every loss event so the step locations retain their actual times.
+    loss_times = res["times_lost"][lost]
+    t_start = min(1e-6, loss_times.min()) if loss_times.size else 1e-6
+    t = np.unique(np.concatenate(([t_start, t_end], loss_times)))
     curves = confined_curves(res["times_lost"], res["orbit_exit_code"],
                              res["trap_par"], t)
     for key in ("total", "passing", "trapped"):
