@@ -39,8 +39,8 @@ contains
         end do
 
         call compute_continuous_tip_scores(tips, n, jpar_rate, &
-            rotation_drift, turns, jpar_samples, &
-            rotation_samples)
+                                           rotation_drift, turns, jpar_samples, &
+                                           rotation_samples)
 
         call assert_close("constant relative drift rate", jpar_rate, 0.4_dp, errors)
         call assert_close("one achieved turn", turns, 1.0_dp, errors)
@@ -70,8 +70,8 @@ contains
         end do
 
         call compute_continuous_tip_scores(tips, n, jpar_rate, &
-            rotation_drift, turns, jpar_samples, &
-            rotation_samples)
+                                           rotation_drift, turns, jpar_samples, &
+                                           rotation_samples)
 
         call assert_close("rotation drift", rotation_drift, 0.1_dp, errors)
         call assert_close("wrapped-angle exposure", turns, 1.1_dp, errors)
@@ -93,8 +93,8 @@ contains
             tips(2, k) = real(k - 1, dp)*0.25_dp*pi
         end do
         call compute_continuous_tip_scores(tips, n, jpar_rate, &
-            rotation_drift, turns, jpar_samples, &
-            rotation_samples)
+                                           rotation_drift, turns, jpar_samples, &
+                                           rotation_samples)
 
         call assert_close("zero reference score", jpar_rate, 0.0_dp, errors)
         call assert_equal("zero reference samples", jpar_samples, 0, errors)
@@ -114,12 +114,12 @@ contains
         tips(3, 4) = ieee_value(0.0_dp, ieee_quiet_nan)
 
         call compute_continuous_tip_scores(tips, n, jpar_rate, &
-            rotation_drift, turns, jpar_samples, rotation_samples)
+                                  rotation_drift, turns, jpar_samples, rotation_samples)
 
         if (.not. all(ieee_is_finite([jpar_rate, rotation_drift, turns]))) then
             print *, "FAIL: nonfinite tip produced a nonfinite score"
             errors = errors + 1
-        endif
+        end if
         call assert_close("nonfinite J_parallel score", jpar_rate, 0.0_dp, errors)
         call assert_close("nonfinite rotation score", rotation_drift, 0.0_dp, errors)
         call assert_close("nonfinite turns", turns, 0.0_dp, errors)
@@ -135,8 +135,8 @@ contains
 
         tips = 0.0_dp
         call compute_continuous_tip_scores(tips, 2, jpar_rate, &
-            rotation_drift, turns, jpar_samples, &
-            rotation_samples)
+                                           rotation_drift, turns, jpar_samples, &
+                                           rotation_samples)
 
         call assert_close("unresolved J_parallel", jpar_rate, 0.0_dp, errors)
         call assert_close("unresolved rotation", rotation_drift, 0.0_dp, errors)
