@@ -5,7 +5,7 @@ import unittest
 
 import numpy as np
 
-from efss_scaling import phase_seconds, physics
+from efss_scaling import check_traced, phase_seconds, physics
 from compare_efss_runs import compare
 
 
@@ -16,6 +16,17 @@ class MeasurementParsing(unittest.TestCase):
         self.assertEqual(phase_seconds(' tracing        =     2.125000 s', True), 2.125)
         with self.assertRaises(ValueError):
             phase_seconds('STOP before tracing', False)
+
+    def test_skipped_markers_rejected(self):
+        with tempfile.TemporaryDirectory() as name:
+            directory = Path(name)
+            np.savetxt(directory / 'orbit_exit_code.dat', [[1, 0], [2, 1]])
+            check_traced(directory, 2)
+            with self.assertRaises(ValueError):
+                check_traced(directory, 3)
+            np.savetxt(directory / 'orbit_exit_code.dat', [[1, 0], [2, 3]])
+            with self.assertRaises(ValueError):
+                check_traced(directory, 2)
 
     def test_fraction_semantics(self):
         with tempfile.TemporaryDirectory() as name:

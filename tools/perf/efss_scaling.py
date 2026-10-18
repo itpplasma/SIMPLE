@@ -26,6 +26,14 @@ def physics(directory):
     return confined[:, 0], confined[:, 1] + confined[:, 2], unresolved[:, 1]
 
 
+def check_traced(directory, markers):
+    codes = np.loadtxt(directory / "orbit_exit_code.dat", ndmin=2)[:, 1]
+    if len(codes) != markers:
+        raise ValueError(f"Unexpected marker count in {directory}")
+    if np.any(codes == 3):
+        raise ValueError(f"Skipped markers invalidate throughput in {directory}")
+
+
 def phase_seconds(log, gpu):
     pattern = (r"tracing\s*=\s*([\d.]+) s" if gpu else
                r"Particle tracing completed\s+([\d.]+) s")
@@ -59,6 +67,8 @@ def run(args):
             config = f"""&config
  netcdffile = 'wout.nc'
  ntestpart = {args.markers}
+ contr_pp = -1d100
+ notrace_passing = 0
  sbeg = 0.3d0
  trace_time = {args.trace_time:.12e}
  ntimstep = 1001
@@ -93,6 +103,7 @@ def run(args):
             wall = time.perf_counter() - start
             log = (directory / "stdout.log").read_text()
             grid, confined, unresolved = physics(directory)
+            check_traced(directory, args.markers)
             starts = np.loadtxt(directory / "start.dat", ndmin=2)
             if baseline is None:
                 baseline = (grid, confined, unresolved, starts)
@@ -122,7 +133,7 @@ def main():
     parser.add_argument("--executable", type=Path, default=Path("build/simple.x"))
     parser.add_argument("--wout", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--markers", type=int, default=2048)
+    parser.add_argument("--markers", type=int, default=128)
     parser.add_argument("--threads", type=int, nargs="+", default=[1, 2, 4, 8, 16])
     parser.add_argument("--repetitions", type=int, default=2)
     parser.add_argument("--trace-time", type=float, default=0.01)
