@@ -538,6 +538,18 @@ target_link_libraries(test_radial_electric_potential.x simple)
 add_test(NAME test_radial_electric_potential COMMAND test_radial_electric_potential.x)
 set_tests_properties(test_radial_electric_potential PROPERTIES LABELS "unit;physics")
 
+add_executable(test_radial_potential_config.x test_radial_potential_config.f90)
+target_link_libraries(test_radial_potential_config.x simple)
+foreach(case valid zero_slope_rk field rk full_orbit gpu)
+    add_test(NAME test_radial_potential_config_${case}
+        COMMAND test_radial_potential_config.x ${case})
+    set_tests_properties(test_radial_potential_config_${case} PROPERTIES LABELS "unit")
+endforeach()
+foreach(case field rk full_orbit gpu)
+    set_tests_properties(test_radial_potential_config_${case} PROPERTIES
+        PASS_REGULAR_EXPRESSION "radial_electric_potential_slope (requires|is not)")
+endforeach()
+
 # Unit tests for refactored modules
 add_executable(test_stencil_utils.x test_stencil_utils.f90)
 target_link_libraries(test_stencil_utils.x simple)

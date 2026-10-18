@@ -9,7 +9,7 @@ module params
                                   netcdffile, ns_s, ns_tp, multharm, vmec_B_scale, &
                                   vmec_RZ_scale
     use velo_mod, only: isw_field_type
-    use magfie_sub, only: TEST
+    use magfie_sub, only: TEST, BOOZER
     use field_can_mod, only: eval_field => evaluate, field_can_t
     use field_can_base, only: set_radial_electric_potential_slope
     use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
@@ -354,8 +354,7 @@ contains
         if (spectre_fo_tolerance <= 0.0_dp) &
             error stop 'spectre_fo_tolerance must be positive'
         call validate_collision_config
-        if (.not. config_value_is_finite(radial_electric_potential_slope)) &
-            error stop 'radial_electric_potential_slope must be finite'
+        call validate_radial_electric_potential
         call set_radial_electric_potential_slope(radial_electric_potential_slope)
 
         call validate_gpu_config
@@ -370,6 +369,22 @@ contains
         if (macrostep_log_ratio /= 1.0d3) print *, 'WARNING: removed &config key ', &
             'macrostep_log_ratio is ignored'
     end subroutine warn_removed_config_keys
+
+    subroutine validate_radial_electric_potential
+        ! Only field_can_boozer sets Phie; every other field, the RK path, full
+        ! orbits and the GPU kernels would silently ignore the potential.
+        if (.not. config_value_is_finite(radial_electric_potential_slope)) &
+            error stop 'radial_electric_potential_slope must be finite'
+        if (radial_electric_potential_slope == 0.0_dp) return
+        if (isw_field_type /= BOOZER) error stop &
+            'radial_electric_potential_slope requires Boozer integ_coords'
+        if (integmode <= 0) error stop &
+            'radial_electric_potential_slope requires a symplectic integmode'
+        if (orbit_model /= ORBIT_GC) error stop &
+            'radial_electric_potential_slope requires the guiding-center model'
+        if (trim(gpu_mode) /= 'off') error stop &
+            'radial_electric_potential_slope is not supported with gpu_mode'
+    end subroutine validate_radial_electric_potential
 
     subroutine validate_collision_config
         real(dp) :: energy

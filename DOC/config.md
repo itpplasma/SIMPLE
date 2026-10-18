@@ -106,7 +106,13 @@ Collision substeps are chosen automatically; their bounds are in
   `lorentz_iota`, with `nu_star_standard = R0*nu/(abs(iota)*v0)`. `p_abs`
   stays unchanged. See {doc}`/model/collisions`.
 - `radial_electric_potential_slope` (default `0`) adds `Phi(s) = slope*s` to
-  the Boozer Hamiltonian.
+  the Boozer canonical Hamiltonian. `Phi` is added directly to the normalized
+  `H = vpar**2/2 + mu*B + Phi`, so it is in the units of `H`, and the slope is
+  per unit of the Boozer radial variable `r = s` (normalized toroidal flux).
+  A nonzero slope requires `integ_coords = 2` (Boozer), a symplectic
+  `integmode > 0`, `orbit_model = 0` and `gpu_mode = 'off'`; other
+  configurations stop with an error, since only the Boozer canonical field
+  applies the potential.
 - With `output_results_netcdf` and `output_orbits_macrostep`, `results.nc` and
   `orbits.nc` carry the effective energy, collision model and these values as
   global attributes.
