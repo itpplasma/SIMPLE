@@ -103,6 +103,14 @@ wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc -O run/wout.nc
 
 `examples/simple_full.in` lists every input key with its default value and
 meaning; a run needs only the keys that differ.
+The [generated input reference](docs/input-reference.rst) and
+[machine-readable schema](docs/input-reference.json) are extracted from the
+Fortran declarations. Check keys, types and basic constraints before running:
+
+```bash
+python tools/check_input.py simple.in
+```
+
 `examples/run_example.sh` performs the same setup in `/tmp/simple_example`.
 
 The main outputs are:
