@@ -364,7 +364,8 @@ contains
 
     subroutine test_wrong_energy_symplectic_endpoint
         use field_can_mod, only: field_can_t
-        use orbit_symplectic_base, only: symplectic_integrator_t
+        use orbit_symplectic_base, only: symplectic_integrator_t, &
+                                         SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
         use parmot_mod, only: ro0
         use finite_check, only: is_finite
         type(tracer_t) :: local_orbit
@@ -408,8 +409,12 @@ contains
                         call macrostep_with_wall_check(local_orbit, z, kt, &
                                                        step_error, 1, 1, x_previous)
                     end if
-                    if (step_error /= SYMPLECTIC_STEP_MAXITER) &
+                    if (step_error /= SYMPLECTIC_STEP_EVENT_NOT_CONVERGED) &
                         error stop 'Wrong-energy endpoint accepted as a step or hit'
+                    if (classify_orbit_exit(step_error, ORBIT_GC, integmode, &
+                                            ORBIT_EXIT_LCFS) /= &
+                        ORBIT_EXIT_NUMERICAL_EVENT) &
+                        error stop 'Wrong-energy rejection classified as Newton failure'
                     if (kt /= 0_int64 .or. any(z /= initial)) &
                         error stop 'Wrong-energy rejection changed particle or time'
                     if (any(local_orbit%si%z /= saved_si%z) .or. &
