@@ -642,6 +642,36 @@ def suite(args, output):
                         ],
                     )
                 )
+    if args.suite in ("regimes", "all"):
+        # Regime-aware collisionless comparison: self-divergence horizons,
+        # pointwise checks for regular orbits and paired cohort statistics.
+        for case in ["circular", "large-aspect", *SOURCES]:
+            for species, energy, extra in [
+                ("deuterium", "10000", []),
+                ("alpha", "3500000", ["--stat-markers", "512"]),
+            ]:
+                jobs.append(
+                    (
+                        f"regimes-{species}-{case}",
+                        [
+                            "--case",
+                            case,
+                            "--regimes",
+                            "--species",
+                            species,
+                            "--energy",
+                            energy,
+                            "--dense",
+                            "--resolution",
+                            "96",
+                            "--duration",
+                            "1e-4",
+                            "--step",
+                            "5e-9",
+                            *extra,
+                        ],
+                    )
+                )
     summary = {"suite": args.suite, "planned": len(jobs), "runs": []}
 
     def execute(job):
@@ -700,7 +730,9 @@ def main():
     parser.add_argument("--duration", type=float, default=1e-5)
     parser.add_argument("--step", type=float, default=1e-8)
     parser.add_argument("--resolution", type=int, default=48)
-    parser.add_argument("--suite", choices=["verification", "collisions", "all"])
+    parser.add_argument(
+        "--suite", choices=["verification", "collisions", "regimes", "all"]
+    )
     parser.add_argument(
         "--jobs", type=int, default=2, help="Concurrent isolated benchmark processes"
     )
@@ -729,7 +761,32 @@ def main():
         default=1,
         help="Independent copies for collision statistics; input weight unchanged",
     )
+    parser.add_argument(
+        "--regimes",
+        action="store_true",
+        help="Collisionless regime-aware comparison (imas_trajectory_regimes.py)",
+    )
+    parser.add_argument(
+        "--stat-markers",
+        type=int,
+        default=0,
+        help="Random cohort size for --regimes loss statistics",
+    )
+    parser.add_argument(
+        "--perturbation",
+        type=float,
+        default=1e-6,
+        help="Start displacement in R [m] for --regimes self-divergence",
+    )
+    parser.add_argument(
+        "--horizon-tolerance",
+        type=float,
+        default=1e-3,
+        help="Self-divergence [m] that ends pointwise comparison (--regimes)",
+    )
     args = parser.parse_args()
+    if args.regimes and (args.collisions or args.case == "cylinder"):
+        parser.error("--regimes compares collisionless toroidal orbits")
     if args.copies < 1 or (
         args.collisions and (args.species != "alpha" or args.case == "cylinder")
     ):
@@ -810,6 +867,45 @@ def main():
         nrho=n,
         ntheta=2 * n,
     )
+    if args.regimes:
+        import imas_trajectory_regimes as regimes
+
+        report = regimes.compare(
+            eq,
+            field,
+            positions,
+            mass,
+            charge,
+            duration=args.duration,
+            step=args.step,
+            output=output,
+            perturbation=args.perturbation,
+            horizon_tolerance=args.horizon_tolerance,
+            stat_markers=args.stat_markers,
+        )
+        report.update(
+            case=args.case,
+            species=args.species,
+            initial_energy_eV=args.energy,
+            resolution=n,
+            source=SOURCES.get(args.case),
+            field_consistency_with_input_IDS=field_consistency(eq, field),
+            revisions={
+                "benchmark": revision(repository),
+                "SIMPLE": revision(Path(pysimple.__file__).resolve().parents[2]),
+            },
+        )
+        regimes.write(report, output)
+        (output / "report.json").write_text(
+            json.dumps(
+                {k: v for k, v in report.items() if k != "markers"},
+                indent=2,
+                allow_nan=False,
+            )
+            + "\n"
+        )
+        print(json.dumps(report["summary"], indent=2))
+        return
     start = time.perf_counter()
     actor_input = (
         {
