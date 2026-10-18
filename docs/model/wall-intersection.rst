@@ -1,81 +1,88 @@
 Wall intersection
 =================
 
+This page defines the loss boundaries, the segment–triangle test against an
+STL wall, and the accuracy of the resulting hit points and times.
+Usage: :doc:`/user-guide/wall-heat-loads`.
+
 Loss boundaries
 ---------------
 
-By default a particle is lost when its guiding centre crosses the last closed
-flux surface (LCFS): :math:`s = 1` for VMEC and Boozer coordinates, or the
-outer boundary of a chartmap whose ``rho_lcfs`` is 1. The crossing is located
-within the step as described in :doc:`integrators` (exit code 1).
+Without a wall, a marker is lost when its guiding centre crosses the outer
+boundary of the integration domain: :math:`s = 1` for VMEC and Boozer
+coordinates, or the outer boundary of a chartmap. The crossing is located
+inside the step (:doc:`integrators`); the exit code is 1.
 
-When the reference coordinates extend beyond the LCFS (a chartmap with
-``rho_lcfs`` < 1), the outer chartmap boundary has the meaning set by
-``chart_boundary_kind``: a loss at the LCFS (code 1), a loss at the wall
-(code 2), or the end of the numerical domain (code 101, the default ``auto``
-for such chartmaps). A triangulated wall gives the physical loss surface
-inside this domain.
+For chartmap reference coordinates ``chart_boundary_kind`` sets the meaning
+of the outer chartmap boundary (``init_stl_wall_if_enabled`` in
+``src/simple_main.f90``):
 
-Segment-triangle intersection
------------------------------
+.. csv-table::
+   :header: "Value", "Crossing the outer chartmap boundary"
+   :widths: 18 82
 
-The wall is read from an STL file into a CGAL surface mesh with an axis-aligned
-bounding-box (AABB) tree for fast queries (``src/wall/stl_wall_cgal.cpp``,
-exact predicates and inexact constructions kernel). Lengths are converted to
-metres with ``wall_units``.
+   "``auto``", "``lcfs`` if the chartmap attribute ``rho_lcfs`` is 1, else ``domain`` (default)"
+   "``lcfs``", "loss at the LCFS, exit code 1"
+   "``wall``", "loss at the wall, exit code 2"
+   "``domain``", "end of the numerical domain, exit code 101; not a physical loss"
 
-During the integration of a particle, SIMPLE keeps the Cartesian position of
-the guiding centre at the start and the end of every accepted microstep,
-computed from the reference coordinates (chartmap). The straight segment
-between them is intersected with all triangles of the wall. If the segment
-intersects the wall, the intersection closest to the start point is the hit.
-SIMPLE then records
+A chartmap with ``rho_lcfs`` :math:`< 1` extends beyond the LCFS; an STL wall
+inside that domain is then the physical loss surface.
 
-* the hit point :math:`\mathbf{x}_\text{hit}` (``wall_hit_cart``),
-* the unit normal :math:`\mathbf{n}` of the hit triangle,
-* the incidence angle :math:`\alpha` from
-  :math:`\cos\alpha = |\hat{\mathbf{d}} \cdot \mathbf{n}|`, with
-  :math:`\hat{\mathbf{d}}` the direction of the segment (0 is normal
-  incidence),
-* the loss time, interpolated linearly in the fraction
-  :math:`|\mathbf{x}_\text{hit} - \mathbf{x}_0| / |\mathbf{x}_1 - \mathbf{x}_0|`
-  of the segment,
+Segment–triangle test
+---------------------
 
-and ends the orbit with exit code 2. The final state is mapped back to
-reference coordinates (``src/simple_main.f90``, ``locate_wall_segment``).
+``wall_input`` is read into a CGAL surface mesh with an AABB tree
+(``src/wall/stl_wall_cgal.cpp``, exact-predicates/inexact-constructions
+kernel), with lengths scaled to metres by ``wall_units`` (``m`` or ``mm``).
+A wall requires chartmap reference coordinates.
+
+For every accepted microstep SIMPLE maps the guiding-centre positions at
+its start and end, :math:`\mathbf x_0` and :math:`\mathbf x_1`, through the
+chartmap to Cartesian coordinates and intersects the straight segment with
+the mesh (``stl_wall_first_hit_segment_with_normal``). Of all intersections,
+the one closest to :math:`\mathbf x_0` is the hit. ``locate_wall_segment``
+then records
+
+* the hit point :math:`\mathbf x_\text{hit}` (``wall_hit_cart``) and the
+  triangle index,
+* the unit normal :math:`\mathbf n` of the triangle,
+* the incidence angle :math:`\alpha`, :math:`\cos\alpha =
+  |\hat{\mathbf d}\cdot\mathbf n|` with :math:`\hat{\mathbf d} = (\mathbf x_1
+  - \mathbf x_0)/|\mathbf x_1 - \mathbf x_0|` (0 is normal incidence),
+* the fraction :math:`f = |\mathbf x_\text{hit} - \mathbf x_0| / |\mathbf x_1
+  - \mathbf x_0|`, which interpolates the loss time and :math:`(v/v_0,
+  \lambda)` linearly within the microstep,
+
+maps :math:`\mathbf x_\text{hit}` back to reference coordinates (by linear
+interpolation in :math:`u` if the chartmap inversion fails) and ends the
+orbit with exit code 2.
 
 Query gate
 ----------
 
-A wall is a non-convex surface that encloses the plasma. A straight chord
-between two points inside the LCFS can intersect such a surface, for example
-on the inboard side of a bean-shaped cross-section, although the orbit itself
-does not reach the wall. SIMPLE therefore queries the wall only after an
-accepted microstep has ended outside the LCFS, :math:`\rho > \rho_\text{LCFS}`.
-If a microstep also reaches the outer boundary of the chartmap, the partial
-segment up to the boundary is tested, and an earlier wall intersection takes
-precedence.
+The wall is non-convex: a chord between two points inside the LCFS can cut
+it, e.g. on the inboard side of a bean-shaped section. SIMPLE therefore
+queries the wall only for microsteps ending at :math:`\rho >
+\rho_\text{LCFS}`. If a microstep also crosses the outer chartmap boundary,
+the segment up to that crossing is tested and an earlier wall hit wins.
 
 Accuracy
 --------
 
-* The guiding centre, not the particle, is intersected with the wall. The
-  particle impact point differs by up to a gyroradius, which smooths the
-  heat-load pattern on the scale of a few centimetres for 3.5 MeV alphas in a
-  reactor.
-* The chord of a microstep approximates the curved orbit. For a smooth orbit
-  with local curvature :math:`\kappa` and segment length :math:`\ell`, the
-  maximum distance from the arc to its chord is approximately
-  :math:`\kappa\ell^2/8`. Increase ``npoiper2`` to reduce the step length;
-  check convergence of wall hits, especially near tangential incidence.
-* The incidence angle is the angle of the guiding-centre chord with the wall,
-  not of the particle velocity.
+* The guiding centre, not the particle, is intersected: impact points are
+  off by up to one gyroradius (a few cm for 3.5 MeV alphas in a reactor),
+  and :math:`\alpha` is the angle of the guiding-centre chord, not of the
+  particle velocity.
+* The chord deviates from an orbit of curvature :math:`k` by about
+  :math:`k\ell^2/8` for chord length :math:`\ell`; increase ``npoiper2``
+  until hit statistics converge, especially at grazing incidence.
 
-The method and its application to wall heat loads in stellarator reactors,
-including a comparison with BEAMS3D, are published in Albert et al. (2026).
+Albert et al. (2026) apply the method to stellarator reactors and compare
+with BEAMS3D.
 
-Reference
----------
+References
+----------
 
 * C. G. Albert, G. Grassler, J. Lion, J.-F. Lobsien, J. Schatzlmayr,
   F. Warmer, Symplectic methods for optimization of wall heat loads by fusion

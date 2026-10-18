@@ -1,19 +1,19 @@
 Development
 ===========
 
-SIMPLE is developed on GitHub at https://github.com/itpplasma/SIMPLE. Pull
-requests follow the review policy below and fill
-``.github/pull_request_template.md``.
+SIMPLE is developed at https://github.com/itpplasma/SIMPLE. Start with
+:doc:`/contributing` for the pull-request rules, :doc:`architecture` for the
+code structure and :doc:`testing` for the tests a change needs.
 
 .. toctree::
    :maxdepth: 1
 
    /contributing
    coding-standard
-   /review-policy
+   architecture
+   testing
    /collision-golden-contract
-   /reference/design-notes
-   /performance/non_soa_cpu_regression
+   design-notes
    changelog
 
 Repository layout
@@ -26,45 +26,48 @@ Repository layout
    * - Path
      - Content
    * - ``src/``
-     - Fortran sources of the library and of ``simple.x``; ``src/field/``
-       field classes and canonical coordinates, ``src/wall/`` STL wall,
-       ``*.cu`` CUDA kernels.
+     - Fortran library and ``simple.x`` driver; ``src/field/`` field classes
+       and canonical coordinates, ``src/coordinates/`` reference
+       coordinates, ``src/wall/`` STL wall, ``*.cu`` CUDA kernels.
    * - ``app/``
-     - Main programs (``simple.x``, diagnostics).
+     - Main program ``simple.x``, diagnostics, ``export_boozer_chartmap``,
+       ``spectre_poincare``.
    * - ``python/pysimple/``
-     - Python interface and post-processing (``plotting``, ``engineering``).
+     - Python interface, plotting and heat-load post-processing.
    * - ``tools/``
-     - Converters (GVEC, booz_xform, QUASR) and benchmark tools.
+     - Converters (GVEC, booz_xform, QUASR), input validator, reference
+       generators, benchmark tools.
    * - ``examples/``
-     - Example inputs and scripts; ``simple_full.in`` lists all keys.
+     - Example inputs and scripts; ``simple_full.in`` lists every key.
    * - ``test/``
-     - Unit, integration, Python and golden-record tests.
+     - Unit, integration, Python and golden-record tests (:doc:`testing`).
    * - ``DOC/``
-     - Technical design notes (:doc:`/reference/design-notes`).
+     - Implementation notes shown under :doc:`design-notes`.
    * - ``docs/``
      - This documentation (Sphinx).
-   * - ``RUN/``
-     - Cluster job scripts.
+   * - ``RUN/``, ``examples/hpc/``
+     - Cluster job scripts (:doc:`/hpc/index`).
+   * - ``cmake/dependency_versions.json``
+     - Pinned fortnum, fortplot and golden-record libneo revisions.
 
 Build and test
 --------------
 
-Run all commands from the repository root:
+From the repository root:
 
 .. code-block:: bash
 
-   make                      # build
-   make test-fast            # fast tests, deterministic build
-   make test                 # all tests except regression tests
-   make test TEST=name       # one test by name
-   make test-regression     # compare with the main branch
+   make CONFIG=Fast          # build in build/
+   ./setup-venv.sh           # once: .venv with the Python test dependencies
+   source .venv/bin/activate
+   make test-fast            # before every push
+   make test TEST=name       # tests whose name matches a regex
 
-``make test`` and ``make test-fast`` rebuild with
-``SIMPLE_DETERMINISTIC_FP=ON``. The golden-record tests build a reference
-version and compare the outputs of a set of cases.
-
-Code that changes coordinates or fields must update
-``DOC/coordinates-and-fields.md``.
+:doc:`testing` lists all targets and labels. Dependencies and CMake options
+are in :doc:`/getting-started/installation`. A libneo checkout or revision is
+selected on the first configuration with ``make LIBNEO_PATH=/path/to/libneo``
+or ``make LIBNEO_REF=<branch|tag|sha>``; run ``make clean`` before changing
+it.
 
 Build this documentation
 ------------------------
@@ -75,12 +78,9 @@ Build this documentation
    python docs/_static/figures/scripts/build_doc_figures.py
    sphinx-build -W -b html docs docs/_build/html
 
-``-W`` turns warnings into errors. The Python API pages are generated from the
-docstrings of ``pysimple``; the compiled extension is not needed, because it
-is mocked. Figures and their generation scripts are in
-``docs/_static/figures/``.
-
-The workflow ``.github/workflows/docs.yml`` checks every branch and pull
-request with warnings treated as errors. Only ``main`` is published to
-GitHub Pages at ``latest/``; other builds remain downloadable CI artifacts. The same commands build the site on any other CI system, for
-example a GitLab Pages job that copies ``docs/_build/html`` to ``public/``.
+The figure script downloads one pinned equilibrium on its first run; sources
+and provenance of the figures are in ``docs/_static/figures/README.md``. The
+API pages are generated from the ``pysimple`` docstrings with the compiled
+extension mocked, so no build of SIMPLE is needed.
+``.github/workflows/docs.yml`` runs the same commands on every push and pull
+request and publishes ``main`` to GitHub Pages at ``latest/``.

@@ -43,10 +43,7 @@ myst_enable_extensions = ["dollarmath", "amsmath"]
 myst_heading_anchors = 6
 
 templates_path = ["_templates"]
-exclude_patterns: list[str] = [
-    "_build", "Thumbs.db", ".DS_Store",
-    "reference/design/spectre-rejected-interface-models.md",
-]
+exclude_patterns: list[str] = ["_build", "Thumbs.db", ".DS_Store"]
 
 autodoc_class_signature = "separated"
 autodoc_member_order = "bysource"
