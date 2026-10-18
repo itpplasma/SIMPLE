@@ -2,10 +2,11 @@
 import tempfile
 from pathlib import Path
 import unittest
+from types import SimpleNamespace
 
 import numpy as np
 
-from efss_scaling import check_traced, phase_seconds, physics
+from efss_scaling import check_traced, phase_seconds, physics, run
 from compare_efss_runs import compare
 
 
@@ -42,6 +43,25 @@ class MeasurementParsing(unittest.TestCase):
             with self.assertRaises(ValueError):
                 physics(directory)
 
+    def test_fraction_time_grids_must_match(self):
+        with tempfile.TemporaryDirectory() as name:
+            directory = Path(name)
+            np.savetxt(directory / 'confined_fraction.dat', [[0, .5, .5, 10]])
+            np.savetxt(directory / 'unresolved_fraction.dat', [[1, 0, 10]])
+            with self.assertRaises(ValueError):
+                physics(directory)
+
+    def test_existing_campaign_is_not_modified(self):
+        with tempfile.TemporaryDirectory() as name:
+            directory = Path(name)
+            metadata = directory / 'metadata.json'
+            metadata.write_text('original campaign')
+            args = SimpleNamespace(executable=Path('unused'), wout=Path('unused'),
+                                   output=directory)
+            with self.assertRaises(FileExistsError):
+                run(args)
+            self.assertEqual(metadata.read_text(), 'original campaign')
+
 
 class BackendComparison(unittest.TestCase):
     def test_status_tolerance_and_start_identity(self):
@@ -51,6 +71,8 @@ class BackendComparison(unittest.TestCase):
             for directory in (cpu, gpu):
                 directory.mkdir()
                 np.savetxt(directory / 'start.dat', starts)
+                np.savetxt(directory / 'orbit_exit_code.dat',
+                           np.column_stack((np.arange(1, 21), np.zeros(20))))
                 np.savetxt(directory / 'confined_fraction.dat', [[0, .4, .4, 20]])
                 np.savetxt(directory / 'unresolved_fraction.dat', [[0, 0, 20]])
             self.assertTrue(compare(cpu, gpu)['passed'])
@@ -66,10 +88,40 @@ class BackendComparison(unittest.TestCase):
             for directory in (cpu, gpu):
                 directory.mkdir()
                 np.savetxt(directory / 'start.dat', np.zeros((20, 5)))
+                np.savetxt(directory / 'orbit_exit_code.dat',
+                           np.column_stack((np.arange(1, 21), np.zeros(20))))
                 np.savetxt(directory / 'confined_fraction.dat', [[0, .4, .4, 20]])
                 np.savetxt(directory / 'unresolved_fraction.dat', [[0, 0, 20]])
             np.savetxt(gpu / 'unresolved_fraction.dat', [[0, .2, 20]])
             self.assertFalse(compare(cpu, gpu)['passed'])
+
+    def test_one_marker_and_skipped_outputs(self):
+        with tempfile.TemporaryDirectory() as name:
+            cpu, gpu = Path(name) / 'cpu', Path(name) / 'gpu'
+            for directory in (cpu, gpu):
+                directory.mkdir()
+                np.savetxt(directory / 'start.dat', np.zeros((1, 5)))
+                np.savetxt(directory / 'orbit_exit_code.dat', [[1, 0]])
+                np.savetxt(directory / 'confined_fraction.dat', [[0, .5, .5, 1]])
+                np.savetxt(directory / 'unresolved_fraction.dat', [[0, 0, 1]])
+            self.assertEqual(compare(cpu, gpu)['markers'], 1)
+            np.savetxt(gpu / 'orbit_exit_code.dat', [[1, 3]])
+            with self.assertRaises(ValueError):
+                compare(cpu, gpu)
+
+    def test_backend_grid_lengths_must_match(self):
+        with tempfile.TemporaryDirectory() as name:
+            cpu, gpu = Path(name) / 'cpu', Path(name) / 'gpu'
+            for directory in (cpu, gpu):
+                directory.mkdir()
+                np.savetxt(directory / 'start.dat', np.zeros((1, 5)))
+                np.savetxt(directory / 'orbit_exit_code.dat', [[1, 0]])
+            np.savetxt(cpu / 'confined_fraction.dat', [[0, .5, .5, 1]])
+            np.savetxt(cpu / 'unresolved_fraction.dat', [[0, 0, 1]])
+            np.savetxt(gpu / 'confined_fraction.dat', [[0, .5, .5, 1], [1, .5, .5, 1]])
+            np.savetxt(gpu / 'unresolved_fraction.dat', [[0, 0, 1], [1, 0, 1]])
+            with self.assertRaises(ValueError):
+                compare(cpu, gpu)
 
 
 if __name__ == '__main__':

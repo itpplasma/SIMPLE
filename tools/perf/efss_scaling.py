@@ -23,6 +23,9 @@ def physics(directory):
     unresolved = np.loadtxt(directory / "unresolved_fraction.dat", ndmin=2)
     if not np.isfinite(confined).all() or not np.isfinite(unresolved).all():
         raise ValueError(f"Nonfinite fraction output in {directory}")
+    if (confined.shape[0] != unresolved.shape[0]
+            or not np.array_equal(confined[:, 0], unresolved[:, 0])):
+        raise ValueError(f"Fraction time grids differ in {directory}")
     return confined[:, 0], confined[:, 1] + confined[:, 2], unresolved[:, 1]
 
 
@@ -45,7 +48,7 @@ def phase_seconds(log, gpu):
 
 def run(args):
     executable, wout = args.executable.resolve(), args.wout.resolve()
-    args.output.mkdir(parents=True, exist_ok=True)
+    args.output.mkdir(parents=True, exist_ok=False)
     metadata = {
         "source_commit": subprocess.check_output(
             ["git", "rev-parse", "HEAD"], text=True).strip(),

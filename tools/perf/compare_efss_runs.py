@@ -6,18 +6,25 @@ from pathlib import Path
 
 import numpy as np
 
-from efss_scaling import physics
+from efss_scaling import check_traced, physics
 
 
 def compare(cpu, gpu):
-    a, b = np.loadtxt(cpu / 'start.dat'), np.loadtxt(gpu / 'start.dat')
+    a = np.loadtxt(cpu / 'start.dat', ndmin=2)
+    b = np.loadtxt(gpu / 'start.dat', ndmin=2)
+    if not np.isfinite(a).all() or not np.isfinite(b).all():
+        raise ValueError('Nonfinite starting markers')
     np.testing.assert_array_equal(a, b)
+    n = len(a)
+    check_traced(cpu, n)
+    check_traced(gpu, n)
     ta, ca, ua = physics(cpu)
     tb, cb, ub = physics(gpu)
+    if ta.shape != tb.shape:
+        raise ValueError('CPU/GPU time grid lengths differ')
     np.testing.assert_allclose(ta, tb, rtol=0, atol=1e-14)
-    n = len(a)
-    # Predeclared engineering tolerance: at most two markers may change status.
-    # Same markers are paired; this is not an independent-sample confidence bound.
+    # Engineering threshold for aggregate fraction curves, not a bound on the
+    # number of paired marker-status changes or a statistical confidence bound.
     tolerance = 2 / n
     confined_delta = float(np.max(np.abs(ca - cb)))
     unresolved_delta = float(np.max(np.abs(ua - ub)))
