@@ -75,9 +75,8 @@ Build this documentation
 
 ``-W`` turns warnings into errors. The Python API pages are generated from the
 docstrings of ``pysimple``; the compiled extension is not needed, because it
-is mocked. Figures that are produced separately are referenced from
-``docs/_static/figures/``; until a figure file exists, the build shows a note
-in its place (``docs/conf.py``).
+is mocked. Figures and their generation scripts are in
+``docs/_static/figures/``.
 
 The workflow ``.github/workflows/docs.yml`` checks every branch and pull
 request with warnings treated as errors. Only ``main`` is published to

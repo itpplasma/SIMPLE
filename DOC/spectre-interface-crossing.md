@@ -158,7 +158,7 @@ keys were removed without aliases. A finite smoothed layer changes the magnetic
 field and therefore the physics; it does not integrate exactly the sharp-sheet
 Hamiltonian. RK45 with exact crossings reproduces the retained full-orbit-everywhere
 reference loss fractions within counting uncertainty (table above).
-See [the symbolic rejection record](spectre-rejected-interface-models.md#t2-a-boris-smoothing-layer-changes-the-target-problem)
+See [the symbolic rejection record](https://github.com/itpplasma/SIMPLE/blob/main/DOC/spectre-rejected-interface-models.md#t2-a-boris-smoothing-layer-changes-the-target-problem)
 for the model distinction. Historical measurements above are evidence, not
 available configurations. The last revision containing the removed code is
 [`afec0c9`](https://github.com/itpplasma/SIMPLE/commit/afec0c9ccc5a90350ec71755a611450c23623083).

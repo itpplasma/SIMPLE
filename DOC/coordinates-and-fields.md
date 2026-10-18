@@ -1344,7 +1344,7 @@ The standalone sheet experiments no longer expose fixed-mu GC resets,
 phase-discarding hybrids, refreshed frozen-plane propagation in curved fields,
 or Boris as a symplectic candidate. Their sharp-sheet branch/energy-kick landing
 stepper was also removed. The
-[implementation ledger](spectre-rejected-interface-models.md#implementation-removal-ledger)
+[implementation ledger](https://github.com/itpplasma/SIMPLE/blob/main/DOC/spectre-rejected-interface-models.md#implementation-removal-ledger)
 records counterexamples, measured failures and the exact scope of each rejection.
 The maintained production interface path remains the event-resolved RK45 bridge;
 its whole-map symplecticity is not claimed. Resolved smooth-layer and exact planar
