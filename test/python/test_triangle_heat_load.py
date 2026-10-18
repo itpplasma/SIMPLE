@@ -82,6 +82,30 @@ def test_conservation_and_known_bins(tmp_path, binary, units, scale):
     np.testing.assert_allclose(load.power_density_per_MW, [1e6, 0.25e6])
 
 
+@pytest.mark.parametrize('separator', [' ', '\t', '\n'])
+def test_ascii_whitespace(inputs, separator):
+    results, stl = inputs
+    # CGAL accepts arbitrary whitespace between tokens, including coordinates.
+    stl.write_text(separator.join(stl.read_text().split()))
+    load = TriangleHeatLoad.from_netcdf(results, stl, 1)
+    np.testing.assert_array_equal(load.triangles_m, TRIANGLES)
+    np.testing.assert_array_equal(load.hit_count, [1, 2])
+    np.testing.assert_allclose(load.power_W, [250000, 500000])
+
+
+@pytest.mark.parametrize('facet', [
+    'vertex 0 0 0 vertex 1 0 0 endfacet',
+    'vertex 0 0 0 vertex 1 0 0 vertex 0 1 0 vertex 1 1 0 endfacet',
+    'vertex 0 0 0 vertex 1 0 0 vertex 0 1 0',
+    'vertex 0 0 0 vertex 1 0 0 vertex 0 1',
+])
+def test_malformed_ascii_facet(inputs, facet):
+    results, stl = inputs
+    stl.write_text('solid fixture\nfacet normal 0 0 1 outer loop ' + facet)
+    with pytest.raises(ValueError):
+        TriangleHeatLoad.from_netcdf(results, stl, 1)
+
+
 @pytest.mark.parametrize('phase_first', [False, True])
 def test_weight_and_final_energy(inputs, phase_first):
     results, stl = inputs

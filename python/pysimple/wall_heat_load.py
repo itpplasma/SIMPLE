@@ -13,10 +13,29 @@ def _read_stl(path: Path) -> np.ndarray:
     raw = path.read_bytes()
 
     def ascii_triangles():
-        vertices = [list(map(float, row.split()[1:]))
-                    for row in raw.decode('ascii').splitlines()
-                    if row.split()[:1] == ['vertex']]
-        return np.asarray(vertices, dtype=float).reshape(-1, 3, 3)
+        # CGAL reads whitespace-separated tokens, independent of line breaks.
+        tokens = iter(raw.decode('ascii').split())
+        triangles = []
+        for token in tokens:
+            if token != 'facet':
+                continue
+            vertices = []
+            for token in tokens:
+                if token == 'endfacet':
+                    break
+                if token == 'vertex':
+                    try:
+                        vertices.append([float(next(tokens)) for _ in range(3)])
+                    except StopIteration as exc:
+                        raise ValueError('truncated STL vertex') from exc
+                    if len(vertices) > 3:
+                        raise ValueError('STL facets must have three vertices')
+            else:
+                raise ValueError('unterminated STL facet')
+            if len(vertices) != 3:
+                raise ValueError('STL facets must have three vertices')
+            triangles.append(vertices)
+        return np.asarray(triangles, dtype=float).reshape(-1, 3, 3)
 
     # Match CGAL: try ASCII for a 'solid' prefix, then binary on failure.
     prefix = raw.lstrip(b' \t\r\n\v\f')
