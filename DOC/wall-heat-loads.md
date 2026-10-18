@@ -25,9 +25,104 @@ $$\tau_s = \frac{3(2\pi)^{3/2} \epsilon_0^2 m_\alpha}{e^4 Z_\alpha^2 n_e \ln\Lam
 
 For typical reactor parameters ($n_e = 10^{20}$ m$^{-3}$, $T_e = 10$ keV), $\tau_s \approx 0.1-1$ s.
 
-The energy evolution follows:
+The implemented operator includes momentum drag, momentum diffusion and
+pitch scattering. Its energy histories depend on the supplied temperature
+and density profiles; the characteristic time is a guide for choosing the
+trace duration, not an exact stopping law for each marker.
 
-$$E(t) = E_0 \left(1 - t/\tau_s\right)^{2/3} \quad \text{for } t < \tau_s$$
+## Collisions with an STL wall
+
+Build with `SIMPLE_ENABLE_CGAL=ON`. Set `swcoll = .true.` and supply both
+`wall_input` (an STL file) and `coord_input` (a chartmap covering the plasma
+and the wall). The field must remain valid throughout that chart, for example
+by splining a coil field onto an extended chartmap. Set `wall_units = 'm'` or
+`'mm'` to match the STL. A wall outside the LCFS needs an extended chart;
+reaching the chart boundary alone does not establish an STL hit.
+
+The same input file contains the background plasma profiles, in eV and m$^{-3}$:
+
+```fortran
+&config
+  swcoll = .true.
+  field_input = 'coils.simple'
+  coord_input = 'wall.chartmap.nc'
+  wall_input = 'wall.stl'
+  wall_units = 'm'
+  isw_field_type = 5  ! Reference-coordinate field
+  integmode = 0      ! RK guiding-center integration
+  facE_al = 1        ! Birth energy 3.5 MeV
+  contr_pp = -1d10   ! Trace strongly passing markers too
+  trace_time = 0.1
+  deterministic = .true.
+  ran_seed = 541
+  output_results_netcdf = .true.
+/
+&profiles
+  profile_type = 'power_series'
+  Te_scale = 1d4
+  Ti1_scale = 1d4
+  Ti2_scale = 1d4
+  ni1_scale = 5d19
+  ni2_scale = 5d19
+/
+```
+
+The default constant coefficients make these flat profiles. Choose
+`trace_time` relative to the slowing-down time of the supplied profiles:
+`trace_time << tau_s` measures prompt losses with little slowing down;
+times comparable to `tau_s` resolve losses at reduced energy. Check the
+birth momentum slowing rate (`params::slowrate`, in s$^{-1}$, computed at
+collision initialization); its inverse
+is a local momentum relaxation scale, not a universal stopping time. Energy
+diffusion and the spatial profiles preclude a single deterministic energy law
+for all markers. Resolve collision kicks with the microstep size and check
+convergence when changing the density, temperature, or trace time.
+
+Each microstep first advances the guiding center and checks the Cartesian
+segment for its first STL intersection. A hit retains momentum and pitch
+from that drift, including collision kicks from preceding microsteps. The
+code does not apply the full next collision kick after an already detected
+hit, or a fractional kick on the final segment. Thus hit energy has the
+time resolution of the drift/kick splitting. `times_lost` is interpolated
+along the intersecting segment. `wall_hit_angle_rad` is the angle between
+the segment and the wall normal (0 is normal incidence), not a full-orbit
+velocity incidence angle.
+
+Use `wall_hit == 1` to select actual STL intersections; `class_lost` is a
+classifier flag and does not select STL hits in ordinary tracing. Heat-load
+weights use the recorded
+`zend(4)**2 = E_hit/E0`, with `E0 = 3.5 MeV / facE_al`. Energy transferred
+to the background before impact is not deposited in the wall bin. Thermal
+diffusion can increase individual energies, so `p < 1` is an ensemble
+slowing-down expectation rather than a strict bound for every marker.
+
+The current `WallHeatMap.from_netcdf` reader selects `class_lost`, so ordinary
+STL tracing results need direct selection with `wall_hit` for heat-load
+post-processing. The regression CSV supplies the hit energy weights directly.
+
+The registered `test_collisional_stl_wall` case uses 256 3.5 MeV alphas,
+the NCSX coil fixture, and an STL triangulated from the boundary of
+the map2disc chart extended by 0.1 m, contracted 5% toward the chart axis
+to leave a field-domain buffer around the planar facets. It uses enhanced flat
+densities and 1 keV temperatures to resolve slowing down in a short trace;
+this is a regression fixture, not a reactor prediction. With Python tools,
+map2disc, NumPy and netCDF4 available, run (the exercised map2disc environment
+used NumPy 2.2.6 and SciPy 1.16.3):
+
+```sh
+CMAKE_BUILD_PARALLEL_LEVEL=8 make test CONFIG=Fast \
+  FLAGS='-DSIMPLE_ENABLE_CGAL=ON -DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=ON' \
+  TEST=test_collisional_stl_wall
+```
+
+CTest generates the chartmap fixture automatically. The test checks the
+collisionless momentum invariant, the negligible-density limit, reduced
+energy on delayed wall hits, and identical particle results in two seeded
+one-thread runs. It writes `build/test/tests/collisional_stl_wall/wall_hits.csv`
+with mode, marker, hit energy fraction, hit time in seconds, and incidence
+angle in radians, alongside per-run `results.nc` and `run.log`. The fixed
+thread count is `OMP_NUM_THREADS=1`; multithread stream independence and
+scheduling-dependent reproducibility remain tracked in #42.
 
 ## Monte Carlo Heat Flux Calculation
 
@@ -68,7 +163,9 @@ The **energy loss fraction** accounts for slowing down:
 
 $$f_\text{energy} = \frac{1}{N} \sum_{i \in \text{lost}} p_i^2$$
 
-Note: $f_\text{energy} \leq f_\text{particle}$ because $p_i^2 \leq 1$.
+For an ensemble dominated by slowing down, typically
+$f_\text{energy} \leq f_\text{particle}$. Stochastic energy diffusion does not
+impose $p_i^2 \leq 1$ on every individual marker.
 
 The lost power is:
 
@@ -169,9 +266,11 @@ The NetCDF results file from SIMPLE contains:
 
 | Variable | Shape | Description |
 |----------|-------|-------------|
-| `zend` | (5, N) | Final phase space: s, theta, zeta, p=v/v0, lambda |
+| `zend` | (5, N) | Final reference phase space: radial coordinate (rho for chartmaps), theta, zeta, p=v/v0, lambda |
 | `xend_cart` | (3, N) | Final Cartesian position (x, y, z) |
-| `class_lost` | (N,) | 1 if particle hit wall, 0 otherwise |
+| `class_lost` | (N,) | Classifier loss flag; use wall_hit to select STL intersections |
+| `wall_hit` | (N,) | 1 for a confirmed STL intersection |
+| `wall_hit_angle_rad` | (N,) | Segment incidence angle relative to wall normal (rad) |
 | `times_lost` | (N,) | Time of wall impact (s) |
 
 The velocity ratio `zend[3]` = $p = v/v_0$ is crucial for energy weighting.

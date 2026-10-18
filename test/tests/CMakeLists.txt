@@ -202,6 +202,22 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS AND SIMPLE_HAVE_MAP2DISC)
         TIMEOUT 600
         FIXTURES_SETUP chartmap_ncsx_map2disc_wall)
 
+    if(SIMPLE_ENABLE_CGAL)
+        add_test(NAME test_collisional_stl_wall
+            COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/test_collisional_stl_wall.py
+                $<TARGET_FILE:simple.x>
+                ${CHARTMAP_NCSX_MAP2DISC_WALL_FILE}
+                ${CMAKE_CURRENT_BINARY_DIR}/coils.simple
+                ${CMAKE_CURRENT_BINARY_DIR}/wout_ncsx.nc
+            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+        set_tests_properties(test_collisional_stl_wall PROPERTIES
+            LABELS "integration;python;wall"
+            TIMEOUT 600
+            PROCESSORS 1
+            FIXTURES_REQUIRED chartmap_ncsx_map2disc_wall)
+    endif()
+
     add_test(NAME test_chartmap_ncsx_map2disc_wall_offset
         COMMAND ${CMAKE_COMMAND} -E env
             PYTHONPATH=${LIBNEO_PYTHON_DIR}:${LIBNEO_PYTHON_BINARY_DIR}
