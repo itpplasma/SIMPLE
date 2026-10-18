@@ -454,6 +454,14 @@ set_tests_properties(test_fusion_hot_profile PROPERTIES
 set_tests_properties(test_fusion_nonfinite PROPERTIES
     PASS_REGULAR_EXPRESSION "fusion source: nonfinite profiles")
 
+add_executable(test_api_repeated_sampling.x test_api_repeated_sampling.f90)
+target_link_libraries(test_api_repeated_sampling.x simple)
+add_test(NAME test_api_repeated_sampling
+    COMMAND test_api_repeated_sampling.x ${WOUT_FILE})
+set_tests_properties(test_api_repeated_sampling PROPERTIES LABELS "integration"
+    TIMEOUT 120 ENVIRONMENT "OMP_NUM_THREADS=1"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
 add_executable(test_fusion_birth_equilibrium.x test_fusion_birth_equilibrium.f90)
 target_link_libraries(test_fusion_birth_equilibrium.x simple)
 add_dependencies(test_fusion_birth_equilibrium.x generate_test_boozer_chartmap)
