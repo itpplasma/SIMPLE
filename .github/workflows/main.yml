@@ -172,13 +172,14 @@ jobs:
             target: test-smoke
             coverage: 'OFF'
           - gcc: 14
-            config: Debug
+            config: Fast
             target: test-fast
             coverage: 'ON'
     env:
       CC: gcc-${{ matrix.gcc }}
       CXX: g++-${{ matrix.gcc }}
       FC: gfortran-${{ matrix.gcc }}
+      OMP_NUM_THREADS: 2
 
     steps:
       - uses: actions/checkout@v6

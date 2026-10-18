@@ -115,10 +115,12 @@ python -m unittest discover -s test/python -p test_changed_line_lint.py -v
 CI keeps the existing GNU test jobs and adds GCC 13 smoke tests plus GCC 14
 fast-suite coverage on non-draft PRs and pushes to `main`. Coverage reports are
 attached as the `fast-suite-coverage` artifact and summarized in the job summary.
-To collect coverage locally with GNU Fortran, GCC's matching `gcov`, and `lcov`:
+Coverage uses the normal `Fast` profile; `ENABLE_COVERAGE` instruments SIMPLE
+and its tests after configuring external dependencies. To collect coverage
+locally with GNU Fortran, GCC's matching `gcov`, and `lcov`:
 
 ```bash
-make test-fast CONFIG=Debug \
+make test-fast CONFIG=Fast \
     FLAGS='-DENABLE_COVERAGE=ON -DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF'
 cmake --build build --target coverage
 lcov --summary build/coverage_filtered.info

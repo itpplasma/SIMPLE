@@ -73,7 +73,7 @@ endif()
 option(ENABLE_PYTHON_INTERFACE "Enables the Python-Wrapper." ON)
 option(SIMPLE_TESTING "Enable testing." ON)
 option(ENABLE_OPENMP "Enable OpenMP compiler flags." ON)
-option(ENABLE_COVERAGE "Enable code coverage analysis (Debug/Profile builds only)" OFF)
+option(ENABLE_COVERAGE "Enable GNU code coverage analysis" OFF)
 option(SIMPLE_DETERMINISTIC_FP "Disable fast-math for reproducible floating-point" OFF)
 option(SIMPLE_ENABLE_PYTHON_TOOLS "Enable Python helpers (tests/data generation)" ON)
 option(SIMPLE_ENABLE_OPENACC "Enable OpenACC offload (NVHPC only)" OFF)
@@ -384,15 +384,18 @@ if (ENABLE_OPENMP)
     link_libraries(OpenMP::OpenMP_Fortran)
 endif()
 
-# Coverage analysis configuration (only for Debug/Profile builds)
+# Coverage analysis uses the selected build profile, including normal Fast builds.
 if (ENABLE_COVERAGE)
-    if (CMAKE_BUILD_TYPE MATCHES "Debug|Profile")
+    if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
         message(STATUS "Coverage analysis enabled for ${CMAKE_BUILD_TYPE} build")
         
         # Create interface library for coverage flags to scope them to specific targets
         add_library(coverage_flags INTERFACE)
         target_compile_options(coverage_flags INTERFACE --coverage -fprofile-arcs -ftest-coverage)
         target_link_options(coverage_flags INTERFACE --coverage -lgcov)
+        # Apply to SIMPLE targets declared below, after external dependencies.
+        # Coverage must not depend on Debug-only initialization/trap options.
+        link_libraries(coverage_flags)
         
         # Add custom target for coverage data generation
         find_program(LCOV_PATH lcov)
@@ -421,7 +424,7 @@ if (ENABLE_COVERAGE)
             message(WARNING "lcov not found - coverage target will not be available")
         endif()
     else()
-        message(WARNING "Coverage analysis requires Debug or Profile build type (current: ${CMAKE_BUILD_TYPE})")
+        message(FATAL_ERROR "Coverage analysis requires GNU Fortran")
     endif()
 endif()
 
