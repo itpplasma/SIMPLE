@@ -4,6 +4,8 @@ module failed_symplectic_step_backend
 
     implicit none
 
+    integer :: successful_drift_calls = 0
+
 contains
 
     subroutine fail_symplectic_step(si, f, ierr)
@@ -37,6 +39,7 @@ contains
         type(field_can_t), intent(inout) :: f
         integer, intent(out) :: ierr
 
+        successful_drift_calls = successful_drift_calls + 1
         si%z(1) = si%z(1) + 0.01d0
         f%Bmod = 1.0d0
         f%mu = si%pabs**2
@@ -50,7 +53,7 @@ end module failed_symplectic_step_backend
 program test_sympl_testfield
     use, intrinsic :: iso_fortran_env, only : dp => real64, int64
     use failed_symplectic_step_backend, only: fail_symplectic_step, &
-        locate_lcfs_step, successful_drift_step
+        locate_lcfs_step, successful_drift_step, successful_drift_calls
     use classification, only: classify_classifier_exit
     use simple_main, only : classify_orbit_exit, init_field, locate_linear_lcfs, &
         locate_validated_lcfs, macrostep, macrostep_with_wall_check, &
@@ -240,7 +243,9 @@ contains
     end subroutine test_failed_step_preserves_state
 
     subroutine test_collision_failure_propagation
-        use collis_alp, only: efcolf_grid, velrat_grid, enrat_grid
+        use collis_alp, only: efcolf_grid, velrat_grid, enrat_grid, stost
+        use parmot_mod, only: ro0
+        use finite_check, only: is_finite
         use field_can_mod, only: field_can_t
         use orbit_symplectic_base, only: symplectic_integrator_t, &
             SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
@@ -250,13 +255,16 @@ contains
         type(field_can_t) :: saved_field
         real(dp), parameter :: initial(5) = [0.2_dp, 1.0_dp, 0.2_dp, &
             1.0_dp, 0.0_dp]
-        real(dp) :: z(5), x_previous(3), saved_wall_gate
+        real(dp) :: z(5), x_previous(3), saved_wall_gate, saved_ro0, saved_dtaumin
         integer(int64) :: kt
         integer :: warning, wall_path, step_error, hold_streak
         logical :: numerical_hold
 
         ! A real stost failure, not a mock collision callback: negative
         ! diffusion coefficients must be rejected by the production operator.
+        saved_ro0 = ro0
+        saved_dtaumin = dtaumin
+        ro0 = 1.0_dp ! TEST field uses explicit normalized finite units.
         efcolf_grid = -1.0_dp
         velrat_grid = 1.0_dp
         enrat_grid = 1.0_dp
@@ -266,15 +274,26 @@ contains
         orbit_model = ORBIT_GC
         integmode = 3
         swcoll = .true.
+        z = initial
+        call stost(z, dtaumin, 1, step_error)
+        if (step_error /= 1 .or. any(z /= initial)) &
+            error stop 'Collision rejection fixture did not reject bad diffusion'
         do warning = 0, 1
             symplectic_newton_warning_mode = warning == 1
             do wall_path = 0, 1
                 local_orbit = norb
                 call init_sympl(local_orbit%si, local_orbit%f, initial, &
                     1.0e-3_dp, 1.0e-3_dp, 1.0e-12_dp, 3)
+                if (.not. all(is_finite(local_orbit%si%z)) .or. &
+                    .not. all(is_finite([local_orbit%f%H, &
+                        local_orbit%f%mu, local_orbit%f%vpar]))) &
+                    error stop 'Collision caller fixture initialized nonfinite state'
+                if (abs(local_orbit%f%H - initial(4)**2) > 1.0e-12_dp) &
+                    error stop 'Collision caller fixture initialized wrong energy'
                 saved_si = local_orbit%si
                 saved_field = local_orbit%f
                 orbit_timestep_sympl => successful_drift_step
+                successful_drift_calls = 0
                 z = initial
                 x_previous = [1.0_dp, 2.0_dp, 3.0_dp]
                 kt = 7_int64
@@ -287,6 +306,8 @@ contains
                         step_error, 1, 1, x_previous, hold_streak=hold_streak, &
                         numerical_hold_any=numerical_hold)
                 end if
+                if (successful_drift_calls /= 1) &
+                    error stop 'Collision caller fixture did not complete its drift'
                 if (step_error /= SYMPLECTIC_STEP_EVENT_NOT_CONVERGED) &
                     error stop 'Collision failure did not terminate microstep'
                 if (classify_orbit_exit(step_error, ORBIT_GC, integmode, &
@@ -307,6 +328,8 @@ contains
             end do
         end do
         wall_query_rho_lcfs = saved_wall_gate
+        ro0 = saved_ro0
+        dtaumin = saved_dtaumin
         efcolf_grid = 0.0_dp
         swcoll = .false.
     end subroutine test_collision_failure_propagation
