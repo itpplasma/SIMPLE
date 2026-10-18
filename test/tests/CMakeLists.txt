@@ -1119,6 +1119,12 @@ foreach(CASE ${GOLDEN_RECORD_TEST_CASES})
         LABELS "golden_record;regression"
         ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record;GOLDEN_RECORD_RTOL=1.5e-7"
     )
+    if(CASE STREQUAL "collision")
+        # Intentional stream/operator correction: preserve the run and timing;
+        # analytic collision tests supply the physical distribution oracles.
+        set_property(TEST golden_record_${CASE} APPEND PROPERTY ENVIRONMENT
+            "GOLDEN_RECORD_STOCHASTIC_COLLISION=1")
+    endif()
 endforeach()
 
 # Golden record sanity test: tests the comparison system itself
