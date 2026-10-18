@@ -228,8 +228,9 @@ singularity when B is parallel to Cartesian Z. SIMPLE's IDS converter needs
 closed toroidal flux surfaces, so the straight-cylinder entry explicitly
 reports this capability limit.
 
-Each output directory contains the real input/output IDS files, external-code
-inputs/logs, state CSV and a JSON report. Reports preserve code revisions,
+Toroidal output directories contain the real input/output IDS files,
+external-code inputs/logs, state CSV and a JSON report. Cylinder directories
+contain the analytic-oracle report and ASCOT inputs. Reports preserve code revisions,
 end conditions, actual final times, losses, invariants and timing. Trajectory
 errors include only markers that completed at the same physical time; lost
 and failed markers cannot masquerade as matched trajectories. SIMPLE and
