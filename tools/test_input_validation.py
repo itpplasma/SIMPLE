@@ -40,6 +40,7 @@ class InputValidationTests(unittest.TestCase):
     def test_valid_syntax(self):
         for text in (
             "&CONFIG NPER=10 /",
+            "&config startmode=7, fusion_grid=128,32,32 /",
             "&config field_input='it''s!/a=b.nc', debug=F /",
             "&config sbeg(2:4)=3*0.2, sbeg(1024)=0.1 /",
             "&config sbeg(4:2:-1)=0.1 0.2 0.3 /",
@@ -63,6 +64,8 @@ class InputValidationTests(unittest.TestCase):
             ("&config trace_time=-1 /", "must be positive"),
             ("&config facE_al=0 /", "must be positive"),
             ("&config ntimstep=1 /", "must be >= 2"),
+            ("&config startmode=8 /", "must be <= 7"),
+            ("&config fusion_grid=128,32,32,16 /", "at most 3"),
             ("&config gpu_mode='typo' /", "must be one of"),
             ("&config nper=1,2 /", "at most 1"),
             ("&config sbeg(1025)=0.2 /", "outside 1:1024"),

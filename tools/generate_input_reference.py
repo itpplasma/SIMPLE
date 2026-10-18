@@ -47,7 +47,7 @@ RULES = {
     "npoiper2": {"min": 1},
     "notrace_passing": {"min": 0, "max": 1},
     "num_surf": {"min": 0, "max": 2},
-    "startmode": {"min": 1, "max": 6},
+    "startmode": {"min": 1, "max": 7},
     "integmode": {"choices": [-1, 0, 1, 2, 3, 4, 5, 6, 7, 15]},
     "orbit_model": {"choices": [0, 7]},
     "orbit_coord": {"choices": [0, 1]},

@@ -13,7 +13,7 @@ Boozer chartmaps. The latter is a physical volume element only when the
 chart geometry and field data are Boozer-consistent; this consistency is
 not checked at load time. It converts chartmap starts to
 reference coordinates only after sampling; profile arguments remain toroidal
-flux `s`, not reference `sqrt(s)`. See [alpha births](../docs/alpha-birth.md)
+flux `s`, not reference `sqrt(s)`. See [alpha births](https://github.com/itpplasma/SIMPLE/blob/main/docs/alpha-birth.md)
 for source-grid resolution, units, supported inputs and marker normalization.
 
 ---

@@ -37,7 +37,7 @@ and ``DOC/config.md`` for additional usage, units and option interactions.
 &config
 -------
 
-Source: ``src/params.f90:212``.
+Source: ``src/params.f90:213``.
 
 .. list-table::
    :header-rows: 1
@@ -180,6 +180,12 @@ Source: ``src/params.f90:212``.
      - ``default``
      - ``scalar``
      - ``1``
+     -
+   * - ``fusion_grid``
+     - ``integer``
+     - ``default``
+     - ``3``
+     - ``(/128, 32, 32/)``
      -
    * - ``grid_density``
      - ``real``
