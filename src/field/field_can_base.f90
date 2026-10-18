@@ -14,8 +14,8 @@ integer(8) :: n_field_evaluations = 0
 ! second derivatives (mode_secders = 2) for their analytic Jacobians. Any
 ! comparison of cost per unit accuracy between those families has to weight the
 ! two separately, so they are counted separately.
-integer(8) :: n_field_evaluations_d1 = 0
-integer(8) :: n_field_evaluations_d2 = 0
+    integer(8) :: n_field_evaluations_d1 = 0
+    integer(8) :: n_field_evaluations_d2 = 0
 
 !$omp threadprivate(n_field_evaluations)
 !$omp threadprivate(n_field_evaluations_d1, n_field_evaluations_d2)
@@ -69,16 +69,16 @@ contains
 ! Record one field evaluation, split by derivative depth. Every field backend
 ! calls this instead of bumping n_field_evaluations directly, so the split can
 ! never drift out of step with the total.
-subroutine count_field_evaluation(mode_secders)
-    integer, intent(in) :: mode_secders
+    subroutine count_field_evaluation(mode_secders)
+        integer, intent(in) :: mode_secders
 
-    n_field_evaluations = n_field_evaluations + 1
-    if (mode_secders > 0) then
-        n_field_evaluations_d2 = n_field_evaluations_d2 + 1
-    else
-        n_field_evaluations_d1 = n_field_evaluations_d1 + 1
-    end if
-end subroutine count_field_evaluation
+        n_field_evaluations = n_field_evaluations + 1
+        if (mode_secders > 0) then
+            n_field_evaluations_d2 = n_field_evaluations_d2 + 1
+        else
+            n_field_evaluations_d1 = n_field_evaluations_d1 + 1
+        end if
+    end subroutine count_field_evaluation
 
 subroutine identity_transform(xfrom, xto)
     real(dp), intent(in) :: xfrom(3)
