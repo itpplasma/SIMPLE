@@ -13,6 +13,7 @@ docstrings of ``pysimple`` and the examples are the scripts in ``examples/``.
    overview
    api/index
    examples
+   postprocessing
    boozer-chartmap-schema
 
 Indices and tables
