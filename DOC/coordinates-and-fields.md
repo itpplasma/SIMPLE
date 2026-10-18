@@ -18,1344 +18,473 @@ for source-grid resolution, units, supported inputs and marker normalization.
 
 ---
 
-## Table of Contents
+The equations behind canonical, Boozer, Meiss and Albert coordinates are in
+{doc}`/model/coordinates`; the module map and the steps to add a field source
+are in {doc}`/development/architecture`. This note documents the code paths:
+types, routines, grids, units and conventions at each interface.
 
-1. [Architecture Overview](#1-architecture-overview)
-2. [Coordinate Systems](#2-coordinate-systems)
-3. [Magnetic Field System](#3-magnetic-field-system)
-4. [The magfie Interface](#4-the-magfie-interface)
-5. [Splined Field Architecture](#5-splined-field-architecture)
-6. [Canonical Coordinate Systems](#6-canonical-coordinate-systems)
-7. [libneo Integration](#7-libneo-integration)
-8. [Configuration Options](#8-configuration-options)
-9. [Coordinate Transformation Workflows](#9-coordinate-transformation-workflows)
-10. [Key Files Reference](#10-key-files-reference)
+## 1. Coordinate systems
 
----
+### 1.1 Interface (libneo)
 
-## 1. Architecture Overview
+Reference coordinates are a libneo `coordinate_system_t`
+(`libneo_coordinates`). Every implementation provides
 
-SIMPLE uses a layered architecture for coordinates and fields:
+| Routine | Result |
+|---|---|
+| `evaluate_cart(u, x)` | Cartesian position $(x, y, z)$ |
+| `evaluate_cyl(u, xcyl)` | cylindrical $(R, \varphi, Z)$ |
+| `covariant_basis(u, e_cov)` | $3\times 3$ covariant basis $\partial\mathbf x/\partial u^i$ |
+| `metric_tensor(u, g, ginv, sqrtg)` | $g_{ij}$, $g^{ij}$, $\sqrt g$ |
+| `from_cyl(xcyl, u, ierr)` | inverse map from cylindrical coordinates |
+| `cov_to_cart`, `ctr_to_cart` | vector components to Cartesian |
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Orbit Integrator Layer                       │
-│  (orbit_symplectic.f90, orbit_symplectic_quasi.f90)             │
-├─────────────────────────────────────────────────────────────────┤
-│                      magfie Interface                            │
-│  Unified field evaluation: magfie(x, bmod, sqrtg, bder, ...)    │
-├─────────────────────────────────────────────────────────────────┤
-│              Canonical Field Layer (optional)                    │
-│  field_can_boozer, field_can_meiss, field_can_albert            │
-├─────────────────────────────────────────────────────────────────┤
-│                 Splined Field Decorator                          │
-│  splined_field_t: Fast evaluation via batch B-splines           │
-├─────────────────────────────────────────────────────────────────┤
-│                 Magnetic Field Implementations                   │
-│  vmec_field_t, coils_field_t, gvec_field_t                      │
-├─────────────────────────────────────────────────────────────────┤
-│                  Coordinate Systems (libneo)                     │
-│  vmec_coordinate_system_t, chartmap_coordinate_system_t         │
-└─────────────────────────────────────────────────────────────────┘
-```
+The run-wide instance is `reference_coordinates::ref_coords`, set by
+`init_reference_coordinates(coord_input)` from the file type: a Boozer
+chartmap or chartmap file gives `chartmap_coordinate_system_t` wrapped with
+`vmec_RZ_scale` (`scaled_chartmap_coordinates`), a VMEC `wout` gives
+`vmec_coordinate_system_t`.
 
-### Design Principles
+### 1.2 VMEC coordinates
 
-1. **Polymorphism**: All fields inherit from abstract `magnetic_field_t`
-2. **Decorator Pattern**: `splined_field_t` wraps any field for fast evaluation
-3. **Strategy Pattern**: Runtime field selection via procedure pointer (`magfie`)
-4. **Coordinate Independence**: Physics is independent of coordinate choice
+`vmec_coordinate_system_t` uses $(s, \vartheta, \varphi)$: normalised
+toroidal flux, VMEC poloidal angle and geometric toroidal angle. $R$ and $Z$
+come from `splint_vmec_data`; $x = R\cos\varphi$, $y = R\sin\varphi$. The
+basis vectors are
 
----
+$$
+\mathbf e_{s,\vartheta} = \partial_{s,\vartheta} R\,\hat{\mathbf R}
+  + \partial_{s,\vartheta} Z\,\hat{\mathbf z},\qquad
+\mathbf e_\varphi = R\,\hat{\boldsymbol\varphi} + \partial_\varphi R\,\hat{\mathbf R}
+  + \partial_\varphi Z\,\hat{\mathbf z}.
+$$
 
-## 2. Coordinate Systems
+`from_cyl` solves $(R, Z)(s, \vartheta) = (R_*, Z_*)$ at fixed $\varphi$ by
+Newton iteration from $s \approx (d_\text{axis}/d_\text{boundary})^2$: at most
+50 iterations, residual $10^{-10}$, step $10^{-12}$
+(`libneo_coordinates_vmec.f90`). It can fail outside the plasma and near the
+boundary ([#288](https://github.com/itpplasma/SIMPLE/issues/288)).
 
-### 2.1 Abstract Base (libneo)
+### 1.3 Chartmap coordinates
 
-All coordinate systems derive from `coordinate_system_t` in libneo:
+`chartmap_coordinate_system_t` reads a NetCDF file with Cartesian geometry
+$x, y, z(\zeta, \vartheta, \rho)$ on a uniform grid over one field period,
+dimensions `rho`, `theta`, `zeta` and attributes `num_field_periods`,
+`zeta_convention`, `rho_convention`:
 
-```fortran
-type, abstract :: coordinate_system_t
-contains
-    procedure(evaluate_cart_if), deferred :: evaluate_cart
-    procedure(evaluate_cyl_if), deferred :: evaluate_cyl
-    procedure(covariant_basis_if), deferred :: covariant_basis
-    procedure(metric_tensor_if), deferred :: metric_tensor
-    procedure(from_cyl_if), deferred :: from_cyl
-    procedure :: cov_to_cart => coordinate_system_cov_to_cart
-    procedure :: ctr_to_cart => coordinate_system_ctr_to_cart
-end type
-```
+| `rho_convention` | Meaning of `rho` |
+|---|---|
+| `rho_tor`, `rho_pol` | $\sqrt{s}$ of toroidal or poloidal flux |
+| `psi_tor_norm`, `psi_pol_norm` | normalised flux $s$ itself |
+| `unknown` | geometric radius, e.g. from `map2disc` |
 
-**Core Operations**:
-- `evaluate_cart(u, x)`: Convert coordinate u to Cartesian (x, y, z)
-- `evaluate_cyl(u, xcyl)`: Convert to cylindrical (R, phi, Z)
-- `covariant_basis(u, e_cov)`: Get 3x3 covariant basis vectors
-- `metric_tensor(u, g, ginv, sqrtg)`: Compute metric tensor
-- `from_cyl(xcyl, u, ierr)`: Invert cylindrical to native coordinates
+Two kinds of chartmap describe the same boundary with different interiors.
+`vmec_to_chartmap.x` follows the VMEC flux surfaces (`rho_tor`, magnetic
+axis at $\rho = 0$). `generate_chartmap_map2disc.py` fills the interior with a
+conformal disc map (`unknown`, geometric centre at $\rho = 0$); it serves as a
+smooth reference for Meiss coordinates. At equal nominal
+$(\rho, \vartheta, \zeta)$ the two give different points and metrics; a
+particle started at the same physical position follows the same orbit.
 
-### 2.2 VMEC Coordinates
+**Extended Boozer chartmap.** A chartmap with `boozer_field = 1` also stores
+the field in Boozer coordinates; the format is specified in
+{doc}`/boozer-chartmap-schema`. Geometry, `Bmod`, `B_theta` and `B_phi` use
+the uniform `rho` grid with $s = \rho^2$; `A_phi` uses a uniform `s` grid
+(`radial_abscissa = "s"`); $A_\vartheta = \psi_\text{tor}\, s$ is linear in
+$s$. `theta` and `zeta` exclude the periodic endpoint; the reader appends it
+for the splines. The major radius is not stored: the reader takes the
+$(\vartheta, \zeta)$ average of $\sqrt{x^2 + y^2}$ on the innermost surface
+(cm in the file, metres in `new_vmec_stuff_mod::rmajor`). Both consumers use
+`boozer_chartmap_io::read_boozer_chartmap`. Writers are
+`export_boozer_chartmap` (libneo `boozer_converter.F90`, app
+`export_boozer_chartmap.x`), `tools/gvec_to_boozer_chartmap.py` and
+`tools/booz_xform_to_boozer_chartmap.py` (from `boozmn*.nc`; recovers
+`torflux` from the geometry when `phi_b` is absent).
 
-**Type**: `vmec_coordinate_system_t`
+### 1.4 Cartesian coordinates
 
-**Coordinates**: (s, theta, varphi)
-- `s`: Normalized toroidal flux, 0 <= s <= 1
-- `theta`: VMEC poloidal angle, 0 to 2pi
-- `varphi`: Geometrical toroidal angle, 0 to 2pi
+`cartesian_coordinate_system_t` (`src/coordinates/cartesian_coordinates.f90`)
+is the identity in cm with unit metric. It is the native system of
+`coils_field_t`.
 
-**Position Evaluation**:
-```
-R, Z from splint_vmec_data(s, theta, varphi, ...)
-x = R * cos(varphi)
-y = R * sin(varphi)
-z = Z
-```
+### 1.5 Radial scaling
 
-**Covariant Basis**:
-```
-e_1 = dR/ds * [cos(phi), sin(phi), 0] + dZ/ds * [0, 0, 1]
-e_2 = dR/dtheta * [cos(phi), sin(phi), 0] + dZ/dtheta * [0, 0, 1]
-e_3 = R * [-sin(phi), cos(phi), 0] + dR/dphi * [cos(phi), sin(phi), 0] + dZ/dphi * [0, 0, 1]
-```
+Splines in the integrator radius $r$ resolve the axis better than splines in
+$s$. `src/coordinates/coordinate_scaling.f90` provides
 
-**Inversion (from_cyl)**: Newton iteration on (R, Z) -> (s, theta)
-- Initial guess: s ~ (distance_from_axis / distance_to_boundary)^2
-- Tolerance: 1e-10, max 50 iterations
+| Type | Map | $dr/ds$ |
+|---|---|---|
+| `sqrt_s_scaling_t` | $r = \sqrt{s}$ | $1/(2r)$ |
+| `identity_scaling_t` | $r$ = reference radius | 1 |
 
-### 2.3 Chartmap Coordinates
+`get_default_scaling` (`src/field/field_splined.f90`) selects
+`sqrt_s_scaling_t` for VMEC references and for chartmaps with
+`psi_tor_norm`/`psi_pol_norm`, and `identity_scaling_t` for chartmaps whose
+`rho` is already $\sqrt s$ or geometric. Covariant radial components are
+multiplied by $ds/dr = 2r$ under `sqrt_s_scaling_t`
+([#291](https://github.com/itpplasma/SIMPLE/issues/291)).
 
-**Type**: `chartmap_coordinate_system_t`
+## 2. Field objects
 
-**Coordinates**: `(rho, theta, zeta)`
-- `rho`: normalized radial coordinate
-- `theta`: poloidal angle
-- `zeta`: toroidal angle over one field period
+### 2.1 Interface
 
-**Source**: NetCDF file with Cartesian geometry on a structured grid
+Fields extend libneo `magnetic_field_t` (module `field_base`) and carry their
+native coordinate system in `coords`:
 
-**Required geometry layout**:
-```
-Dimensions: rho, theta, zeta
-Variables: x(zeta, theta, rho), y(...), z(...)
-Attributes: num_field_periods, zeta_convention, rho_convention
-```
-
-**Rho conventions**:
-- `RHO_TOR`: rho = sqrt(s_toroidal)
-- `RHO_POL`: rho = sqrt(s_poloidal)
-- `PSI_TOR_NORM`: rho = s (normalized toroidal flux)
-- `PSI_POL_NORM`: rho = s (normalized poloidal flux)
-- `UNKNOWN`: Geometric disc mapping (e.g., map2disc)
-
-**Common chartmap sources**:
-
-1. `vmec_to_chartmap.x`
-   - `rho_convention = rho_tor`
-   - interior follows VMEC flux surfaces
-
-2. `generate_chartmap_map2disc.py`
-   - `rho_convention = unknown`
-   - interior is geometric, not flux-based
-   - mainly useful as a smooth reference map for Meiss coordinates
-
-#### Extended Boozer chartmap (field profiles)
-
-A chartmap with `boozer_field = 1` stores Boozer field data next to the
-geometry. The radial contract is split by quantity:
-
-- `rho` is uniform and increasing. Geometry, `Bmod`, `B_theta`, and `B_phi`
-  use this grid.
-- `s` is uniform and increasing. It spans `rho(1)^2` to `rho(n_rho)^2`.
-  `A_phi` uses this grid and must carry `radial_abscissa = "s"`.
-
-`rho_tor` means `s = rho^2`. `A_theta = torflux*s` stays linear in `s`.
-`theta` and `zeta` are endpoint-excluded and shared by geometry and `Bmod`.
-The reader appends exact periodic endpoint planes for spline construction. The
-major radius is not stored: the reader derives it as the `(theta,
-zeta)`-average of `sqrt(x^2 + y^2)` on the innermost `rho` surface (cm in the
-file, metres in `new_vmec_stuff_mod::rmajor`). Both chartmap consumers use
-`boozer_chartmap_io.read_boozer_chartmap`, so metadata, scaling, and grid layout
-stay shared.
-
-The required NetCDF variables and attributes are listed in
-`docs/boozer-chartmap-schema.rst`.
-
-Writers of the extended format: `export_boozer_chartmap`
-(`boozer_converter.F90`), `tools/gvec_to_boozer_chartmap.py`, and
-`tools/booz_xform_to_boozer_chartmap.py` (from booz_xform `boozmn*.nc`
-harmonics; recovers `torflux` from the surface geometry when `phi_b` is
-absent).
-
-### 2.4 Cartesian Coordinates
-
-**Type**: `cartesian_coordinate_system_t`
-
-**Coordinates**: (x, y, z) in cm
-
-- Identity coordinate system
-- Used by `coils_field_t` (Biot-Savart evaluation)
-- Trivial metric (identity), trivial basis (identity)
-
-### 2.5 Coordinate Scaling
-
-**Purpose**: Transform between flux coordinate (s) and radial coordinate (r)
-for better spline resolution near magnetic axis.
-
-**Types** (in `coordinate_scaling.f90`):
-
-```fortran
-type :: sqrt_s_scaling_t    ! Default
-    ! Transform: s -> r = sqrt(s)
-    ! Jacobian: dr/ds = 1/(2r)
-end type
-
-type :: identity_scaling_t
-    ! No transformation: r = s
-    ! Used when coordinates already use rho = sqrt(s)
-end type
-```
-
-**Selection Logic**:
-- PSI_TOR_NORM, PSI_POL_NORM: Use sqrt_s_scaling
-- RHO_TOR, RHO_POL, UNKNOWN: Use identity_scaling
-
----
-
-## 3. Magnetic Field System
-
-### 3.1 Abstract Base Class
-
-```fortran
-type, abstract :: magnetic_field_t
-    class(coordinate_system_t), allocatable :: coords
-contains
-    procedure(evaluate_interface), deferred :: evaluate
-end type
-```
-
-**Evaluate Interface**:
 ```fortran
 subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
-    real(dp), intent(in) :: x(3)           ! Position in field coords
-    real(dp), intent(out) :: Acov(3)       ! Covariant vector potential
-    real(dp), intent(out) :: hcov(3)       ! Covariant h = B/|B|
-    real(dp), intent(out) :: Bmod          ! Field magnitude
-    real(dp), intent(out), optional :: sqgBctr(3)  ! sqrt(g) * B^i
+    real(dp), intent(in) :: x(3)                   ! native coordinates
+    real(dp), intent(out) :: Acov(3)               ! covariant A_i
+    real(dp), intent(out) :: hcov(3)               ! covariant h_i = B_i/B
+    real(dp), intent(out) :: Bmod                  ! B
+    real(dp), intent(out), optional :: sqgBctr(3)  ! sqrt(g) B^i
 end subroutine
 ```
 
-### 3.2 VMEC Field
+`field_from_file` (`src/field.F90`) chooses the class: SPECTRE HDF5,
+Boozer chartmap, VMEC `wout`, or a coils file (name starting with `coils` or
+ending in `.coils`), which it wraps in a splined field on `ref_coords`.
 
-**Type**: `vmec_field_t`
-**File**: `libneo/src/field/field_vmec.f90`
+| Type | File | Native coordinates | `sqgBctr` |
+|---|---|---|---|
+| `vmec_field_t` | libneo `field_vmec.f90` | VMEC $(s,\vartheta,\varphi)$ | not implemented |
+| `coils_field_t` | `src/field/field_coils.f90` | Cartesian | Cartesian $\mathbf B$ |
+| `boozer_chartmap_field_t` | `src/field/field_boozer_chartmap.f90` | $(\rho, \vartheta_B, \varphi_B)$ | not implemented |
+| `splined_field_t` | `src/field/field_splined.f90` | reference coordinates | not implemented |
+| `spectre_field_t` | libneo `field_spectre.f90` | $(\rho_g, \vartheta, \zeta)$ | exact (section 6) |
 
-- Native coordinates: VMEC (s, theta, varphi)
-- Evaluation: Calls `splint_vmec_data()` from libneo
-- sqgBctr: Not implemented
+`sqgBctr` is inconsistent across types
+([#290](https://github.com/itpplasma/SIMPLE/issues/290)).
 
-**Creation**:
-```fortran
-call create_vmec_field(field)
-! Allocates vmec_coordinate_system_t into field%coords
-```
+`coils_field_t` evaluates Biot–Savart from libneo `neo_biotsavart`;
+`create_coils_field` converts coil positions from m to cm and currents from A
+to statA ($\times 2.99792458\times 10^{9}$).
 
-### 3.3 Coils Field
+`boozer_chartmap_field_t` needs no VMEC initialisation;
+`is_boozer_chartmap` selects this path. On load it scales `Bmod` by
+`vmec_B_scale`, `B_theta` and `B_phi` by `vmec_B_scale*vmec_RZ_scale`, and
+`A_phi` and `torflux` by `vmec_B_scale*vmec_RZ_scale**2`. GVEC equilibria
+enter only through this path after conversion with
+`tools/gvec_to_boozer_chartmap.py`; SIMPLE does not link GVEC.
 
-**Type**: `coils_field_t`
-**File**: `src/field/field_coils.f90`
+### 2.2 Splined field
 
-- Native coordinates: Cartesian (x, y, z)
-- Evaluation: Biot-Savart via `neo_biotsavart` library
-- Unit conversions: meters -> cm, Amperes -> STATA
+`splined_field_t` resamples any field on the reference coordinates and then
+forgets the source. `create_splined_field` (`src/field/field_splined.f90`):
 
-**Creation**:
-```fortran
-call create_coils_field('coils.simple', field)
-```
+1. `configure_spline_grid`: $62 \times 63 \times 64$ points in
+   $(r, \vartheta, \varphi)$ over $r \in [10^{-12}, 1]$,
+   $\vartheta \in [0, 2\pi]$, $\varphi \in [0, 2\pi/N_\text{fp}]$. For a
+   chartmap reference it takes the chartmap grid size and $\rho$ range,
+   pulled $0.1\,\Delta\rho$ inside the outermost surface, where the VMEC
+   inversion can fail.
+2. `get_default_scaling` (section 1.5).
+3. `sample_spline_arrays` evaluates $A_i$, $h_i$ and $B$ at every node
+   (OpenMP over $\varphi$), see section 4.
+4. Gauge: subtract the value at the first node from each $A_i$.
+5. `construct_batch_splines_3d`: quintic in all directions, periodic in the
+   angles. Seven quantities: $A_r, A_\vartheta, A_\varphi, h_r, h_\vartheta,
+   h_\varphi, B$.
 
-### 3.4 Boozer Chartmap Field
+At run time `evaluate_with_der` returns the seven values and their first
+derivatives; `magfie_refcoords` adds the metric from `ref_coords`.
 
-**Type**: `boozer_chartmap_field_t`
-**File**: `src/field/field_boozer_chartmap.f90`
+## 3. The `magfie` interface
 
-- Reads an extended Boozer chartmap NetCDF (`boozer_field = 1`, see section 2)
-- Native coordinates: chartmap (rho = sqrt(s), theta_B, phi_B)
-- No VMEC initialization; runtime path selected by `is_boozer_chartmap()`
-
-GVEC equilibria enter through this path. SIMPLE reads no raw GVEC state files
-and links no GVEC library; convert with `tools/gvec_to_boozer_chartmap.py`
-(section 8.2.1).
-
-### 3.5 Splined Field (Decorator)
-
-**Type**: `splined_field_t`
-**File**: `src/field/field_splined.f90`
-
-Wraps any magnetic field for fast evaluation via batch B-splines.
-
-**Architecture**:
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  SPLINE CONSTRUCTION (one-time)                                  │
-│                                                                  │
-│  For each grid point (r, theta, phi) in reference coordinates:  │
-│    1. ref_coords%evaluate_cart([r,theta,phi]) -> (x,y,z)        │
-│    2. find_vmec_coords_for_cart_point -> (s, theta_v, phi_v)    │
-│    3. source%evaluate(s, theta_v, phi_v) -> B_vmec              │
-│    4. Transform to reference coords via basis vectors           │
-│    5. Store in spline: spline(r, theta, phi) = B_ref            │
-│                                                                  │
-│  Result: Spline knows B(r,theta,phi) but NOT source origin      │
-└─────────────────────────────────────────────────────────────────┘
-                            |
-                            v
-┌─────────────────────────────────────────────────────────────────┐
-│  RUNTIME EVALUATION (many calls)                                 │
-│                                                                  │
-│  Given position (r, theta, phi):                                 │
-│    1. evaluate_batch_splines_3d -> (A_cov, h_cov, |B|)          │
-│    2. ref_coords%metric_tensor -> g_ij, sqrt(g)                 │
-│    3. Compute h^i = g^{ij} h_j                                  │
-│                                                                  │
-│  Source field is COMPLETELY FORGOTTEN after construction        │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-**Grid Configuration**:
-- Default: 62 x 63 x 64 points (r x theta x phi)
-- Spline order: 5 (quintic) in all dimensions
-- Periodicity: [False, True, True] (r, theta, phi)
-
-**Chartmap Special Case**:
-- Range limited to rho in [0.1, 0.99]
-- Avoids axis singularity (0.1) and boundary inversion failure (0.99)
-- Covers 99% of plasma volume
-
-**Stored Components** (7 total):
-1. A_r (covariant vector potential)
-2. A_theta
-3. A_phi
-4. h_r (covariant unit field direction)
-5. h_theta
-6. h_phi
-7. |B| (field magnitude)
-
----
-
-## 4. The magfie Interface
-
-**File**: `src/magfie.f90`
-
-Unified field evaluation interface using procedure pointer for runtime dispatch.
-
-### 4.1 Interface Definition
+`magfie_sub` (`src/magfie.f90`) evaluates the non-canonical field for RK45,
+sampling, classification and diagnostics through a procedure pointer:
 
 ```fortran
-abstract interface
-    subroutine magfie_base(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
-        real(dp), intent(in) :: x(3)
-        real(dp), intent(out) :: bmod, sqrtg
-        real(dp), intent(out) :: bder(3), hcovar(3), hctrvr(3), hcurl(3)
-    end subroutine
-end interface
-
-procedure(magfie_base), pointer :: magfie => null()
-```
-
-### 4.2 Output Quantities
-
-| Variable | Type | Physical Meaning |
-|----------|------|------------------|
-| bmod | scalar | Magnetic field magnitude B/B_ref |
-| sqrtg | scalar | Jacobian sqrt(det(g_ij)) |
-| bder(3) | covariant | Derivatives d(ln B)/dx_i |
-| hcovar(3) | covariant | Unit field direction h_i = B_i/|B| |
-| hctrvr(3) | contravariant | Unit field direction h^i = B^i/|B| |
-| hcurl(3) | contravariant | Curl of unit vector (curl h)^i |
-
-### 4.3 Available Modes
-
-| ID | Name | Coordinates | Description |
-|----|------|-------------|-------------|
-| -1 | TEST | (r, theta, phi) | Analytic circular tokamak |
-| 0 | CANFLUX | (s, theta_c, phi_c) | Canonical flux coordinates |
-| 1 | VMEC | (s, theta, phi) | Direct VMEC (non-canonical) |
-| 2 | BOOZER | (s, theta_B, phi_B) | Boozer coordinates |
-| 3 | MEISS | (r, theta_c, phi_c) | Meiss canonical |
-| 4 | ALBERT | (psi, theta_c, phi_c) | Albert canonical |
-| 5 | REFCOORDS | (varies) | Reference splined field |
-
-### 4.4 Mode Initialization
-
-```fortran
-! Select mode at startup
-call init_magfie(BOOZER)
-
-! For REFCOORDS, first install the splined field
-call set_magfie_refcoords_field(my_splined_field)
-call init_magfie(REFCOORDS)
-```
-
-### 4.5 REFCOORDS Implementation Details
-
-The REFCOORDS mode (`magfie_refcoords`) is the most flexible:
-
-```fortran
-subroutine magfie_refcoords(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
-    ! 1. Evaluate splined field with derivatives
-    call refcoords_field%evaluate_with_der(x, Acov, hcovar, Bmod,
-                                           dAcov, dhcov, dBmod)
-
-    ! 2. Handle coordinate scaling (sqrt_s vs identity)
-    call scaled_to_ref_coords(refcoords_field%coords, x, u_ref, J)
-
-    ! 3. Get metric from reference coordinates
-    call refcoords_field%coords%metric_tensor(u_ref, g, ginv_u, sqrtg_abs)
-    call refcoords_field%coords%covariant_basis(u_ref, e_cov)
-
-    ! 4. Compute signed Jacobian
-    sqrtg = signed_jacobian(e_cov) * J
-
-    ! 5. Transform to contravariant components
-    call inverse_metric_scaled(J, ginv_u, ginv_x)
-    hctrvr = matmul(ginv_x, hcovar)
-
-    ! 6. Compute curl
-    call compute_hcurl(sqrtg, dhcov, hcurl)
+subroutine magfie_base(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+    real(dp), intent(in) :: x(3)
+    real(dp), intent(out) :: bmod, sqrtg
+    real(dp), intent(out) :: bder(3), hcovar(3), hctrvr(3), hcurl(3)
 end subroutine
 ```
 
-`compute_hcurl` forms `(curl h)^i = eps^ijk d_j h_k / sqrtg` from
-`dh(j, k) = d h_k / d x_j`, derivative index first. The splined field returns
-that order; a field that is not splined goes through central differences in
-`magfie_generic_refcoords`, which builds the same order.
-
----
-
-## 5. Splined Field Architecture
-
-### 5.1 Construction Workflow
-
-```fortran
-subroutine create_splined_field(source, ref_coords, field, scaling, ...)
-    ! 1. Configure grid
-    call configure_spline_grid(ref_coords, ..., n_r, n_th, n_phi, xmin, xmax)
-
-    ! 2. Select coordinate scaling
-    scaling_ptr => get_default_scaling(ref_coords, ...)
-
-    ! 3. Sample source field on grid
-    call sample_spline_arrays(source, ref_coords, scaling_ptr, ...,
-                              Ar, Ath, Aphi, hr, hth, hphi, Bmod_arr)
-
-    ! 4. Build batch splines
-    call construct_batch_splines_3d(xmin, xmax, y_batch, order, periodic, spl)
-end subroutine
-```
-
-### 5.2 Coordinate Transformation During Sampling
-
-For each grid point (r, theta, phi) in scaled reference coordinates:
-
-**Case 1: VMEC source + VMEC reference**
-- Direct evaluation, no transformation needed
-- Scaling Jacobian applied to covariant components
-
-**Case 2: VMEC source + Different reference (e.g., chartmap)**
-```
-1. ref_coords%evaluate_cart(x_ref) -> x_cart (Cartesian position)
-2. find_vmec_coords_for_cart_point -> x_vmec (VMEC coords for same point)
-3. source%evaluate(x_vmec) -> A_cov, h_cov in VMEC basis
-4. source%coords%cov_to_cart -> A_cart, h_cart (Cartesian vectors)
-5. ref_coords%covariant_basis -> e_cov (reference basis)
-6. A_ref = A_cart * e_cov (project to reference coords)
-```
-When using a chartmap reference, differences between symplectic and RK45
-trajectories can already appear in chartmap $(\rho,\theta,\zeta)$ space, so a
-discrepancy seen in $R,Z$ is not automatically attributable to the chartmap
-inversion alone.
-
-**Case 3: Cartesian source (coils)**
-```
-1. ref_coords%evaluate_cart(x_ref) -> x_cart
-2. source%evaluate(x_cart) -> A_cart, h_cart directly
-3. ref_coords%covariant_basis -> e_cov
-4. A_ref = A_cart * e_cov
-```
-
-### 5.3 The find_vmec_coords_for_cart_point Function
-
-Critical for coordinate system interoperability:
-
-```fortran
-subroutine find_vmec_coords_for_cart_point(vmec_coords, ref_coords,
-                                           u_ref, x_target, u_vmec)
-    ! Convert Cartesian to cylindrical
-    xcyl(1) = sqrt(x_target(1)**2 + x_target(2)**2)  ! R
-    xcyl(2) = modulo(atan2(x_target(2), x_target(1)), twopi)  ! phi
-    xcyl(3) = x_target(3)  ! Z
-
-    ! Use VMEC native inversion (Newton iteration)
-    call vcs%from_cyl(xcyl, u_vmec, ierr)
-end subroutine
-```
-
-### 5.4 Gauge Fixing
-
-Vector potential is defined up to gradient of scalar. Splines remove this freedom:
-
-```fortran
-Ar = Ar - Ar(1, 1, 1)      ! A_r(r_min, 0, 0) = 0
-Ath = Ath - Ath(1, 1, 1)   ! A_theta(r_min, 0, 0) = 0
-Aphi = Aphi - Aphi(1, 1, 1) ! A_phi(r_min, 0, 0) = 0
-```
-
----
-
-## 6. Canonical Coordinate Systems
-
-Canonical coordinates simplify symplectic integration by giving the magnetic
-field a special structure.
-
-### 6.1 Common Structure
-
-All canonical coordinate systems transform to a form where:
-- Vector potential: A = (0, A_theta, A_phi) or A = (0, psi, A_phi)
-- Unit field direction: h = (0, h_theta, h_phi)
-- First (radial) component vanishes
-
-### 6.2 Boozer Coordinates
-
-**File**: `src/field/field_can_boozer.f90`
-**Coordinates**: (r, theta_B, phi_B)
-
-- Straight field line coordinates
-- A_theta, A_phi independent of angles
-- Uses `splint_boozer_coord()` from libneo
-
-The adaptive-RK path evaluates the same canonical Boozer field from the
-device-resident spline coefficients. Per-particle initialization extracts
-only the invariant magnetic moment and normalized gyroradius; RK stages rebuild
-the transient field values on the device instead of copying the full
-`field_can_t` object into every orbit thread. `test_gpu_orbit_bench` compares
-this compact device RHS with an independently evaluated host canonical RHS.
-
-**Transformation**:
-```fortran
-call vmec_to_boozer(r, theta_v, phi_v, theta_B, phi_B)
-call boozer_to_vmec(r, theta_B, phi_B, theta_v, phi_v)
-```
-
-### 6.3 Meiss Coordinates
-
-**File**: `src/field/field_can_meiss.f90`
-**Coordinates**: (r, theta_c, phi_c) where r is a generic radial coordinate
-in the chosen reference system (often r = sqrt(s) for VMEC-based references).
-
-**Applicability**:
-- Meiss canonicalization is coordinate-agnostic: it does not require flux
-  coordinates or nested flux surfaces.
-- The only structural requirement is a non-vanishing toroidal field component
-  in the domain, so VMEC, chartmap, or cylindrical reference coordinates are
-  all valid inputs.
-
-**Construction** (two-phase):
-
-**Phase 1: Transformation Computation**
-- Integrate ODEs radially to find lambda(r, theta, phi)
-- lambda = phi_canonical - phi (angle transformation)
-- Store in batch splines
-
-**Phase 2: Field Sampling**
-- Sample field components on canonical grid
-- Store: A_theta(r), A_phi(r), h_theta, h_phi, B_mod
-
-**Coordinate Transforms**:
-```fortran
-subroutine integ_to_ref_meiss(xinteg, xref)
-    ! (r, theta_c, phi_c) -> (s, theta, phi)
-    call evaluate_batch_splines_3d(spl_transform_batch, xinteg, y_batch)
-    lambda = y_batch(1)
-    xref(1) = xinteg(1)**2   ! s = r^2
-    xref(2) = xinteg(2)      ! theta = theta_c
-    xref(3) = xinteg(3) + lambda  ! phi = phi_c + lambda
-end subroutine
-```
-
-### 6.4 Albert Coordinates
-
-**File**: `src/field/field_can_albert.f90`
-**Coordinates**: (psi, theta_c, phi_c) where psi ~ A_theta
-
-**Key Property**: dA_theta/dpsi = constant (simplifies symplectic integrator)
-
-**Construction**:
-1. Build Meiss coordinates first
-2. Transform radial coordinate: r -> psi = A_theta(r)
-3. Regrid all field components from r to psi
-
-**Evaluation**:
-```fortran
-f%Ath = Ath_norm * psi    ! Linear in psi
-f%dAth = [Ath_norm, 0, 0] ! Constant derivative
-```
-
-The `diag_albert.x` diagnostic renders the four stored Albert field
-components at three radial slices with fortplot. PNG filenames, theta/phi axes,
-field data, and radial selection are preserved. Native PNG rendering replaces
-the former generated Python sidecar scripts. Diagnostic plotting is disabled
-when fortplot is unavailable, following the Meiss diagnostic behavior.
-
-### 6.5 Canonical Flux Coordinates
-
-**File**: `src/field/field_can_flux.f90`
-**Coordinates**: (s, theta_c, phi_c)
-
-- Uses libneo functions: `vmec_to_can`, `can_to_vmec`
-- Simpler than Meiss/Albert but less optimized
-
-### 6.6 SPECTRE Field-Line Coordinates
-
-**Files**: `src/field_line_spectre.f90`, `app/spectre_poincare.f90`
-**Input**: SPECTRE/SPEC MRxMHD equilibrium (HDF5), read through libneo
-`spectre_reader` (`spectre_data_t`, `load_spectre`); per-volume covariant
-vector potential `(A_theta, A_zeta)` and its s/theta/zeta derivatives from
-libneo `spectre_basis` (`eval_spectre_vector_potential`). Derivatives are with
-respect to the local volume coordinate `s in [-1, 1]`; the polynomial basis is
-valid past `|s| = 1`.
-
-**Canonical structure**: inside a single volume the magnetic field line is the
-flow of a one-degree-of-freedom canonical system with the toroidal angle `zeta`
-as time, the poloidal angle `theta` as coordinate, and `psi = A_theta` as the
-conjugate momentum. The radial coordinate `s` is recovered implicitly from `psi`
-at fixed `(theta, zeta)`. The derived flow is
-
-```
-dtheta/dzeta = -dA_zeta/ds / dA_theta/ds
-dpsi/dzeta   =  dA_zeta/dtheta - dA_theta/dtheta * dA_zeta/ds / dA_theta/ds
-```
-
-with the explicit `d/dzeta` terms cancelling. `field_line_spectre.f90` advances
-`(theta, psi)` with a semi-implicit symplectic Euler map: a Newton solve on `s`
-for the implicit momentum update (analytic Jacobian from the `ss` and `st`
-second derivatives, `|F|` tolerance `1e-13`), then explicit `theta` and `zeta`
-updates. Both update signs set the field-line orientation (the sign of iota).
-
-**App `spectre_poincare.x`**: traces field lines per volume from a namelist
-(`spectre_poincare.in`) and writes `poincare_vol<N>.dat` (seed, section, s,
-theta, R, Z) and `iota_vol<N>.dat` (least-squares rotational transform). Field
-periodicity places every section exactly on `zeta0 + k*2*pi/Nfp`, so no
-interpolation is needed. R, Z come from the SPEC interface Fourier blend
-(`spectre_rz`, mirroring libneo `libneo_coordinates_spectre` for output only:
-linear-in-s between interfaces for interior volumes, the `sbar**m` power law for
-the axis volume). Field lines never cross interfaces (`B.n = 0` on both sides),
-so no crossing logic is involved. This app is a standalone diagnostic separate
-from the guiding-center stack below.
-
-#### Guiding-center RK45 per volume (`integ_coords = 6`)
-
-**Files**: `src/magfie.f90` (`magfie_spectre`), `src/spectre_orbit.f90`,
-`src/simple_main.f90` (`init_spectre_field`,
-`trace_orbit_spectre`), `src/samplers.f90` (`sample_spectre_surface`).
-
-`simple.x` traces multi-volume SPECTRE fields with `integmode > 0` and
-`crossing_level = 3` (default). The multi-volume hybrid uses full orbit at
-interior interfaces and near the absorbing outer boundary. The same radial-gyroradius entry/exit
-distances apply at both. Loss is localized when the particle reaches
-`rho_g = Mvol`; the guiding centre can still be inside. A launch whose Larmor
-offset already places the particle outside is an immediate physical loss
-(zero elapsed time), preserving that exterior particle position rather than
-reporting a coordinate-inversion failure. The separate single-volume GC model
-retains its guiding-centre edge convention; GC bulk motion remains unchanged.
-Levels 0/1 and their GC crossing-event log were removed without aliases; see
-[the rejection record](https://github.com/itpplasma/SIMPLE/blob/main/DOC/spectre-rejected-interface-models.md). Single-volume RK45
-and multi-volume field evaluation, geometry, diagnostics and sampling remain
-supported. The home-volume lock pins implicit Newton trials and coordinate
-transforms to one volume; interior physical crossings use the full orbit.
-
-The FO provider in `src/spectre_fo_field.f90` splines R, Z, A_theta and A_zeta
-separately in each volume. All quantities retain the existing cm/G conventions
-inside the FO module. Basis/dual vectors and B are derived from the spline first
-derivatives, using libneo's positive metric Jacobian for the field. The regular
-FO path advances logical position with `du/dt = E^{-1} v` and Cartesian velocity
-with the Lorentz force, eliminating stage coordinate inversion. A Cartesian
-position chart remains near the volume-1 axis. GC reconstruction uses the spline
-inverse, and retains its original physical transform and exit conditions. The
-provider is constructed before parallel tracing and then shared read-only;
-field reinitialization releases the previous tables. Accepted endpoint samples
-are reused for GC reconstruction and the next RK first stage; a landed sheet
-refreshes the sample in the new owner's field. The first-volume magnetic axis
-uses a regular `(xi, eta) = rho_g*(cos(theta), sin(theta))` table of R, Z and all
-three potential components. This avoids amplifying polar spline derivative
-error by the vanishing polar Jacobian. Geometry and potential jets join the
-polar representation over `0.05 < rho_g < 0.1`, including derivatives of the
-joining weight before taking the curl. Axis coordinate inversion solves for
-xi/eta with a nonsingular Jacobian. No raw spectral fallback is used during
-tracing. The axis table uses `2*max(3, n_rho/4)+1` points in each transverse
-direction and the configured zeta grid. Default three-volume coefficient
-storage including this table is about 1.34 GiB. Reinitialization also releases
-the axis table.
-Spline-grid convergence is required alongside time-integration convergence;
-see [the interface description](spectre-interface-crossing.md).
-The switch round-trip diagnostic constructs its phase sweep from this same
-owning-volume interpolant. Its strict entry identity measures switch
-consistency; independent raw-field comparisons remain in the spline-field
-tests, rather than counting interpolation differences as switch defects.
-
-**Detection and loading**. `field_input` is detected as SPECTRE by a `.h5`
-extension or the HDF5 magic bytes (`field.is_spectre_file`), and loaded through
-libneo `create_spectre_field` (which builds the stacked-rho
-`spectre_coordinate_system_t`). The run is VMEC-free: no `init_vmec`, no `wout`.
-`init_spectre_field` sets the equilibrium globals the same way the Boozer
-chartmap path does, so `stevvo` and `params_init` produce a consistent
-`dphi`/`dtaumin`/`fper`: `nper = Nfp`, and `rmajor` is the `m=0, n=0` R harmonic
-of the outermost interface (SI meters; `stevvo` scales it to cm). `fper` is
-`2*pi/Nfp`. `integmode > 0` builds the per-volume canonical coordinates below.
-
-**`magfie_spectre`** evaluates on the chart `x = (rho_g, theta, zeta)`. libneo
-`spectre_evaluate_der` returns `|B|`, covariant `h = B/|B|`, the exact
-`sqrt(g) B^i` (the metric-free 2-form) and the analytic derivatives `d|B|/dx`
-and `d h_i/dx` in a single field evaluation; the coordinate system supplies the
-analytic metric and its derivative `d g_ij/dx`. `grad log|B|` (`bder`) and
-`curl(h)` (`hcurl`), the small drift corrections, follow analytically from the
-vector-potential Hessian and `d g_ij/dx` (libneo returns `d h_i/dx_j` with the
-component index first; `magfie_spectre` transposes it for `compute_hcurl`), so
-the field is evaluated once per
-call instead of the seven central-difference evaluations it replaced. `|B|`
-jumps across SPEC interfaces (the pressure jump), but the analytic derivative is
-the in-volume derivative in the volume `lvol = min(int(rho_g)+1, Mvol)` owning
-the point, so the discontinuity never enters the drift.
-
-**Units**. The SPECTRE field returns SI (Tesla, meter); SIMPLE integrates in
-Gaussian-CGS. The conversion lives in one block in `magfie_spectre`:
-
-| quantity | factor | reason |
-|----------|--------|--------|
-| `bmod` = `\|B\|` | `1e4` | Tesla -> Gauss |
-| `sqrtg` (Jacobian) | `1e6` | `L^3`, meter -> cm |
-| `hcovar` (covariant `h_i`) | `1e2` | `L` |
-| `hctrvr` (contravariant `h^i`) | `1e-2` | `1/L` |
-| `bder` = `d log\|B\|/dx` | `1` | dimensionless (the chart is dimensionless) |
-
-The covariant vector potential (`T*m -> G*cm`, factor `1e6`) does not enter the
-non-canonical RK45 path, which uses only `bmod`/`sqrtg`/`bder`/`hcovar`/
-`hctrvr`/`hcurl`. The alpha normalization then follows the standard SIMPLE chain
-unchanged: `v0`, `ro0 = v0 m c / e` (cm*Gauss), and `dtaumin = 2*pi*rmajor/
-npoiper2` (cm).
-
-**Sampler**. `startmode = 1` samples the control surface `rho_g = sbeg(1)`:
-`(theta, zeta)` grid nodes drawn with probability proportional to the surface
-Jacobian `|e_theta x e_zeta|`, uniform velocity magnitude, random pitch. The
-chart is the integration coordinate, so `start.dat` holds `(rho_g, theta, zeta)`
-directly and every marker sits on the requested interface to round-off. The
-sampler also sets `bmin`/`bmax`/`bmod00` from a scan of the surface.
-
-**Single-volume boundary handling**. The RK45 path retains its clamped
-boundary evaluation and coordinate-axis reflection; the outer edge `rho_g = 1`
-is absorbing. No internal interface map or crossing log is produced.
-See [the rejection record](https://github.com/itpplasma/SIMPLE/blob/main/DOC/spectre-rejected-interface-models.md) for the removed
-models and their physical failure.
-
-#### Guiding-center symplectic per volume (`integmode > 0`)
-
-**Files**: `src/field/field_can_spectre.f90`, `src/field/field_can_meiss.f90`
-(`spectre_field_t` arms in `ah_cov_on_slice` / `init_canonical_field_components`,
-the `meiss_volume_t` slot, and the `harvest_meiss_volume` mover),
-`src/field_can.f90` (id `SPECTRE` dispatch),
-`src/simple_main.f90` (`init_spectre_field`, `trace_orbit`).
-
-**Corrected premise** (computer-algebra verified in spectre-orbits
-`ca/05_gc_canonical.wl`): the SPECTRE `A_s = 0` gauge supplies only half of the
-canonical requirement. The covariant `h_s` does not vanish in SPECTRE
-coordinates (metric off-diagonals), so the guiding-center phase-space 1-form
-keeps a `rho_par B_s ds` term. The Meiss angle transform `zeta_c` with
-`d_s lambda = -B_s/B_zeta` plus gauge `chi` with `d_s chi = (d_s lambda) A_zeta`
-restores both `A'_s = 0` and `B'_s = 0`, so the guiding-center flow is canonical
-in `(rho_g, theta_c, zeta_c)`.
-
-**Per-volume construction**. The construction ODE would integrate through the
-interface current sheets in a global chart, so it is run once per volume on the
-smooth slab `r in [lvol-1, lvol]` (`lvol = 1..Mvol`) using the existing Meiss
-machinery (`init_meiss` + `get_meiss_coordinates`). The axis volume starts at
-`r = 1e-3` so the construction never touches the `r = 0` coordinate singularity.
-The SPECTRE chart is its own radial coordinate, so the identity radial scaling is
-used (no `r = sqrt(s)`). Each volume is built on the `(r, theta, zeta)` grid set
-by the `spectre_ncon_r/th/phi` namelist knob (default `48 x 48 x 32`); after
-`get_meiss_coordinates`, `harvest_meiss_volume` moves the field and transform
-batch splines (coefficient arrays via `move_alloc`, not copied) into a per-volume
-`meiss_volume_t` slot in `field_can_spectre`.
-
-**Construction-grid knob and memory** (#442). The quintic batch splines dominate
-peak memory: the coefficient array is `n_quantities * 6^3 * n_r * n_th * n_phi`
-per volume, ~1.8 GB at the `48 x 48 x 32` default on the two-volume tok2vol
-fixture. `spectre_ncon_r/th/phi` (threaded in by
-`set_spectre_construction_grid` before the build, kept as a setter because
-`field_can_*` cannot `use params` without a dependency cycle) let a caller trade
-resolution for memory. `spectre_ncon_phi = -1` (the default) is automatic: fields
-carrying toroidal harmonics keep the historical `n_phi = 32` (bit-identical),
-while an **axisymmetric** field (all `in == 0`, e.g. any tokamak) is phi-invariant
-and auto-clamps to `AXISYM_NPHI = 8` -- the dominant memory saver, ~3.8x on
-tok2vol (1.77 GB -> 0.46 GB), and bit-identical to `n_phi = 32` for well-confined
-orbit energy conservation (verified to `2.9e-12`). A positive `spectre_ncon_phi`
-overrides the clamp verbatim: raise it to 32 when high-order symplectic
-convergence needs the full phi grid, or lower it for RK45-only runs (the RK45
-path, `integmode = 0`, builds no construction at all). `AXISYM_NPHI` stays above
-the quintic `order + 1 = 6` so the periodic spline is well conditioned.
-
-**Units**. The construction stays in the field's SI covariant units (numerically
-balanced, `O(1)`). The Gaussian-CGS conversion is applied only at
-`evaluate_spectre_can`, uniformly to values and derivatives because
-`(rho_g, theta, zeta)` are all dimensionless: `Bmod` `1e4` (Tesla -> Gauss),
-covariant `h_theta`/`h_phi` `1e2` (`L`), covariant `A_theta`/`A_phi`
-`1e8 = 1e4 * (1e2)^2` (flux-like `[B] L^2`, Tesla*m^2 -> Gauss*cm^2). The last
-factor makes `sqrt(g) = (h_phi A_theta' - h_theta A_phi')/Bmod` come out in
-`cm^3`, matching `magfie_spectre`.
-
-**Evaluation**. `evaluate_spectre_can` picks `lvol = min(int(r)+1, Mvol)`
-and evaluates that volume's splines. `integ_to_ref` / `ref_to_integ` apply the
-volume's `lambda_phi` transform; the radial map is the identity. The existing
-C1 radial extension near volume edges remains part of field evaluation.
-It does not define a physical interface crossing. SPECTRE symplectic
-initialization sets the Newton trial bound to `rho_g = Mvol + 1`, allowing
-trials beyond each volume edge. The SPECTRE event handler localizes physical
-loss at `rho_g = Mvol`, including `rho_g = 1` for a single-volume field.
-
-**Optional follow-up** (documented, not implemented): a `no_K`-style variant that
-drops `rho_par h_s` in SPECTRE coordinates directly -- the same
-`O(Larmor-radius)` approximation as SIMPLE's Boozer `use_B_r = .false.`. The
-exact per-volume Meiss construction here is the reference path.
-
----
-
-## 7. libneo Integration
-
-SIMPLE depends heavily on libneo for coordinate systems and VMEC data.
-
-### 7.1 Key libneo Imports
-
-```fortran
-use libneo_coordinates, only: &
-    coordinate_system_t,           &  ! Abstract base
-    make_vmec_coordinate_system,   &  ! Create VMEC coords
-    make_chartmap_coordinate_system, & ! Create chartmap coords
-    detect_refcoords_file_type,    &  ! File type detection
-    chartmap_coordinate_system_t,  &  ! Chartmap type
-    PSI_TOR_NORM, PSI_POL_NORM,   &  ! Rho conventions
-    RHO_TOR, RHO_POL, UNKNOWN
-```
-
-### 7.2 Key libneo Functions
-
-| Function | Purpose |
-|----------|---------|
-| `splint_vmec_data` | Interpolate VMEC spline data |
-| `vmec_to_boozer` | VMEC -> Boozer coordinate transform |
-| `boozer_to_vmec` | Boozer -> VMEC inverse |
-| `vmec_to_can` | VMEC -> Canonical flux |
-| `can_to_vmec` | Canonical flux -> VMEC |
-| `splint_boozer_coord` | Field in Boozer coordinates |
-| `splint_can_coord` | Field in canonical flux coordinates |
-
-### 7.3 VMEC Initialization
-
-```fortran
-subroutine init_vmec(vmec_file, ans_s, ans_tp, amultharm, fper)
-    call spline_vmec_data()           ! Initialize libneo splines
-    call stevvo(RT0, R0i, L1i, ...)   ! Get geometry parameters
-    fper = twopi / dble(L1i)          ! Field period
-    call volume_and_B00(volume, B00)  ! Get volume and B_00
-end subroutine
-```
-
-### 7.4 Reference Coordinate Initialization
-
-```fortran
-subroutine init_reference_coordinates(coord_input)
-    call detect_refcoords_file_type(coord_input, file_type, ierr, message)
-
-    select case (file_type)
-    case (refcoords_file_chartmap)
-        call make_chartmap_coordinate_system(ref_coords, coord_input)
-    case (refcoords_file_vmec_wout)
-        call make_vmec_coordinate_system(ref_coords)
-    case (refcoords_file_unknown)
-        error stop "Unknown coordinate file type"
-    end select
-end subroutine
-```
-
----
-
-## 8. Configuration Options
-
-### 8.1 Field Type Selection (`isw_field_type` / `integ_coords`)
-
-| Value | Name | Coordinates | Integrators |
-|-------|------|-------------|-------------|
-| -1 | TEST | (r, theta, phi) | Symplectic only |
-| 0 | CANFLUX | (s, theta_c, phi_c) | Symplectic |
-| 1 | VMEC | (s, theta, phi) | RK45 only |
-| 2 | BOOZER | (s, theta_B, phi_B) | Symplectic |
-| 3 | MEISS | (r, theta_c, phi_c) | Symplectic |
-| 4 | ALBERT | (psi, theta_c, phi_c) | Symplectic |
-| 5 | REFCOORDS | (varies) | RK45 only |
-| 6 | SPECTRE | (rho_g, theta, zeta) | RK45 (integmode = 0) or per-volume symplectic (integmode > 0) |
-
-`integ_coords` is the integer mode id above; `6` selects SPECTRE. A string
-alias `'spectre'` is not read from the namelist (the slot is integer).
-
-### 8.2 Input File Parameters
-
-| Parameter | Type | Purpose |
-|-----------|------|---------|
-| `netcdffile` | string | VMEC wout.nc file path |
-| `field_input` | string | Field data file (VMEC wout, coils file, or Boozer chartmap NetCDF) |
-| `coord_input` | string | Reference coordinate file (VMEC or chartmap) |
-
-### 8.2.1 GVEC -> Boozer chartmap -> SIMPLE
-
-This is the supported user workflow for using GVEC output with the new Boozer
-chartmap path.
-
-SIMPLE does **not** consume raw GVEC `parameter/state` files at runtime. First
-convert them to an extended Boozer chartmap NetCDF:
-
-```bash
-python tools/gvec_to_boozer_chartmap.py \
-    parameter_final.ini \
-    State_final.dat \
-    boozer_chartmap.nc
-```
-
-Then use that file as both field source and reference coordinates:
-
-```fortran
-&config
-field_input = 'boozer_chartmap.nc'
-coord_input = 'boozer_chartmap.nc'
-isw_field_type = 2
-startmode = 2
-/
-```
-
-Notes:
-- `startmode = 2` means particle starts are already given in the chartmap
-  Boozer coordinates.
-- If `field_input` has the `boozer_field = 1` metadata, SIMPLE takes the
-  chartmap runtime path and does not initialize VMEC.
-- The tested reference workflow is `test/tests/run_gvec_qa_roundtrip.py`.
-
-### 8.2.2 STL Wall Intersection (`wall_input`, `wall_units`)
-
-SIMPLE can optionally detect wall losses by intersecting the orbit segment in
-Cartesian space with a triangulated STL surface (using CGAL).
-
-| Parameter | Type | Purpose |
-|-----------|------|---------|
-| `wall_input` | string | STL file path. If empty, wall intersections are disabled. |
-| `wall_units` | string | STL units: `m` or `mm` (STL has no unit metadata). |
-
-**Requirements**:
-- Must be built with `-DSIMPLE_ENABLE_CGAL=ON`.
-- Requires `coord_input` to be a chartmap reference coordinate file.
-
-**Intersection ordering**:
-- SIMPLE tests every accepted microstep segment against the STL surface.
-- If a microstep also reaches the chartmap boundary, SIMPLE tests the partial
-  segment up to that boundary and records the earlier wall intersection.
-
-**Outputs** (when `output_results_netcdf = .True.`):
-- `results.nc:wall_hit(particle)` (byte)
-- `results.nc:wall_hit_cart(xyz, particle)` (cm, consistent with `xstart_cart`)
-
-**Fallback Chain**:
-1. coord_input (if set)
-2. netcdffile (if coord_input empty)
-3. field_input (if both empty)
-
-### 8.2.3 SPECTRE Equilibria (`integ_coords = 6`)
-
-VMEC-free guiding-centre tracing with full orbit near interfaces, and field
-and geometry evaluation on SPECTRE/SPEC MRxMHD equilibria (HDF5, `.h5`),
-detected automatically from `field_input`; see
-[the interface status](spectre-interface-crossing.md). Example sampling input:
-`examples/simple_spectre.in`.
-
-| Parameter | Type | Default | Purpose |
-|-----------|------|---------|---------|
-| `field_input` | string | `''` | SPECTRE HDF5 equilibrium (`.h5`); VMEC-free |
-| `integ_coords` | int | -1000 | `6` selects the SPECTRE per-volume stacked-rho chart |
-| `integmode` | int | 0 | `0` = RK45 per volume; `> 0` = per-volume symplectic (builds the canonical construction) |
-| `crossing_level` | int | 3 | full orbit near interfaces (symplectic path); levels 0/1 are rejected |
-| `spectre_fo_entry_larmor` | real | 1.5 | Multi-volume `crossing_level = 3`: enter full orbit closer than this many radial gyroradii to an interface or the absorbing outer edge; leave one gyroradius farther out |
-| `spectre_fo_tolerance` | real | `1e-9` | relative tolerance of sharp-field RK45 with exact crossings |
-| `spectre_fo_grid` | int(3) | `32,64,32` | FO spline points per volume in rho, theta and zeta per field period; axisymmetric zeta uses seven planes |
-| `spectre_ncon_r` | int | 48 | Meiss construction grid points in `r` (per volume) |
-| `spectre_ncon_th` | int | 48 | construction grid points in `theta` |
-| `spectre_ncon_phi` | int | -1 | construction grid points in `phi`; `-1` = automatic (32 with toroidal harmonics, `AXISYM_NPHI` for axisymmetric fields); a positive value forces that count |
-
-The radial start `sbeg` is the SPECTRE label `rho_g in [0, Mvol]`.
-Single-volume markers are lost at `rho_g = 1`. Construction settings apply to
-`integmode > 0`; RK45 builds no canonical construction. The field construction
-and axisymmetric clamp remain covered by the SPECTRE field tests.
-
-### 8.3 Integration Mode (`integmode`)
-
-The canonical steppers carry `p_theta` separately from the radial Newton seed.
-After the final Newton correction, midpoint extrapolates this momentum using
-only endpoint `(r, theta, phi, p_phi)` increments; its independent midpoint
-radius is not an endpoint field argument. Gauss1–4 extrapolate each stage's
-field jet in all four variables, including the `p_phi` dependence of parallel
-speed. The radial correction of `d_phi p_theta` uses `d_r d_phi p_theta`
-(`d2pth(3)` in the packed Hessian). These are first-order Taylor updates, with
-quadratic remainder in the final Newton correction; a finite solve does not
-make the floating-point map exactly symplectic. The independent polynomial
-Hamiltonian regression checks these operations without an equilibrium spline.
-
-| Value | Name | Order | Speed |
-|-------|------|-------|-------|
-| 0 | RK45 | Adaptive | Slow |
-| 1 | EXPL_IMPL_EULER | 1 | Fast |
-| 2 | IMPL_EXPL_EULER | 1 | Fast |
-| 3 | MIDPOINT | 2 | Medium |
-| 4 | GAUSS1 | 2 | Slow |
-| 5 | GAUSS2 | 4 | Medium |
-| 6 | GAUSS3 | 6 | Medium-Slow |
-| 7 | GAUSS4 | 8 | Slow |
-| 15 | LOBATTO3 | 4 | Slow |
-
-**Constraints**:
-- integmode >= 1: Requires canonical field type (TEST, CANFLUX, BOOZER, MEISS, ALBERT, SPECTRE)
-- integmode = 0 (RK45): works with any initialized field type (VMEC, REFCOORDS, or canonical modes); `simple_main.f90` guards only integmode >= 1
-
-### 8.4 Spline Parameters
-
-| Parameter | Default | Purpose |
-|-----------|---------|---------|
-| `ns_s` | 5 | Spline order for s dimension |
-| `ns_tp` | 5 | Spline order for theta/phi |
-| `multharm` | 5 | Angular grid multiplier |
-
-### 8.5 Valid Configurations
-
-**Fast Testing**:
-```fortran
-integmode = 1, isw_field_type = 2  ! Euler + Boozer
-multharm = 3, ns_s = 3, ns_tp = 3
-```
-
-**Production**:
-```fortran
-integmode = 6, isw_field_type = 2  ! Gauss3 + Boozer
-multharm = 5, ns_s = 5, ns_tp = 5
-npoiper2 = 256
-```
-
-**Coil-Based**:
-```fortran
-integmode = 1, isw_field_type = 3  ! Euler + Meiss
-field_input = 'coils.simple'
-netcdffile = 'wout.nc'  ! Reference VMEC
-```
-
----
-
-## 9. Coordinate Transformation Workflows
-
-### 9.1 Particle Initialization (VMEC to Chartmap)
-
-When particles start in VMEC coordinates but integration uses chartmap:
-
-```fortran
-subroutine vmec_to_chartmap(z_vmec, z_chart)
-    ! 1. Get Cartesian position from VMEC coords
-    call ref_coords%evaluate_cart(z_vmec(1:3), x_target)
-
-    ! 2. Initial guess (same as VMEC)
-    z_chart(1:3) = z_vmec(1:3)
-
-    ! 3. Newton iteration to find chartmap coords
-    do iter = 1, max_iter
-        call chartmap_coords%evaluate_cart(z_chart(1:3), x_test)
-        err_vec = x_test - x_target
-        if (norm(err_vec) < tol) exit
-
-        ! Compute Jacobian and update
-        call compute_jacobian(z_chart(1:3), J)
-        z_chart(1:3) = z_chart(1:3) - J_inv * err_vec
-    end do
-end subroutine
-```
-
-### 9.2 Direct VMEC vs Map2disc Chartmaps
-
-Both chartmap types represent the same boundary but use different interiors:
-
-| Aspect | Direct VMEC | Map2disc |
-|--------|-------------|----------|
-| Interior | VMEC flux surfaces | Conformal disc |
-| rho meaning | sqrt(s) | Geometric radius |
-| rho at s=0.8 | 0.894 | ~0.874 |
-| Axis position | Magnetic axis | Geometric center |
-| rho_convention | rho_tor | unknown |
-
-If particles are initialized at the same physical position and the field is
-sampled from the same underlying equilibrium, the orbit physics should agree.
-
-### 9.3 Metric Tensor Differences
-
-The metric `g_ij` can differ between chartmaps at the same nominal
-`(rho, theta, zeta)`:
-
-```
-At rho=0.5, theta=0, zeta=0:
-  Direct VMEC: g_rr = 7820, sqrt(g) = 3.17
-  Map2disc:    g_rr = 6695, sqrt(g) = 3.02  (~5% difference)
-```
-
-This changes coordinate-specific quantities, but not the intended physical
-trajectory.
-
-### 9.4 Orbit Trajectory Output
-
-With `output_orbits_macrostep = .true.`, `orbits.nc` stores the trajectory in
-reference coordinates as `s`, `theta`, and `phi`. The global
-`radial_coordinate` attribute gives the meaning of the first variable: `s` for
-VMEC and `rho` for chartmaps. The variable name `s` remains for file-format
-compatibility.
-
-When a reference coordinate system is available, the file also contains `R`
-and `Z`. SIMPLE computes them through the active reference geometry, so VMEC
-and chartmap runs use the same runtime map as the orbit calculation. Each
-variable carries its native length unit (`cm` or `m`). Points without a finite
-reference position remain NaN. Analytic test fields do not write `R` and `Z`
-because they have no reference-coordinate geometry.
-
----
-
-## 10. Key Files Reference
-
-### 10.1 Coordinate Systems
-
-| File | Purpose |
-|------|---------|
-| `libneo/src/coordinates/libneo_coordinates.f90` | Abstract base + VMEC + chartmap |
-| `src/coordinates/reference_coordinates.f90` | Runtime coord system selection |
-| `src/coordinates/coordinate_scaling.f90` | sqrt_s and identity scaling |
-| `src/coordinates/cartesian_coordinates.f90` | Cartesian coordinate system |
-| `src/coordinates/coordinates.f90` | Transformation function pointers |
-
-### 10.2 Field Implementations
-
-| File | Purpose |
-|------|---------|
-| `libneo/src/field/magnetic_field_base.f90` | Abstract magnetic_field_t |
-| `libneo/src/field/field_vmec.f90` | VMEC field |
-| `src/field/field_coils.f90` | Coils Biot-Savart (62 lines) |
-| `src/field/field_boozer_chartmap.f90` | Extended Boozer chartmap field |
-| `src/field/field_splined.f90` | Splined decorator (537 lines) |
-| `src/field.F90` | Field factory (182 lines) |
-
-### 10.3 Canonical Coordinates
-
-| File | Purpose |
-|------|---------|
-| `src/field/field_can_base.f90` | field_can_t data structure (65 lines) |
-| `src/field/field_can_boozer.f90` | Boozer canonical (129 lines) |
-| `src/field/field_can_meiss.f90` | Meiss canonical (659 lines) |
-| `src/field/field_can_albert.f90` | Albert canonical (334 lines) |
-| `src/field/field_can_flux.f90` | Flux canonical (184 lines) |
-| `src/field/psi_transform.f90` | r->psi regridding |
-
-### 10.4 magfie Interface
-
-| File | Purpose |
-|------|---------|
-| `src/magfie.f90` | Unified field evaluation interface |
-| `src/magfie_can_boozer.f90` | Boozer/Canflux implementations |
-
-### 10.5 Canonical Frequency API
-
-`src/orbit_frequencies.f90` provides the source-level Fortran interface
-`compute_canonical_frequencies(tracer, initial_state, options, result)`.
-`initial_state` uses SIMPLE integration coordinates in the standard ordering
-`[s, theta, phi, v/v0, lambda]`; all angles are radians and remain unwrapped.
-The caller must initialize `tracer_t` and set `dtaumin`, `v0`, `relerr`, and
-`integmode`. The routine copies the tracer before integration and therefore
-does not advance caller-owned orbit state.
-
-The result contains the positive bounce/transit frequency
-`omega_b = 2*pi/period` and the signed mean toroidal frequency
-`omega_phi = delta_phi/period`. Periods are seconds, frequencies are rad/s,
-and toroidal displacement is radians. Named status and orbit-class constants
-are exported by the module. A downstream Fortran target can link the CMake
-target `simple` and `use orbit_frequencies`; the target publishes SIMPLE's
-build-tree module directory.
-
-The flat wrapper in `simple_main` accepts the public reference-coordinate
-state, performs `ref_to_integ`, and is the boundary used by f90wrap and
-`pysimple.compute_canonical_frequencies`.
-
-### 10.6 Guiding-center invariant initial conditions
-
-`src/orbit_invariants.f90` provides an axisymmetric preprocessing path from the
-three guiding-center invariants `(H0, J_perp, p_phi)` to SIMPLE's standard
-initial state `[s, theta, phi, p, lambda]`. The existing state remains the
-integrator input, so this API adds no branch or unit checks to the orbit hot
-loop.
-
-SIMPLE uses
-
-```
-p       = |momentum|/(m v0)
-lambda  = v_parallel/v
-H0      = p^2
-J_perp  = p^2 (1 - lambda^2)/B
-```
-
-for the current magnetic Hamiltonian. Electrostatic potential energy is not
-included. With `rho0 = m c v0/q`, the native flux-normalized canonical
-toroidal momentum is
-
-```
-psi_star_native = A_phi + rho0 p lambda h_phi = (c/q) P_phi.
-```
-
-It has magnetic-flux units; it is not the dimensionless VMEC label `s`.
-`A_phi` is the toroidal covariant vector-potential component, hence the
-poloidal flux contribution. For a VMEC field, `A_theta` is toroidal flux and
-`A_phi` is minus poloidal flux.
-
-The public `p_phi` value uses a portable POTATO-facing gauge:
-
-```
-p_phi = epsilon_psi (psi_star_native - A_phi_axis),
-epsilon_psi = sign(A_phi_edge - A_phi_axis).
-```
-
-The Python `invariants_from_state` result exposes these native equilibrium
-values as `axis_flux_native` and `edge_flux_native`. The latter is evaluated
-at the LCFS; for an extended chartmap this is its `rho_lcfs`, not the outer
-computational boundary.
-
-The magnetic-flux contribution is therefore zero on axis and positive in the
-equilibrium's outward flux direction. The total `p_phi` also contains the
-parallel-momentum term and need not vanish on axis. Raw POTATO `psi_star`
-values retain the g-eqdsk gauge. Convert them with
-
-```
-p_phi = sign(psi_edge - psi_axis) (psi_star_POTATO - psi_axis).
-```
-
-If POTATO and SIMPLE use different reference velocities, set
-`a = v0_POTATO/v0_SIMPLE` and convert `H0_SIMPLE = a^2 H0_POTATO` and
-`J_perp_SIMPLE = a^2 J_perp_POTATO`. The default `a = 1` requires the same
-reference energy, mass, and charge state. The physical flux-normalized
-`p_phi` needs no velocity rescaling when both codes describe the same physical
-species and toroidal orientation.
-
-The symplectic integrator uses a private normalization. `init_sympl`,
-`reseed_sympl`, and the invariant API share `encode_symplectic_state`, which
-sets
-
-```
-mu_bar    = J_perp
-rho0_bar  = rho0/sqrt(2)
-vpar_bar  = sqrt(2) p lambda
-z(4)      = sqrt(2) psi_star_native/rho0
-dt_bar    = dtau/sqrt(2).
-```
-
-The paired `sqrt(2)` factors do not change the public time convention:
-`tau = v0 t`. They stay inside the symplectic implementation.
-
-The inverse routine constructs the coordinate-independent Poincare cut
-`grad(psi) x grad(B) = 0`. In axisymmetry this is the set of `B` extrema on
-each flux surface. It scans both `sigma = sign(v_parallel)` branches and
-returns every regular root. Results from the flat/Python API are ordered by
-cylindrical major radius from HFS to LFS, matching POTATO's `R_c` direction.
-The metadata identifies the velocity sign, section branch, and whether the
-point is a `B` minimum or maximum.
-
-No root is selected as the representative orbit. Several cut points can map
-to one physical orbit, and a non-monotone `psi_star(R_c)` can repeat an orbit
-within one branch. Likewise, “outer” and “inner” describe whether an orbit
-encircles the central forbidden region; they are topological classes, not HFS
-and LFS labels. This multiplicity follows the POTATO construction described by
-[Buchholz et al. (2022)](https://doi.org/10.1088/1742-6596/2397/1/012012).
-
-The source-level entry points are `invariants_from_state`,
-`states_from_invariants`, and `potato_to_simple_invariants`. The flat wrappers
-in `simple_main` convert between reference and integration coordinates and
-provide cylindrical `R_c` metadata for Python.
-
-### 10.7 Integration
-
-| File | Purpose |
-|------|---------|
-| `src/orbit_symplectic_base.f90` | Integrator types and RK coefficients |
-| `src/orbit_symplectic.f90` | Symplectic methods |
-| `src/orbit_symplectic_quasi.f90` | Quasi-symplectic and RK45 |
-| `src/alpha_lifetime_sub.f90` | orbit_timestep_axis |
-
----
-
-## Appendix: Known Issues and Complications
-
-### A.1 Chartmap Boundary Range
-
-**Issue**: VMEC coordinate inversion fails at exact boundary (rho=1.0).
-**Solution**: Spline range limited to [0.1, 0.99].
-**Impact**: Particles beyond rho=0.99 use extrapolated field values.
-
-### A.2 Coordinate Scaling Complexity
-
-**Issue**: Multiple coordinate conventions (s vs rho vs r) require careful
-handling of Jacobians and component transformations.
-**Complication**: Easy to miss scaling factors when adding new coordinate
-systems or field types.
-
-### A.3 Single-Instance Canonical Coordinates
-
-**Issue**: Meiss/Albert use module-level variables for splines and coordinate data.
-**Note**: This is not a thread-safety issue since variables are written only at
-initialization, then read-only during parallel particle tracing.
-**Limitation**: Cannot have multiple canonical field instances with different
-configurations simultaneously.
-
-### A.4 VMEC from_cyl Newton Iteration
-
-**Issue**: Newton iteration can fail near separatrix or for points outside
-plasma.
-**Workaround**: Error checking and fallback to cylindrical coordinates.
-
-### A.5 Inconsistent sqgBctr Support
-
-**Issue**: Some field types support sqgBctr output, others do not.
-- vmec_field_t: Not implemented
-- coils_field_t: Returns raw Cartesian B
-- gvec_field_t: Fully implemented
-- splined_field_t: Not implemented
-
-### A.6 Mode Naming Confusion
-
-**Issue**: Parameter `isw_field_type` is deprecated but still widely used.
-New name `integ_coords` is more descriptive but less documented.
-**Recommendation**: Use `integ_coords` in new code.
-
----
-
-*Document last updated: 2026-07-18*
-*Corresponding code version: Post v1.5.1*
-
-### Rejected interface experiments
-
-The standalone sheet experiments no longer expose fixed-mu GC resets,
-phase-discarding hybrids, refreshed frozen-plane propagation in curved fields,
-or Boris as a symplectic candidate. Their sharp-sheet branch/energy-kick landing
-stepper was also removed. The
-[implementation ledger](https://github.com/itpplasma/SIMPLE/blob/main/DOC/spectre-rejected-interface-models.md#implementation-removal-ledger)
-records counterexamples, measured failures and the exact scope of each rejection.
-The maintained production interface path remains the event-resolved RK45 bridge;
-its whole-map symplecticity is not claimed. Resolved smooth-layer and exact planar
-controls are retained as explicitly limited reference models.
+| Output | Meaning |
+|---|---|
+| `bmod` | $B$ (G) |
+| `sqrtg` | signed Jacobian $\sqrt g$ |
+| `bder` | $\partial_i \ln B$ |
+| `hcovar`, `hctrvr` | $h_i$, $h^i$ |
+| `hcurl` | $(\nabla\times\mathbf h)^i$ |
+
+`init_magfie(id)` sets the pointer; the ids `TEST = -1` to `SPECTRE = 6` are
+the `integ_coords` values ({doc}`/user-guide/field-sources`). The pointer is
+global ([#292](https://github.com/itpplasma/SIMPLE/issues/292)).
+
+`magfie_refcoords` (id `REFCOORDS = 5`) works with any field installed by
+`set_magfie_refcoords_field`:
+
+1. `evaluate_with_der` gives $A_i$, $h_i$, $B$ and $\partial_j h_k$,
+   $\partial_j B$ in scaled coordinates $x$.
+2. `scaled_to_ref_coords` maps $x$ to reference $u$ with Jacobian
+   $J = du/dx$.
+3. `metric_tensor` and `covariant_basis` at $u$ give $g^{ij}$ and the
+   orientation; $\sqrt g_x = \operatorname{sign}(\det \mathbf e)\,
+   \sqrt{|g_u|}\, J$ (`signed_jacobian`).
+4. $h^i = g_x^{ij} h_j$ with the scaled inverse metric
+   (`inverse_metric_scaled`).
+5. `compute_hcurl`: $(\nabla\times\mathbf h)^i = \epsilon^{ijk}\partial_j
+   h_k/\sqrt g$, from `dh(j, k)` $= \partial h_k/\partial x_j$ (derivative
+   index first). Fields without analytic derivatives go through
+   `magfie_generic_refcoords`, which builds the same array by central
+   differences.
+
+## 4. Sampling a field on reference coordinates
+
+`sample_spline_arrays` covers three cases.
+
+- **VMEC source, VMEC reference**: evaluate at $(s, \vartheta, \varphi)$
+  directly; apply the radial scaling to the covariant $r$ components.
+- **VMEC source, other reference** (e.g. chartmap): $u_\text{ref} \to
+  \mathbf x$ (`evaluate_cart`), then `find_vmec_coords_for_cart_point`
+  converts $\mathbf x$ to cylindrical coordinates and calls the VMEC
+  `from_cyl`; evaluate there, convert $A$ and $h$ to Cartesian vectors
+  (`cov_to_cart`) and project on the reference basis,
+  $A_i = \mathbf A\cdot\mathbf e_i$.
+- **Cartesian source** (coils): evaluate at $\mathbf x$ and project as above.
+
+With a chartmap reference, symplectic and RK45 orbits can differ already in
+$(\rho, \vartheta, \zeta)$; a difference seen in $(R, Z)$ is not
+necessarily caused by the chartmap inversion.
+
+## 5. Canonical coordinates
+
+Canonical fields fill `field_can_t` (`src/field/field_can_base.f90`) with
+$A_\vartheta, A_\varphi, h_\vartheta, h_\varphi, B$ and their first and
+second derivatives in $(r, \vartheta, \varphi)$; the radial components of
+$\mathbf A$ and $\mathbf h$ vanish by construction. The constructions are
+module-level singletons: one canonical field per process
+([#293](https://github.com/itpplasma/SIMPLE/issues/293)). They are written
+during initialisation and read-only during tracing.
+
+| Coordinates | File | $r$ | Construction |
+|---|---|---|---|
+| canonical flux | `src/field/field_can_flux.f90` | $s$ | libneo `vmec_to_can`, `can_to_vmec`, `splint_can_coord` |
+| Boozer | `src/field/field_can_boozer.f90` | $s$ | libneo `splint_boozer_coord`, `vmec_to_boozer`, `boozer_to_vmec` |
+| Meiss | `src/field/field_can_meiss.f90` | reference radius after scaling | radial ODE on a grid |
+| Albert | `src/field/field_can_albert.f90` | $\psi = A_\vartheta/A_\text{norm}$ | Meiss, then regrid |
+| SPECTRE | `src/field/field_can_spectre.f90` | $\rho_g$ | Meiss per volume (section 6) |
+| test | `src/field/field_can_test.f90` | $r$ | analytic circular tokamak |
+
+For Boozer chartmaps the Boozer splines come from the chartmap
+(`load_boozer_from_chartmap`) and `integ_to_ref_boozer_chartmap` maps
+$s \to \rho = \sqrt s$. The RK45 GPU path evaluates the same Boozer splines
+on the device; `test_gpu_orbit_bench` compares it with the host.
+
+**Meiss.** The construction needs only a toroidal covariant field component
+that does not vanish, not flux surfaces, so VMEC, chartmap and coil fields on
+any reference work. Phase 1 integrates the transformation ODE radially on the
+`canonical_grid_*` grid (tolerance `canonical_ode_relerr`) and stores
+$\lambda_\varphi$ and the gauge $\chi$ in batch splines; phase 2 samples
+$A_\vartheta, A_\varphi, h_\vartheta, h_\varphi, B$ on the canonical grid.
+The transforms are
+
+$$
+r = \text{scaled reference radius},\qquad \vartheta = \vartheta_c,\qquad
+\varphi = \varphi_c + \lambda_\varphi(r, \vartheta_c, \varphi_c),
+$$
+
+`integ_to_ref_meiss` evaluates this directly; `ref_to_integ_meiss` solves
+for $\varphi_c$ by Newton iteration (tolerance $10^{-12}$, at most 16
+iterations). `diag_meiss.x` plots the stored components.
+
+**Albert.** `init_albert` builds Meiss coordinates, maps $r \to \psi =
+A_\vartheta(r)/A_\text{norm}$ with $A_\text{norm} = \pm\max|A_\vartheta|$
+(`src/field/psi_transform.f90`) and regrids all components to $\psi$. Then
+$A_\vartheta = A_\text{norm}\psi$ and $\partial_\psi A_\vartheta = A_\text{norm}$
+are exact. `diag_albert.x` plots the four stored components at three radii
+with fortplot (disabled without fortplot).
+
+## 6. SPECTRE
+
+SPECTRE/SPEC MRxMHD equilibria (HDF5) are read by libneo `spectre_reader`
+(`load_spectre`); `field_input` is recognised by the `.h5` extension or the
+HDF5 signature (`field::is_spectre_file`) and loaded by `create_spectre_field`,
+which builds the stacked chart $\rho_g \in [0, M_\text{vol}]$, volume
+$l = \min(\lfloor\rho_g\rfloor + 1, M_\text{vol})$. libneo `spectre_basis`
+returns $(A_\vartheta, A_\zeta)$ and derivatives in the local coordinate
+$s_l \in [-1, 1]$; the polynomial basis is valid beyond $|s_l| = 1$. The run
+does not initialise VMEC. `init_spectre_field` (`src/simple_main.f90`) sets
+$N_\text{fp}$, `fper` $= 2\pi/N_\text{fp}$ and `rmajor`, the $m = n = 0$
+harmonic of $R$ on the outermost interface (m), so that `params_init` derives
+$\Delta\tau$ as for VMEC.
+
+### 6.1 Field lines
+
+`src/field_line_spectre.f90` traces field lines inside one volume as a
+one-degree-of-freedom Hamiltonian flow with time $\zeta$, coordinate
+$\vartheta$ and momentum $\psi = A_\vartheta$; $s$ follows implicitly from
+$\psi$:
+
+$$
+\frac{d\vartheta}{d\zeta} = -\frac{\partial_s A_\zeta}{\partial_s A_\vartheta},
+\qquad
+\frac{d\psi}{d\zeta} = \partial_\vartheta A_\zeta
+ - \partial_\vartheta A_\vartheta\,\frac{\partial_s A_\zeta}{\partial_s A_\vartheta}.
+$$
+
+The map is semi-implicit symplectic Euler: Newton on $s$ for the momentum
+update (analytic Jacobian, $|F| < 10^{-13}$), then explicit $\vartheta$ and
+$\zeta$ updates. `spectre_poincare.x` (`app/spectre_poincare.f90`) reads
+`spectre_poincare.in` and writes `poincare_vol<N>.dat` (seed, section, $s$,
+$\vartheta$, $R$, $Z$) and `iota_vol<N>.dat` (least-squares rotational
+transform) at $\zeta_0 + 2\pi k/N_\text{fp}$. $R, Z$ come from the interface
+Fourier blend `spectre_rz`: linear in $s$ between interfaces, $\bar s^{m}$
+in the axis volume.
+
+### 6.2 Guiding centre, RK45 (`integmode = 0`)
+
+`magfie_spectre` (`src/magfie.f90`) evaluates on $(\rho_g, \vartheta,
+\zeta)$. One call of libneo `spectre_evaluate_der` gives $B$, $h_i$, the exact
+$\sqrt g\,B^i$ and the derivatives of $B$ and $h_i$; the chart supplies
+$g_{ij}$ and $\partial_k g_{ij}$. `bder` and `hcurl` follow analytically;
+libneo returns $\partial h_i/\partial x_j$ with the component index first,
+so `magfie_spectre` transposes it for `compute_hcurl`. Derivatives are taken
+inside volume $l$, so the jump of $B$ at an interface never enters a drift.
+
+The field is SI; the conversion to Gaussian units is in one block:
+
+| Quantity | Factor | Reason |
+|---|---|---|
+| `bmod` | $10^4$ | T to G |
+| `sqrtg` | $10^6$ | $L^3$, m to cm |
+| `hcovar` | $10^2$ | $L$ |
+| `hctrvr` | $10^{-2}$ | $1/L$ |
+| `bder` | 1 | chart is dimensionless |
+
+`sample_spectre_surface` (`startmode = 1`) samples the surface
+$\rho_g$ = `sbeg(1)` with probability $\propto |\mathbf e_\vartheta \times
+\mathbf e_\zeta|$ on the $(\vartheta, \zeta)$ nodes, uniform speed and random
+pitch; `start.dat` holds $(\rho_g, \vartheta, \zeta)$ directly. It also sets
+`bmin`, `bmax`, `bmod00`. The single-volume RK45 path (`src/spectre_orbit.f90`)
+clamps evaluation at the boundary, reflects at the axis and absorbs at
+$\rho_g = 1$. Multi-volume fields require `integmode > 0`.
+
+### 6.3 Guiding centre, symplectic per volume (`integmode > 0`)
+
+In SPECTRE coordinates the gauge $A_s = 0$ holds, but $h_s \neq 0$ (the
+metric is not diagonal), so the guiding-centre one-form keeps a
+$\rho_\parallel B_s\,ds$ term. The Meiss angle $\zeta_c$ with
+$\partial_s\lambda = -B_s/B_\zeta$ and the gauge $\chi$ with
+$\partial_s\chi = (\partial_s\lambda) A_\zeta$ remove both $A'_s$ and $B'_s$,
+so the flow is canonical in $(\rho_g, \vartheta_c, \zeta_c)$.
+
+`construct_spectre_coordinates` runs `init_meiss` and
+`get_meiss_coordinates` once per volume on the smooth slab
+$r \in [l-1, l]$ (volume 1 from $r = 10^{-3}$, avoiding the axis) with
+identity radial scaling, on the grid `spectre_ncon_r` $\times$
+`spectre_ncon_th` $\times n_\varphi$ (default $48 \times 48$).
+`harvest_meiss_volume` moves the splines (`move_alloc`) into a
+`meiss_volume_t` slot. `spectre_ncon_phi = -1` (default) uses
+$n_\varphi = 32$ for fields with toroidal harmonics and `AXISYM_NPHI` $= 8$
+for axisymmetric fields; a positive value is used as given. The quintic
+coefficients take $n_q \cdot 6^3 \cdot n_r n_\vartheta n_\varphi$ doubles per
+volume, which dominates peak memory; the axisymmetric clamp saves about a
+factor 4. `set_spectre_construction_grid` passes the grid because
+`field_can_*` cannot use `params` without a dependency cycle.
+
+The construction stays in SI; `evaluate_spectre_can` converts values and
+derivatives: $B$ by $10^4$, $h_\vartheta, h_\varphi$ by $10^2$,
+$A_\vartheta, A_\varphi$ by $10^8$ (T m$^2$ to G cm$^2$), so that
+$\sqrt g = (h_\varphi A_\vartheta' - h_\vartheta A_\varphi')/B$ is in
+cm$^3$ as in `magfie_spectre`. It evaluates volume $l$; `integ_to_ref` and
+`ref_to_integ` apply that volume's $\lambda_\varphi$ with identity radius.
+Field evaluation keeps a $C^1$ radial extension past each volume edge for
+Newton trials (bound $\rho_g = M_\text{vol} + 1$); this is not a crossing
+model. Loss is located at $\rho_g = M_\text{vol}$.
+
+### 6.4 Full orbit near interfaces
+
+With `crossing_level = 3` (default), multi-volume tracing switches to full
+orbit near interior interfaces and the outer boundary; the switch rules are
+in {doc}`/development/design/spectre-interface-crossing`. A launch whose
+gyro-offset places the particle outside is an immediate loss at zero time.
+
+`src/spectre_fo_field.f90` splines $R$, $Z$, $A_\vartheta$ and $A_\zeta$ per
+volume on `spectre_fo_grid` (default $32 \times 64 \times 32$ in
+$\rho, \vartheta, \zeta$ per period; seven $\zeta$ planes for axisymmetric
+fields). Basis vectors and $\mathbf B$ follow from the spline derivatives
+with libneo's positive metric Jacobian. The orbit advances logical position
+by $d\mathbf u/dt = \mathbf E^{-1}\mathbf v$ and Cartesian velocity by the
+Lorentz force, so RK stages need no coordinate inversion. Near the volume-1
+axis a regular table in $(\xi, \eta) = \rho_g(\cos\vartheta, \sin\vartheta)$
+of $R$, $Z$ and three potential components, with
+$2\max(3, n_\rho/4) + 1$ points per transverse direction, replaces the polar
+splines; the two join over $0.05 < \rho_g < 0.1$, including the derivative of
+the blending weight. The tables are built before the parallel region, shared
+read-only and released on reinitialisation. Results must be converged in
+the spline grid as well as in the time step.
+
+## 7. libneo entry points
+
+| Routine | Use |
+|---|---|
+| `spline_vmec_data`, `splint_vmec_data` | VMEC splines and their evaluation |
+| `vmec_to_boozer`, `boozer_to_vmec`, `splint_boozer_coord` | Boozer coordinates |
+| `vmec_to_can`, `can_to_vmec`, `splint_can_coord` | canonical flux coordinates |
+| `make_vmec_coordinate_system`, `make_chartmap_coordinate_system`, `detect_refcoords_file_type` | reference coordinates |
+| `create_spectre_field`, `spectre_evaluate_der` | SPECTRE fields |
+
+`init_vmec` (`src/simple.f90`) calls `spline_vmec_data`, then `stevvo` for
+$R_0$ and $N_\text{fp}$ (`fper` $= 2\pi/N_\text{fp}$), then
+`volume_and_B00`.
+
+## 8. Orbit-level interfaces
+
+### 8.1 Canonical frequencies
+
+`orbit_frequencies::compute_canonical_frequencies(tracer, initial_state,
+options, result)` takes an initialised `tracer_t` (`dtaumin`, `v0`, `relerr`,
+`integmode` set) and a state $(s, \vartheta, \varphi, v/v_0, \lambda)$ in
+integration coordinates. It copies the tracer, so the caller's orbit state
+does not advance. The result holds the bounce or transit frequency
+$\omega_b = 2\pi/T > 0$ and the mean toroidal frequency
+$\omega_\varphi = \Delta\varphi/T$ (rad/s, period in s). The flat wrapper
+`compute_canonical_frequencies_flat` in `simple_main` takes a reference
+state and is what f90wrap and `pysimple.compute_canonical_frequencies` call.
+
+### 8.2 Initial states from invariants
+
+`src/orbit_invariants.f90` maps the axisymmetric guiding-centre invariants
+$(H_0, J_\perp, p_\varphi)$ to starting states and back, outside the
+tracing loop. With $p = v/v_0$ and $\lambda = v_\parallel/v$,
+
+$$
+H_0 = p^2,\qquad J_\perp = \frac{p^2(1-\lambda^2)}{B},\qquad
+\psi_*^\text{native} = A_\varphi + \rho_0\, p\lambda\, h_\varphi
+ = \frac{c}{q} P_\varphi .
+$$
+
+No electrostatic potential enters. $\psi_*$ has magnetic-flux units; for VMEC
+$A_\vartheta$ is the toroidal and $-A_\varphi$ the poloidal flux. The public
+$p_\varphi$ uses a portable gauge,
+
+$$
+p_\varphi = \epsilon_\psi\,(\psi_*^\text{native} - A_{\varphi,\text{axis}}),
+\qquad \epsilon_\psi = \operatorname{sign}(A_{\varphi,\text{edge}} - A_{\varphi,\text{axis}}),
+$$
+
+so its flux part is zero on axis and grows outward. `axis_flux_native` and
+`edge_flux_native` are $A_\varphi$ on the axis and at the LCFS (for an
+extended chartmap at `rho_lcfs`). POTATO values convert as
+$p_\varphi = \operatorname{sign}(\psi_\text{edge} - \psi_\text{axis})
+(\psi_*^\text{POTATO} - \psi_\text{axis})$; with $a = v_0^\text{POTATO} /
+v_0^\text{SIMPLE}$, $H_0^\text{SIMPLE} = a^2 H_0^\text{POTATO}$ and
+$J_\perp^\text{SIMPLE} = a^2 J_\perp^\text{POTATO}$. The symplectic state is
+encoded by `encode_symplectic_state` ({doc}`/model/guiding-centre`).
+
+The inverse searches the section $\nabla\psi \times \nabla B = 0$ (the $B$
+extrema on each flux surface in axisymmetry) on both branches
+$\sigma = \operatorname{sign} v_\parallel$ and returns every regular root,
+ordered by major radius from the high- to the low-field side (POTATO's
+$R_c$), with branch, sign and minimum/maximum metadata. No root is singled
+out: several section points can belong to one orbit, and "inner"/"outer"
+are topological classes, not field sides (Buchholz et al., J. Phys.: Conf.
+Ser. 2397, 012012 (2022),
+[doi:10.1088/1742-6596/2397/1/012012](https://doi.org/10.1088/1742-6596/2397/1/012012)).
+Entry points: `invariants_from_state`, `states_from_invariants`,
+`potato_to_simple_invariants`; the flat wrappers in `simple_main` convert
+coordinates and add $R_c$ for Python.
