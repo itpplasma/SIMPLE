@@ -52,7 +52,9 @@ CONFIG=Fast` (or `CONFIG=Debug`) before `make`. The test targets below, except
 
 The build fetches libneo, fortplot and fortnum through CMake `FetchContent`.
 Select a libneo revision with `make LIBNEO_REF=<branch|tag|sha>` or use a local
-checkout with `make LIBNEO_PATH=/path/to/libneo`. The `fpm.toml` is
+checkout with `make LIBNEO_PATH=/path/to/libneo`. Set these overrides on the
+first configuration, or run `make clean` before changing them with `make`;
+ordinary `make` does not reconfigure an existing build. The `fpm.toml` is
 experimental and is not used for development or testing.
 
 Several tests in every test target, including `make test-fast`, are written in
@@ -66,15 +68,18 @@ source .venv/bin/activate
 ```
 
 The default setup also builds and installs `pysimple` and selects OpenBLAS.
-Install OpenBLAS first. With Homebrew, make its installation visible to CMake
-and select GNU C/C++ as well as GNU Fortran for OpenMP. Replace `16` below
+Install OpenBLAS first. With Homebrew, expose OpenBLAS and NetCDF to the
+build and select GNU C/C++ as well as GNU Fortran for OpenMP. Replace `16` below
 with the installed GCC major version. Select compilers before the first
 configuration, or run `make clean` when switching toolchains.
 
 ```bash
 brew install openblas
-CMAKE_PREFIX_PATH="$(brew --prefix openblas)" \
-    CC=gcc-16 CXX=g++-16 FC=gfortran ./setup-venv.sh
+export CMAKE_PREFIX_PATH="$(brew --prefix openblas)"
+export CPATH="$(nc-config --includedir)"
+export LIBRARY_PATH="$(nc-config --libdir)"
+export CC=gcc-16 CXX=g++-16 FC=gfortran
+./setup-venv.sh
 ```
 
 Use `./setup-venv.sh --no-pysimple` to install only the Python dependencies.
