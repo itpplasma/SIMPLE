@@ -14,7 +14,7 @@ program test_fo_boris
   use, intrinsic :: iso_fortran_env, only: dp => real64
   use parmot_mod, only: ro0
     use simple, only: init_params, init_fo, orbit_timestep_fo, &
-        orbit_timestep_fo_bridge, tracer_t
+                      orbit_timestep_fo_bridge, tracer_t
   use simple_main, only: init_field
   use orbit_fo_boris, only: fo_state_t, fo_init, fo_step, &
     fo_energy, fo_mu, fo_to_gc, accept_or_fail, FO_OK, FO_LOCATE_FAIL
@@ -90,7 +90,7 @@ contains
         if (status /= FO_OK) return
         call fo_to_gc(reference, s, theta, phi, vpar, status)
         call check('wrapper fixture guiding-centre recovery succeeds', &
-            status == FO_OK, nfail)
+                   status == FO_OK, nfail)
         if (status /= FO_OK) return
 
         z = z0
@@ -98,9 +98,9 @@ contains
         call orbit_timestep_fo(state, z, ierr)
         call check('successful full-orbit wrapper returns zero', ierr == 0, nfail)
         call check('successful full-orbit wrapper advances position', &
-            maxval(abs(state%x - position_start)) > 0.0_dp, nfail)
+                   maxval(abs(state%x - position_start)) > 0.0_dp, nfail)
         call check('successful full-orbit wrapper writes finite coordinates', &
-            all(ieee_is_finite(z)), nfail)
+                   all(ieee_is_finite(z)), nfail)
     end subroutine check_full_orbit_wrapper_success
 
   subroutine check_reference_axis_bridge(nfail)
