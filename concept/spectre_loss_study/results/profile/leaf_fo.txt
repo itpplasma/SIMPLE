@@ -1,0 +1,33 @@
+__batch_interpolate_3d_MOD_evaluate_batch_splines_3d_der_core_general.isra.0  (in study_spectre_orbits.x)        108421
+_platform_memmove  (in libsystem_platform.dylib)        15396
+DYLD-STUB$$memcpy  (in study_spectre_orbits.x)        2974
+__spectre_fo_hybrid_MOD_dp_trial.isra.0  (in study_spectre_orbits.x)        2351
+__batch_interpolate_3d_MOD_evaluate_batch_splines_3d_der  (in study_spectre_orbits.x)        870
+fmod  (in libsystem_m.dylib)        721
+__spectre_fo_field_MOD_set_magnetic_field  (in study_spectre_orbits.x)        514
+__spectre_fo_field_MOD_geometry_from_values.isra.0  (in study_spectre_orbits.x)        467
+__spectre_fo_field_MOD_spectre_fo_field_locate  (in study_spectre_orbits.x)        459
+__spectre_fo_hybrid_MOD_gc_map.isra.0  (in study_spectre_orbits.x)        459
+__spectre_fo_field_MOD_spectre_fo_field_local  (in study_spectre_orbits.x)        340
+exp  (in libsystem_m.dylib)        222
+__spectre_fo_hybrid_MOD_spectre_fo_advance_until_exit  (in study_spectre_orbits.x)        164
+cexp  (in libsystem_m.dylib)        155
+sin  (in libsystem_m.dylib)        136
+cos  (in libsystem_m.dylib)        124
+DYLD-STUB$$fmod  (in study_spectre_orbits.x)        98
+pow  (in libsystem_m.dylib)        95
+atan2  (in libsystem_m.dylib)        79
+DYLD-STUB$$cexp  (in study_spectre_orbits.x)        66
+???  (in libsystem_m.dylib)  load address 0x199603000 + 0x10a8  [0x1996040a8]        60
+???  (in libsystem_m.dylib)  load address 0x199603000 + 0x1150  [0x199604150]        58
+_platform_memset  (in libsystem_platform.dylib)        38
+???  (in libsystem_m.dylib)  load address 0x199603000 + 0x1138  [0x199604138]        26
+???  (in libsystem_m.dylib)  load address 0x199603000 + 0x1098  [0x199604098]        24
+__spectre_fo_field_MOD_axis_values  (in study_spectre_orbits.x)        14
+???  (in libsystem_m.dylib)  load address 0x199603000 + 0x1114  [0x199604114]        10
+???  (in libsystem_m.dylib)  load address 0x199603000 + 0x1170  [0x199604170]        9
+DYLD-STUB$$memset  (in study_spectre_orbits.x)        9
+DYLD-STUB$$atan2  (in study_spectre_orbits.x)        7
+DYLD-STUB$$pow  (in study_spectre_orbits.x)        6
+???  (in libsystem_m.dylib)  load address 0x199603000 + 0x1080  [0x199604080]        5
+_xzm_xzone_malloc_tiny  (in libsystem_malloc.dylib)        5

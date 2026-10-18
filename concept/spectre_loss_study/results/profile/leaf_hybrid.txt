@@ -1,0 +1,118 @@
+__batch_interpolate_3d_MOD_evaluate_batch_splines_3d_der_core_general.isra.0  (in study_spectre_orbits.x)        97595
+_platform_memmove  (in libsystem_platform.dylib)        13544
+__batch_interpolate_3d_MOD_evaluate_batch_splines_3d_der2_core_o555.isra.0  (in study_spectre_orbits.x)        8531
+DYLD-STUB$$memcpy  (in study_spectre_orbits.x)        2585
+__spectre_fo_hybrid_MOD_dp_trial.isra.0  (in study_spectre_orbits.x)        2106
+fmod  (in libsystem_m.dylib)        1294
+__batch_interpolate_3d_MOD_evaluate_batch_splines_3d_der  (in study_spectre_orbits.x)        783
+__spectre_fo_field_MOD_set_magnetic_field  (in study_spectre_orbits.x)        477
+__spectre_fo_field_MOD_spectre_fo_field_locate  (in study_spectre_orbits.x)        454
+__spectre_fo_hybrid_MOD_gc_map.isra.0  (in study_spectre_orbits.x)        410
+__spectre_fo_field_MOD_geometry_from_values.isra.0  (in study_spectre_orbits.x)        386
+__batch_interpolate_3d_MOD_evaluate_batch_splines_3d  (in study_spectre_orbits.x)        337
+__spectre_fo_field_MOD_spectre_fo_field_local  (in study_spectre_orbits.x)        324
+exp  (in libsystem_m.dylib)        212
+cexp  (in libsystem_m.dylib)        208
+__spectre_fo_hybrid_MOD_spectre_fo_advance_until_exit  (in study_spectre_orbits.x)        146
+sin  (in libsystem_m.dylib)        137
+__field_can_mod_MOD_get_derivatives2  (in study_spectre_orbits.x)        135
+__orbit_symplectic_MOD_newton_midpoint  (in study_spectre_orbits.x)        119
+cos  (in libsystem_m.dylib)        106
+cblas_dtrsm  (in libBLAS.dylib)        86
+DYLD-STUB$$fmod  (in study_spectre_orbits.x)        80
+__orbit_symplectic_MOD_jac_midpoint_part1  (in study_spectre_orbits.x)        80
+pow  (in libsystem_m.dylib)        75
+atan2  (in libsystem_m.dylib)        73
+__field_can_spectre_MOD_evaluate_spectre_can  (in study_spectre_orbits.x)        66
+???  (in libsystem_m.dylib)  load address 0x199603000 + 0x1114  [0x199604114]        63
+???  (in libsystem_m.dylib)  load address 0x199603000 + 0x1150  [0x199604150]        57
+cblas_idamax  (in libBLAS.dylib)        54
+???  (in libsystem_m.dylib)  load address 0x199603000 + 0x10a8  [0x1996040a8]        51
+_xzm_free  (in libsystem_malloc.dylib)        51
+DYLD-STUB$$cexp  (in study_spectre_orbits.x)        50
+_platform_memset  (in libsystem_platform.dylib)        47
+APL_dtrsm  (in libBLAS.dylib)        42
+mach_absolute_time  (in libsystem_kernel.dylib)        36
+__field_can_mod_MOD_get_derivatives  (in study_spectre_orbits.x)        34
+DLASWP  (in libLAPACK.dylib)        30
+___chkstk_darwin  (in libsystem_pthread.dylib)        30
+DGETRS  (in libLAPACK.dylib)        27
+__emutls_get_address  (in study_spectre_orbits.x)        27
+DGETF2  (in libLAPACK.dylib)        26
+__batch_interpolate_3d_MOD_evaluate_batch_splines_3d_der2  (in study_spectre_orbits.x)        26
+__orbit_symplectic_MOD_f_midpoint_part1  (in study_spectre_orbits.x)        25
+???  (in libsystem_m.dylib)  load address 0x199603000 + 0x1098  [0x199604098]        23
+__orbit_symplectic_MOD_orbit_timestep_sympl_midpoint.part.0  (in study_spectre_orbits.x)        23
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0x578558  [0x18a86a558]        22
+_malloc_zone_malloc  (in libsystem_malloc.dylib)        21
+_xzm_xzone_malloc  (in libsystem_malloc.dylib)        21
+cblas_dger  (in libBLAS.dylib)        21
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0x5bd12c  [0x18a8af12c]        20
+???  (in libLAPACK.dylib)  load address 0x199a2f000 + 0x20b0  [0x199a310b0]        20
+DGESV  (in libLAPACK.dylib)        20
+???  (in libLAPACK.dylib)  load address 0x199a2f000 + 0x2008  [0x199a31008]        19
+_free  (in libsystem_malloc.dylib)        18
+<deduplicated_symbol>  (in libsystem_malloc.dylib)        17
+???  (in libsystem_m.dylib)  load address 0x199603000 + 0x1138  [0x199604138]        17
+DGETRF  (in libLAPACK.dylib)        17
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0x123c  [0x18a2f323c]        14
+DYLD-STUB$$cblas_dger  (in libLAPACK.dylib)        14
+__spectre_sympl_orbit_MOD_orbit_microstep_sympl_spectre  (in study_spectre_orbits.x)        14
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0x5bd214  [0x18a8af214]        12
+???  (in libLAPACK.dylib)  load address 0x199a2f000 + 0x1ff8  [0x199a30ff8]        12
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0x5785a0  [0x18a86a5a0]        11
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0xf6c  [0x18a2f2f6c]        11
+???  (in libLAPACK.dylib)  load address 0x199a2f000 + 0x20f0  [0x199a310f0]        11
+???  (in libsystem_m.dylib)  load address 0x199603000 + 0x1170  [0x199604170]        11
+_platform_memcmp  (in libsystem_platform.dylib)        11
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0x578544  [0x18a86a544]        10
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0xddc  [0x18a2f2ddc]        10
+MAIN__._omp_fn.0  (in study_spectre_orbits.x)        10
+__spectre_fo_hybrid_MOD_spectre_fo_radial_larmor  (in study_spectre_orbits.x)        10
+_gfortran_string_len_trim.part.0  (in libgfortran.5.dylib)        10
+cblas_dscal  (in libBLAS.dylib)        10
+pthread_getspecific  (in libsystem_pthread.dylib)        10
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0x12b0  [0x18a2f32b0]        9
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0x578740  [0x18a86a740]        9
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0xda0  [0x18a2f2da0]        9
+???  (in libLAPACK.dylib)  load address 0x199a2f000 + 0x2054  [0x199a31054]        9
+_tlv_get_addr  (in libdyld.dylib)        9
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0x157d54  [0x18a449d54]        8
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0x5bd164  [0x18a8af164]        8
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0xe18  [0x18a2f2e18]        8
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0xf9c  [0x18a2f2f9c]        8
+???  (in libLAPACK.dylib)  load address 0x199a2f000 + 0x203c  [0x199a3103c]        8
+APPLE_NTHREADS  (in libBLAS.dylib)        8
+DYLD-STUB$$__emutls_get_address  (in study_spectre_orbits.x)        8
+DYLD-STUB$$cblas_dswap  (in libLAPACK.dylib)        8
+_platform_strlen  (in libsystem_platform.dylib)        8
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0x1284  [0x18a2f3284]        7
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0x157d30  [0x18a449d30]        7
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0x157d98  [0x18a449d98]        7
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0x5780fc  [0x18a86a0fc]        7
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0x5785f0  [0x18a86a5f0]        7
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0x63adf8  [0x18a92cdf8]        7
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0x6e0180  [0x18a9d2180]        7
+???  (in libLAPACK.dylib)  load address 0x199a2f000 + 0x1020  [0x199a30020]        7
+???  (in libLAPACK.dylib)  load address 0x199a2f000 + 0x1c18  [0x199a30c18]        7
+???  (in libsystem_m.dylib)  load address 0x199603000 + 0x1144  [0x199604144]        7
+DYLD-STUB$$cblas_dscal  (in libLAPACK.dylib)        7
+DYLD-STUB$$cblas_idamax  (in libLAPACK.dylib)        7
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0x11d8  [0x18a2f31d8]        6
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0x1230  [0x18a2f3230]        6
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0x578784  [0x18a86a784]        6
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0x6e0c90  [0x18a9d2c90]        6
+???  (in libLAPACK.dylib)  load address 0x199a2f000 + 0x1f0c  [0x199a30f0c]        6
+DYLD-STUB$$_platform_bzero  (in libsystem_malloc.dylib)        6
+DYLD-STUB$$atan2  (in study_spectre_orbits.x)        6
+DYLD-STUB$$free  (in study_spectre_orbits.x)        6
+DYLD-STUB$$pthread_getspecific  (in study_spectre_orbits.x)        6
+_xzm_xzone_malloc_tiny  (in libsystem_malloc.dylib)        6
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0x157da0  [0x18a449da0]        5
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0x157db8  [0x18a449db8]        5
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0x5bd19c  [0x18a8af19c]        5
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0x5bd224  [0x18a8af224]        5
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0x6e0c7c  [0x18a9d2c7c]        5
+???  (in libBLAS.dylib)  load address 0x18a2f2000 + 0xe74  [0x18a2f2e74]        5
+???  (in libLAPACK.dylib)  load address 0x199a2f000 + 0x11e0  [0x199a301e0]        5
+???  (in libLAPACK.dylib)  load address 0x199a2f000 + 0x1f80  [0x199a30f80]        5

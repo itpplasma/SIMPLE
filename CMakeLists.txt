@@ -73,7 +73,7 @@ endif()
 option(ENABLE_PYTHON_INTERFACE "Enables the Python-Wrapper." ON)
 option(SIMPLE_TESTING "Enable testing." ON)
 option(ENABLE_OPENMP "Enable OpenMP compiler flags." ON)
-option(ENABLE_COVERAGE "Enable code coverage analysis (Debug/Profile builds only)" OFF)
+option(ENABLE_COVERAGE "Enable GNU code coverage analysis" OFF)
 option(SIMPLE_DETERMINISTIC_FP "Disable fast-math for reproducible floating-point" OFF)
 option(SIMPLE_ENABLE_PYTHON_TOOLS "Enable Python helpers (tests/data generation)" ON)
 option(SIMPLE_ENABLE_OPENACC "Enable OpenACC offload (NVHPC only)" OFF)
@@ -320,6 +320,17 @@ if(NOT SIMPLE_ENABLE_OPENACC)
         "Disable libneo OpenACC when SIMPLE does not enable OpenACC" FORCE)
 endif()
 
+set(_dependency_versions_file "${CMAKE_CURRENT_SOURCE_DIR}/cmake/dependency_versions.json")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${_dependency_versions_file}")
+file(READ "${_dependency_versions_file}" _dependency_versions)
+foreach(_dependency IN ITEMS fortnum fortplot)
+    string(TOUPPER "${_dependency}" _dependency_upper)
+    if(NOT DEFINED ${_dependency_upper}_REF)
+        string(JSON ${_dependency_upper}_REF GET "${_dependency_versions}" ${_dependency})
+    endif()
+endforeach()
+
 # fortnum provides the root finder and allocation-free GPU RK5(4) device
 # integrator used by SIMPLE. libneo declares fortnum as well, so this must be
 # declared first: FetchContent keeps the first declaration and silently ignores
@@ -330,9 +341,7 @@ if(NOT TARGET fortnum)
     FetchContent_Declare(
         fortnum
         GIT_REPOSITORY https://github.com/lazy-fortran/fortnum.git
-        # Temporary dependency pin for the tuned-DOPRI PR; update to the
-        # resulting Fortnum main commit after lazy-fortran/fortnum#90 merges.
-        GIT_TAG b382eff4d2578570c05cdc0b8471e11ce61fb8bd
+        GIT_TAG ${FORTNUM_REF}
     )
     FetchContent_MakeAvailable(fortnum)
 endif()
@@ -383,10 +392,13 @@ endif()
 # Fetch fortplot for diagnostic plotting (disabled for nvfortran due to compatibility issues)
 if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     include(FetchContent)
+    # SIMPLE uses the native plotting API and does not need the fortarray adapter.
+    set(FORTPLOT_BUILD_FORTARRAY_ADAPTER OFF CACHE BOOL
+        "Build the optional fortarray plotting adapter")
     FetchContent_Declare(
         fortplot
         GIT_REPOSITORY https://github.com/lazy-fortran/fortplot.git
-        GIT_TAG feabb592faf39bac8167b9193413912f2bb8ca48
+        GIT_TAG ${FORTPLOT_REF}
     )
     FetchContent_MakeAvailable(fortplot)
     add_compile_definitions(USE_FORTPLOT)
@@ -434,16 +446,21 @@ if (ENABLE_OPENMP)
     link_libraries(OpenMP::OpenMP_Fortran)
 endif()
 
-# Coverage analysis configuration (only for Debug/Profile builds)
+# Coverage analysis uses the selected build profile, including normal Fast builds.
 if (ENABLE_COVERAGE)
-    if (CMAKE_BUILD_TYPE MATCHES "Debug|Profile")
+    if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
         message(STATUS "Coverage analysis enabled for ${CMAKE_BUILD_TYPE} build")
 
         # Create interface library for coverage flags to scope them to specific targets
         add_library(coverage_flags INTERFACE)
-        target_compile_options(coverage_flags INTERFACE --coverage -fprofile-arcs -ftest-coverage)
+        # OpenMP workers must not race when updating gcov counters.
+        target_compile_options(coverage_flags INTERFACE
+            --coverage -fprofile-arcs -ftest-coverage -fprofile-update=atomic)
         target_link_options(coverage_flags INTERFACE --coverage -lgcov)
-
+        # Apply to SIMPLE targets declared below, after external dependencies.
+        # Coverage must not depend on Debug-only initialization/trap options.
+        link_libraries(coverage_flags)
+        
         # Add custom target for coverage data generation
         find_program(LCOV_PATH lcov)
         if(LCOV_PATH)
@@ -455,7 +472,6 @@ if (ENABLE_COVERAGE)
                     --ignore-errors mismatch
                     --ignore-errors unused
                 COMMAND ${LCOV_PATH} --remove coverage.info
-                    "/home/ert/code/libneo/*"
                     "*/libneo/*"
                     "*/test/*"
                     "/usr/*"
@@ -471,7 +487,7 @@ if (ENABLE_COVERAGE)
             message(WARNING "lcov not found - coverage target will not be available")
         endif()
     else()
-        message(WARNING "Coverage analysis requires Debug or Profile build type (current: ${CMAKE_BUILD_TYPE})")
+        message(FATAL_ERROR "Coverage analysis requires GNU Fortran")
     endif()
 endif()
 
@@ -546,28 +562,6 @@ else()
 endif()
 
 # Trampoline error flags will be applied per-target to avoid affecting subprojects
-
-# Auto-download pyplot-fortran single file during build
-set(PYPLOT_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty)
-set(PYPLOT_MODULE_FILE ${PYPLOT_SOURCE_DIR}/pyplot_module.F90)
-
-# Download pyplot_module.F90 if it doesn't exist
-if(NOT EXISTS ${PYPLOT_MODULE_FILE})
-    message(STATUS "Downloading pyplot_module.F90...")
-    file(MAKE_DIRECTORY ${PYPLOT_SOURCE_DIR})
-    file(DOWNLOAD
-        "https://raw.githubusercontent.com/jacobwilliams/pyplot-fortran/refs/heads/master/src/pyplot_module.F90"
-        ${PYPLOT_MODULE_FILE}
-        SHOW_PROGRESS
-    )
-endif()
-
-# Create pyplot library from downloaded source
-add_library(pyplot STATIC ${PYPLOT_MODULE_FILE})
-set_target_properties(pyplot PROPERTIES
-    Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/include
-)
-target_include_directories(pyplot PUBLIC ${CMAKE_BINARY_DIR}/include)
 
 add_subdirectory(src)
 include_directories("${CMAKE_BINARY_DIR}/src")

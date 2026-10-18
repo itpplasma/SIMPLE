@@ -1,0 +1,167 @@
+[physics]
+igeometry = 3
+nfp = 1
+nvol = 2
+mpol = 4
+ntor = 0
+lconstraint = 3
+mupfits = 128
+ladiabatic = 0
+mupftol = 1e-12
+rpol = 1.0
+rtor = 1.0
+lreflect = 0
+lfreebound = 0
+phiedge = 1.0
+curtor = 0.0
+curpol = 0.0
+gamma = 0.0
+pscale = 1.0
+enforce_stell_sym = true
+lrad = [8, 6]
+pl = [0, 0]
+ql = [0, 0]
+pr = [0, 0]
+qr = [0, 0]
+lp = [0, 0]
+lq = [0, 0]
+rp = [0, 0]
+rq = [0, 0]
+tflux = [0.2475, 1.0]
+pflux = [0.0, 0.08]
+pressure = [0.001, 0.0]
+adiabatic = [0.0, 0.0]
+mu = [0.0, 0.0]
+ivolume = [0.0, 0.0]
+iota = [0.35, 0.35, 0.3]
+oita = [0.35, 0.35, 0.3]
+isurf = [0.0, 0.0]
+helicity = [0.0, 0.0]
+rac = [-1.0]
+zas = [0.0]
+ras = [0.0]
+zac = [0.0]
+
+[physics.rbc]
+"(0, 0)" = 10.0
+"(1, 0)" = 1.0
+
+[physics.zbs]
+"(1, 0)" = -1.0
+
+[physics.rbs]
+
+[physics.zbc]
+
+[physics.rwc]
+
+[physics.zws]
+
+[physics.rws]
+
+[physics.zwc]
+
+[physics.vns]
+
+[physics.bns]
+
+[physics.vnc]
+
+[physics.bnc]
+
+[physics.allrzrz]
+
+
+[physics.allrzrz.interface_1.rbc]
+"(0, 0)" = 10.0
+"(1, 0)" = 0.5
+
+[physics.allrzrz.interface_1.zbs]
+"(1, 0)" = -0.5
+
+[physics.allrzrz.interface_1.rbs]
+
+[physics.allrzrz.interface_1.zbc]
+
+[physics.allrzrz.interface_2.rbc]
+"(0, 0)" = 10.0
+"(1, 0)" = 1.0
+
+[physics.allrzrz.interface_2.zbs]
+"(1, 0)" = -1.0
+
+[physics.allrzrz.interface_2.rbs]
+
+[physics.allrzrz.interface_2.zbc]
+
+[numeric]
+linitialize = 0
+lautoinitbn = 1
+lzerovac = 0
+ndiscrete = 2
+nquad = -1
+impol = -4
+intor = -4
+lsparse = 0
+lsvdiota = 0
+imethod = 3
+iorder = 2
+iprecon = 1
+iotatol = -1.0
+mregular = 4
+lrzaxis = 1
+ntoraxis = 3
+lvcgrid = 0
+
+[local]
+linitgues = 1
+lposdef = 0
+maxrndgues = 1.0
+
+[diagnostics]
+odetol = 1e-07
+absreq = 1e-08
+relreq = 1e-08
+absacc = 0.0001
+epsr = 1e-08
+nppts = 0
+ppts = 0.0
+nptrj = [3, 3]
+lhevalues = false
+lhevectors = false
+lhmatrix = false
+dpp = -1
+dqq = -1
+lerrortype = 0
+ngrid = -1
+drz = 1e-05
+lcheck = 7
+ltiming = false
+ltransform = false
+fudge = 1.0
+scaling = 1.0
+
+[global]
+lfindzero = 0
+escale = 0.0
+opsilon = 1.0
+pcondense = 4.0
+epsilon = 1.0
+wpoloidal = 1.0
+upsilon = 1.0
+forcetol = 1e-12
+c05xmax = 1e-06
+c05xtol = 1e-12
+c05factor = 0.0001
+lreadgf = false
+mfreeits = 0
+bnstol = 1e-06
+bnsblend = 0.666
+gbntol = 1e-06
+gbnbld = 0.666
+vcasingeps = 1e-12
+vcasingtol = 1e-08
+vcasingits = 8
+vcasingper = 1
+vcnt = 256
+vcnz = 256

@@ -145,6 +145,9 @@ contains
                 if (ierr /= chartmap_from_cyl_ok) then
                     err_vmec_grid(j, i) = -1.0_dp
                     n_vmec_fail = n_vmec_fail + 1
+                    print *, '  VMEC->chart from_cyl failed at u_vmec=', u_vmec, &
+                        ' ierr=', ierr
+                    nerrors = nerrors + 1
                 else
                     call chart_cs%evaluate_cyl(u, xcyl_back)
                     err_vmec = sqrt(sum((xcyl - xcyl_back)**2))
@@ -165,6 +168,8 @@ contains
                 if (ierr /= chartmap_from_cyl_ok) then
                     err_chart_grid(j, i) = -1.0_dp
                     n_chart_fail = n_chart_fail + 1
+                    print *, '  Chartmap from_cyl failed at u=', u, ' ierr=', ierr
+                    nerrors = nerrors + 1
                 else
                     err_chart = sqrt(sum((u - u_back)**2))
                     err_chart_grid(j, i) = log10(max(err_chart, 1.0e-16_dp))
