@@ -19,7 +19,8 @@ module simple_main
         boundary_event_time_width, integmode, relerr, trace_time, class_plot, &
         fast_class, generate_start_only, ntcut, iclass, bmin, bmax, zstart, &
         zend, trap_par, perp_inv, sbeg, ntimstep, should_skip, &
-        reset_seed_if_deterministic, field_input, isw_field_type, reuse_batch, &
+        reset_seed_if_deterministic, particle_stream_id, field_input, &
+        isw_field_type, reuse_batch, &
         max_consecutive_warning_holds, &
         coord_input, wall_input, wall_units, wall_hit, wall_hit_triangle, &
             wall_hit_cart, &
@@ -1345,7 +1346,7 @@ contains
             end if
 #endif
 
-            if (swcoll) call reset_seed_if_deterministic
+            if (swcoll) call reset_seed_if_deterministic(particle_stream_id(i))
             call trace_orbit_with_classifiers(norb, i, class_result)
 
             ! Store classification flags in params arrays
@@ -1895,7 +1896,7 @@ contains
         orbit_traj = quiet_nan()
         orbit_times = quiet_nan()
 
-        if (swcoll) call reset_seed_if_deterministic
+        if (swcoll) call reset_seed_if_deterministic(particle_stream_id(ipart))
 
         if (ntcut > 0 .or. class_plot) then
             call trace_orbit_with_classifiers(anorb, ipart, class_result)

@@ -418,6 +418,15 @@ target_link_libraries(test_finite_check.x simple)
 add_test(NAME test_finite_check COMMAND test_finite_check.x)
 set_tests_properties(test_finite_check PROPERTIES LABELS "unit")
 
+add_executable(test_particle_rng.x test_particle_rng.f90)
+target_link_libraries(test_particle_rng.x simple)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/particle_rng)
+add_test(NAME test_particle_rng COMMAND test_particle_rng.x)
+set_tests_properties(test_particle_rng PROPERTIES
+    LABELS "unit;collisions" TIMEOUT 30
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/particle_rng
+    ENVIRONMENT "OMP_DYNAMIC=FALSE")
+
 add_executable (test_profiles.x test_profiles.f90)
 target_link_libraries(test_profiles.x simple)
 add_test(NAME test_profiles COMMAND test_profiles.x)

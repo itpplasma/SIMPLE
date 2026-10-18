@@ -54,3 +54,18 @@ are listed in `examples/simple_full.in`.
   builds use at least `1d-8` only on slices where the covariant toroidal field
   component is near zero, preventing step-size underflow at that coordinate
   singularity. Change one setting at a time in resolution studies.
+
+* Deterministic collisions seed each particle by its original one-based source
+  row, rather than repeating one kick sequence for every particle. Untagged
+  initialization calls retain the legacy `ran_seed` state. `startmode=4` uses
+  the selected `start.dat` row numbers persisted as text in `batch.dat`.
+  Only mode 4 applies that selection; other modes retain their existing
+  `batch_size` truncation behavior. Batch draws use `ran_seed` even when
+  deterministic collision replay is disabled.
+  For a contiguous external shard, set `particle_index_offset` to the number
+  of original source rows preceding that shard (default zero). The same marker
+  then replays the same stream across thread counts, native selection and
+  contiguous shards. Reordered or noncontiguous external subsets must retain
+  their original ordering/identity rather than treating local row numbers as
+  global IDs. Offset plus source row must be between 1 and 2147483646.
+  Different deterministic streams are not a proof of statistical independence.
