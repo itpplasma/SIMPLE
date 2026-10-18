@@ -189,6 +189,13 @@ new output directory outside the repository for each run; repository-local
 download and output directories are rejected. No dataset or generated file
 needs to be committed::
 
+    python examples/imas_benchmark.py --suite all --jobs 2 \
+        --gorilla /path/to/GORILLA --output /tmp/ids-full-suite
+
+The full suite runs 30 cases, with separate field/timestep refinements,
+fast-alpha losses and 1080-marker collision ensembles. ``suite.json`` records
+every exit status, including failures. Individual cases can be run with::
+
     python examples/imas_benchmark.py --case aug --output /tmp/ids-aug-r48 \
         --gorilla /path/to/GORILLA
     python examples/imas_benchmark.py --case aug --resolution 96 --step 5e-9 \
