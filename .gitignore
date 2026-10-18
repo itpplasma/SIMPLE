@@ -10,7 +10,6 @@ fort.*
 *.nc.*
 *.x
 *.png
-!docs/_static/figures/*.png
 *.o
 *.mod
 RUN/PICS
