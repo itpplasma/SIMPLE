@@ -1005,14 +1005,14 @@ Hamiltonian regression checks these operations without an equilibrium spline.
 | Value | Name | Order | Speed |
 |-------|------|-------|-------|
 | 0 | RK45 | Adaptive | Slow |
-| 1 | EXPL_IMPL_EULER | 2 | Fast |
-| 2 | IMPL_EXPL_EULER | 2 | Fast |
+| 1 | EXPL_IMPL_EULER | 1 | Fast |
+| 2 | IMPL_EXPL_EULER | 1 | Fast |
 | 3 | MIDPOINT | 2 | Medium |
 | 4 | GAUSS1 | 2 | Slow |
 | 5 | GAUSS2 | 4 | Medium |
 | 6 | GAUSS3 | 6 | Medium-Slow |
 | 7 | GAUSS4 | 8 | Slow |
-| 15 | LOBATTO3 | 6 | Slow |
+| 15 | LOBATTO3 | 4 | Slow |
 
 **Constraints**:
 - integmode >= 1: Requires canonical field type (TEST, CANFLUX, BOOZER, MEISS, ALBERT, SPECTRE)
