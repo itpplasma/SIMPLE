@@ -61,7 +61,7 @@ module params
     integer          :: ibins
     logical          :: generate_start_only = .False.
     integer          :: startmode = 1
-    integer :: fusion_grid(3) = [128, 32, 32]
+    integer :: fusion_grid(3) = (/128, 32, 32/)
     real(dp) :: grid_density = 0d0
     logical          :: special_ants_file = .False.
 
