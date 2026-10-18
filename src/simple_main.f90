@@ -2964,7 +2964,16 @@ contains
                     end if
                     exit
                 end if
-                if (ierr_orbit .ne. 0 .and. &
+                if (ierr_orbit .ne. 0 .and. axis_halving_only .and. &
+                    symplectic_newton_warning_mode) then
+                    ! exp/axis-reject V2: halving only, no RK recovery.
+                    z = z_step_start
+                    anorb%si = si_step_start
+                    anorb%f = f_step_start
+                    call hold_isolated_warning_failure(z, z_step_start, &
+                        ierr_orbit, hold_streak_local, numerical_hold, &
+                        numerical_hold_any_local)
+                else if (ierr_orbit .ne. 0 .and. &
                     symplectic_newton_warning_mode) then
                     ! Recover from the reference momentum, not the H-derived
                     ! z(4) of the symplectic state, so that RK, validation and
