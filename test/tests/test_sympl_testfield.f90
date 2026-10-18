@@ -32,11 +32,25 @@ contains
         ierr = SYMPLECTIC_STEP_BOUNDARY
     end subroutine locate_lcfs_step
 
+    subroutine successful_drift_step(si, f, ierr)
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        integer, intent(out) :: ierr
+
+        si%z(1) = si%z(1) + 0.01d0
+        f%Bmod = 1.0d0
+        f%mu = si%pabs**2
+        f%vpar = 0.0d0
+        f%H = si%pabs**2
+        ierr = 0
+    end subroutine successful_drift_step
+
 end module failed_symplectic_step_backend
 
 program test_sympl_testfield
     use, intrinsic :: iso_fortran_env, only : dp => real64, int64
-    use failed_symplectic_step_backend, only: fail_symplectic_step, locate_lcfs_step
+    use failed_symplectic_step_backend, only: fail_symplectic_step, &
+        locate_lcfs_step, successful_drift_step
     use classification, only: classify_classifier_exit
     use simple_main, only : classify_orbit_exit, init_field, locate_linear_lcfs, &
         locate_validated_lcfs, macrostep, macrostep_with_wall_check, &
@@ -107,6 +121,7 @@ program test_sympl_testfield
 
     call test_macrostep_lcfs_event
     call test_failed_step_preserves_state
+    call test_collision_failure_propagation
     call test_rk_recovery_regions
     call test_exit_classification
     call test_numerically_confined_classification
@@ -223,6 +238,78 @@ contains
             error stop 'repeated wall failure changed the last accepted state'
         end if
     end subroutine test_failed_step_preserves_state
+
+    subroutine test_collision_failure_propagation
+        use collis_alp, only: efcolf_grid, velrat_grid, enrat_grid
+        use field_can_mod, only: field_can_t
+        use orbit_symplectic_base, only: symplectic_integrator_t, &
+            SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
+        use params, only: dtaumin, wall_query_rho_lcfs
+        type(tracer_t) :: local_orbit
+        type(symplectic_integrator_t) :: saved_si
+        type(field_can_t) :: saved_field
+        real(dp), parameter :: initial(5) = [0.2_dp, 1.0_dp, 0.2_dp, &
+            1.0_dp, 0.0_dp]
+        real(dp) :: z(5), x_previous(3), saved_wall_gate
+        integer(int64) :: kt
+        integer :: warning, wall_path, step_error, hold_streak
+        logical :: numerical_hold
+
+        ! A real stost failure, not a mock collision callback: negative
+        ! diffusion coefficients must be rejected by the production operator.
+        efcolf_grid = -1.0_dp
+        velrat_grid = 1.0_dp
+        enrat_grid = 1.0_dp
+        dtaumin = 1.0e-3_dp
+        saved_wall_gate = wall_query_rho_lcfs
+        wall_query_rho_lcfs = huge(1.0_dp)
+        orbit_model = ORBIT_GC
+        integmode = 3
+        swcoll = .true.
+        do warning = 0, 1
+            symplectic_newton_warning_mode = warning == 1
+            do wall_path = 0, 1
+                local_orbit = norb
+                call init_sympl(local_orbit%si, local_orbit%f, initial, &
+                    1.0e-3_dp, 1.0e-3_dp, 1.0e-12_dp, 3)
+                saved_si = local_orbit%si
+                saved_field = local_orbit%f
+                orbit_timestep_sympl => successful_drift_step
+                z = initial
+                x_previous = [1.0_dp, 2.0_dp, 3.0_dp]
+                kt = 7_int64
+                hold_streak = 0
+                if (wall_path == 0) then
+                    call macrostep(local_orbit, z, kt, step_error, 1, &
+                        hold_streak=hold_streak, numerical_hold_any=numerical_hold)
+                else
+                    call macrostep_with_wall_check(local_orbit, z, kt, &
+                        step_error, 1, 1, x_previous, hold_streak=hold_streak, &
+                        numerical_hold_any=numerical_hold)
+                end if
+                if (step_error /= SYMPLECTIC_STEP_EVENT_NOT_CONVERGED) &
+                    error stop 'Collision failure did not terminate microstep'
+                if (classify_orbit_exit(step_error, ORBIT_GC, integmode, &
+                    ORBIT_EXIT_LCFS) /= ORBIT_EXIT_NUMERICAL_EVENT) &
+                    error stop 'Collision failure was classified as physical'
+                if (kt /= 7_int64 .or. any(z /= initial)) &
+                    error stop 'Collision failure committed drift or elapsed time'
+                if (hold_streak /= 0 .or. numerical_hold) &
+                    error stop 'Collision failure was consumed as warning hold'
+                if (any(local_orbit%si%z /= saved_si%z) .or. &
+                    local_orbit%si%pabs /= saved_si%pabs .or. &
+                    local_orbit%f%H /= saved_field%H .or. &
+                    local_orbit%f%mu /= saved_field%mu .or. &
+                    local_orbit%f%Bmod /= saved_field%Bmod) &
+                    error stop 'Collision failure changed accepted hidden state'
+                if (any(x_previous /= [1.0_dp, 2.0_dp, 3.0_dp])) &
+                    error stop 'Collision failure committed wall segment origin'
+            end do
+        end do
+        wall_query_rho_lcfs = saved_wall_gate
+        efcolf_grid = 0.0_dp
+        swcoll = .false.
+    end subroutine test_collision_failure_propagation
 
     subroutine test_rk_recovery_regions
         type(rk_recovery_state_t) :: recovery

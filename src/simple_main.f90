@@ -2441,6 +2441,7 @@ contains
     subroutine macrostep(anorb, z, kt, ierr_orbit, ntau_local, exit_step, &
             hold_streak, numerical_hold_any, rk_recovery)
         use alpha_lifetime_sub, only: orbit_timestep_axis
+        use orbit_fo_boris, only: fo_state_t
         use orbit_symplectic, only: advance_symplectic_with_retry, &
             orbit_timestep_sympl
 
@@ -2455,6 +2456,7 @@ contains
         type(rk_recovery_state_t), intent(inout), optional :: rk_recovery
 
         integer :: hold_streak_local, ktau, recovery_method
+        integer :: ierr_coll, collision_hold_start
         real(dp) :: z_step_start(5), z_step_end(5), loss_fraction
         real(dp) :: u_event(3)
         logical :: numerical_hold, numerical_hold_any_local
@@ -2462,6 +2464,10 @@ contains
         type(rk_recovery_state_t) :: rk_recovery_local
         type(symplectic_integrator_t) :: si_step_start
         type(field_can_t) :: f_step_start
+        type(symplectic_integrator_t) :: collision_si_start
+        type(field_can_t) :: collision_field_start
+        type(fo_state_t) :: collision_fo_start
+        type(rk_recovery_state_t) :: collision_recovery_start
 
         if (present(exit_step)) exit_step = real(kt, dp)
         hold_streak_local = 0
@@ -2474,6 +2480,13 @@ contains
             numerical_hold = .false.
             reference_boundary = .false.
             z_step_start = z
+            if (swcoll) then
+                collision_si_start = anorb%si
+                collision_field_start = anorb%f
+                collision_fo_start = anorb%fo
+                collision_recovery_start = rk_recovery_local
+                collision_hold_start = hold_streak_local
+            end if
             if (orbit_model == ORBIT_FULL_ORBIT) then
                 call orbit_timestep_fo(anorb%fo, z, ierr_orbit)
                 if (ierr_orbit .ne. 0) then
@@ -2668,7 +2681,19 @@ contains
             if (integmode <= 0 .or. rk_recovery_local%active) &
                 hold_streak_local = 0
             if (swcoll) then
-                call collide(z, dtaumin) ! Collisions
+                call collide(z, dtaumin, ierr_coll)
+                if (ierr_coll /= 0) then
+                    ! Reject the complete drift-plus-collision microstep.
+                    ! A collision fault is numerical, never a boundary or hold.
+                    z = z_step_start
+                    anorb%si = collision_si_start
+                    anorb%f = collision_field_start
+                    anorb%fo = collision_fo_start
+                    rk_recovery_local = collision_recovery_start
+                    hold_streak_local = collision_hold_start
+                    ierr_orbit = SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
+                    exit
+                end if
                 if (rk_recovery_local%active) then
                     rk_recovery_local%momentum_reference = z(4)
                 end if
@@ -2771,6 +2796,7 @@ contains
             ipart, x_prev_m, exit_step, hold_streak, numerical_hold_any, &
             rk_recovery)
         use alpha_lifetime_sub, only: orbit_timestep_axis
+        use orbit_fo_boris, only: fo_state_t
         use orbit_symplectic, only: advance_symplectic_with_retry, &
             orbit_timestep_sympl
 
@@ -2787,6 +2813,7 @@ contains
         type(rk_recovery_state_t), intent(inout), optional :: rk_recovery
 
         integer :: hold_streak_local, ktau, recovery_method
+        integer :: ierr_coll, collision_hold_start
         real(dp) :: u_ref_prev(3), u_ref_cur(3), x_cur(3), x_cur_m(3)
         real(dp) :: z_step_start(5), z_step_end(5), segment_duration
         real(dp) :: boundary_fraction
@@ -2796,6 +2823,10 @@ contains
         type(rk_recovery_state_t) :: rk_recovery_local
         type(symplectic_integrator_t) :: si_step_start
         type(field_can_t) :: f_step_start
+        type(symplectic_integrator_t) :: collision_si_start
+        type(field_can_t) :: collision_field_start
+        type(fo_state_t) :: collision_fo_start
+        type(rk_recovery_state_t) :: collision_recovery_start
 
         call integ_to_ref(z(1:3), u_ref_prev)
         if (present(exit_step)) exit_step = real(kt, dp)
@@ -2809,6 +2840,13 @@ contains
             reference_boundary = .false.
             segment_duration = 1.0_dp
             z_step_start = z
+            if (swcoll) then
+                collision_si_start = anorb%si
+                collision_field_start = anorb%f
+                collision_fo_start = anorb%fo
+                collision_recovery_start = rk_recovery_local
+                collision_hold_start = hold_streak_local
+            end if
             if (integmode <= 0 .or. rk_recovery_local%active) then
                 if (rk_recovery_local%active) then
                     call orbit_timestep_recovery(anorb%fo, z, dtaumin, relerr, &
@@ -2998,7 +3036,19 @@ contains
             end if
 
             if (swcoll) then
-                call collide(z, dtaumin)
+                call collide(z, dtaumin, ierr_coll)
+                if (ierr_coll /= 0) then
+                    ! Reject the complete drift-plus-collision microstep.
+                    ! A collision fault is numerical, never a boundary or hold.
+                    z = z_step_start
+                    anorb%si = collision_si_start
+                    anorb%f = collision_field_start
+                    anorb%fo = collision_fo_start
+                    rk_recovery_local = collision_recovery_start
+                    hold_streak_local = collision_hold_start
+                    ierr_orbit = SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
+                    exit
+                end if
                 if (rk_recovery_local%active) then
                     rk_recovery_local%momentum_reference = z(4)
                 end if
@@ -3097,10 +3147,10 @@ contains
         anorb%si%pthold = anorb%f%pth
     end subroutine update_momentum
 
-    subroutine collide(z, dt)
+    subroutine collide(z, dt, ierr_coll)
         real(dp), intent(inout) :: z(5)
         real(dp), intent(in) :: dt
-        integer :: ierr_coll
+        integer, intent(out) :: ierr_coll
 
         call stost(z, dt, 1, ierr_coll)
         if (ierr_coll /= 0) then
