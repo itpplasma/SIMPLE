@@ -1,0 +1,63 @@
+cff-version: 1.2.0
+message: >-
+  If you use SIMPLE in your work, please cite the software and the article
+  describing its method.
+title: "SIMPLE: Symplectic Integration Methods for Particle Loss Estimation"
+type: software
+authors:
+  - family-names: Albert
+    given-names: Christopher G.
+    orcid: "https://orcid.org/0000-0003-4773-416X"
+  - family-names: Kasilov
+    given-names: Sergei V.
+  - family-names: Kernbichler
+    given-names: Winfried
+repository-code: "https://github.com/itpplasma/SIMPLE"
+license: MIT
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.3666820
+    description: Zenodo concept DOI for all released versions
+keywords:
+  - stellarator
+  - guiding-center orbits
+  - symplectic integration
+  - alpha particles
+  - fusion
+preferred-citation:
+  type: article
+  title: >-
+    Accelerated methods for direct computation of fusion alpha particle
+    losses within stellarator optimization
+  authors:
+    - family-names: Albert
+      given-names: Christopher G.
+      orcid: "https://orcid.org/0000-0003-4773-416X"
+    - family-names: Kasilov
+      given-names: Sergei V.
+    - family-names: Kernbichler
+      given-names: Winfried
+  journal: Journal of Plasma Physics
+  volume: 86
+  issue: 2
+  start: 815860201
+  year: 2020
+  doi: 10.1017/S0022377820000203
+references:
+  - type: article
+    title: >-
+      Symplectic integration with non-canonical quadrature for guiding-center
+      orbits in magnetic confinement devices
+    authors:
+      - family-names: Albert
+        given-names: Christopher G.
+        orcid: "https://orcid.org/0000-0003-4773-416X"
+      - family-names: Kasilov
+        given-names: Sergei V.
+      - family-names: Kernbichler
+        given-names: Winfried
+    journal: Journal of Computational Physics
+    volume: 403
+    start: 109065
+    year: 2020
+    doi: 10.1016/j.jcp.2019.109065

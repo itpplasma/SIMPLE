@@ -34,26 +34,15 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r docs/requirements.txt
 
-      - name: Build Sphinx docs
-        run: sphinx-build -b html docs docs/_build/html
+      - name: Generate documentation figures
+        run: python docs/_static/figures/scripts/build_doc_figures.py
 
-      - name: Compute destination directory
-        id: destination
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            DEST_DIR="previews/pr-${{ github.event.number }}"
-          else
-            if [ "${GITHUB_REF_NAME}" = "main" ]; then
-              DEST_DIR="latest"
-            else
-              DEST_DIR="branches/${GITHUB_REF_NAME//\//-}"
-            fi
-          fi
-          echo "dest_dir=${DEST_DIR}" >> "$GITHUB_OUTPUT"
+      - name: Build Sphinx docs
+        run: sphinx-build -W -b html docs docs/_build/html
 
       - name: Stage site output
         run: |
-          DEST="${{ steps.destination.outputs.dest_dir }}"
+          DEST="latest"
           mkdir -p site/"$DEST"
           rsync -a --delete docs/_build/html/ site/"$DEST"/
           cat > site/index.html <<'EOF'
@@ -79,7 +68,7 @@ jobs:
   deploy:
     name: Deploy to GitHub Pages
     needs: build
-    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

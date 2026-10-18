@@ -1,20 +1,19 @@
 &config
-! SPECTRE multi-volume guiding-center run on the committed two-volume tokamak
-! fixture. Copy the fixture next to this input first:
-!   cp test/tests/data/tok2vol.h5 tok2vol.h5
-! then run ./build/simple.x simple_spectre.in. The reference behavior of this
-! case is locked by test/tests/test_spectre_validation.py (loss accounting,
-! Level-0 vs Level-1 fractions, trapped/passing split, determinism).
+! Generate starting points on the committed multi-volume tokamak field.
+! Copy test/tests/data/tok2vol.h5 next to this input and run
+! ./build/simple.x simple_spectre.in. This input samples start points only.
+! Set generate_start_only = .False. for multi-volume hybrid orbit tracing;
+! see DOC/spectre-interface-crossing.md for its requirements and limits.
+generate_start_only = .True.
 field_input = 'tok2vol.h5'   ! SPECTRE HDF5 equilibrium (VMEC-free)
 integ_coords = 6             ! SPECTRE per-volume stacked-rho chart
 integmode = 3                ! symplectic midpoint (per-volume Meiss canonical)
-crossing_level = 1           ! interface crossing: 1 = Level-1 refraction map
 trace_time = 1d-4            ! slowing-down trace time, s
 sbeg = 0.5d0                 ! starting rho_g (SPECTRE radial label) for markers
 ntestpart = 64               ! number of markers, area-weighted over the surface
 ntimstep = 100               ! confined_fraction.dat time bins
 npoiper2 = 256               ! integration steps per toroidal turn
-facE_al = 4.0                ! 875 keV: guiding-center-defensible on tok2vol
+facE_al = 8.0                ! 437.5 keV
 relerr = 1d-11               ! integrator relative tolerance
 deterministic = .True.       ! fixed seed for reproducible sampling
 ran_seed = 12345

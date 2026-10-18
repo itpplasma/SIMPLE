@@ -61,6 +61,7 @@ module params
     integer          :: ibins
     logical          :: generate_start_only = .False.
     integer          :: startmode = 1
+    integer :: fusion_grid(3) = (/128, 32, 32/)
     real(dp) :: grid_density = 0d0
     logical          :: special_ants_file = .False.
 
@@ -165,6 +166,7 @@ module params
     integer :: ierr
 
     integer :: batch_size = 2000000000  ! Initialize large so batch mode is not default
+    integer :: particle_index_offset = 0
     integer :: ran_seed = 42
     integer :: num_surf = 1
     logical :: reuse_batch = .False.
@@ -185,9 +187,16 @@ module params
     character(16) :: chart_boundary_kind = 'auto'
     character(16) :: chart_boundary_kind_effective = 'lcfs'
     integer :: integ_coords = -1000  ! Sentinel: -1000 means user did not set it
-    !> SPECTRE RK45 interface-crossing map: 1 = Level-1 refraction (default),
-    !> 0 = Level-0 energy rescale (regression comparison).
-    integer :: crossing_level = 1
+    !> SPECTRE interface treatment: only full orbit (3) is supported.
+    integer :: crossing_level = 3
+    !> Full orbit near SPECTRE interfaces: entry distance in radial gyroradii
+    !> and the relative tolerance of RK45 on the sharp per-volume field.
+    !> 1.5 keeps the switch's p_zeta invariant as at 3 (entry 1 breaks it) at
+    !> about half the FO time (concept/spectre_loss_study/results/fo-residence).
+    real(dp) :: spectre_fo_entry_larmor = 1.5_dp
+    real(dp) :: spectre_fo_tolerance = 1.0e-9_dp
+    !> Per-volume FO spline points: rho, theta, zeta per field period.
+    integer :: spectre_fo_grid(3) = (/32, 64, 32/)
     logical :: spectre_sbeg_is_toroidal_flux = .false.
 
     !> SPECTRE per-volume Meiss construction grid (n_r, n_th, n_phi). Each volume
@@ -204,36 +213,47 @@ module params
     integer :: spectre_ncon_ode_max_steps = 1000000
     real(dp) :: spectre_ncon_ode_relerr = 1.0e-2_dp
 
+    ! Removed &config keys. They are still read so that old input files run;
+    ! a value other than the historical default prints a warning.
+    logical :: local = .true.
+    integer :: loopskip = 0
+    real(dp) :: bmod_ref = 5.0d4
+    real(dp) :: macrostep_log_ratio = 1.0d3
+
     namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
         trace_time, num_surf, sbeg, phibeg, thetabeg, contr_pp, &
-	        facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm, &
-	        isw_field_type, generate_start_only, startmode, grid_density, &
+        facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm, &
+        isw_field_type, generate_start_only, startmode, fusion_grid, grid_density, &
         special_ants_file, integmode, orbit_model, orbit_coord, relerr, &
         gpu_mode, gpu_backend, gpu_method, gpu_start_coordinates, &
         gpu_landreman, gpu_compact_init, gpu_work_order, gpu_num_devices, &
         gpu_t_block, gpu_loss_tau, gpu_maxloss, gpu_min_timestep, &
         gpu_pilot_fraction, gpu_particle_profile, &
-	        symplectic_newton_warning_mode, &
-	        boundary_event_fraction_tolerance, boundary_event_radial_tolerance, &
-	        canonical_grid_nr, canonical_grid_ntheta, canonical_grid_nphi, &
-	        canonical_ode_relerr, &
-	        tcut, nturns, debug, &
-	        class_plot, cut_in_per, fast_class, vmec_B_scale, &
-	        vmec_RZ_scale, swcoll, deterministic, old_axis_healing, &
-	        old_axis_healing_boundary, axis_healing_power_law, rho_axis_heal, &
-	        axis_healing, s_axis_heal, axis_healing_polyfit_degree, &
-	        am1, am2, Z1, Z2, &
-	        densi1, densi2, tempi1, tempi2, tempe, &
-	        batch_size, ran_seed, reuse_batch, field_input, coord_input, &
-	        wall_input, wall_units, chart_boundary_kind, integ_coords, crossing_level, &
-	        spectre_sbeg_is_toroidal_flux, spectre_ncon_r, spectre_ncon_th, &
-	        spectre_ncon_phi, spectre_ncon_order, spectre_ncon_ode_max_steps, &
-	        spectre_ncon_ode_relerr, &
+        symplectic_newton_warning_mode, &
+        boundary_event_fraction_tolerance, boundary_event_radial_tolerance, &
+        canonical_grid_nr, canonical_grid_ntheta, canonical_grid_nphi, &
+        canonical_ode_relerr, &
+        tcut, nturns, debug, &
+        class_plot, cut_in_per, fast_class, vmec_B_scale, &
+        vmec_RZ_scale, swcoll, deterministic, old_axis_healing, &
+        old_axis_healing_boundary, axis_healing_power_law, rho_axis_heal, &
+        axis_healing, s_axis_heal, axis_healing_polyfit_degree, &
+        am1, am2, Z1, Z2, &
+        densi1, densi2, tempi1, tempi2, tempe, &
+        batch_size, ran_seed, particle_index_offset, reuse_batch, &
+        field_input, coord_input, &
+        wall_input, wall_units, chart_boundary_kind, integ_coords, crossing_level, &
+        spectre_fo_entry_larmor, spectre_fo_tolerance, spectre_fo_grid, &
+        spectre_sbeg_is_toroidal_flux, spectre_ncon_r, spectre_ncon_th, &
+        spectre_ncon_phi, spectre_ncon_order, spectre_ncon_ode_max_steps, &
+        spectre_ncon_ode_relerr, &
         output_results_netcdf, &
-	        output_error, output_orbits_macrostep, &  ! callback
-	        macrostep_time_grid, checkpoint_interval, restart
+        output_error, output_orbits_macrostep, &  ! callback
+        macrostep_time_grid, checkpoint_interval, restart, &
+        local, loopskip, bmod_ref, macrostep_log_ratio  ! removed, ignored
 
     integer(int8), allocatable :: wall_hit(:)
+    integer, allocatable :: wall_hit_triangle(:)
     real(dp), allocatable :: wall_hit_cart(:, :)
     real(dp), allocatable :: wall_hit_normal_cart(:, :)
     real(dp), allocatable :: wall_hit_cos_incidence(:)
@@ -244,10 +264,38 @@ contains
     subroutine read_config(config_file)
         character(*), intent(in) :: config_file
 
-        open (1, file=config_file, status='old', action='read')
-        read (1, nml=config)
-        close (1)
+        call read_config_namelist(config_file)
+        call finalize_config
+    end subroutine read_config
 
+    subroutine read_config_namelist(config_file)
+        ! Read the &config group without resolving aliases or validating.
+        character(*), intent(in) :: config_file
+        integer :: unit
+
+        open (newunit=unit, file=config_file, status='old', action='read')
+        read (unit, nml=config)
+        close (unit)
+    end subroutine read_config_namelist
+
+    subroutine reset_config
+        ! Restore every &config value to its compiled default. The first call
+        ! records the defaults, so call it before changing any value.
+        integer, save :: defaults_unit
+        logical, save :: recorded = .false.
+
+        if (.not. recorded) then
+            open (newunit=defaults_unit, status='scratch', delim='apostrophe')
+            write (defaults_unit, nml=config)
+            recorded = .true.
+        end if
+        rewind (defaults_unit)
+        read (defaults_unit, nml=config)
+    end subroutine reset_config
+
+    subroutine finalize_config
+        ! Resolve aliases, normalize and validate the current &config values.
+        call warn_removed_config_keys
         call apply_config_aliases
 
         gpu_mode = to_lower(trim(gpu_mode))
@@ -286,9 +334,26 @@ contains
             error stop 'Collisions are incompatible with classification'
         end if
 
-        call validate_gpu_config
+        if (crossing_level /= 3) then
+            error stop 'crossing_level must be 3; fixed-mu GC maps were removed'
+        end if
+        if (spectre_fo_entry_larmor <= 0.0_dp) &
+            error stop 'spectre_fo_entry_larmor must be positive'
+        if (spectre_fo_tolerance <= 0.0_dp) &
+            error stop 'spectre_fo_tolerance must be positive'
 
-    end subroutine read_config
+        call validate_gpu_config
+    end subroutine finalize_config
+
+    subroutine warn_removed_config_keys
+        if (.not. local) print *, 'WARNING: removed &config key local is ignored; ', &
+            'use num_surf=0 for volume sampling'
+        if (loopskip /= 0) print *, 'WARNING: removed &config key loopskip is ignored'
+        if (bmod_ref /= 5.0d4) print *, 'WARNING: removed &config key bmod_ref ', &
+            'is ignored; use vmec_B_scale to scale the field'
+        if (macrostep_log_ratio /= 1.0d3) print *, 'WARNING: removed &config key ', &
+            'macrostep_log_ratio is ignored'
+    end subroutine warn_removed_config_keys
 
     subroutine validate_gpu_config
         select case (trim(gpu_mode))
@@ -496,71 +561,76 @@ contains
 	    end function to_lower
 
     subroutine init_batch
-        integer :: iostat, i, n
-        real :: ran_tmp
-        character, dimension(:), allocatable :: batch_file
+        integer :: unit, status, source_index, selected, source_count, seedsize
+        integer, allocatable :: batch_seed(:)
+        real(dp) :: draw
         logical :: old_batch
 
-        !See if batch is wanted, if yes find random or re-use from previous file.
-        if (ntestpart > batch_size) then
-            if (reuse_batch) then
-                inquire (file="batch.dat", exist=old_batch)
-
-                if (old_batch) then
-                    allocate (batch_file(batch_size))
-                    allocate (idx(batch_size))
-                    open (1, file='batch.dat', recl=batch_size, iostat=iostat)
-                    if (iostat /= 0) goto 666
-
-                    do i = 1, batch_size
-                        read (1, iostat=iostat) batch_file(i)
-                        if (iostat /= 0) goto 667
-                        idx(i) = ichar(batch_file(i))
-                    end do
-                    deallocate (batch_file)
-                    close (1)
-                else !old_batch
-                    ! no old batch file found, so we pretend the user knew this and
-                    ! set the flag to .False.
-                    reuse_batch = .False.
-                end if !old_batch
-            end if !reuse_batch
-
-            if (.not. reuse_batch) then
-                !Create a random list(batch_size) of indices using ran_seed.
-                allocate (idx(batch_size))
-
-                call srand(ran_seed)
-
-                do i = 1, batch_size
-                    call random_number(ran_tmp)
-                    ! Create randomized indices from the amount available, leaving out
-                    ! the upper 1% as margin for later sorting and replacing of
-                    ! duplicates (relevant for smaller batches).
-                    idx(i) = floor(ceiling((ntestpart - (ntestpart*0.01)))*ran_tmp)
-                end do
-
-                call sort_idx(idx, batch_size)
-
-                open (1, file='batch.dat', recl=batch_size*2, iostat=iostat)
-
-                do n = 1, batch_size
-                    write (1, *) idx(n)
-                end do
-                close (1)
-            end if !reuse_batch again
-
-            !Set ntestpart to batch_size for rest of the run.
-            ntestpart = batch_size
-        end if !batches wanted
-
-        return
-
-666     print *, iostat
-        error stop
-667     print *, iostat
-        error stop
+        if (allocated(idx)) deallocate (idx)
+        if (particle_index_offset < 0) &
+            error stop 'particle_index_offset must be nonnegative'
+        if (batch_size < 1) error stop 'batch_size must be positive'
+        if (ntestpart <= batch_size) return
+        source_count = ntestpart
+        allocate (idx(batch_size))
+        inquire (file='batch.dat', exist=old_batch)
+        if (reuse_batch .and. old_batch) then
+            open (newunit=unit, file='batch.dat', status='old', action='read')
+            do selected = 1, batch_size
+                read (unit, *, iostat=status) idx(selected)
+                if (status /= 0) error stop 'Invalid batch.dat index list'
+                if (idx(selected) < 1 .or. idx(selected) > source_count) &
+                    error stop 'Batch index outside start.dat source range'
+                if (selected > 1) then
+                    if (idx(selected) <= idx(selected - 1)) &
+                        error stop 'Batch indices must be strictly increasing'
+                end if
+            end do
+            close (unit)
+        else
+            reuse_batch = .false.
+            call random_seed(size=seedsize)
+            allocate (batch_seed(seedsize))
+            batch_seed = ran_seed
+            call random_seed(put=batch_seed)
+            selected = 0
+            ! Sequential sampling without replacement gives sorted, one-based
+            ! source rows without allocating the complete source population.
+            do source_index = 1, source_count
+                call random_number(draw)
+                if (draw*real(source_count - source_index + 1, dp) < &
+                    real(batch_size - selected, dp)) then
+                    selected = selected + 1
+                    idx(selected) = source_index
+                    if (selected == batch_size) exit
+                end if
+            end do
+            open (newunit=unit, file='batch.dat', status='replace', action='write')
+            do selected = 1, batch_size
+                write (unit, *) idx(selected)
+            end do
+            close (unit)
+        end if
+        ntestpart = batch_size
     end subroutine init_batch
+
+    integer function particle_stream_id(local_index) result(global_index)
+        integer, intent(in) :: local_index
+        integer :: source_index
+
+        source_index = local_index
+        if (startmode == 4 .and. allocated(idx)) then
+            if (local_index < 1 .or. local_index > size(idx)) &
+                error stop 'Particle index outside selected batch'
+            source_index = idx(local_index)
+        end if
+        if (source_index < 1 .or. particle_index_offset < 0) &
+            error stop 'Particle stream identity must be positive'
+        if (int(particle_index_offset, int64) > &
+            2147483646_int64 - int(source_index, int64)) &
+            error stop 'Particle stream identity exceeds integer range'
+        global_index = particle_index_offset + source_index
+    end function particle_stream_id
 
     subroutine reallocate_arrays
         integer :: npoi
@@ -585,6 +655,7 @@ contains
         if (allocated(confpart_trap)) deallocate (confpart_trap)
         if (allocated(confpart_pass)) deallocate (confpart_pass)
         if (allocated(unresolved_orbits)) deallocate (unresolved_orbits)
+        if (allocated(wall_hit_triangle)) deallocate (wall_hit_triangle)
         if (allocated(wall_hit)) deallocate (wall_hit)
         if (allocated(wall_hit_cart)) deallocate (wall_hit_cart)
         if (allocated(wall_hit_normal_cart)) deallocate (wall_hit_normal_cart)
@@ -602,6 +673,7 @@ contains
         allocate (iclass(3, ntestpart))
         allocate (class_scores(n_class_scores, ntestpart))
         allocate (class_passing(ntestpart), class_lost(ntestpart))
+        allocate (wall_hit_triangle(ntestpart))
         allocate (wall_hit(ntestpart))
         allocate (wall_hit_cart(3, ntestpart))
         allocate (wall_hit_normal_cart(3, ntestpart))
@@ -618,6 +690,7 @@ contains
         class_scores = 0d0
         class_passing = .false.
         class_lost = .false.
+        wall_hit_triangle = -1
         wall_hit = 0_int8
         wall_hit_cart = 0.0d0
         wall_hit_normal_cart = 0.0d0
@@ -734,15 +807,31 @@ contains
         classification_enabled = (ntcut > 0) .or. class_plot .or. fast_class
     end function classification_enabled
 
-    subroutine reset_seed_if_deterministic
+
+    subroutine reset_seed_if_deterministic(stream_id)
         ! for run with fixed random seed
-        integer :: seedsize
+        integer, intent(in), optional :: stream_id
+        integer :: seedsize, i, stream
         integer, allocatable :: seed(:)
+        integer(int64) :: state
+        integer(int64), parameter :: modulus = 2147483647_int64
 
         if (deterministic) then
             call random_seed(size=seedsize)
             if (.not. allocated(seed)) allocate (seed(seedsize))
-            seed = ran_seed
+            if (.not. present(stream_id)) then
+                seed = ran_seed
+                call random_seed(put=seed)
+                return
+            end if
+            stream = stream_id
+            state = modulo(int(ran_seed, int64) + 104729_int64*int(stream, int64), &
+                           modulus - 1_int64) + 1_int64
+            do i = 1, seedsize
+                state = modulo(48271_int64*state + 7919_int64*int(i, int64), &
+                               modulus - 1_int64) + 1_int64
+                seed(i) = int(state)
+            end do
             call random_seed(put=seed)
         end if
     end subroutine reset_seed_if_deterministic

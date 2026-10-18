@@ -146,7 +146,7 @@ end subroutine rh_can_wrapper
 
 subroutine init_meiss(field_noncan_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thmax, &
                       scaling, transformation_relerr_, spline_order_, ode_step_limit_)
-    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    use finite_check, only: is_finite
     use, intrinsic :: iso_fortran_env, only: int64
     use new_vmec_stuff_mod, only : nper
 
@@ -201,7 +201,7 @@ subroutine init_meiss(field_noncan_, n_r_, n_th_, n_phi_, rmin, rmax, thmin, thm
         error stop 'canonical map grid exceeds the 2097152-point limit'
     end if
     if (present(transformation_relerr_)) then
-        if (.not. ieee_is_finite(transformation_relerr_) .or. &
+        if (.not. is_finite(transformation_relerr_) .or. &
             transformation_relerr_ <= 0d0) then
             error stop 'canonical map ODE tolerance must be finite and positive'
         end if

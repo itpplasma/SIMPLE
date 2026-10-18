@@ -34,7 +34,7 @@
 module check_orbit_type_sub
 
 use, intrinsic :: iso_fortran_env, only: dp => real64
-use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+use finite_check, only: is_finite
 
 implicit none
 
@@ -230,7 +230,7 @@ contains
     rotation_samples=0
 
     if(n.lt.3) return
-    if(.not. all(ieee_is_finite(tips(:,1:n)))) return
+    if(.not. all(is_finite(tips(:,1:n)))) return
 
     jpar_reference=abs(tips(3,2))
     cumulative_turns=0.0_dp
