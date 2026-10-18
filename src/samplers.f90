@@ -417,34 +417,32 @@ contains
     end subroutine sample_grid
 
     subroutine sample_random_batch(zstart, reuse_existing)
-        ! Get random batch from preexisting zstart, allows reuse.
-        use params, only: batch_size, ntestpart, zstart_dim1, idx
+        ! init_batch owns the persisted source-row indices; batch.dat contains
+        ! indices, never particle coordinates. Read selected rows from start.dat.
+        use params, only: idx
 
-        integer :: ran_begin, ran_end, ipart
-        real :: temp_ran
-        real(dp), dimension(:, :), intent(inout) :: zstart
-        real(dp), dimension(zstart_dim1, batch_size) :: zstart_batch
+        real(dp), intent(inout) :: zstart(:, :)
         logical, intent(in) :: reuse_existing
+        real(dp) :: source_row(size(zstart, 1))
+        integer :: unit, source_index, selected, status
 
-        if (reuse_existing .eqv. .True.) then
-            call load_starting_points(zstart_batch, START_FILE_BATCH)
-        else
-            call load_starting_points(zstart_batch, START_FILE)
-            call random_number(temp_ran)
-            ran_begin = INT(temp_ran)
-            ran_end = ran_begin + batch_size
-            if ((ran_end) .gt. (ntestpart)) then
-                ran_begin = ran_begin - (ran_end - ntestpart)
-            end if
-            do ipart = 0, batch_size
-                zstart(:, ipart) = zstart_batch(:, (ipart + ran_begin))
-            end do
+        if (.not. allocated(idx)) then
+            if (reuse_existing) error stop 'No selected indices for reused batch'
+            call load_starting_points(zstart, START_FILE)
+            return
         end if
-
-        do ipart = idx(0), idx(ntestpart)
-            read (1, *) zstart(:, ipart)
+        if (size(idx) /= size(zstart, 2)) error stop 'Batch size mismatch'
+        open(newunit=unit, file=START_FILE, status='old', action='read')
+        selected = 1
+        do source_index = 1, idx(size(idx))
+            read(unit, *, iostat=status) source_row
+            if (status /= 0) error stop 'Cannot read selected start.dat source row'
+            if (source_index /= idx(selected)) cycle
+            zstart(:, selected) = source_row
+            selected = selected + 1
+            if (selected > size(idx)) exit
         end do
-
+        close(unit)
     end subroutine sample_random_batch
 
     subroutine sample_points_ants(use_special_ants_file)
