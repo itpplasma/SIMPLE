@@ -701,7 +701,7 @@
           "default_value": ".true.",
           "documentation": "",
           "source": "src/orbit_symplectic_base.f90",
-          "source_line": 28
+          "source_line": 29
         },
         {
           "name": "boundary_event_fraction_tolerance",
@@ -714,7 +714,7 @@
           "default_value": "-1d0",
           "documentation": "",
           "source": "src/orbit_symplectic_base.f90",
-          "source_line": 31
+          "source_line": 32
         },
         {
           "name": "boundary_event_radial_tolerance",
@@ -727,7 +727,7 @@
           "default_value": "-1d0",
           "documentation": "",
           "source": "src/orbit_symplectic_base.f90",
-          "source_line": 32
+          "source_line": 33
         },
         {
           "name": "canonical_grid_nr",
