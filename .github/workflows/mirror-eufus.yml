@@ -56,6 +56,6 @@ jobs:
           ASKPASS
           chmod 700 "$RUNNER_TEMP/eufus-askpass"
           GIT_ASKPASS="$RUNNER_TEMP/eufus-askpass" GIT_TERMINAL_PROMPT=0 \
-            git -c credential.helper= push \
+            git -c http.version=HTTP/1.1 -c credential.helper= push \
               https://gitlab.eufus.psnc.pl/itpplasma/simple.git \
               refs/remotes/origin/main:refs/heads/main --tags
