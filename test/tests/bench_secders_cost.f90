@@ -98,7 +98,7 @@ program bench_secders_cost
         end if
     end do
 
-    rho = t_sec2 / t_sec0
+    rho = t_sec2/t_sec0
     breakeven = 1.5_dp
 
     write (*, "(a)") "=========================================================="
@@ -107,7 +107,7 @@ program bench_secders_cost
     write (*, "(a,i0,a,i0)") " points per pass ", NPT, ", passes ", NREP
     write (*, "(a,es12.4,a)") " mode_secders=0 total ", t_sec0, " s"
     write (*, "(a,es12.4,a)") " mode_secders=2 total ", t_sec2, " s"
-    write (*, "(a,f8.3)")     " rho = cost(secders=2)/cost(secders=0) = ", rho
+    write (*, "(a,f8.3)") " rho = cost(secders=2)/cost(secders=0) = ", rho
     write (*, "(a)") ""
     write (*, "(a,f6.2,a)") " order-4 TDRK break-even rho = ", breakeven, &
         "  (1F+2G vs RK4 4F)"
