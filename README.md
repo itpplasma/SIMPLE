@@ -131,6 +131,14 @@ compiler portability failures remain visible for investigation. The additional
 GCC jobs run on manual dispatch only when `full` is `true`, preserving the small
 libneo smoke gate.
 
+### EUFUS mirror
+
+On pushes to `main` and tags in `itpplasma/SIMPLE`, `mirror-eufus.yml` pushes
+`main` and all tags to `https://gitlab.eufus.psnc.pl/itpplasma/simple.git` using
+`EUFUS_GITLAB_TOKEN` with username `oauth2`. With no token, it succeeds with a
+notice. Forks and pull requests cannot run the mirror. Pushes use ordinary
+fast-forward/tag checks; divergent mirror refs require maintainer attention.
+
 ## CPU quickstart
 
 Copy `examples/simple.in` and provide a VMEC file named `wout.nc`:
