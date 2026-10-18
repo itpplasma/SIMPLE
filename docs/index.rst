@@ -11,8 +11,8 @@ three-dimensional magnetic fields and reports when and where they leave the
 plasma. Its main application is the fast computation of fusion alpha-particle
 losses in stellarators, both for the analysis of a given configuration and
 inside a stellarator optimisation loop. The orbits are integrated with
-symplectic methods in canonical coordinates, which keep the long-time
-behaviour of the orbits correct at large time steps. Regular and chaotic
+symplectic methods in canonical coordinates, which improve long-time
+behaviour at suitable time steps. Regular and chaotic
 orbits can be classified early, which shortens the computation further.
 
 .. figure:: /_static/figures/front.png

@@ -252,6 +252,10 @@ is 2.
    median incidence angle: 67 deg
    median loss time: 1.65e-05 s
 
+These are representative results. A fixed sampling seed does not make
+chaotic orbit outcomes bitwise identical
+across compilers and dependency versions.
+
 The intersection points lie on the STL surface. Together with the energy
 :math:`(v/v_0)^2` of each marker (column 4 of ``zend``) and the area of the
 wall triangles they give the heat load on the wall geometry, as in Part A.
@@ -259,5 +263,7 @@ The incidence angle enters the load on tilted tiles.
 
 As a check of the numerics, the same case with the field splined on the
 chartmap and the adaptive Runge-Kutta integrator (``isw_field_type = 5``,
-``integmode = 0``) gives 44 wall hits of 64, which agrees within the
-statistical error of :math:`\pm 4`.
+``integmode = 0``) gives 44 wall hits of 64 in the reference run. This checks
+both input paths, but agreement within the Monte Carlo counting uncertainty
+does not bound discretisation bias. A quantitative study must also check
+step-size and field-resolution convergence.

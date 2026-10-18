@@ -41,8 +41,9 @@ Physics settings that set the cost
 Numerical settings
 ------------------
 
-* ``npoiper2`` sets the step size. Symplectic Euler is stable at large steps
-  because it is symplectic, but its error grows with the step size; check
+* ``npoiper2`` sets the step size. Symplectic Euler can give bounded long-time
+  energy errors at suitable steps, but symplecticity alone does not guarantee
+  stability at large steps. Check
   the loss fraction for convergence by halving the step. ``DOC/config.md``
   gives guidance (:doc:`/reference/design-notes`).
 * Higher-order integrators (``integmode`` 3 to 7, 15) are more accurate per

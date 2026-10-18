@@ -2,10 +2,10 @@ Python interface
 ================
 
 ``pysimple`` is a thin Python layer over SIMPLE's Fortran library interface
-``src/simple_api.f90``. It runs the same code as ``simple.x``: a Python run
-configured from a ``simple.in`` file reproduces ``simple.x`` exactly (this is
-tested in ``test/python/test_simple_api.py``). Installation is described in
-:doc:`/getting-started/installation`.
+``src/simple_api.f90``. It exposes the phases used by ``simple.x``; parity of
+runs configured from a ``simple.in`` file is tested in
+``test/python/test_simple_api.py``. The sampling caveat below applies at this
+revision. Installation is described in :doc:`/getting-started/installation`.
 
 Typical use:
 
@@ -13,7 +13,7 @@ Typical use:
 
    import pysimple
 
-   pysimple.init(config="simple.in")                  # exactly as simple.x
+   pysimple.init(config="simple.in")                  # load CLI configuration
    pysimple.init("wout.nc", trace_time=1e-3)          # file and settings
    pysimple.init("wout.nc", config="simple.in", n_d=2)  # file and overrides
 
