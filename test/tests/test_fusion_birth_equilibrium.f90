@@ -53,6 +53,11 @@ program test_fusion_birth_equilibrium
         shi = 0.8_dp
         sbeg(1:2) = [slo, shi]
     end if
+    if (trim(mode) == 'interior') then
+        num_surf = 1
+        shi = 0.7_dp
+        sbeg(1) = shi
+    end if
     if (trim(mode) == 'vmec_peaked') then
         ! n_D = 5e19 (1-s), n_T = 5e19, T_D = T_T = 10 keV.
         ! Enough markers to resolve this wout's weak radial Jacobian variation.
@@ -76,6 +81,10 @@ program test_fusion_birth_equilibrium
     allocate (z(5, np))
     call simple_sample(np, z)
     if (trim(mode) == 'bad_energy') stop
+    ! Repeated API calls must preserve the requested full/interior volume.
+    if (trim(mode) == 'vmec' .or. trim(mode) == 'interior') then
+        call simple_sample(np, z)
+    end if
     if (trim(mode) == 'trace') then
         call simple_trace
         if (any(orbit_exit_code >= 100)) error stop 'fusion trace numerical failure'

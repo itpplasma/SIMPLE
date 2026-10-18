@@ -145,11 +145,11 @@ contains
 
     subroutine sample_fusion_birth(zstart, s_inner, s_outer, integration_coords)
         use params, only: fusion_grid, num_surf, facE_al, n_d, n_e, &
-            am1, am2, Z1, Z2
+            am1, am2, Z1, Z2, sbeg
         use fusion_source, only: build_birth_cdf, draw_birth, alpha_energy_joule
         use field_can_mod, only: integ_to_ref
         real(dp), intent(out) :: zstart(:, :)
-        real(dp), intent(in) :: s_inner, s_outer
+        real(dp), value, intent(in) :: s_inner, s_outer
         logical, intent(in) :: integration_coords
         real(dp), allocatable :: cdf(:)
         real(dp) :: power, x(3)
@@ -171,6 +171,7 @@ contains
             end if
         end do
         num_surf = 2
+        sbeg(1:2) = [s_inner, s_outer]
         call save_starting_points(zstart)
         open (newunit=unit, file='alpha_source.dat', status='replace')
         write (unit, '(a)') '# Equal-weight D-T births; rows of start.dat are markers.'

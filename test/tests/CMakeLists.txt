@@ -412,7 +412,7 @@ set_tests_properties(test_fusion_nonfinite PROPERTIES
 add_executable(test_fusion_birth_equilibrium.x test_fusion_birth_equilibrium.f90)
 target_link_libraries(test_fusion_birth_equilibrium.x simple)
 add_dependencies(test_fusion_birth_equilibrium.x generate_test_boozer_chartmap)
-set(fusion_equilibrium_cases vmec vmec_peaked chartmap annulus trace bad_energy)
+set(fusion_equilibrium_cases vmec vmec_peaked chartmap annulus interior trace bad_energy)
 if(ENABLE_OPENMP)
     list(APPEND fusion_equilibrium_cases vmec_parallel chartmap_parallel)
 endif()
