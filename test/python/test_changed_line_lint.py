@@ -111,6 +111,22 @@ class ChangedLineGate(unittest.TestCase):
         self.python.write_text(self.python.read_text().replace("value = 2\n", ""))
         self.check(0)
 
+    def test_rename_keeps_untouched_legacy_lines_out_of_the_gate(self):
+        destination = self.repo / "tools" / "renamed.py"
+        self.git(
+            "mv",
+            str(self.python.relative_to(self.repo)),
+            str(destination.relative_to(self.repo)),
+        )
+        self.python = destination
+        self.check(0)
+        self.python.write_text(
+            self.python.read_text().replace("value = 2", "value = 3")
+        )
+        self.check(0)
+        self.python.write_text(self.python.read_text().replace("value = 3", "value=3"))
+        self.assertIn("renamed.py:4: formatting differs", self.check(1))
+
     def test_new_file_and_invalid_base(self):
         (self.repo / "tools" / "new.py").write_text("value=1\n")
         self.git("add", ".")
