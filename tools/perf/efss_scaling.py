@@ -4,6 +4,7 @@
 Run directories retain the input, stdout and physics outputs. No source changes,
 worktrees, downloads, builds or remote execution are performed by this tool.
 """
+
 import argparse
 import csv
 import hashlib
@@ -23,8 +24,9 @@ def physics(directory):
     unresolved = np.loadtxt(directory / "unresolved_fraction.dat", ndmin=2)
     if not np.isfinite(confined).all() or not np.isfinite(unresolved).all():
         raise ValueError(f"Nonfinite fraction output in {directory}")
-    if (confined.shape[0] != unresolved.shape[0]
-            or not np.array_equal(confined[:, 0], unresolved[:, 0])):
+    if confined.shape[0] != unresolved.shape[0] or not np.array_equal(
+        confined[:, 0], unresolved[:, 0]
+    ):
         raise ValueError(f"Fraction time grids differ in {directory}")
     return confined[:, 0], confined[:, 1] + confined[:, 2], unresolved[:, 1]
 
@@ -38,8 +40,11 @@ def check_traced(directory, markers):
 
 
 def phase_seconds(log, gpu):
-    pattern = (r"tracing\s*=\s*([\d.]+) s" if gpu else
-               r"Particle tracing completed\s+([\d.]+) s")
+    pattern = (
+        r"tracing\s*=\s*([\d.]+) s"
+        if gpu
+        else r"Particle tracing completed\s+([\d.]+) s"
+    )
     match = re.search(pattern, log)
     if match is None:
         raise ValueError("Missing tracing timer in SIMPLE stdout")
@@ -51,7 +56,8 @@ def run(args):
     args.output.mkdir(parents=True, exist_ok=False)
     metadata = {
         "source_commit": subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], text=True).strip(),
+            ["git", "rev-parse", "HEAD"], text=True
+        ).strip(),
         "executable": str(executable),
         "executable_sha256": hashlib.sha256(executable.read_bytes()).hexdigest(),
         "wout_sha256": hashlib.sha256(wout.read_bytes()).hexdigest(),
@@ -94,15 +100,28 @@ def run(args):
  gpu_min_timestep = 0d0
 """
             (directory / "simple.in").write_text(config + "/\n")
-            env = dict(os.environ, OMP_NUM_THREADS=str(threads), OMP_THREAD_LIMIT="16",
-                       OMP_DYNAMIC="FALSE", OMP_PLACES="cores", OMP_PROC_BIND="spread",
-                       OPENBLAS_NUM_THREADS="1", MKL_NUM_THREADS="1",
-                       CUDA_VISIBLE_DEVICES=str(args.device))
+            env = dict(
+                os.environ,
+                OMP_NUM_THREADS=str(threads),
+                OMP_THREAD_LIMIT="16",
+                OMP_DYNAMIC="FALSE",
+                OMP_PLACES="cores",
+                OMP_PROC_BIND="spread",
+                OPENBLAS_NUM_THREADS="1",
+                MKL_NUM_THREADS="1",
+                CUDA_VISIBLE_DEVICES=str(args.device),
+            )
             start = time.perf_counter()
             with (directory / "stdout.log").open("w") as log:
-                subprocess.run([str(executable), "simple.in"], cwd=directory,
-                               env=env, stdout=log, stderr=subprocess.STDOUT,
-                               check=True, timeout=args.timeout)
+                subprocess.run(
+                    [str(executable), "simple.in"],
+                    cwd=directory,
+                    env=env,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    check=True,
+                    timeout=args.timeout,
+                )
             wall = time.perf_counter() - start
             log = (directory / "stdout.log").read_text()
             grid, confined, unresolved = physics(directory)
@@ -116,13 +135,21 @@ def run(args):
             delta = float(np.max(np.abs(confined - baseline[1])))
             unresolved_delta = float(np.max(np.abs(unresolved - baseline[2])))
             if max(delta, unresolved_delta) > 1e-12:
-                raise ValueError(f"Thread-dependent physics in {directory}: {delta}, {unresolved_delta}")
-            row = dict(markers=args.markers, threads=threads, repetition=repetition,
-                       backend="cuda" if args.gpu else "cpu", wall_s=wall,
-                       trace_s=phase_seconds(log, args.gpu),
-                       confined_final=float(confined[-1]),
-                       unresolved_final=float(unresolved[-1]),
-                       max_confined_delta=delta, max_unresolved_delta=unresolved_delta)
+                raise ValueError(
+                    f"Thread-dependent physics in {directory}: {delta}, {unresolved_delta}"
+                )
+            row = dict(
+                markers=args.markers,
+                threads=threads,
+                repetition=repetition,
+                backend="cuda" if args.gpu else "cpu",
+                wall_s=wall,
+                trace_s=phase_seconds(log, args.gpu),
+                confined_final=float(confined[-1]),
+                unresolved_final=float(unresolved[-1]),
+                max_confined_delta=delta,
+                max_unresolved_delta=unresolved_delta,
+            )
             rows.append(row)
             with (args.output / "measurements.csv").open("w", newline="") as stream:
                 writer = csv.DictWriter(stream, fieldnames=list(row))
@@ -144,8 +171,13 @@ def main():
     parser.add_argument("--gpu", action="store_true")
     parser.add_argument("--device", type=int, default=0)
     args = parser.parse_args()
-    if (any(t < 1 or t > 16 for t in args.threads) or args.markers < 1
-            or args.repetitions < 1 or args.trace_time <= 0 or args.timeout <= 0):
+    if (
+        any(t < 1 or t > 16 for t in args.threads)
+        or args.markers < 1
+        or args.repetitions < 1
+        or args.trace_time <= 0
+        or args.timeout <= 0
+    ):
         parser.error("Use 1..16 threads and positive markers, repetitions and times")
     run(args)
 

@@ -13,7 +13,9 @@ def _pyplot():
     try:
         import matplotlib.pyplot as plt
     except ImportError as exc:
-        raise ImportError("install plotting dependencies with pysimple[plotting]") from exc
+        raise ImportError(
+            "install plotting dependencies with pysimple[plotting]"
+        ) from exc
     return plt
 
 
@@ -24,15 +26,20 @@ def wilson_interval(successes, trials, confidence=0.95):
     k, n = np.broadcast_arrays(
         np.asarray(successes, dtype=float), np.asarray(trials, dtype=float)
     )
-    if (not np.all(np.isfinite(k)) or not np.all(np.isfinite(n))
-            or np.any(n < 0) or np.any(k < 0) or np.any(k > n)):
+    if (
+        not np.all(np.isfinite(k))
+        or not np.all(np.isfinite(n))
+        or np.any(n < 0)
+        or np.any(k < 0)
+        or np.any(k > n)
+    ):
         raise ValueError("counts must be finite and satisfy 0 <= successes <= trials")
     z = NormalDist().inv_cdf(0.5 + confidence / 2)
     with np.errstate(divide="ignore", invalid="ignore"):
         p = k / n
         denominator = 1 + z**2 / n
-        centre = (p + z**2 / (2*n)) / denominator
-        half = z * np.sqrt(p*(1-p)/n + z**2/(4*n**2)) / denominator
+        centre = (p + z**2 / (2 * n)) / denominator
+        half = z * np.sqrt(p * (1 - p) / n + z**2 / (4 * n**2)) / denominator
     return np.maximum(0, centre - half), np.minimum(1, centre + half)
 
 
@@ -74,17 +81,28 @@ def plot_losses(directory, output=None, confidence=0.95, show=None):
         trials = data[:, 3]
     else:
         trials = np.full(len(data), len(_table(directory / "times_lost.dat", 2)))
-    if (not np.all(np.isfinite(time)) or np.any(np.diff(time) <= 0)
-            or not np.all(np.isfinite(trials)) or np.any(trials < 0)
-            or np.any(trials != np.rint(trials))):
-        raise ValueError(f"{path}: times must increase and marker counts be nonnegative integers")
+    if (
+        not np.all(np.isfinite(time))
+        or np.any(np.diff(time) <= 0)
+        or not np.all(np.isfinite(trials))
+        or np.any(trials < 0)
+        or np.any(trials != np.rint(trials))
+    ):
+        raise ValueError(
+            f"{path}: times must increase and marker counts be nonnegative integers"
+        )
     valid = trials > 0
     if not np.any(valid):
         raise ValueError(f"{path} contains no resolved markers")
     confined = passing + trapped
-    if (not np.all(np.isfinite(data[valid, 1:3]))
-            or np.any(data[valid, 1:3] < 0) or np.any(confined[valid] > 1 + 1e-12)):
-        raise ValueError(f"{path}: passing/trapped fractions must be finite and sum to at most 1")
+    if (
+        not np.all(np.isfinite(data[valid, 1:3]))
+        or np.any(data[valid, 1:3] < 0)
+        or np.any(confined[valid] > 1 + 1e-12)
+    ):
+        raise ValueError(
+            f"{path}: passing/trapped fractions must be finite and sum to at most 1"
+        )
     # Preserve gaps for rows with no resolved markers; these are not physical losses.
     passing = np.where(valid, passing, np.nan)
     trapped = np.where(valid, trapped, np.nan)
@@ -99,10 +117,20 @@ def plot_losses(directory, output=None, confidence=0.95, show=None):
     ax.semilogx(time, passing, color="tab:blue", linestyle="-.", label="Passing")
     ax.semilogx(time, trapped, color="tab:orange", linestyle=":", label="Trapped")
     ax.semilogx(time, lost, color="tab:red", linestyle="--", label="Lost")
-    ax.fill_between(time, lower, upper, color="tab:red", alpha=0.22,
-                    label=f"Lost {confidence:.0%} Wilson interval")
-    ax.set(xlabel="Time / s", ylabel="Fraction of resolved markers", ylim=(0, 1.05),
-           title="SIMPLE confinement and loss")
+    ax.fill_between(
+        time,
+        lower,
+        upper,
+        color="tab:red",
+        alpha=0.22,
+        label=f"Lost {confidence:.0%} Wilson interval",
+    )
+    ax.set(
+        xlabel="Time / s",
+        ylabel="Fraction of resolved markers",
+        ylim=(0, 1.05),
+        title="SIMPLE confinement and loss",
+    )
     ax.grid(True, which="both", alpha=0.25)
     ax.legend(loc="upper left", bbox_to_anchor=(1.02, 1))
     return _finish(fig, output, show)
@@ -145,8 +173,13 @@ def plot_classes(value, output=None, show=None):
         path = _results_path(path)
         variables, _ = _netcdf(path, ("iclass",))
         classes = variables["iclass"]
-    if (classes.ndim != 2 or classes.shape[1] != 3 or not classes.size
-            or not np.all(np.isfinite(classes)) or np.any(classes != np.rint(classes))):
+    if (
+        classes.ndim != 2
+        or classes.shape[1] != 3
+        or not classes.size
+        or not np.all(np.isfinite(classes))
+        or np.any(classes != np.rint(classes))
+    ):
         raise ValueError(f"{path}: expected three integer class codes per marker")
     plt = _pyplot()
     fig, axes = plt.subplots(1, 3, figsize=(12, 4), sharey=True)
@@ -172,7 +205,9 @@ def plot_wall(value, output=None, color_by="energy", show=None):
     hit = variables["wall_hit"] == 1
     positions = variables["wall_hit_cart"]
     if hit.ndim != 1 or positions.shape != (len(hit), 3):
-        raise ValueError(f"{path}: expected one wall flag and Cartesian triple per marker")
+        raise ValueError(
+            f"{path}: expected one wall flag and Cartesian triple per marker"
+        )
     if not np.any(hit):
         raise ValueError(f"{path} contains no wall-hit markers")
     positions = positions[hit]
@@ -180,7 +215,7 @@ def plot_wall(value, output=None, color_by="energy", show=None):
     if color_by == "energy":
         if color.shape != (len(hit), 5):
             raise ValueError(f"{path}: expected five zend components per marker")
-        color = color[hit, 3]**2
+        color = color[hit, 3] ** 2
         label = r"Impact energy $E/E_0 = (v/v_0)^2$"
     else:
         if color.shape != hit.shape:
@@ -191,11 +226,20 @@ def plot_wall(value, output=None, color_by="energy", show=None):
         raise ValueError(f"{path} contains missing/nonfinite wall-hit diagnostics")
     plt = _pyplot()
     fig, ax = plt.subplots(figsize=(7, 5))
-    scatter = ax.scatter(np.hypot(positions[:, 0], positions[:, 1]), positions[:, 2],
-                         c=color, s=16, cmap="viridis")
+    scatter = ax.scatter(
+        np.hypot(positions[:, 0], positions[:, 1]),
+        positions[:, 2],
+        c=color,
+        s=16,
+        cmap="viridis",
+    )
     fig.colorbar(scatter, ax=ax, label=label)
-    ax.set(xlabel=f"R / {units}", ylabel=f"Z / {units}", aspect="equal",
-           title=f"SIMPLE wall-hit footprint ({np.count_nonzero(hit)} markers)")
+    ax.set(
+        xlabel=f"R / {units}",
+        ylabel=f"Z / {units}",
+        aspect="equal",
+        title=f"SIMPLE wall-hit footprint ({np.count_nonzero(hit)} markers)",
+    )
     ax.grid(alpha=0.25)
     return _finish(fig, output, show)
 
@@ -213,14 +257,26 @@ def plot_poincare(directory, output=None, show=None):
     plt = _pyplot()
     from matplotlib.colors import Normalize
 
-    norm = Normalize(min(d[:, 2].min() for d in sections),
-                     max(d[:, 2].max() for d in sections))
+    norm = Normalize(
+        min(d[:, 2].min() for d in sections), max(d[:, 2].max() for d in sections)
+    )
     fig, ax = plt.subplots(figsize=(7, 6))
     for path, data in zip(files, sections):
-        scatter = ax.scatter(data[:, 4], data[:, 5], c=data[:, 2], norm=norm,
-                             cmap="viridis", s=2, label=path.stem)
-    ax.set(xlabel="R (equilibrium units)", ylabel="Z (equilibrium units)",
-           aspect="equal", title="SIMPLE Poincare sections")
+        scatter = ax.scatter(
+            data[:, 4],
+            data[:, 5],
+            c=data[:, 2],
+            norm=norm,
+            cmap="viridis",
+            s=2,
+            label=path.stem,
+        )
+    ax.set(
+        xlabel="R (equilibrium units)",
+        ylabel="Z (equilibrium units)",
+        aspect="equal",
+        title="SIMPLE Poincare sections",
+    )
     if len(files) <= 12:
         ax.legend(loc="best", fontsize="small")
     fig.colorbar(scatter, ax=ax, label="s (volume-local)")
@@ -229,10 +285,13 @@ def plot_poincare(directory, output=None, show=None):
 
 def _parser():
     parser = argparse.ArgumentParser(
-        prog="simple-plot", description="Plot existing SIMPLE output files; never runs SIMPLE.")
+        prog="simple-plot",
+        description="Plot existing SIMPLE output files; never runs SIMPLE.",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
     losses = sub.add_parser(
-        "losses", help="confinement and loss fraction, with passing/trapped split",
+        "losses",
+        help="confinement and loss fraction, with passing/trapped split",
         description=(
             "Pointwise Wilson binomial band on lost fraction among resolved markers. "
             "For p=k/n (k lost, n resolved markers), z=Normal quantile at (1+confidence)/2: "
@@ -240,20 +299,37 @@ def _parser():
             "Assumes independent, equally weighted markers; excludes numerical failures."
         ),
     )
-    losses.add_argument("directory", type=Path, help="directory containing confined_fraction.dat")
-    losses.add_argument("--confidence", type=float, default=0.95, metavar="LEVEL",
-                        help="confidence level between 0 and 1 (default: 0.95)")
+    losses.add_argument(
+        "directory", type=Path, help="directory containing confined_fraction.dat"
+    )
+    losses.add_argument(
+        "--confidence",
+        type=float,
+        default=0.95,
+        metavar="LEVEL",
+        help="confidence level between 0 and 1 (default: 0.95)",
+    )
     classes = sub.add_parser("classes", help="orbit-class code counts")
     classes.add_argument("path", type=Path, help="output directory or results.nc")
     wall = sub.add_parser("wall", help="R-Z wall-hit footprint from results.nc")
     wall.add_argument("path", type=Path, help="output directory or results.nc")
-    wall.add_argument("--color", choices=("energy", "incidence"), default="energy",
-                      help="normalized impact energy E/E0 or absolute incidence cosine")
+    wall.add_argument(
+        "--color",
+        choices=("energy", "incidence"),
+        default="energy",
+        help="normalized impact energy E/E0 or absolute incidence cosine",
+    )
     poincare = sub.add_parser("poincare", help="R-Z sections from poincare_vol<N>.dat")
-    poincare.add_argument("directory", type=Path, help="directory containing Poincare files")
+    poincare.add_argument(
+        "directory", type=Path, help="directory containing Poincare files"
+    )
     for command in (losses, classes, wall, poincare):
-        command.add_argument("-o", "--output", type=Path,
-                             help="save a figure (e.g. PNG/PDF); otherwise display interactively")
+        command.add_argument(
+            "-o",
+            "--output",
+            type=Path,
+            help="save a figure (e.g. PNG/PDF); otherwise display interactively",
+        )
     return parser
 
 

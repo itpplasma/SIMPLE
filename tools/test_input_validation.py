@@ -171,8 +171,11 @@ end module
                 build_schema(root)
             result = subprocess.run(
                 [
-                    sys.executable, str(ROOT / "tools/generate_input_reference.py"),
-                    "--root", str(root), "--check",
+                    sys.executable,
+                    str(ROOT / "tools/generate_input_reference.py"),
+                    "--root",
+                    str(root),
+                    "--check",
                 ],
                 check=False,
                 capture_output=True,
