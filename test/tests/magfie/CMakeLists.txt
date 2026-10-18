@@ -31,6 +31,9 @@ target_link_libraries(test_magfie_refcoords_splines.x simple)
 add_executable(test_orbit_refcoords_rk45.x test_orbit_refcoords_rk45.f90)
 target_link_libraries(test_orbit_refcoords_rk45.x simple)
 
+add_executable(test_rk_pitch_zero_start.x test_rk_pitch_zero_start.f90)
+target_link_libraries(test_rk_pitch_zero_start.x simple)
+
 add_executable(test_orbit_chartmap_comparison.x test_orbit_chartmap_comparison.f90)
 target_link_libraries(test_orbit_chartmap_comparison.x simple)
 add_dependencies(test_orbit_chartmap_comparison.x chartmap_test_data)
@@ -74,6 +77,11 @@ add_test(NAME test_magfie_refcoords_splines
 
 add_test(NAME test_orbit_refcoords_rk45
     COMMAND $<TARGET_FILE:test_orbit_refcoords_rk45.x>
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
+)
+
+add_test(NAME test_rk_pitch_zero_start
+    COMMAND $<TARGET_FILE:test_rk_pitch_zero_start.x>
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
 )
 
