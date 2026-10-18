@@ -93,7 +93,6 @@ program test_splined_kernel_bench
     print *, 'PASSED: splined kernel baseline instrument'
 end program test_splined_kernel_bench
 
-
 subroutine time_kernel(f, phi_period, n_timing, n_rep, t_eval, t_eval_der)
     !> Best-of-n wall-clock time per evaluation of splined_evaluate and
     !> splined_evaluate_with_der. Outputs are accumulated into a checksum so
@@ -131,7 +130,7 @@ subroutine time_kernel(f, phi_period, n_timing, n_rep, t_eval, t_eval_der)
             checksum = checksum + Bmod
         end do
         call system_clock(count=t1, count_rate=cr)
-        dt = real(t1 - t0, dp)/real(max(cr,1), dp)
+        dt = real(t1 - t0, dp)/real(max(cr, 1), dp)
         t_eval = min(t_eval, dt/real(n_timing, dp))
 
         checksum = 0.0_dp
@@ -144,7 +143,7 @@ subroutine time_kernel(f, phi_period, n_timing, n_rep, t_eval, t_eval_der)
             checksum = checksum + Bmod
         end do
         call system_clock(count=t1, count_rate=cr)
-        dt = real(t1 - t0, dp)/real(max(cr,1), dp)
+        dt = real(t1 - t0, dp)/real(max(cr, 1), dp)
         t_eval_der = min(t_eval_der, dt/real(n_timing, dp))
     end do
 
@@ -152,7 +151,6 @@ subroutine time_kernel(f, phi_period, n_timing, n_rep, t_eval, t_eval_der)
     if (checksum == huge(1.0_dp)) print *, checksum
 
 end subroutine time_kernel
-
 
 subroutine measure_accuracy(raw, splined, phi_period, n_acc, max_ulp)
     !> Max ulp deviation of splined Bmod from the direct coils Bmod at the
