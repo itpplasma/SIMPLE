@@ -179,6 +179,40 @@ def circular_equilibrium(*, aspect=10.0, sign=1, version="4.1.1"):
     return eq
 
 
+def field_consistency(equilibrium, path):
+    """Check chart geometry and |B| against the original rectangular IDS grid."""
+    import netCDF4
+    from scipy.interpolate import RectBivariateSpline
+
+    eq = equilibrium.time_slice[0]
+    p = eq.profiles_2d[0]
+    psi = RectBivariateSpline(p.grid.dim1, p.grid.dim2, p.psi)
+    toroidal = RectBivariateSpline(p.grid.dim1, p.grid.dim2, p.b_field_phi)
+    with netCDF4.Dataset(path) as dataset:
+        x, y, z = [np.asarray(dataset[k][0]).T * 0.01 for k in ["x", "y", "z"]]
+        radius = np.hypot(x, y)
+        flux = psi.ev(radius, z)
+        rho = np.asarray(dataset["rho"][:])
+        interior = (rho >= 0.1) & (rho <= 0.9)
+        spread = np.ptp(flux[interior], axis=1) / abs(
+            float(eq.global_quantities.psi_boundary)
+            - float(eq.global_quantities.psi_axis)
+        )
+        expected = np.sqrt(
+            toroidal.ev(radius, z) ** 2
+            + (psi.ev(radius, z, dx=1) ** 2 + psi.ev(radius, z, dy=1) ** 2)
+            / (2 * np.pi * radius) ** 2
+        )
+        actual = np.asarray(dataset["Bmod"][0]).T * 1e-4
+        return {
+            "rho_range": [0.1, 0.9],
+            "maximum_relative_flux_surface_spread": float(np.max(spread)),
+            "maximum_relative_Bmod_error": float(
+                np.max(np.abs(actual[interior] / expected[interior] - 1))
+            ),
+        }
+
+
 def bulk_plasma():
     import imas
     from pysimple.imas._common import initialize
@@ -541,7 +575,7 @@ def suite(args, output):
             )
     if args.suite in ("collisions", "all"):
         for case in ["circular", *SOURCES]:
-            for step in [5e-7, 2.5e-7]:
+            for step in [1e-8, 5e-9]:
                 jobs.append(
                     (
                         f"collisions-{case}-dt{step:g}",
@@ -557,7 +591,7 @@ def suite(args, output):
                             "--copies",
                             str(max(20, args.copies)),
                             "--duration",
-                            "1e-3",
+                            "1e-4",
                             "--step",
                             str(step),
                         ],
@@ -773,6 +807,7 @@ def main():
     )
     from a5py.ascot5io.state import State
     import a5py
+    import libneo
 
     simple_codes = np.asarray(result.distribution[0].markers[1].positions)[:, 6].astype(
         int
@@ -802,6 +837,7 @@ def main():
             "benchmark": revision(repository),
             "SIMPLE": revision(Path(pysimple.__file__).resolve().parents[2]),
             "ASCOT5": revision(Path(a5py.__file__).resolve().parents[1]),
+            "libneo_converter": revision(Path(libneo.__file__).resolve().parents[2]),
         },
         "dd_version": "4.1.1",
         "duration_s": args.duration,
@@ -811,8 +847,12 @@ def main():
         "collisions": args.collisions,
         "marker_copies": args.copies,
         "initial_energy_eV": args.energy,
+        "simple_integrator": "RK45",
+        "simple_ntimstep": 10000,
+        "ascot_integrator": "fixed-step GC RK4",
         "omp_num_threads": os.environ.get("OMP_NUM_THREADS", "runtime default"),
         "source": SOURCES.get(args.case),
+        "field_consistency_with_input_IDS": field_consistency(eq, field),
         "markers": len(positions),
         "simple_seconds_including_field_initialization": simple_elapsed,
         "simple_seconds_tracing": simple_trace_seconds,
@@ -883,6 +923,15 @@ def main():
             "confined_mean_pitch": mean_pitch,
             "confined_mean_squared_pitch": float(np.mean(end[completed, 4] ** 2))
             if survival
+            else None,
+            "confined_mean_energy_eV": float(np.mean(end[completed, 3]))
+            if survival
+            else None,
+            "confined_energy_standard_error_eV": error(
+                completed * (end[:, 3] - np.mean(end[completed, 3]))
+            )
+            / survival
+            if survival and args.copies > 1
             else None,
             "confined_pitch_standard_error": error(completed * (end[:, 4] - mean_pitch))
             / survival
