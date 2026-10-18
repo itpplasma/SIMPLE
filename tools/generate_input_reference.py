@@ -465,7 +465,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         schema = build_schema(root, args.libneo_source)
     except (ValueError, OSError) as error:
-        parser.exit(1, f"{error}\n")
+        hint = (
+            "Regenerate with: python tools/generate_input_reference.py\n"
+            if args.check
+            else ""
+        )
+        parser.exit(1, f"{error}\n{hint}")
     schema_text = json.dumps(schema, indent=2, sort_keys=False) + "\n"
     reference_text = render_rst(schema)
     if args.check:

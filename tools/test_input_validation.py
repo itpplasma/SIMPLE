@@ -169,6 +169,21 @@ end module
                 ValueError, "cannot resolve declaration of alias"
             ):
                 build_schema(root)
+            result = subprocess.run(
+                [
+                    sys.executable, str(ROOT / "tools/generate_input_reference.py"),
+                    "--root", str(root), "--check",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("cannot resolve declaration of alias", result.stderr)
+            self.assertIn(
+                "Regenerate with: python tools/generate_input_reference.py",
+                result.stderr,
+            )
 
     def test_source_change_makes_reference_stale(self):
         command = [sys.executable, str(ROOT / "tools/generate_input_reference.py")]
