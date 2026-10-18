@@ -1,0 +1,2048 @@
+{
+  "schema_version": 1,
+  "generated_by": "tools/generate_input_reference.py",
+  "namelists": {
+    "config": {
+      "source": "src/params.f90",
+      "source_line": 213,
+      "variables": [
+        {
+          "name": "notrace_passing",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "0",
+          "default_value": "0",
+          "documentation": "Further configuration parameters",
+          "source": "src/params.f90",
+          "source_line": 147,
+          "validation": {
+            "min": 0,
+            "max": 1
+          }
+        },
+        {
+          "name": "nper",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1000",
+          "default_value": "1000",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 29,
+          "validation": {
+            "min": 1
+          }
+        },
+        {
+          "name": "npoiper",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "100",
+          "default_value": "100",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 149,
+          "validation": {
+            "min": 1
+          }
+        },
+        {
+          "name": "ntimstep",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "10000",
+          "default_value": "10000",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 149,
+          "validation": {
+            "min": 2
+          }
+        },
+        {
+          "name": "ntestpart",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1024",
+          "default_value": "1024",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 29,
+          "validation": {
+            "min": 1
+          }
+        },
+        {
+          "name": "trace_time",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1d-1",
+          "default_value": "1d-1",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 148,
+          "validation": {
+            "positive": true
+          }
+        },
+        {
+          "name": "num_surf",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1",
+          "default_value": "1",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 161,
+          "validation": {
+            "min": 0,
+            "max": 2
+          }
+        },
+        {
+          "name": "sbeg",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [
+            "1024"
+          ],
+          "extent": [
+            1024
+          ],
+          "default": "0.5d0",
+          "default_value": "0.5d0",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 34
+        },
+        {
+          "name": "phibeg",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "0d0",
+          "default_value": "0d0",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 31
+        },
+        {
+          "name": "thetabeg",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "0.0d0",
+          "default_value": "0.0d0",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 35
+        },
+        {
+          "name": "contr_pp",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "-1d0",
+          "default_value": "-1d0",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 60
+        },
+        {
+          "name": "face_al",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1d0",
+          "default_value": "1d0",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 148,
+          "validation": {
+            "positive": true
+          }
+        },
+        {
+          "name": "npoiper2",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "256",
+          "default_value": "256",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 149,
+          "validation": {
+            "min": 1
+          }
+        },
+        {
+          "name": "n_e",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "2",
+          "default_value": "2",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 149
+        },
+        {
+          "name": "n_d",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "4",
+          "default_value": "4",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 150,
+          "validation": {
+            "positive": true
+          }
+        },
+        {
+          "name": "netcdffile",
+          "type": "character",
+          "kind": "",
+          "length": "1000",
+          "shape": [],
+          "extent": [],
+          "default": "''",
+          "default_value": "''",
+          "documentation": "Empty = unset, apply 'wout.nc' default at usage",
+          "source": "libneo/src/vmec_support/canonical_coordinates_mod.f90",
+          "source_line": 12
+        },
+        {
+          "name": "ns_s",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "5",
+          "default_value": "5",
+          "documentation": "<- spline order for R,Z,lambda over s",
+          "source": "libneo/src/vmec_support/canonical_coordinates_mod.f90",
+          "source_line": 16
+        },
+        {
+          "name": "ns_tp",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "5",
+          "default_value": "5",
+          "documentation": "<- spline order for R,Z,lambda over theta and varphi",
+          "source": "libneo/src/vmec_support/canonical_coordinates_mod.f90",
+          "source_line": 17
+        },
+        {
+          "name": "multharm",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "5",
+          "default_value": "5",
+          "documentation": "",
+          "source": "libneo/src/vmec_support/canonical_coordinates_mod.f90",
+          "source_line": 14
+        },
+        {
+          "name": "isw_field_type",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "0",
+          "default_value": "0",
+          "documentation": "",
+          "source": "libneo/src/vmec_support/canonical_coordinates_mod.f90",
+          "source_line": 119
+        },
+        {
+          "name": "generate_start_only",
+          "type": "logical",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": ".False.",
+          "default_value": ".False.",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 62
+        },
+        {
+          "name": "startmode",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1",
+          "default_value": "1",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 63,
+          "validation": {
+            "min": 1,
+            "max": 7
+          }
+        },
+        {
+          "name": "fusion_grid",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [
+            "3"
+          ],
+          "extent": [
+            3
+          ],
+          "default": "(/128, 32, 32/)",
+          "default_value": "(/128, 32, 32/)",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 64
+        },
+        {
+          "name": "grid_density",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "0d0",
+          "default_value": "0d0",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 65,
+          "validation": {
+            "min": 0,
+            "max": 1
+          }
+        },
+        {
+          "name": "special_ants_file",
+          "type": "logical",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": ".False.",
+          "default_value": ".False.",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 66
+        },
+        {
+          "name": "integmode",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "EXPL_IMPL_EULER",
+          "default_value": "1",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 74,
+          "validation": {
+            "choices": [
+              -1,
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              15
+            ]
+          }
+        },
+        {
+          "name": "orbit_model",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "ORBIT_GC",
+          "default_value": "0",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 100,
+          "validation": {
+            "choices": [
+              0,
+              7
+            ]
+          }
+        },
+        {
+          "name": "orbit_coord",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "0",
+          "default_value": "0",
+          "documentation": "Chart for the full-orbit field+geometry: full orbit currently supports only orbit_coord = 1 (Boozer/chartmap), which shares the production GC field.",
+          "source": "src/params.f90",
+          "source_line": 104,
+          "validation": {
+            "choices": [
+              0,
+              1
+            ]
+          }
+        },
+        {
+          "name": "relerr",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1d-13",
+          "default_value": "1d-13",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 108,
+          "validation": {
+            "positive": true
+          }
+        },
+        {
+          "name": "gpu_mode",
+          "type": "character",
+          "kind": "",
+          "length": "16",
+          "shape": [],
+          "extent": [],
+          "default": "'off'",
+          "default_value": "'off'",
+          "documentation": "GPU execution is configured in the same namelist as the CPU run. Native CUDA with tuned DOPRI is the default production path. The legacy OpenACC path remains available only when selected explicitly.",
+          "source": "src/params.f90",
+          "source_line": 79,
+          "validation": {
+            "choices": [
+              "off",
+              "production",
+              "benchmark"
+            ]
+          }
+        },
+        {
+          "name": "gpu_backend",
+          "type": "character",
+          "kind": "",
+          "length": "16",
+          "shape": [],
+          "extent": [],
+          "default": "'cuda-native'",
+          "default_value": "'cuda-native'",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 80,
+          "validation": {
+            "choices": [
+              "openacc",
+              "cuda-native",
+              "auto"
+            ]
+          }
+        },
+        {
+          "name": "gpu_method",
+          "type": "character",
+          "kind": "",
+          "length": "16",
+          "shape": [],
+          "extent": [],
+          "default": "'dopri'",
+          "default_value": "'dopri'",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 81,
+          "validation": {
+            "choices": [
+              "auto",
+              "euler",
+              "midpoint",
+              "cash-karp",
+              "dopri"
+            ]
+          }
+        },
+        {
+          "name": "gpu_start_coordinates",
+          "type": "character",
+          "kind": "",
+          "length": "16",
+          "shape": [],
+          "extent": [],
+          "default": "'reference'",
+          "default_value": "'reference'",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 82,
+          "validation": {
+            "choices": [
+              "reference",
+              "boozer"
+            ]
+          }
+        },
+        {
+          "name": "gpu_landreman",
+          "type": "logical",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": ".true.",
+          "default_value": ".true.",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 83
+        },
+        {
+          "name": "gpu_compact_init",
+          "type": "logical",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": ".false.",
+          "default_value": ".false.",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 84
+        },
+        {
+          "name": "gpu_work_order",
+          "type": "logical",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": ".true.",
+          "default_value": ".true.",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 85
+        },
+        {
+          "name": "gpu_num_devices",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1",
+          "default_value": "1",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 86,
+          "validation": {
+            "min": 1
+          }
+        },
+        {
+          "name": "gpu_t_block",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1.0d-3",
+          "default_value": "1.0d-3",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 87,
+          "validation": {
+            "positive": true
+          }
+        },
+        {
+          "name": "gpu_loss_tau",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "0.1d0",
+          "default_value": "0.1d0",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 88,
+          "validation": {
+            "positive": true
+          }
+        },
+        {
+          "name": "gpu_maxloss",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "0.02d0",
+          "default_value": "0.02d0",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 89,
+          "validation": {
+            "nonnegative": true
+          }
+        },
+        {
+          "name": "gpu_min_timestep",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1.0d-10",
+          "default_value": "1.0d-10",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 90,
+          "validation": {
+            "nonnegative": true
+          }
+        },
+        {
+          "name": "gpu_pilot_fraction",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "0.04d0",
+          "default_value": "0.04d0",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 91,
+          "validation": {
+            "min": 0,
+            "max": 0.25
+          }
+        },
+        {
+          "name": "gpu_particle_profile",
+          "type": "character",
+          "kind": "",
+          "length": "1000",
+          "shape": [],
+          "extent": [],
+          "default": "''",
+          "default_value": "''",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 92
+        },
+        {
+          "name": "symplectic_newton_warning_mode",
+          "type": "logical",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": ".true.",
+          "default_value": ".true.",
+          "documentation": "",
+          "source": "src/orbit_symplectic_base.f90",
+          "source_line": 28
+        },
+        {
+          "name": "boundary_event_fraction_tolerance",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "-1d0",
+          "default_value": "-1d0",
+          "documentation": "",
+          "source": "src/orbit_symplectic_base.f90",
+          "source_line": 31
+        },
+        {
+          "name": "boundary_event_radial_tolerance",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "-1d0",
+          "default_value": "-1d0",
+          "documentation": "",
+          "source": "src/orbit_symplectic_base.f90",
+          "source_line": 32
+        },
+        {
+          "name": "canonical_grid_nr",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "62",
+          "default_value": "62",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 114,
+          "validation": {
+            "min": 6,
+            "max": 512
+          }
+        },
+        {
+          "name": "canonical_grid_ntheta",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "63",
+          "default_value": "63",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 115,
+          "validation": {
+            "min": 6,
+            "max": 512
+          }
+        },
+        {
+          "name": "canonical_grid_nphi",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "64",
+          "default_value": "64",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 116,
+          "validation": {
+            "min": 6,
+            "max": 512
+          }
+        },
+        {
+          "name": "canonical_ode_relerr",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1d-11",
+          "default_value": "1d-11",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 117,
+          "validation": {
+            "positive": true
+          }
+        },
+        {
+          "name": "tcut",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "-1d0",
+          "default_value": "-1d0",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 129
+        },
+        {
+          "name": "nturns",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "8",
+          "default_value": "8",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 131
+        },
+        {
+          "name": "debug",
+          "type": "logical",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": ".False.",
+          "default_value": ".False.",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 154
+        },
+        {
+          "name": "class_plot",
+          "type": "logical",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": ".False.",
+          "default_value": ".False.",
+          "documentation": "<=AAA",
+          "source": "src/params.f90",
+          "source_line": 132
+        },
+        {
+          "name": "cut_in_per",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "0d0",
+          "default_value": "0d0",
+          "documentation": "<=AAA",
+          "source": "src/params.f90",
+          "source_line": 133,
+          "validation": {
+            "min": 0,
+            "max": 1
+          }
+        },
+        {
+          "name": "fast_class",
+          "type": "logical",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": ".False.",
+          "default_value": ".False.",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 135
+        },
+        {
+          "name": "vmec_b_scale",
+          "type": "real",
+          "kind": "kind(1d0)",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1d0",
+          "default_value": "1d0",
+          "documentation": "",
+          "source": "libneo/src/vmec_support/canonical_coordinates_mod.f90",
+          "source_line": 19
+        },
+        {
+          "name": "vmec_rz_scale",
+          "type": "real",
+          "kind": "kind(1d0)",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1d0",
+          "default_value": "1d0",
+          "documentation": "",
+          "source": "libneo/src/vmec_support/canonical_coordinates_mod.f90",
+          "source_line": 19
+        },
+        {
+          "name": "swcoll",
+          "type": "logical",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": ".False.",
+          "default_value": ".False.",
+          "documentation": "Colliding with D-T reactor plasma. TODO: Make configurable",
+          "source": "src/params.f90",
+          "source_line": 139
+        },
+        {
+          "name": "deterministic",
+          "type": "logical",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": ".False.",
+          "default_value": ".False.",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 144
+        },
+        {
+          "name": "old_axis_healing",
+          "type": "logical",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": ".True.",
+          "default_value": ".True.",
+          "documentation": "DEPRECATED boolean switches (use axis_healing). Kept for back-compat and mapped to a mode with a deprecation warning; the next SIMPLE release will remove them and default axis_healing to 'polyfit'.",
+          "source": "libneo/src/vmec_support/canonical_coordinates_mod.f90",
+          "source_line": 54
+        },
+        {
+          "name": "old_axis_healing_boundary",
+          "type": "logical",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": ".True.",
+          "default_value": ".True.",
+          "documentation": "",
+          "source": "libneo/src/vmec_support/canonical_coordinates_mod.f90",
+          "source_line": 55
+        },
+        {
+          "name": "axis_healing_power_law",
+          "type": "logical",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": ".False.",
+          "default_value": ".False.",
+          "documentation": "",
+          "source": "libneo/src/vmec_support/canonical_coordinates_mod.f90",
+          "source_line": 56
+        },
+        {
+          "name": "rho_axis_heal",
+          "type": "real",
+          "kind": "kind(1d0)",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "-1.0d0",
+          "default_value": "-1.0d0",
+          "documentation": "deprecated; use s_axis_heal",
+          "source": "libneo/src/vmec_support/canonical_coordinates_mod.f90",
+          "source_line": 48
+        },
+        {
+          "name": "axis_healing",
+          "type": "character",
+          "kind": "",
+          "length": "16",
+          "shape": [],
+          "extent": [],
+          "default": "''",
+          "default_value": "''",
+          "documentation": "Near-axis healing of the VMEC harmonics. Preferred selector: axis_healing = 'legacy'          - old default: discard min(|m|,4) surfaces and extrapolate. 'legacy_adaptive' - old adaptive boundary from determine_nheal_for_axis. 'powerlaw'        - rho**|m| continuation below s_axis_heal. 'polyfit'         - rho**|m| * least-squares poly(s) below s_axis_heal. Recommended. The empty string means \"unset\": deprecated logical switches below are mapped to a mode with a warning (see resolve_axis_healing_mode).",
+          "source": "libneo/src/vmec_support/canonical_coordinates_mod.f90",
+          "source_line": 46,
+          "validation": {
+            "choices": [
+              "",
+              "legacy",
+              "legacy_adaptive",
+              "powerlaw",
+              "polyfit"
+            ]
+          }
+        },
+        {
+          "name": "s_axis_heal",
+          "type": "real",
+          "kind": "kind(1d0)",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1.0d-2",
+          "default_value": "1.0d-2",
+          "documentation": "anchor flux for powerlaw/polyfit",
+          "source": "libneo/src/vmec_support/canonical_coordinates_mod.f90",
+          "source_line": 47
+        },
+        {
+          "name": "axis_healing_polyfit_degree",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "3",
+          "default_value": "3",
+          "documentation": "polyfit polynomial degree in s",
+          "source": "libneo/src/vmec_support/canonical_coordinates_mod.f90",
+          "source_line": 49
+        },
+        {
+          "name": "am1",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "2.0d0",
+          "default_value": "2.0d0",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 140
+        },
+        {
+          "name": "am2",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "3.0d0",
+          "default_value": "3.0d0",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 140
+        },
+        {
+          "name": "z1",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1.0d0",
+          "default_value": "1.0d0",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 140
+        },
+        {
+          "name": "z2",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1.0d0",
+          "default_value": "1.0d0",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 140
+        },
+        {
+          "name": "densi1",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "0.5d14",
+          "default_value": "0.5d14",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 140
+        },
+        {
+          "name": "densi2",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "0.5d14",
+          "default_value": "0.5d14",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 140
+        },
+        {
+          "name": "tempi1",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1.0d4",
+          "default_value": "1.0d4",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 140
+        },
+        {
+          "name": "tempi2",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1.0d4",
+          "default_value": "1.0d4",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 140
+        },
+        {
+          "name": "tempe",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1.0d4",
+          "default_value": "1.0d4",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 140
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "2000000000",
+          "default_value": "2000000000",
+          "documentation": "Initialize large so batch mode is not default",
+          "source": "src/params.f90",
+          "source_line": 159,
+          "validation": {
+            "min": 1
+          }
+        },
+        {
+          "name": "ran_seed",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "42",
+          "default_value": "42",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 160
+        },
+        {
+          "name": "reuse_batch",
+          "type": "logical",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": ".False.",
+          "default_value": ".False.",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 162
+        },
+        {
+          "name": "field_input",
+          "type": "character",
+          "kind": "",
+          "length": "1000",
+          "shape": [],
+          "extent": [],
+          "default": "''",
+          "default_value": "''",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 170
+        },
+        {
+          "name": "coord_input",
+          "type": "character",
+          "kind": "",
+          "length": "1000",
+          "shape": [],
+          "extent": [],
+          "default": "''",
+          "default_value": "''",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 171
+        },
+        {
+          "name": "wall_input",
+          "type": "character",
+          "kind": "",
+          "length": "1000",
+          "shape": [],
+          "extent": [],
+          "default": "''",
+          "default_value": "''",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 172
+        },
+        {
+          "name": "wall_units",
+          "type": "character",
+          "kind": "",
+          "length": "16",
+          "shape": [],
+          "extent": [],
+          "default": "'m'",
+          "default_value": "'m'",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 173,
+          "validation": {
+            "choices": [
+              "m",
+              "mm"
+            ]
+          }
+        },
+        {
+          "name": "chart_boundary_kind",
+          "type": "character",
+          "kind": "",
+          "length": "16",
+          "shape": [],
+          "extent": [],
+          "default": "'auto'",
+          "default_value": "'auto'",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 177,
+          "validation": {
+            "choices": [
+              "auto",
+              "lcfs",
+              "wall",
+              "domain"
+            ]
+          }
+        },
+        {
+          "name": "integ_coords",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "-1000",
+          "default_value": "-1000",
+          "documentation": "Sentinel: -1000 means user did not set it",
+          "source": "src/params.f90",
+          "source_line": 179
+        },
+        {
+          "name": "crossing_level",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "3",
+          "default_value": "3",
+          "documentation": "SPECTRE interface treatment: only full orbit (3) is supported.",
+          "source": "src/params.f90",
+          "source_line": 181,
+          "validation": {
+            "choices": [
+              3
+            ]
+          }
+        },
+        {
+          "name": "spectre_fo_entry_larmor",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1.5_dp",
+          "default_value": "1.5_dp",
+          "documentation": "Full orbit near SPECTRE interfaces: entry distance in radial gyroradii and the relative tolerance of RK45 on the sharp per-volume field. 1.5 keeps the switch's p_zeta invariant as at 3 (entry 1 breaks it) at about half the FO time (concept/spectre_loss_study/results/fo-residence).",
+          "source": "src/params.f90",
+          "source_line": 186,
+          "validation": {
+            "positive": true
+          }
+        },
+        {
+          "name": "spectre_fo_tolerance",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1.0e-9_dp",
+          "default_value": "1.0e-9_dp",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 187,
+          "validation": {
+            "positive": true
+          }
+        },
+        {
+          "name": "spectre_fo_grid",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [
+            "3"
+          ],
+          "extent": [
+            3
+          ],
+          "default": "(/32, 64, 32/)",
+          "default_value": "(/32, 64, 32/)",
+          "documentation": "Per-volume FO spline points: rho, theta, zeta per field period.",
+          "source": "src/params.f90",
+          "source_line": 189
+        },
+        {
+          "name": "spectre_sbeg_is_toroidal_flux",
+          "type": "logical",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": ".false.",
+          "default_value": ".false.",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 190
+        },
+        {
+          "name": "spectre_ncon_r",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "48",
+          "default_value": "48",
+          "documentation": "SPECTRE per-volume Meiss construction grid (n_r, n_th, n_phi). Each volume allocates rank-3 arrays plus batch splines of this size, so the total peak memory scales as Mvol*n_r*n_th*n_phi. spectre_ncon_phi = -1 means automatic: 32 for fields with toroidal harmonics and a minimal phi grid for axisymmetric fields (all n = 0), the dominant memory saver for tokamak cases. A positive value forces that phi count verbatim, bypassing the axisymmetric clamp.",
+          "source": "src/params.f90",
+          "source_line": 199,
+          "validation": {
+            "min": 1
+          }
+        },
+        {
+          "name": "spectre_ncon_th",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "48",
+          "default_value": "48",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 200,
+          "validation": {
+            "min": 1
+          }
+        },
+        {
+          "name": "spectre_ncon_phi",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "-1",
+          "default_value": "-1",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 201
+        },
+        {
+          "name": "spectre_ncon_order",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "5",
+          "default_value": "5",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 202,
+          "validation": {
+            "min": 1
+          }
+        },
+        {
+          "name": "spectre_ncon_ode_max_steps",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1000000",
+          "default_value": "1000000",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 203,
+          "validation": {
+            "min": 1
+          }
+        },
+        {
+          "name": "spectre_ncon_ode_relerr",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1.0e-2_dp",
+          "default_value": "1.0e-2_dp",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 204,
+          "validation": {
+            "positive": true
+          }
+        },
+        {
+          "name": "output_results_netcdf",
+          "type": "logical",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": ".False.",
+          "default_value": ".False.",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 155
+        },
+        {
+          "name": "output_error",
+          "type": "logical",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": ".False.",
+          "default_value": ".False.",
+          "documentation": "",
+          "source": "src/callback.f90",
+          "source_line": 5
+        },
+        {
+          "name": "output_orbits_macrostep",
+          "type": "logical",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": ".False.",
+          "default_value": ".False.",
+          "documentation": "",
+          "source": "src/callback.f90",
+          "source_line": 6
+        },
+        {
+          "name": "macrostep_time_grid",
+          "type": "character",
+          "kind": "",
+          "length": "16",
+          "shape": [],
+          "extent": [],
+          "default": "'linear'",
+          "default_value": "'linear'",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 70,
+          "validation": {
+            "choices": [
+              "linear",
+              "log"
+            ]
+          }
+        },
+        {
+          "name": "checkpoint_interval",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "10.0d0",
+          "default_value": "10.0d0",
+          "documentation": "Legacy progress/checkpoint interval, retained for input compatibility. Tracing performs no timed I/O; results and event totals are emitted after the OpenMP team joins.",
+          "source": "src/params.f90",
+          "source_line": 113
+        },
+        {
+          "name": "restart",
+          "type": "logical",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": ".False.",
+          "default_value": ".False.",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 156
+        },
+        {
+          "name": "local",
+          "type": "logical",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": ".true.",
+          "default_value": ".true.",
+          "documentation": "Removed &config keys. They are still read so that old input files run; a value other than the historical default prints a warning.",
+          "source": "src/params.f90",
+          "source_line": 208
+        },
+        {
+          "name": "loopskip",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "0",
+          "default_value": "0",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 209
+        },
+        {
+          "name": "bmod_ref",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "5.0d4",
+          "default_value": "5.0d4",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 210
+        },
+        {
+          "name": "macrostep_log_ratio",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1.0d3",
+          "default_value": "1.0d3",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 211
+        }
+      ]
+    },
+    "profiles": {
+      "source": "src/profiles.f90",
+      "source_line": 36,
+      "variables": [
+        {
+          "name": "profile_type",
+          "type": "character",
+          "kind": "",
+          "length": "32",
+          "shape": [],
+          "extent": [],
+          "default": "\"power_series\"",
+          "default_value": "\"power_series\"",
+          "documentation": "",
+          "source": "src/profiles.f90",
+          "source_line": 10
+        },
+        {
+          "name": "te_scale",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1.0d4",
+          "default_value": "1.0d4",
+          "documentation": "",
+          "source": "src/profiles.f90",
+          "source_line": 13
+        },
+        {
+          "name": "ti1_scale",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1.0d4",
+          "default_value": "1.0d4",
+          "documentation": "",
+          "source": "src/profiles.f90",
+          "source_line": 14
+        },
+        {
+          "name": "ti2_scale",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1.0d4",
+          "default_value": "1.0d4",
+          "documentation": "",
+          "source": "src/profiles.f90",
+          "source_line": 15
+        },
+        {
+          "name": "ni1_scale",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "0.5d20",
+          "default_value": "0.5d20",
+          "documentation": "",
+          "source": "src/profiles.f90",
+          "source_line": 16
+        },
+        {
+          "name": "ni2_scale",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "0.5d20",
+          "default_value": "0.5d20",
+          "documentation": "",
+          "source": "src/profiles.f90",
+          "source_line": 17
+        },
+        {
+          "name": "te_coef",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [
+            "MAX_POWER_SERIES"
+          ],
+          "extent": [
+            10
+          ],
+          "default": "[1.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0,  0.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0]",
+          "default_value": "[1.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0,  0.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0]",
+          "documentation": "",
+          "source": "src/profiles.f90",
+          "source_line": 19
+        },
+        {
+          "name": "ti1_coef",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [
+            "MAX_POWER_SERIES"
+          ],
+          "extent": [
+            10
+          ],
+          "default": "[1.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0,  0.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0]",
+          "default_value": "[1.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0,  0.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0]",
+          "documentation": "",
+          "source": "src/profiles.f90",
+          "source_line": 21
+        },
+        {
+          "name": "ti2_coef",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [
+            "MAX_POWER_SERIES"
+          ],
+          "extent": [
+            10
+          ],
+          "default": "[1.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0,  0.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0]",
+          "default_value": "[1.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0,  0.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0]",
+          "documentation": "",
+          "source": "src/profiles.f90",
+          "source_line": 23
+        },
+        {
+          "name": "ni1_coef",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [
+            "MAX_POWER_SERIES"
+          ],
+          "extent": [
+            10
+          ],
+          "default": "[1.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0,  0.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0]",
+          "default_value": "[1.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0,  0.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0]",
+          "documentation": "",
+          "source": "src/profiles.f90",
+          "source_line": 25
+        },
+        {
+          "name": "ni2_coef",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [
+            "MAX_POWER_SERIES"
+          ],
+          "extent": [
+            10
+          ],
+          "default": "[1.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0,  0.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0]",
+          "default_value": "[1.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0,  0.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0]",
+          "documentation": "",
+          "source": "src/profiles.f90",
+          "source_line": 27
+        },
+        {
+          "name": "te_p1",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1.0d0",
+          "default_value": "1.0d0",
+          "documentation": "",
+          "source": "src/profiles.f90",
+          "source_line": 30
+        },
+        {
+          "name": "te_p2",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "0.0d0",
+          "default_value": "0.0d0",
+          "documentation": "",
+          "source": "src/profiles.f90",
+          "source_line": 30
+        },
+        {
+          "name": "ti1_p1",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1.0d0",
+          "default_value": "1.0d0",
+          "documentation": "",
+          "source": "src/profiles.f90",
+          "source_line": 31
+        },
+        {
+          "name": "ti1_p2",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "0.0d0",
+          "default_value": "0.0d0",
+          "documentation": "",
+          "source": "src/profiles.f90",
+          "source_line": 31
+        },
+        {
+          "name": "ti2_p1",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1.0d0",
+          "default_value": "1.0d0",
+          "documentation": "",
+          "source": "src/profiles.f90",
+          "source_line": 32
+        },
+        {
+          "name": "ti2_p2",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "0.0d0",
+          "default_value": "0.0d0",
+          "documentation": "",
+          "source": "src/profiles.f90",
+          "source_line": 32
+        },
+        {
+          "name": "ni1_p1",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1.0d0",
+          "default_value": "1.0d0",
+          "documentation": "",
+          "source": "src/profiles.f90",
+          "source_line": 33
+        },
+        {
+          "name": "ni1_p2",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "0.0d0",
+          "default_value": "0.0d0",
+          "documentation": "",
+          "source": "src/profiles.f90",
+          "source_line": 33
+        },
+        {
+          "name": "ni2_p1",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1.0d0",
+          "default_value": "1.0d0",
+          "documentation": "",
+          "source": "src/profiles.f90",
+          "source_line": 34
+        },
+        {
+          "name": "ni2_p2",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "0.0d0",
+          "default_value": "0.0d0",
+          "documentation": "",
+          "source": "src/profiles.f90",
+          "source_line": 34
+        }
+      ]
+    },
+    "poincare": {
+      "source": "app/spectre_poincare.f90",
+      "source_line": 32,
+      "variables": [
+        {
+          "name": "spectre_file",
+          "type": "character",
+          "kind": "",
+          "length": "1024",
+          "shape": [],
+          "extent": [],
+          "default": "'spectre.h5'",
+          "default_value": "'spectre.h5'",
+          "documentation": "",
+          "source": "app/spectre_poincare.f90",
+          "source_line": 27
+        },
+        {
+          "name": "zeta0",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "0.0_dp",
+          "default_value": "0.0_dp",
+          "documentation": "",
+          "source": "app/spectre_poincare.f90",
+          "source_line": 28
+        },
+        {
+          "name": "nturns",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "200",
+          "default_value": "200",
+          "documentation": "",
+          "source": "app/spectre_poincare.f90",
+          "source_line": 29
+        },
+        {
+          "name": "nsteps_per_period",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "256",
+          "default_value": "256",
+          "documentation": "",
+          "source": "app/spectre_poincare.f90",
+          "source_line": 29
+        },
+        {
+          "name": "nseeds_per_volume",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "4",
+          "default_value": "4",
+          "documentation": "",
+          "source": "app/spectre_poincare.f90",
+          "source_line": 29
+        },
+        {
+          "name": "volumes",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [
+            "max_volumes"
+          ],
+          "extent": [
+            128
+          ],
+          "default": "-1",
+          "default_value": "-1",
+          "documentation": "",
+          "source": "app/spectre_poincare.f90",
+          "source_line": 31
+        },
+        {
+          "name": "seed_file",
+          "type": "character",
+          "kind": "",
+          "length": "1024",
+          "shape": [],
+          "extent": [],
+          "default": "''",
+          "default_value": "''",
+          "documentation": "",
+          "source": "app/spectre_poincare.f90",
+          "source_line": 27
+        },
+        {
+          "name": "spline_n_s",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "32",
+          "default_value": "32",
+          "documentation": "",
+          "source": "app/spectre_poincare.f90",
+          "source_line": 30
+        },
+        {
+          "name": "spline_n_theta",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "32",
+          "default_value": "32",
+          "documentation": "",
+          "source": "app/spectre_poincare.f90",
+          "source_line": 30
+        },
+        {
+          "name": "spline_n_zeta",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "32",
+          "default_value": "32",
+          "documentation": "",
+          "source": "app/spectre_poincare.f90",
+          "source_line": 30
+        },
+        {
+          "name": "spline_order",
+          "type": "integer",
+          "kind": "",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "3",
+          "default_value": "3",
+          "documentation": "",
+          "source": "app/spectre_poincare.f90",
+          "source_line": 30
+        }
+      ]
+    }
+  }
+}

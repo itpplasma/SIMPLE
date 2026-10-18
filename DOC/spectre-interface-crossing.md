@@ -8,7 +8,7 @@ RK45 guiding-centre tracing and sampling-only initialization remain supported.
 The conserved-magnetic-moment guiding-centre crossing maps were removed because
 a sharp sheet changes the physical magnetic moment by a gyrophase-dependent
 amount and the maps produce spurious confinement. The
-[rejection record](spectre-rejected-interface-models.md) retains the mathematical
+[rejection record](https://github.com/itpplasma/SIMPLE/blob/main/DOC/spectre-rejected-interface-models.md) retains the mathematical
 arguments, symbolic verifier, recorded measurements, and code provenance.
 
 ## Full orbit near interfaces (`crossing_level = 3`)
@@ -142,7 +142,7 @@ were 7/41 with wall times 929/409 s; the retained reference and GC timings were
 920/565 s and 15/25 s. These historical timings use different thread counts,
 so they are not a direct speed comparison with the corrected runs. Setup and
 full timing evidence are retained in
-[`concept/symplectic_sheet/README.md`](../concept/symplectic_sheet/README.md#simple-on-ncsx-loss-fractions-against-full-orbit-everywhere).
+[`concept/symplectic_sheet/README.md`](https://github.com/itpplasma/SIMPLE/blob/main/concept/symplectic_sheet/README.md#simple-on-ncsx-loss-fractions-against-full-orbit-everywhere).
 
 `mu` conservation through a zero-width sheet is a modeling convention: the
 Buechner-Zelenyi adiabaticity parameter vanishes for an ideal
@@ -158,7 +158,7 @@ keys were removed without aliases. A finite smoothed layer changes the magnetic
 field and therefore the physics; it does not integrate exactly the sharp-sheet
 Hamiltonian. RK45 with exact crossings reproduces the retained full-orbit-everywhere
 reference loss fractions within counting uncertainty (table above).
-See [the symbolic rejection record](spectre-rejected-interface-models.md#t2-a-boris-smoothing-layer-changes-the-target-problem)
+See [the symbolic rejection record](https://github.com/itpplasma/SIMPLE/blob/main/DOC/spectre-rejected-interface-models.md#t2-a-boris-smoothing-layer-changes-the-target-problem)
 for the model distinction. Historical measurements above are evidence, not
 available configurations. The last revision containing the removed code is
 [`afec0c9`](https://github.com/itpplasma/SIMPLE/commit/afec0c9ccc5a90350ec71755a611450c23623083).
