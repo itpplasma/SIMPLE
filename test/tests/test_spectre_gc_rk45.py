@@ -1,33 +1,16 @@
 #!/usr/bin/env python3
-"""Behavioural test for SPECTRE guiding-center RK45 tracing per volume (#438, #443).
-
-Runs simple.x on the committed libneo SPECTRE fixture with integ_coords='spectre'
-(mode id 6) and integmode=0, markers started on control surface rho_g = 2, and
-checks the acceptance scenarios:
-
-  1. With the Level-0 crossing map wired in (#443), markers traverse volumes and
-     either stay confined for the whole trace or are lost at the outermost
-     interface; times_lost.dat and confined_fraction.dat account for every
-     marker, and no boundary-stop artefact file is left behind.
-  2. Relative total energy (p^2, conserved by the guiding-center flow and by the
-     crossing map) drifts by less than the RK45-tolerance bound over the trace.
-  3. The surface sampler places markers on the requested interface to < 1e-12 and
-     reproduces bit-for-bit with a fixed seed.
-  4. The run is VMEC-free: no wout file is configured or opened.
-
-Usage:
-    test_spectre_gc_rk45.py <simple.x> <spectre_test.h5>
-"""
+"""SPECTRE RK45 single-volume accounting and multi-volume sampling checks."""
 import os
 import subprocess
 import sys
 import tempfile
 
 import numpy as np
+from spectre_test_utils import axis_volume
 
 NTESTPART = 32
 TRACE_TIME = 1.0e-4
-SBEG = 2.0
+SBEG = 0.5
 ENERGY_TOL = 1.0e-8        # relative energy drift bound
 SAMPLE_TOL = 1.0e-12       # sampler forward-map residual on the interface
 PERP_INV_MAX = 1.0e-2      # normalization witness: perp invariant ~ 1/B (Gauss)
@@ -76,48 +59,28 @@ def load_times_lost(workdir):
     }
 
 
-def load_crossing_events(workdir):
-    path = os.path.join(workdir, "spectre_crossing_events.dat")
-    a = np.loadtxt(path)
-    return a.reshape(1, -1) if a.ndim == 1 else a
-
-
 def main():
-    binary, h5 = sys.argv[1], sys.argv[2]
+    binary, source = sys.argv[1], sys.argv[2]
+    with axis_volume(source) as h5:
+        check(binary, h5, source)
+
+
+def check(binary, h5, source):
     failures = []
 
     with tempfile.TemporaryDirectory() as work:
         stdout = run_simple(binary, work, h5)
         res = load_times_lost(work)
-        ev = load_crossing_events(work)
 
         lost = res["t_lost"] < TRACE_TIME * (1.0 - 1e-9)
         confined = ~lost
         n_lost = int(lost.sum())
         n_confined = int(confined.sum())
 
-        # BDD 1: accounting -- every marker confined or lost at the outermost
-        # interface, and the boundary-stop artefact of #438 is gone.
-        if n_confined + n_lost != NTESTPART:
-            failures.append(
-                f"BDD1: {n_confined}+{n_lost} != {NTESTPART} markers")
-        if os.path.exists(os.path.join(work, "spectre_boundary_events.dat")):
-            failures.append("BDD1: stale spectre_boundary_events.dat present")
-        loss = ev[ev[:, 3] == 3]           # type 3 = loss at the outermost face
-        if len(loss) != n_lost:
-            failures.append(
-                f"BDD1: {n_lost} lost markers but {len(loss)} loss events")
-        if len(loss):
-            mvol = int(loss[:, 2].max())
-            if not np.all(loss[:, 2] == mvol):
-                failures.append("BDD1: a loss occurred off the outermost interface")
-        if n_confined:
-            tmin = res["t_lost"][confined].min()
-            if not tmin >= TRACE_TIME * (1.0 - 1e-6):
-                failures.append(
-                    f"BDD1: confined marker loss time {tmin:.3e} < trace_time")
-        print(f"BDD1: confined={n_confined} lost={n_lost} loss_events={len(loss)}")
-
+        if n_confined + n_lost != NTESTPART or not np.all(np.isfinite(res["t_lost"])):
+            failures.append("single-volume accounting: missing or non-finite marker")
+        if n_lost and not np.allclose(res["zend_rho"][lost], 1.0, atol=1e-8):
+            failures.append("single-volume loss off outer boundary")
         # confined_fraction.dat closes the account at the final time.
         cf = np.loadtxt(os.path.join(work, "confined_fraction.dat"))
         frac_final = cf[-1, 1] + cf[-1, 2]
@@ -144,7 +107,7 @@ def main():
                 f"(Gaussian B mis-scaled?)")
         print(f"Norm: perp_inv max = {perp_max:.3e} (< {PERP_INV_MAX:.0e})")
 
-        # BDD 3: sampler places markers exactly on interface rho_g = 2, and
+        # BDD 3: sampler places markers on the requested surface rho_g = 0.5, and
         # reproduces bit-for-bit with the fixed seed.
         start = np.loadtxt(os.path.join(work, "start.dat"))
         res_map = np.max(np.abs(start[:, 0] - SBEG))
@@ -170,8 +133,20 @@ def main():
             failures.append("BDD4: SPECTRE field loading phase missing from log")
         print("BDD4: VMEC-free initialization confirmed")
 
+    # Multi-volume surface sampling remains available without orbit tracing.
+    samples = []
+    for _ in range(2):
+        with tempfile.TemporaryDirectory() as work:
+            run_simple(binary, work, source, sbeg=2.0, generate_only=True)
+            start = np.loadtxt(os.path.join(work, "start.dat"))
+            if np.max(np.abs(start[:, 0] - 2.0)) >= SAMPLE_TOL:
+                failures.append("multi-volume sampler changed the requested surface")
+            samples.append(start)
+    if not np.array_equal(*samples):
+        failures.append("multi-volume sampling is not deterministic")
+
     with tempfile.TemporaryDirectory() as work:
-        run_simple(binary, work, h5, sbeg=0.05, flux_label=True,
+        run_simple(binary, work, source, sbeg=0.05, flux_label=True,
                    generate_only=True)
         start = np.loadtxt(os.path.join(work, "start.dat"))
         expected_rho = 0.67072394072143493

@@ -1,0 +1,28 @@
+{
+  "performance_commit": "6bbdef0",
+  "baseline_commit": "fe002a3",
+  "field": "ncsx_freeboundary.h5",
+  "energy_ev": 3500,
+  "duration_s": 0.0002,
+  "markers": 32,
+  "threads": 16,
+  "marker": 31,
+  "initial_gc": [
+    0.3300484620219408,
+    0.7652077778193249,
+    3.8133062530594515,
+    1.0,
+    -0.7481408113461772
+  ],
+  "fo_status": 2,
+  "fo_status_name": "SPECTRE_FO_LOCATE_FAIL",
+  "warning_hold_count": 4666,
+  "accepted_fo_fraction": 0.0,
+  "final_rho": 6.190827216666096e-13,
+  "final_theta": 0.6607373149552789,
+  "final_zeta": 1.5874878289042158,
+  "polar_spline_axis_field_relative_error": 49.0188,
+  "axis_field_limit_test_rho": 1e-12,
+  "raw_main_warning_holds": 0,
+  "interpretation": "Unresolved marker; its apparent confinement is invalid. Reproduce with the retained initial GC state, not a physical loss event."
+}

@@ -1,0 +1,813 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[margin=22mm]{geometry}
+\usepackage{amsmath,amssymb,mathtools,bm,booktabs,longtable,array,enumitem}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern,microtype}
+\usepackage{xcolor,hyperref,xurl}
+\hypersetup{colorlinks=true,linkcolor=blue!45!black,citecolor=blue!45!black,urlcolor=blue!45!black,pdftitle={Eliminating gyroperiod cost at sharp stellarator interfaces}}
+\usepackage{fancyhdr}
+\pagestyle{fancy}\fancyhf{}\fancyhead[L]{FLR and sharp-sheet orbit integration}\fancyhead[R]{Research note}\fancyfoot[C]{\thepage}
+\setlength{\headheight}{14pt}
+\setlength{\parskip}{4pt}\setlength{\parindent}{0pt}
+\setlist{nosep,leftmargin=*}
+\newcommand{\B}{\mathbf B}\newcommand{\bunit}{\mathbf b}
+\newcommand{\y}{\mathbf y}\newcommand{\x}{\mathbf x}\renewcommand{\v}{\mathbf v}\newcommand{\p}{\mathbf p}
+\newcommand{\X}{\mathbf X}\newcommand{\n}{\mathbf n}
+\newcommand{\A}{\mathbf A}\newcommand{\dd}{\mathrm d}
+\newcommand{\jump}[1]{[\![#1]\!]}
+\newcommand{\avg}[1]{\langle #1\rangle}
+\newcommand{\proved}{\textbf{[P]}}
+\newcommand{\lit}{\textbf{[L]}}
+\newcommand{\conj}{\textbf{[C]}}
+\newcommand{\obs}{\textbf{[O]}}
+\newcommand{\pathref}[1]{\texttt{\nolinkurl{#1}}}
+\newcommand{\doi}[1]{\href{https://doi.org/#1}{doi:\nolinkurl{#1}}}
+\title{Eliminating gyroperiod cost at sharp stellarator interfaces\\\large FLR models, ring mechanics, exact sheet maps, and multiscale integration}
+\author{Research note for SIMPLE}
+\date{14 October 2026}
+\begin{document}
+\maketitle
+\begin{abstract}
+A finite jump of a tangential magnetic field is a regular full-orbit event but a singular guiding-center ordering. Keeping all spatial finite-Larmor-radius (FLR) effects after eliminating gyrophase does not recover its phase-dependent scattering. The most direct deterministic alternative is to retain the gyroaction and phase, propagate uniform-field helices analytically, and locate sheet crossings exactly. This note derives the canonical coordinates, magnitude-and-direction reset, event symplecticity, and an additional exact reduction: a planar sheet with constant fields on its two sides has a one-dimensional piecewise quadratic normal Hamiltonian. Entire repeated-crossing cycles can therefore be composed without resolving their time scale. This exact local result does not establish a symplectic or uniformly accurate curved-sheet hybrid. Its extension requires a Hamiltonian treatment of slowly changing sheet geometry, phase-accurate volume propagation, and controlled canonical lifts. Existing uniformly accurate and asymptotic-preserving methods are useful ingredients, but their smooth-field results do not validate unresolved sharp crossings.
+\end{abstract}
+
+\textbf{Main recommendation.} Develop a phase-carrying, Hamiltonian local sheet propagator, initially with exact helix events and subsequently with complete-cycle acceleration for particles that remain near a sheet. Retain resolved full orbit as the reference and as the fallback at grazing, changes of event topology, and failure of smooth-volume ordering. Do not replace the sheet by a gyroaveraged magnetic field or a fixed-$\mu$ boundary condition.
+
+\textbf{Evidence labels.} \proved{} is derived in this note or established in the supplied mathematical record under explicitly stated hypotheses. \lit{} is a result of the cited literature within its assumptions. \conj{} is a proposed extension, cost expectation, or unproved long-time statement. \obs{} denotes a repository observation or a small numerical check; it is not a theorem or a new SIMPLE benchmark. All calculations use nonrelativistic SI units with signed charge $q\ne0$ and $m>0$.
+
+\textbf{Research scope.} The Zotero database was copied to \pathref{flr/zotero.sqlite} and searched read-only before web research. Local attachments, KAMEL/SIMPLE source files, author manuscripts, publisher records, and Crossref metadata were inspected. No repository was edited or built. The scripts, bibliographic evidence, and progress log are in \pathref{flr/}. The requested tok2vol/NCSX studies below are a validation plan, not studies performed in this run.
+
+\section{The target problem and non-negotiable constraints}
+\label{sec:target}
+SIMPLE follows energetic charged particles over times much longer than their cyclotron period. In a SPECTRE multi-region equilibrium, a stationary interface $\Sigma$ has
+\begin{equation}
+ \B_\pm\cdot\n=0,\qquad B_\pm=|\B_\pm|>0,
+ \qquad \jump{\B}\ne0,
+\end{equation}
+with a continuous, locally Lipschitz vector potential $\A$ whose derivatives have one-sided limits. The current is distributional, but the magnetic field itself is bounded. With no electric field or material wall at this interface,
+\begin{equation}\label{eq:fo}
+ L=\tfrac12m|\dot\x|^2+q\A(\x)\cdot\dot\x,
+ \quad H(\x,\p)=\frac{|\p-q\A(\x)|^2}{2m},
+ \quad \dot\x=\v,\quad m\dot\v=q\v\times\B.
+\end{equation}
+Thus $\x,\v,\p$ are continuous at an isolated transversal crossing and kinetic energy is unchanged. There is no delta-function magnetic impulse and no instantaneous reflection rule. The gyromotion continues in a different field immediately afterward.
+
+The rejected models record \cite{rejected} proves the relevant obstructions and qualifies several overly broad statements in the prototype README \cite{sheetreadme}. Its conclusions supersede the README's blanket random-walk and symplecticity claims. A method must satisfy four distinct requirements:
+\begin{enumerate}
+\item \textbf{Sharp-sheet physics.} Recover the continuous particle state, the correct one-sided $\mu$, multiple returns, and the dependence on incoming phase. A method that preserves an incorrect invariant can spuriously confine particles; exact energy alone does not certify losses.
+\item \textbf{Long-time fidelity.} Prefer bounded energy error, preserve exact symmetry momenta where present, and converge ensemble loss fractions. No guarantee of pointwise agreement of chaotic long orbits is required. Neither symplecticity nor bounded energy alone prevents incorrect transport.
+\item \textbf{Geometry.} Prefer a symplectic map in a clearly identified phase space, including event-time derivatives. Volume preservation, a variational origin, and symplecticity at fixed fictitious time are different claims.
+\item \textbf{Cost.} Avoid $O(\Omega T)$ field evaluations, where $\Omega=|q|B/m$. Small gyroradius is an approximation parameter in smooth volumes, not the computational obstacle: the obstacle is repeatedly stepping the gyroperiod. Cost must be measured especially for particles that stay near a sheet.
+\end{enumerate}
+Let $L_B$ bound smooth-volume magnitude/direction variation and $R_\Sigma$ interface curvature. A useful local length is $r_g=|\v|/\Omega$, which includes parallel travel during a gyroperiod, not just $\rho=|\v_\perp|/\Omega$. Away from a sheet, define
+\begin{equation}
+ \epsilon=\max(r_g/L_B,r_g/R_\Sigma)\ll1.
+\end{equation}
+Constants must also depend on field ratios, pitch, and a transversality lower bound $|\v\cdot\n|\ge\eta|\v|$. There is no uniform bound as $\eta\to0$.
+
+For the usual fixed-$\mu$ GC one-form and Hamiltonian,
+\begin{equation}\label{eq:gc}
+ \Gamma_{\rm gc}=(q\A+m u\bunit)\cdot\dd\X,
+ \qquad H_{\rm gc}=\tfrac12mu^2+\mu B,
+\end{equation}
+write $mu$ here as the product $m u$, not the magnetic moment. In a layer $\bunit(z)=(\cos\alpha(z),\sin\alpha(z),0)$,
+\begin{equation}
+ B_\parallel^*=B\bigl(1-\rho_\parallel\alpha'\bigr),
+ \qquad\rho_\parallel=\frac{m u}{qB}.
+\end{equation}
+For the signed combination $\rho_\parallel\Delta\alpha>0$, sufficiently thin monotone layers give zeros of $B_\parallel^*$. Opposite sign need not give a zero. Either way, a finite direction jump has no uniformly small $r_g|\nabla\bunit|$ ordering as width tends to zero. Adding a phase pair to this lowest-order GC form does not remove that ordering failure.
+
+\section{The compulsory crossing test: moment change and its statistics}
+\label{sec:mu}
+Choose $\mathbf t=\n\times\bunit_-$ so $(\mathbf t,\n,\bunit_-)$ is right-handed, and let
+\begin{equation}
+ \bunit_+=c\bunit_-+s\mathbf t,\quad c=\cos\phi,\ s=\sin\phi,
+ \quad \v=u\bunit_-+w(\cos\theta\,\mathbf t-\sin\theta\,\n).
+\end{equation}
+Here $\phi$ is the \emph{field rotation}, whereas $\theta$ is the particle gyrophase. These two angles should not be confused. Continuity of $\v$ gives \proved{}
+\begin{align}\label{eq:momentreset}
+ u_+&=uc+ws\cos\theta,\\
+ w_+^2&=u^2+w^2-(uc+ws\cos\theta)^2,\\
+ \Delta\mu&=\frac{m}{2B_+}\left[u^2+w^2-(uc+ws\cos\theta)^2\right]
+                 -\frac{mw^2}{2B_-}.
+\end{align}
+For the witness in the supplied proof, $\v=v_t\bunit_-+v_n\n$, so $w\cos\theta=0$. At equal magnitudes,
+\begin{equation}\label{eq:witness}
+ \Delta\mu=\frac{m v_t^2\sin^2\phi}{2B}.
+\end{equation}
+This witness uses a particular gyro-orientation. The general formula is phase dependent and can have either sign. For a pure magnitude change with no direction change, $u,w$ remain fixed and $\mu_+=(B_-/B_+)\mu_-$. Treating $\mu$ as conserved would then demand a nonexistent change of physical velocity or a spurious mirror reflection.
+
+For a \emph{uniform incoming phase} at fixed $u,w$ (not necessarily the distribution sampled by crossings), the mean and variance follow exactly:
+\begin{align}\label{eq:muavg}
+ \avg{\Delta\mu}_\theta
+ &=\frac{m}{2B_+}\left[u^2s^2+w^2(1-s^2/2)\right]-\frac{mw^2}{2B_-},\\
+ \operatorname{Var}_\theta(\Delta\mu)
+ &=\frac{m^2u^2w^2c^2s^2}{2B_+^2}
+       +\frac{m^2w^4s^4}{32B_+^2}.
+\end{align}
+To derive this, separate the fluctuating part as
+\begin{equation}
+ \Delta\mu-\avg{\Delta\mu}_\theta
+ =-\frac{muwcs}{B_+}\cos\theta
+    -\frac{mw^2s^2}{4B_+}\cos2\theta.
+\end{equation}
+Orthogonality of the two harmonics gives the variance. An incoming mono-pitch ensemble is not generally gyrotropic in the outgoing field. In particular, its phase, $u_+$, $\mu_+$, and displaced gyrocenter are correlated.
+
+A homogeneous gyrotropic ensemble sampled by its \emph{flux through a plane} weights the incoming half-circle by $|v_n|=w|\sin\theta|$. On that half-circle, $\cos\theta$ is uniform on $[-1,1]$. Thus a second exact, conditional result is
+\begin{align}\label{eq:fluxstats}
+ \avg{\Delta\mu}_{\rm flux}
+ &=\frac{m}{2B_+}\left[u^2s^2+w^2(1-s^2/3)\right]-\frac{mw^2}{2B_-},\\
+ \operatorname{Var}_{\rm flux}(\Delta\mu)
+ &=\frac{m^2u^2w^2c^2s^2}{3B_+^2}
+       +\frac{m^2w^4s^4}{45B_+^2}.
+\end{align}
+Actual incident distributions can differ from both ensembles. These are one-event statistics, not transport coefficients. Independent random phase at every return is particularly wrong in the exactly planar model derived below: successive crossings are deterministically correlated.
+
+\section{Option A: FLR gyroaverages and the Graz response codes}
+\subsection{What a Bessel gyroaverage does, and what it cannot do}
+For a circular orbit in a smooth reference field,
+\begin{equation}\label{eq:gyroavg}
+ \mathcal G_\rho f(\X)=\frac{1}{2\pi}\int_0^{2\pi}f(\X+\boldsymbol\rho(\theta))\,\dd\theta,
+ \qquad \mathcal G_\rho e^{i\mathbf k\cdot\X}
+ =J_0(k_\perp\rho)e^{i\mathbf k\cdot\X}.
+\end{equation}
+The second identity is the integral definition of $J_0$ after rotating the perpendicular axes. It retains every power of $k_\perp\rho$ in the \emph{sampling operator}. For a Maxwellian velocity average one also encounters $\Gamma_0(b)=e^{-b}I_0(b)$, with the definition of $b$ tied to the thermal-speed convention. A ring quadrature, direct spectral multiplier, and a differential FLR expansion are distinct implementations of this operation.
+
+For example,
+\begin{equation}
+ J_0(a)=1-\frac{a^2}{4}+\frac{a^4}{64}+\cdots,
+ \qquad \frac{1}{1+a^2/4}=1-\frac{a^2}{4}+\frac{a^4}{16}+\cdots.
+\end{equation}
+The latter Pad\'e-type replacement already disagrees at fourth order and has no Bessel zeros. Likewise $\Gamma_0(b)=1-b+3b^2/4+\cdots$ while $(1+b)^{-1}=1-b+b^2+\cdots$. Rational approximations reduce operator cost; they do not supply missing gyrophase dynamics.
+
+The leading electrostatic gyrocenter action has the schematic form
+\begin{equation}\label{eq:gk}
+ \Gamma_{\rm gy}=(q\A_0+m u\bunit_0)\cdot\dd\X+J\dd\theta
+    -\left[\tfrac12mu^2+\Omega_0 J+q\mathcal G_\rho\Phi+\cdots\right]\dd t,
+ \qquad J=\frac{m\mu}{q},\quad\Omega_0=\frac{qB_0}{m}.
+\end{equation}
+The dots matter for electromagnetic, gauge-consistent, and higher-order theories. Gyroaveraging makes $\theta$ ignorable; consequently $\dot J=-\partial_\theta H=0$. This is useful when the background is smooth and perturbations satisfy the selected low-frequency, amplitude, and gradient ordering \cite{brizardhahm,carybrizard}. It is not a full-orbit representation at an order-one background sheet.
+
+\textbf{Sheet test.} If the retained orbit is a circular ring with fixed action in a smoothed or averaged background, it cannot give \eqref{eq:momentreset}. Imposing the mean as an extra deterministic reset still loses the nonzero variance and outgoing correlations. A direction reversal can even give $\avg{\B}=0$ despite both one-sided fields being nonzero. All powers of $k_\perp\rho$ do not repair these problems: the background orbit and the eliminated phase are the issue. A weak-jump expansion may be useful for small $\jump{\B}/B$, but its per-event phase response and accumulation must be retained and bounded separately.
+
+\textbf{Symplecticity and cost.} A consistently derived gyroaveraged action can be Hamiltonian, and its discretization can be symplectic. A finite Taylor series or Pad\'e replacement must be put into that action consistently; averaging a force alone is insufficient. Ring evaluation costs $O(N_\theta)$ field samples per slow step; a spectral operator costs according to its grid/transform size. Those low costs are attractive, but \emph{the phase-eliminated sheet model is physically insufficient}. Verdict: useful in smooth volumes and for response physics; reject as a replacement for the sharp crossing.
+
+\subsection{What the local Graz codes actually contain}
+\label{sec:kim}
+The code/doc inspection supports a more precise classification than either ``all FLR expansion'' or ``full kinetics.'' Paths below are relative to \pathref{/home/ert/code/KAMEL}; these are inspected sources, not new solver tests.
+
+\begin{longtable}{p{.21\linewidth}p{.69\linewidth}}
+\toprule
+Path or evidence & Finding \\ \midrule\endhead
+\pathref{KIM/README.md} & Explicitly distinguishes integral-model WKB mode \texttt{KIM} (full Bessel) from \texttt{FLRE}; distinguishes the imported \texttt{flr2} response from \texttt{flr2\_benchmark}, an approximation of the nonlocal integral kernel.\\
+\pathref{KIM/src/dispersion/fun_input.f90}, routines \texttt{dispersion\_KIM}, \texttt{dispersion\_FLRE} & The former evaluates scaled complex $I_0,I_1$; the latter substitutes $e^{-b}I_0(b)\simeq1-b$ and $e^{-b}I_1(b)\simeq b/2$. A local WKB dispersion evaluation is not the global nonlocal solver.\\
+\pathref{KIM/src/kernels/kernel.f90} & Krook prefactors and assembly loop over $m_\phi=-m_{\phi,\max},\ldots,m_{\phi,\max}$. The cyclotron-harmonic basis is finite in configured calculations. FP assembly and an explicit FLR2 benchmark are separate paths.\\
+\pathref{KIM/src/kernels/integrands.f90}, \pathref{gauss_integrand_F1_rho_phi} & A nonlocal integrand contains $\cos(m_\phi\vartheta)$ and $\exp[-(x-x')^2/(4\rho_T^2(1-\cos\vartheta))]$, with basis functions at both $x$ and $x'$. This is not a finite local radial derivative stencil.\\
+\pathref{KIM/src/setup/config_mod.f90} & The periodic solver can match global-kernel approximations: dropping $k_s^2$ from Bessel arguments and taking zero electron FLR. Default periodic Fourier treatment is more complete; full FLR is mode dependent.\\
+\pathref{KiLCA/flre/conductivity/calc_D_array.f90} & Dispatches the supported expansion settings 1, 3, 5. These are the implementation's \texttt{flre\_order} labels, not a universal assertion that every output has error exactly $O((k_\perp\rho)^{N+1})$.\\
+\pathref{docs/verification/kilca-flr.md} & Documents a radial Larmor-displacement Taylor expansion and notes that quantitative remainders/coefficient identities remain pending. Defaults select no magnetic-drift conductivity suffix and generalized FP collision coefficients.\\
+\bottomrule
+\end{longtable}
+Markl's thesis \cite{markl} gives the model assumptions and resolves the apparent contradiction. Equations (4.11)--(4.16) use the \emph{lowest-order unperturbed gyro-orbit} and its action. Equations (5.5)--(5.7) Taylor-expand the \emph{radial} perturbation dependence and the moment-localization delta function; in the FP treatment angular dependence is not simply Taylor-expanded too. Section 13.1 replaces that radial expansion by a Fourier transform. The perturbation is expanded in the gyrophase/cyclotron, poloidal, and axial harmonics, and linear kinetic response is reconstructed through nonlocal moment kernels. The local EPS report independently explains the same distinction \cite{kimeps}.
+
+Schematically the collisionless linear equation and its characteristic solution are
+\begin{equation}
+ (\partial_t+\mathcal L_0)\delta f=S[\delta\Phi,\delta\A;f_0],\qquad
+ \delta f(z,t)=\int_{-\infty}^t S(\Phi_0^{s-t}z,s)\,\dd s,
+\end{equation}
+with collision operators changing the resolvent. Expanding the angles replaces time integration by harmonic susceptibilities; velocity moments give kernels $K(r,r')$. Full radial FLR/nonlocality can therefore be retained without time-stepping every gyroperiod of every response particle.
+
+\textbf{Accurate answer.} KIM's integral paths are linear kinetic response in a gyrophase harmonic basis with nonlocal radial FLR, subject to a specified cylindrical equilibrium, unperturbed-orbit approximation, collision model, finite harmonic truncation, and additional path-dependent reductions. KiLCA's inspected differential FLRE path is a radial FLR expansion that may retain angular/Bessel dependence. Neither supplies arbitrary, individual, nonlinear full-orbit trajectories through SPECTRE sheets. Using the actual piecewise sheet orbits as the unperturbed characteristics of a response kernel would be a new model. The transferable idea is analytic phase/orbit integration, not a ready-made orbit mover or a conserved-$\mu$ sheet closure.
+
+\section{Option B: a smeared ring and the loop-space alternative}
+\label{sec:ring}
+\subsection{A finite-size ring is a model choice, not an exact particle}
+A coherent variational finite-ring construction starts with a prescribed internal embedding $\boldsymbol\rho(\vartheta;a)$ and collective variables $a$, then averages the particle action:
+\begin{equation}\label{eq:ringaction}
+ L_{\rm ring}=\frac{1}{2\pi}\int_0^{2\pi}
+ \left\{\frac m2|\dot\X+\dot{\boldsymbol\rho}|^2
+ +q\A(\X+\boldsymbol\rho)\cdot(\dot\X+\dot{\boldsymbol\rho})\right\}\dd\vartheta.
+\end{equation}
+A gauge change adds the time derivative of $q\avg{\chi(\X+\boldsymbol\rho)}$; this action is gauge consistent when the internal motion is included. In contrast, inserting $\avg{\B}$ into a point Lorentz force, or averaging $|\p-q\A|^2$ while using one fixed physical $\p$ at every ring point, need not define the intended gauge-consistent reduction. Constraint forces that hold a ring rigid alter the physics too.
+
+For a ring whose plane contains the sheet normal, take normal center distance $d$, normal ring amplitude $a>0$, and $x_n=d+a\cos\vartheta$. The fraction of the ring on the plus side is \proved{}
+\begin{equation}\label{eq:ringfraction}
+ f_+(d)=\begin{cases}0&d\le-a,\\
+ \tfrac12+\pi^{-1}\arcsin(d/a)&|d|<a,\\
+ 1&d\ge a.\end{cases}
+ \qquad f_+'(d)=\frac{1}{\pi\sqrt{a^2-d^2}}\quad(|d|<a).
+\end{equation}
+Thus $\avg{\B}=(1-f_+)\B_-+f_+\B_+$ is continuous, but its derivative diverges at ring tangency. Ring averaging spreads the sheet over a width $2a$; it does not generically make it smooth with bounded derivatives. A disk or smooth radial density can soften the endpoint singularity, at the price of another changed sampling model.
+
+The rigid, uniformly populated ring has no distinguished instantaneous phase: shifting its labels leaves \eqref{eq:ringaction} unchanged. A gyroaveraged ring reduction therefore has a conserved conjugate action. This prevents its deterministic prediction from distinguishing the different incident velocities at identical $(\X,u,J)$ in \eqref{eq:momentreset}. A closure that applies only \eqref{eq:muavg} loses its variance; a fixed-action ring generally loses even that mean. Direction averaging can vanish or yield a gyration axis unrelated to either actual one-sided field. A scalar average of $B$ avoids vector cancellation but still loses the direction-reset physics.
+
+\textbf{Verdict.} A Hamiltonian finite-size model can regularize selected coefficients and support large slow steps, with $O(N_\vartheta)$ samples per step. It is not an exact description of a point particle near a sheet. Retaining enough internal modes and a tagged phase could recover more physics, but then it becomes a phase-resolved representation rather than the original smeared-ring closure. Symplecticity of the chosen ring model does not make its orbit losses correct.
+
+\subsection{Burby's loop space: exact embedding versus formal slow manifold}
+Burby \cite{burby} embeds any smooth phase-space dynamics $\dot z=F(z)$ into evolving loops $\widetilde z(\vartheta,t)$ and a phase $S$:
+\begin{equation}\label{eq:loop}
+ \partial_t\widetilde z+\omega[\widetilde z]\partial_\vartheta\widetilde z
+ =F(\widetilde z),\qquad \dot S=\omega[\widetilde z].
+\end{equation}
+Reconstructing the \emph{tagged point} $z(t)=\widetilde z(S(t),t)$ gives $\dot z=F(z)$ by the chain rule. This exact embedding does not require dropping phase. In canonical coordinates a suitable loop action illustrates the same structure:
+\begin{equation}\label{eq:loopaction}
+ \mathcal A=\int\avg{\p(\vartheta)\cdot\partial_t\x(\vartheta)
+ -H(\x,\p)+\dot S\,\p(\vartheta)\cdot\partial_\vartheta\x(\vartheta)}\,\dd t.
+\end{equation}
+Variation in $\p,\x$ gives \eqref{eq:loop}; variation in $S$ conserves the loop relabeling momentum $\avg{\p\cdot\partial_\vartheta\x}$. The choice of $\dot S$ is a phase gauge here. This loop invariant is not automatically the physical one-sided $m v_\perp^2/(2B)$ of a tagged sheet-crossing particle.
+
+\lit{} Burby's formal slow manifold recovers GC dynamics to all orders in its smooth strong-field expansion, with a restricted Hamiltonian structure. That is a formal asymptotic statement, not convergence of a finite circular-ring truncation at a discontinuity. At the sheet different loop labels can cross at different times; $F(\widetilde z(\vartheta))$ develops nonsmooth phase dependence, and a circular shape need not remain circular. For a generic phase force jump the Fourier coefficients have only algebraic decay, approximately $1/|k|$ for a step. Consequently a fixed small number of Fourier modes is not justified uniformly by the smooth slow-manifold expansion.
+
+An exact tagged-loop treatment would retain \eqref{eq:momentreset}, while the gyro-symmetric slow-manifold restriction cannot be assumed to do so. Spectral/two-scale loops may be productive for \emph{smooth-volume} phase-accurate propagation. At a sharp sheet they require explicit phase events, sufficient mode resolution, or a locally exact sheet loop. Cost then depends on modes and event geometry, not just slow step count. Verdict: useful language for constructing an envelope with internal phase, not a proved sheet regularization or an immediate low-cost orbit replacement.
+
+\section{Option C1: exactly canonical uniform-field gyrocenter coordinates}
+\label{sec:canonical}
+Fix a constant nonzero field $\B=B\bunit$ and a right-handed orthonormal frame $(\mathbf e_1,\mathbf e_2,\bunit)$. Keep the signed frequency and action
+\begin{equation}
+ \Omega=\frac{qB}{m},\qquad
+ J=\frac{m w^2}{2\Omega}=\frac{m\mu}{q},\qquad
+ \v=u\bunit+w(\cos\theta\,\mathbf e_1-\sin\theta\,\mathbf e_2).
+\end{equation}
+For negative $q$, $J$ is negative in this orientation convention; $\Omega J=\mu B>0$. A positive gyroaction could instead be used after reversing the phase convention. Define
+\begin{equation}\label{eq:uniformcenter}
+ \X=\x-\frac{\bunit\times\v}{\Omega},\quad
+ Q_1=X_1,\ P_1=-qB X_2,\quad
+ Q_2=X_\parallel,\ P_2=m u,\quad Q_3=\theta,\ P_3=J.
+\end{equation}
+These are \emph{exact} local canonical coordinates of the uniform-field particle, with six dimensions, not merely a four-dimensional GC approximation. They are singular at $w=0$ because polar phase is undefined there; Cartesian oscillator variables cover that case.
+
+\textbf{Proof.} In physical $(\x,\v)$ coordinates the particle brackets are
+\begin{equation}
+ \{x_i,x_j\}=0,\quad\{x_i,v_j\}=\delta_{ij}/m,
+ \quad\{v_i,v_j\}=\frac q{m^2}\epsilon_{ijk}B_k.
+\end{equation}
+For $\bunit=\mathbf e_z$, $X_1=x+v_y/\Omega$, $X_2=y-v_x/\Omega$. Direct substitution yields
+\begin{equation}
+ \{X_1,X_2\}=-\frac1{qB},\quad
+ \{X_\parallel,m u\}=1,\quad\{\theta,J\}=1,
+\end{equation}
+and all mixed brackets between these three pairs vanish. For the phase bracket use $\theta=\operatorname{atan2}(-v_y,v_x)$ and $J=m(v_x^2+v_y^2)/(2\Omega)$. Hence $D C\,\Pi\,D C^T$ is the canonical block matrix. This was checked exactly by SymPy. Equivalently, up to a gauge differential, the transformed one-form is
+\begin{equation}\label{eq:canonicalaction}
+ \Gamma=P_1\dd Q_1+P_2\dd Q_2+J\dd\theta,
+ \qquad H=\frac{P_2^2}{2m}+\Omega J.
+\end{equation}
+The exact motion is
+\begin{equation}
+ Q_1,P_1,P_2,J=\text{constant},\quad
+ Q_2(t)=Q_2(0)+P_2t/m,\quad\theta(t)=\theta(0)+\Omega t.
+\end{equation}
+A fixed-time step can span any number of gyroperiods at constant arithmetic cost, while reconstructing the full phase and radius. This answers positively the question about exact canonical gyrocenter coordinates \emph{for a uniform field}. Uniformity is essential to the simple formulas.
+
+In a slowly varying field a local frame depends on position and its derivatives produce gyrogauge connections and higher-order terms. A leading six-dimensional GC action is
+\begin{equation}\label{eq:gc6}
+ \Gamma_6=(q\A+m u\bunit-J\mathcal R)\cdot\dd\X+J\dd\theta-H_{\rm gc}\dd t,
+\end{equation}
+where $\mathcal R$ is defined so that a frame rotation by $\chi$ changes $\theta\mapsto\theta+\chi$, $\mathcal R\mapsto\mathcal R+\nabla\chi$. The combination $\dd\theta-\mathcal R\cdot\dd\X$ is invariant. Higher-order corrections must be kept consistently with the intended accuracy \cite{carybrizard}. Substituting a position-dependent $B,\bunit$ into \eqref{eq:uniformcenter} alone is not an exact canonical transformation and cannot be advertised as one.
+
+\section{The exact helix--plane crossing map}
+\label{sec:helix}
+Within one constant-field side, let $u=\v_0\cdot\bunit$ and $\v_{\perp0}=\v_0-u\bunit$. Integration of the Lorentz equation gives \proved{}
+\begin{align}\label{eq:helix}
+ \v(t)&=u\bunit+\cos(\Omega t)\v_{\perp0}
+                  +\sin(\Omega t)(\v_{\perp0}\times\bunit),\\
+ \x(t)&=\x_0+ut\bunit+\frac{\sin(\Omega t)}{\Omega}\v_{\perp0}
+       +\frac{1-\cos(\Omega t)}{\Omega}(\v_{\perp0}\times\bunit).
+\end{align}
+The position derivative, Lorentz equation, and speed conservation have exact symbolic checks. Evaluate small arguments with stable sinc/half-angle formulas, and reduce very large phases carefully; analytic rotation does not remove floating-point argument-reduction error.
+
+For a plane $g(\x)=\n\cdot(\x-\x_\Sigma)=0$ with $\n\cdot\bunit=0$, write $d_0=g(\x_0)$, $\omega=|\Omega|$, and
+\begin{equation}\label{eq:plane}
+ g(\x(t))=d_0+a\sin(\omega t)+k(1-\cos(\omega t)),\quad
+ a=\frac{\n\cdot\v_0}{\omega},\quad
+ k=\frac{\n\cdot(\v_0\times\bunit)}{\Omega}.
+\end{equation}
+Let $r=\sqrt{a^2+k^2}$, $\delta=\operatorname{atan2}(a,-k)$, and $c_0=d_0+k$. The roots obey
+\begin{equation}\label{eq:planeroot}
+ \omega t=\delta\pm\arccos(-c_0/r)+2\pi\ell.
+\end{equation}
+No roots exist if $|c_0|>r$. Equality is grazing; $r=0$ must be classified separately. Among roots in the allowed time interval choose the earliest strictly future \emph{transversal} crossing consistent with the active side. Use an oriented event state to exclude the root just consumed, rather than physically moving the particle off the sheet. A tolerance must not suppress a genuine short recrossing. For a plane with $\bunit\cdot\n\ne0$, the extra linear term $ut\bunit\cdot\n$ makes the intersection transcendental; root bracketing and extrema isolation replace \eqref{eq:planeroot}.
+
+At the exact physical crossing $\x_c,\v_c$, recompute the plus-side variables. Using the sheet frame of Section~\ref{sec:mu}, $\mathbf t_+=\n\times\bunit_+=c\mathbf t-s\bunit_-$, one gets
+\begin{align}\label{eq:fullreset}
+ u_+&=uc+ws\cos\theta,\quad
+ w_+^2=(wc\cos\theta-us)^2+w^2\sin^2\theta,\\
+ \theta_+&=\operatorname{atan2}\bigl(w\sin\theta,\ wc\cos\theta-us\bigr),\\
+ J_+&=\frac{m w_+^2}{2\Omega_+},\quad
+ \X_+=\X_-+\frac{\bunit_-\times\v_c}{\Omega_-}
+                      -\frac{\bunit_+\times\v_c}{\Omega_+}.
+\end{align}
+Choose the continuous phase branch where possible, although $J=0$ requires another chart. The jump in $\X$ is a coordinate-center displacement, not a particle displacement. After converting to the canonical pairs \eqref{eq:uniformcenter} on each side, this specifies the event rechart completely, including $|B|$ changes. It satisfies
+\begin{equation}
+ \tfrac12m u_-^2+\Omega_-J_-=\tfrac12m u_+^2+\Omega_+J_+=\tfrac12m|\v_c|^2.
+\end{equation}
+In particular it gives \eqref{eq:witness} exactly. No scalar energy solve or fixed-$\mu$ reset is needed.
+
+\textbf{Recrossings.} Switch the side label, propagate with that side's helix, find its first return, and repeat until the target physical time or a genuine exit from the local sheet neighborhood. A single incoming-to-outgoing reset is not a complete scattering encounter. Magnetic reversals and strongly rotated fields may produce alternating meanders; their topology is determined by these events. The exactly tangent, uniform plane actually produces periodic normal motion for every non-grazing orbit that crosses it, as shown next. Curvature and field variation can release the particle; a planar frozen model cannot manufacture that release.
+
+\section{Precisely which crossing maps are symplectic?}
+\label{sec:sympl}
+\subsection{Fixed physical time, event sections, and coordinate resets}
+Let $\omega=-\dd(\p\cdot\dd\x)$ and use the convention $\iota_{X_H}\omega=\dd H$. In canonical coordinates its matrix is $\mathbb J=\left(\begin{smallmatrix}0&I\\-I&0\end{smallmatrix}\right)$. A matched continuous $\A$ makes $H$ continuous across the sheet. Its tangential derivatives agree, so
+\begin{equation}
+ \jump{\nabla_{(\x,\p)}H}=(\gamma\n,0),
+ \qquad\gamma=\jump{\partial_n H}.
+\end{equation}
+Although the physical crossing state has no jump, its \emph{variations at a common physical time} have an event-time correction. With $\ell=(\n,0)$, the saltation matrix is \proved{}
+\begin{equation}\label{eq:saltation}
+ S=I+\frac{(X_{H,+}-X_{H,-})\ell^T}{\ell^T X_{H,-}}
+  =\begin{pmatrix}I&0\\-\gamma\n\n^T/v_n&I\end{pmatrix},
+ \qquad v_n=\v\cdot\n\ne0.
+\end{equation}
+Its lower-left block is symmetric, hence $S^T\mathbb J S=\mathbb J$. Smooth-side exact Hamiltonian flows on either side preserve the same form; composing them with $S$ proves that the \emph{fixed-time exact piecewise helix flow} is symplectic. This includes magnitude and direction jumps. In physical coordinates, where
+\begin{equation}
+ \omega_{\B}=m\sum_i\dd x_i\wedge\dd v_i
+ -q\left(B_x\dd y\wedge\dd z+B_y\dd z\wedge\dd x+B_z\dd x\wedge\dd y\right),
+\end{equation}
+SymPy independently verifies $S_{xv}^T\omega_{\B_+}S_{xv}=\omega_{\B_-}$ with
+\begin{equation}
+ S_{xv}=\begin{pmatrix}I&0\\
+ (q/m)(\v\times\jump{\B})\n^T/v_n&I\end{pmatrix}.
+\end{equation}
+The magnetic block has a minus sign in this convention; omitting it invalidates the check.
+
+The five-dimensional map ``propagate until the sheet'' is not itself a six-dimensional symplectic map. Its restriction to a fixed-energy transversal section is a four-dimensional Poincar\'e map preserving the restricted two-form. On the event hypersurface, the rechart \eqref{eq:fullreset} preserves the restricted form because both sides represent the same $(\x,\p)$ trace. Equivalently, the magnetic two-form jump vanishes on pairs of tangential position variations since $\jump{\B}\cdot\n=0$. It also preserves energy. The event-composition criterion in \cite{rejected} then applies.
+
+\textbf{Important qualification.} Algebraically extending $C_+\circ C_-^{-1}$ to arbitrary off-sheet states by keeping $\x,\v$ fixed is \emph{not} a canonical six-dimensional transformation between different uniform-field physical two-forms. The equality holds on the crossing section, and the event-time composition supplies the remaining condition. Exact uniform-field canonical charts do not license an arbitrary off-section reset. Similarly, composing numerically symplectic steps with a state-dependent fractional step is not automatically symplectic: derivatives of the event time and the step construction matter.
+
+At grazing, $v_n=0$ makes \eqref{eq:saltation} undefined. An exact flow can still exist, but a differentiable local event map can fail and event topology can change. No theorem in this note asserts uniform symplectic event differentiability there. If a physical potential jump, electric impulse, or material reflection is added, the matching rules must be rederived; the magnetic formulas alone no longer apply.
+
+\subsection{Why numerical symplecticity does not by itself bound sheet errors}
+Exact planar helix propagation conserves $H$ for arbitrarily long times up to floating-point error. In a smooth Hamiltonian problem, small fixed-step symplectic errors often admit a modified Hamiltonian and bounded energy error under compactness, smoothness, and step assumptions \cite{gni}. A discontinuous-force flow has no automatic globally smooth modified Hamiltonian. Repeated root errors, patch changes, or model errors can dominate. The supplied prototype reports both accurate and inaccurate symplectic-looking sheet schemes, and its mathematical record limits the usual long-time theorem accordingly \cite{rejected,sheetreadme}. For a curved-sheet hybrid, bounded non-growing energy error remains a validation target, not a consequence already established here.
+
+\section{A stronger exact result: complete planar sheet cycles can be skipped}
+\label{sec:cycle}
+A phase-carrying helix method costs $O(N_c)$ cheap events. If $N_c\sim\Omega T$, it still visits every gyroperiod, though without dense field evaluations. The tangential planar sheet has extra integrability that removes this event count in its \emph{constant-parameter} model.
+
+Set $s=\n\cdot(\x-\x_\Sigma)$, $\y=\x-s\n$, and define the globally continuous gauge
+\begin{equation}\label{eq:sheetgauge}
+ \A(s)=s\mathbf a_\sigma,\qquad
+ \mathbf a_\sigma=\B_\sigma\times\n,
+ \quad\sigma=\operatorname{sign}s.
+\end{equation}
+Indeed $\nabla\times\A=\n\times\mathbf a_\sigma=\B_\sigma$ in either half-space, $\A(0)=0$, and its distributional curl has no delta term. Both tangential canonical momenta $\mathbf P=\p_t$ are conserved globally. The Hamiltonian reduces to \proved{}
+\begin{equation}\label{eq:normalH}
+ H_0=\frac{p_s^2}{2m}+U_\sigma(s;\mathbf P),\qquad
+ U_\sigma=\frac{|\mathbf P-q s\mathbf a_\sigma|^2}{2m}.
+\end{equation}
+This is a one-dimensional piecewise quadratic potential, coupled to the ignorable tangential coordinates through $\mathbf P$. Complete the square:
+\begin{equation}\label{eq:normalosc}
+ s_{e,\sigma}=\frac{\mathbf P\cdot\mathbf a_\sigma}{q B_\sigma^2},\quad
+ U_\sigma(s)=U_{\min,\sigma}
+ +\tfrac12m\omega_\sigma^2(s-s_{e,\sigma})^2,\quad
+ \omega_\sigma=\frac{|q|B_\sigma}{m}.
+\end{equation}
+Because $U(0)=|\mathbf P|^2/(2m)$, every transversal crossing has
+\begin{equation}
+ |v_n|=\sqrt{2E/m-|\mathbf P|^2/m^2},\qquad
+ \v_t(0)=\mathbf P/m.
+\end{equation}
+Tangential velocity is identical at every crossing; normal velocity alternates sign. Thus the side-specific $\mu$ is identical at each entry to the same side. A sheet can give a finite \emph{one-crossing} $\Delta\mu$ without producing independent cumulative scattering. Geometry/parameter variation is responsible for decorrelating this ideal cycle.
+
+Take entry to a side at $s=0$ with the appropriately signed $v_{n0}$. Its excursion is
+\begin{align}\label{eq:excursion}
+ s(t)&=s_e(1-\cos\omega t)+\frac{v_{n0}}\omega\sin\omega t,\\
+ p_s(t)&=m\left[s_e\omega\sin\omega t+v_{n0}\cos\omega t\right],\\
+ I_s(t)&=\int_0^t s(\tau)\,\dd\tau
+ =s_e\left(t-\frac{\sin\omega t}{\omega}\right)
+    +\frac{v_{n0}}{\omega^2}(1-\cos\omega t),\\
+ \Delta\y(t)&=\frac{\mathbf P}{m}t-\frac q m\mathbf a_\sigma I_s(t).
+\end{align}
+The first return to zero is determined without time stepping by
+\begin{equation}\label{eq:returntime}
+ \tan(\omega t_\sigma/2)=-\frac{v_{n0}}{\omega s_e},\qquad
+ \omega t_\sigma=\left[2\operatorname{atan2}(-v_{n0}/\omega,s_e)\right]_{(0,2\pi)}.
+\end{equation}
+At $s_e=0$, $t_\sigma=\pi/\omega$; at a true transversal entry the selected return is strictly between zero and one full period. Root selection, not just the tangent formula, fixes the branch. Energy implies $v_n(t_\sigma)=-v_{n0}$. Assemble the two sides with their alternating $v_n$ to obtain a period $T_c=t_++t_-$ and tangential displacement $\mathbf D_c$.
+
+For a state at a chosen oriented crossing, $N$ complete cycles give exactly
+\begin{equation}\label{eq:cycleskip}
+ \y_N=\y_0+N\mathbf D_c,\qquad
+ s_N=0,\quad\mathbf P_N=\mathbf P_0,\quad p_{s,N}=p_{s,0},\quad
+ t_N=t_0+NT_c.
+\end{equation}
+For an arbitrary fixed target time, first land at the selected oriented crossing, compute $N=\lfloor T_{\rm remaining}/T_c\rfloor$, apply \eqref{eq:cycleskip}, and propagate the remainder with at most two excursions. These are the exact solution of one autonomous $H_0$, so its fixed-time map is symplectic and energy preserving. Locally $N$ is an integer constant in differentiation; the remainder contains the derivatives of $T_c(\mathbf P,E)$. At integer-boundary changes the equivalent exact expressions must match. One cannot omit those remainder derivatives when constructing a tangent map.
+
+The normal motion is bounded because both $U_\pm$ grow quadratically at large $|s|$. A crossing orbit in this infinite planar model therefore keeps returning indefinitely, irrespective of whether the field directions reverse. The limiting noncrossing and grazing branches are different regimes. A frozen plane used indefinitely inside a real equilibrium would trap sheet-near particles artificially; exact cycle compression must not be confused with a physical curved-sheet confinement theorem.
+
+\subsection{Action, symplectic return map, and a possible slow-cycle Hamiltonian}
+For $E>U(0)$ define the full normal action
+\begin{equation}\label{eq:action}
+ I(\mathbf P,E)=\frac{W(\mathbf P,E)}{2\pi},\quad
+ W=2\left[\int_{s_-}^{0}\sqrt{2m(E-U_-(s))}\,\dd s
+              +\int_{0}^{s_+}\sqrt{2m(E-U_+(s))}\,\dd s\right].
+\end{equation}
+The outer turning points have their designated signs. Completing the square gives their explicit values
+\begin{equation}
+ s_-=s_{e,-}-A_-,\quad s_+=s_{e,+}+A_+,\quad
+ A_\sigma^2=\frac{2(E-U_{\min,\sigma})}{m\omega_\sigma^2}.
+\end{equation}
+Each action integral is elementary: with $\xi=s-s_e$ the momentum is $m\omega\sqrt{A^2-\xi^2}$, whose primitive is
+\begin{equation}
+ \frac{m\omega}{2}\left[\xi\sqrt{A^2-\xi^2}
+                   +A^2\arcsin(\xi/A)\right].
+\end{equation}
+Differentiate $W$ at fixed endpoints chosen as turning points; their boundary terms vanish because $p_s=0$. Hamilton's equations then give \proved{}
+\begin{equation}\label{eq:actionderivatives}
+ \partial_E W=T_c,\qquad
+ \nabla_{\mathbf P}W=-\mathbf D_c.
+\end{equation}
+Consequently the fixed-energy return map $(\y,\mathbf P)\mapsto(\y+\mathbf D_c,\mathbf P)$ is symplectic: $\partial\mathbf D_c/\partial\mathbf P=-W_{\mathbf P\mathbf P}$ is symmetric. An extended section also carries $t$ and $-E$; the timing and spatial increments follow from the same $W$, rather than independent approximations.
+
+Inverting $I(\mathbf P,E)$ on a transversal branch gives an exact local Hamiltonian $E=\mathcal E(\mathbf P,I)$ and a conjugate normal phase $\psi$. Its frequencies obey
+\begin{equation}\label{eq:normalfreq}
+ \partial_I\mathcal E=\frac{2\pi}{T_c},\qquad
+ \nabla_{\mathbf P}\mathcal E=\frac{\mathbf D_c}{T_c}.
+\end{equation}
+Canonical tangential coordinates in this action-angle chart include oscillatory shifts from the generating function; the physical $\y$ is reconstructed from them. For slowly changing sheet position, orientation, and fields, this suggests \conj{} a \emph{sheet-cycle} averaged Hamiltonian with phase $\psi$ retained for reconstruction. Its fast action is $I$, not the one-sided $J=m\mu/q$. Slow parameter dependence introduces connection terms and may create separatrix/grazing transitions. A controlled canonical transformation and an event-topology-dependent transition theory remain to be derived. This is a specific route to eliminating the time scale for persistent sheet encounters, beyond merely making each crossing cheap.
+
+\section{Curvature errors and how to preserve a Hamiltonian approximation}
+\label{sec:errors}
+An exact constant-field crossing is exact for its model. It is not exact for a curved sheet with varying fields. Suppose an encounter occupies a region of diameter $\ell$ and duration $h$, with uniformly bounded field derivatives in each volume. Freezing the one-sided fields incurs $|\delta\B|/B=O(\ell/L_B)$. For $\omega h=O(1)$, a variation-of-constants estimate for the rotating velocity gives
+\begin{equation}\label{eq:localerror}
+ \frac{|\delta\v|}{|\v|}=O(\omega h\,\ell/L_B),\qquad
+ |\delta\x|=O(|\v|h\,\omega h\,\ell/L_B).
+\end{equation}
+This is an upper estimate, not a universal nonzero leading coefficient. Taking $h=O(1/\omega)$ and $\ell=O(r_g)$ gives first-order local velocity accuracy $O(\epsilon)$ and position error $O(r_g\epsilon)$. It includes parallel travel $u/\omega$: using only $\rho_\perp/L_B$ can underestimate the error for passing particles.
+
+The tangent plane differs from a curved surface by $\delta g=O(\ell^2/R_\Sigma)$. Linearizing a simple event gives
+\begin{equation}\label{eq:eventerror}
+ \delta t_c=-\frac{\delta g(\x_c)}{v_n},\qquad
+ \omega|\delta t_c|=O\left(\frac{\ell^2}{\eta r_g R_\Sigma}\right).
+\end{equation}
+For a gyro-scale excursion this is $O(\epsilon/\eta)$, which alters the entering phase and therefore $\Delta\mu$. A small jump may reduce a particular sensitivity coefficient, but no uniform grazing estimate follows. Near a tangency a perturbed sheet can create or remove two events, invalidating a comparison that assumes the same sequence.
+
+Over many excursions neither \eqref{eq:localerror} nor \eqref{eq:eventerror} implies a time-independent global $O(\rho/L)$ error. Coherent accumulation can scale with event count; chaotic tangent flows can amplify it. Frozen cycles lasting $h\gg1/\omega$ also change their tangential location by $O(|\v|h)$, so $\ell$ is no longer $O(r_g)$. The macro interval must be limited by smooth variation and event topology, not solely by a small gyroradius at the starting point.
+
+\subsection{Two constructions, with different geometric claims}
+\textbf{Cheap physical freezing.} Sample $\B_\pm$ and $\n$ at the current state, use the local exact map, and refreeze at the next event. This is a sensible approximation to test. It is generally \emph{not exactly symplectic} as a global numerical map: derivatives of the state-dependent frozen parameters are absent from the local fixed-parameter flow. No proof of exact canonical charts for each frozen field changes that fact.
+
+\textbf{Hamiltonian patch construction.} Define a single, continuous approximate vector potential $\A_h(\x)$ across a prescribed spatial patch/mesh, and propagate the autonomous approximate Hamiltonian
+\begin{equation}
+ H_h=|\p-q\A_h(\x)|^2/(2m).
+\end{equation}
+A matched piecewise affine $\A_h$ gives constant fields in each patch and exact helix pieces. Continuity of $\A_h$ and the event construction establish symplecticity of its exact fixed-time flow. An arbitrary set of independently sampled constant fields will not necessarily admit such a continuous $\A_h$; normal flux consistency at patch faces is required. Replacing the actual curved sheet by a fixed faceted geometry is then a specified Hamiltonian model error that must converge with refinement. Curved-face helix intersections need certified root searches. A local Hamiltonian approximation is therefore more constrained than just freezing $\B$.
+
+A second Hamiltonian route is to split the matched full potential as $\A=\A_0+\delta\A$, with $H_0$ the exactly integrable planar sheet:
+\begin{equation}\label{eq:Hsplit}
+ H=H_0+H_1,\qquad
+ H_1=-\frac q m(\p-q\A_0)\cdot\delta\A
+                     +\frac{q^2}{2m}|\delta\A|^2.
+\end{equation}
+Exact or properly symplectic subflows compose symplectically, for example by a Strang construction. But $H_1$ is not generally explicitly integrable, and its small amplitude does not eliminate fast commutators with $H_0$: ordinary splitting has no automatic uniform accuracy for $\omega h\gg1$. Cycle averaging, interaction-picture integration, or geometric multirevolution composition is still needed. Chartier--Faou \cite{piecewise} supplies precedent for exact local subsystem propagation of an approximated Hamiltonian; it does not prove this curved-sheet charged-particle extension.
+
+\textbf{Maturity and verdict.} Uniform helices, the planar sheet reduction, and fixed-model symplecticity are established. A globally consistent local-potential approximation, high-order curvature corrections, and a sheet-cycle slow Hamiltonian are proposals. The expected cost is a few field/geometry evaluations per macro step plus exact algebra, with full-orbit fallback where needed. The achievable speed-up and long-time bias have not been established for SIMPLE.
+
+\section{Embedding a phase-carrying map in SIMPLE's volume integrator}
+\label{sec:simple}
+The inspected \pathref{/home/ert/code/SIMPLE-remove/src/orbit_symplectic_base.f90} stores a four-component state $z=(r,\theta_{\rm pol},\varphi,p_\varphi)$ plus auxiliary $p_\theta$ information. The canonical-coordinate paper \cite{simple} explicitly omits the ignorable gyroaction--phase term for fixed action. Hence attaching a phase counter to the current four-dimensional step is not by itself a six-dimensional symplectic construction. Normalization also needs care: local source comments in \pathref{src/spectre_sympl_orbit.f90} and assignments to \texttt{f\%mu} use code-specific factors; this note's SI $\mu,J$ are not direct namelist values.
+
+A concrete research implementation would proceed as follows; these are design requirements, not repository changes made here.
+\begin{enumerate}
+\item \textbf{Retain $(J,\theta)$ and frame information in the volumes.} Work with a six-dimensional canonical extension of the same reduced action, including the $J$-dependence of the existing canonicalization and any gyrogauge connection. Require a nondegenerate reduced form and smooth-volume ordering throughout every GC macro step.
+\item \textbf{Detect entry before any particle ring touches the sheet.} A sufficient local exclusion condition is $|g(\X)|$ larger than the normal ring amplitude plus bounds for center drift, curvature, lift error, and the whole candidate macro interval. Checking the GC center alone at the step endpoints can miss an entire ring encounter. Use hysteresis to prevent switch chatter.
+\item \textbf{Use a canonical lift on a transition section.} Let $T_\epsilon$ map GC variables to particle $(\x,\p)$. Require $T_\epsilon^*\Gamma_{\rm fo}=\Gamma_{\rm gc}^{(k)}+\dd F+O(\epsilon^{k+1})$ with both the Hamiltonian and chart derived consistently. A truncated asymptotic lift is only canonical to its stated order unless realized as an exact canonical map (for example, a generating-function or Lie-flow construction). Energy matching alone does not prove this pullback identity.
+\item \textbf{Evolve the complete sheet encounter.} Use the matched-potential exact local propagator, helix events, and, when valid, complete-cycle acceleration. Keep physical phase and the incident/outgoing correlations. Fall back to the resolved sharp full-orbit solver at grazing, short return events beyond tolerance, or loss of patch ordering.
+\item \textbf{Return only to a smooth, ring-clear region.} Apply the inverse canonical transition, rather than fitting a new $\mu$ and discarding phase. Preserve symmetry momenta through the same transformation. Couple event times in a section/extended-phase formulation; an arbitrary state-dependent mixture of symplectic fixed-time steps is insufficient.
+\end{enumerate}
+
+\subsection{The volume phase must come from the same discrete Hamiltonian}
+In six-dimensional canonical variables $(Q,P,\theta,J)$, a gyroangle-independent Hamiltonian obeys
+\begin{equation}
+ \dot J=0,\qquad\dot\theta=\partial_J H(Q,P,J),\qquad
+ \dot Q=\partial_P H,\quad\dot P=-\partial_Q H.
+\end{equation}
+The frequency includes all retained geometric/higher-order terms, not just $qB(\X)/m$. If a volume step has a type-2 generating function
+\begin{equation}\label{eq:generating}
+ S_h(Q_0,P_1,J_1)+\theta_0J_1,
+\end{equation}
+then its extension must use
+\begin{equation}
+ P_0=\partial_{Q_0}S_h,\quad Q_1=\partial_{P_1}S_h,
+ \quad J_0=J_1,\quad\theta_1=\theta_0+\partial_{J_1}S_h.
+\end{equation}
+For a symplectic Euler example, $S_h=Q_0\cdot P_1+hH(Q_0,P_1,J_1)$, so $\Delta\theta=h\partial_JH$ at the same implicit state. For a higher-order variational or Gauss construction, differentiate its discrete action or include the pair in the same canonical stage equations. An unrelated phase quadrature can violate the mixed $J$ derivatives even if the four-dimensional fixed-$J$ map is symplectic.
+
+\textbf{Phase accuracy is more demanding than center accuracy.} If $\delta\Omega$ is the frequency error and $\delta t$ the time error before the next encounter, then
+\begin{equation}\label{eq:phaseerror}
+ \delta\theta(t)=\int_0^t\delta\Omega\,\dd\tau+\Omega\delta t
+                  +\text{frame/initial-lift errors}.
+\end{equation}
+A phase error of order one can change the next $\mu$ reset even with an excellent guiding-center position. No fixed finite-order volume model is proved to keep deterministic gyrophase accurate over arbitrary confinement times. Higher-order phase normal forms, two-scale reconstruction, or periodic full-orbit calibration might be required; calibration itself must not silently destroy geometry. Ensemble validity after phase decorrelation is a separate, weaker question.
+
+\obs{} The supplied hybrid prototype already shows small symmetry-momentum jumps from first-order switching, despite explicit energy matching \cite{sheetreadme}. That evidence makes canonical lift order and the number of switches central validation variables. A high-quality symplectic GC volume integrator cannot erase those transition errors.
+
+\section{Option C2: envelope following, stroboscopic averaging, and multirevolution composition}
+\label{sec:strobe}
+These methods attack the requested \emph{time} bottleneck directly. After removing the leading fast rotation, write schematically
+\begin{equation}\label{eq:fastslow}
+ \dot y=\epsilon f(y,\vartheta;\epsilon),\qquad \dot\vartheta=1,
+ \quad f(y,\vartheta+2\pi)=f(y,\vartheta).
+\end{equation}
+Here time is scaled to a reference gyroperiod; slow time is $O(\epsilon^{-1})$. For smooth $f$, the period map $\mathcal P_\epsilon$ is close to identity. Its formal logarithm defines a stroboscopic vector field,
+\begin{equation}
+ \mathcal P_\epsilon=\exp(2\pi\epsilon\mathcal F_\epsilon),\qquad
+ \mathcal F_\epsilon=\mathcal F_0+\epsilon\mathcal F_1+\cdots.
+\end{equation}
+The phase-dependent coordinate transformation makes this averaged flow agree at the chosen phase section. Recovering arbitrary-phase physical states still requires a reconstruction map.
+
+\lit{} Petzold's quasi-envelope method \cite{petzold} evaluates a full oscillation to estimate slow evolution. High-order formal averaging and numerical stroboscopic constructions are developed in \cite{higheraverage,stroboscopic}; these are distinct from the multirevolution paper \cite{mrcm}, whose authors are Chartier, Makazaga, Murua, and Vilmart. Calvo and Sanz-Serna should not be assigned authorship of that paper. Their stroboscopic work is relevant through the other citations.
+
+A simple centered slow-vector-field estimate is
+\begin{equation}
+ \mathcal F_\epsilon(y)\simeq
+ \frac{\mathcal P_\epsilon(y)-\mathcal P_\epsilon^{-1}(y)}{4\pi\epsilon}.
+\end{equation}
+Higher-order estimates use more period maps; each costs a micro-solve over a fixed number of periods rather than all periods in the macro interval. Such a vector estimate need not be Hamiltonian merely because the forward and backward maps are symplectic. A symplectic macro solver for an arbitrary estimated vector field is also not a proof of symplecticity of the whole construction.
+
+Multirevolution composition instead targets the $N$th iterate of a near-identity family $\Phi_\epsilon$ using a fixed number of scaled maps, schematically
+\begin{equation}\label{eq:mrc}
+ \Phi_\epsilon^N\simeq
+ \Phi_{\alpha_s(N)\epsilon}\circ\cdots\circ\Phi_{\alpha_1(N)\epsilon}.
+\end{equation}
+The weights obey composition order conditions and are not arbitrary powers of a single numerical period map. If every member of the chosen family is symplectic, the composition is symplectic. Cost is $O(s n_{\rm micro}T/H)$ rather than $O(n_{\rm micro}\Omega T)$ for macro step $H$; this saving depends on the near-identity family and valid parameter scaling. Negative coefficients or reverse microflows require correct reversed event handling.
+
+\textbf{Sheet test.} A full, exact, phase-resolved event microflow passes \eqref{eq:momentreset}; a period microflow that averages the sheet away fails. But event microflows need not form a uniformly smooth near-identity family across grazing or a change in return topology. Scaling a sheet's amplitude/geometry or the magnetic frequency while applying composition weights can alter which sheet events occur. The standard smooth averaging/MRC error estimates therefore do not transfer automatically to a sharp sheet.
+
+A better local base is the complete-cycle Hamiltonian \eqref{eq:normalH}, treating the sharp alternating force exactly. The perturbation is smooth parameter variation around that cycle, not the raw jump. On a fixed transversal branch, the exact cycle translation has displacement $O(r_g)$ and can be near identity on the equilibrium scale even though each one-sided $\mu$ reset is finite. This is a plausible setting for geometric MRC or cycle-action averaging. Validity near separatrix/grazing transitions and a canonical varying-parameter family remain \conj{}.
+
+\textbf{Verdict.} Best second-stage acceleration for particles that repeatedly encounter the sheet. More difficult than a simple crossing map, but it addresses the case where $N_c\sim\Omega T$. Use analytic cycles as the micro-solver when possible, preserve a tagged phase and section timing, and test event branches before claiming frequency-independent cost or bounded energy error.
+
+\section{Option C3: uniformly accurate two-scale and exponential methods}
+\label{sec:ua}
+For the scaled Lorentz system $\dot\x=\v$, $\dot\v=\epsilon^{-1}\v\times\B(\x)+\mathbf E(\x)$, a frozen local rotation permits an interaction-picture or two-scale representation. Schematically let $R(\tau)$ be the leading periodic rotation, set $\v=R(\tau)u$, and write
+\begin{equation}\label{eq:twoscale}
+ \partial_t U+\epsilon^{-1}\partial_\tau U=\mathcal F(U,\tau),
+ \qquad z(t)=\mathcal R\bigl(U(t,t/\epsilon),t/\epsilon\bigr).
+\end{equation}
+Exponential integration treats the phase advection exactly, often through Fourier modes in $\tau$. With well-prepared initial profiles, slow derivatives stay bounded; for instance an exponential Euler step has the structural form
+\begin{equation}
+ U_{n+1}=e^{-H\partial_\tau/\epsilon}U_n
+      +H\varphi_1(-H\partial_\tau/\epsilon)\mathcal F(U_n,\tau),
+ \quad\varphi_1(z)=(e^z-1)/z.
+\end{equation}
+Preparation is part of the method; setting every phase node to the initial physical state can excite rapid transients in the profile.
+
+\lit{} Chartier, Crouseilles, Lemou, M\'ehats, and Zhao \cite{ua3d} explicitly treat \emph{varying field direction}, first with constant intensity, then with a time reparametrization for variable intensity in the linear setting. Their paper compares two-scale, micro--macro, and multirevolution approaches, with reconstruction of the gyration. This removes any justification for rejecting the whole class merely because the stellarator direction varies. The inspected two-scale argument uses smooth fields (including a $C^3$ magnetic field), which excludes a sharp jump.
+
+The later inspected preprint by Wang, Miao, and Jiang \cite{twoexp} uses local linearization and two-scale exponential integration for smooth three-dimensional nonuniform fields. It establishes order-$r$ uniform bounds for its specified schemes and assumptions, $r=1,\ldots,4$, and improved maximal-ordering estimates. Here it is cited as the verified 2024 version of a 2023 arXiv preprint; no unverified journal assignment is supplied. Uniform accuracy on a fixed smooth-field interval is not an arbitrary-time confinement theorem or a symplecticity statement.
+
+\textbf{Sheet test and cost.} Retaining phase means this class can, in principle, reconstruct the incoming velocity needed in \eqref{eq:momentreset}. An unmodified large two-scale step over the sheet nevertheless sees a discontinuous phase force and cannot invoke the smooth error bound. A truncated Fourier profile must resolve the jump or split its phase events. A useful hybrid is a smooth-volume UA solver plus the exact sheet microflow; another is a two-scale profile built around the exact sheet cycle. Neither hybrid's uniform error theorem is established here. Cost is roughly $O(s N_\tau\log N_\tau)$ per macro step for spectral phase advection, plus field samples and event processing; $N_\tau$ may grow near discontinuities.
+
+Exponential integration of one term does not make the method symplectic. A Hamiltonian interaction picture is possible if the rotation/lift and the residual integrator are canonical, but the cited UA result does not supply that sheet construction. Verdict: credible alternative for phase-accurate smooth-volume propagation and a useful benchmark for C1; less direct than analytic local sheets, and its long-time geometry must be assessed independently.
+
+\section{Option C4: large steps, filtered Boris, and related splitting methods}
+\label{sec:large}
+The distinction between speed accuracy, center accuracy, and phase accuracy is visible in a uniform magnetic field. Crank--Nicolson (and the velocity rotation in Boris) uses a Cayley rotation with signed angle
+\begin{equation}\label{eq:cayley}
+ \alpha_h=2\arctan(\Omega h/2),\qquad
+ \v_{n+1}=\left(I-\tfrac h2G\right)^{-1}
+             \left(I+\tfrac h2G\right)\v_n,
+ \quad G\v=\Omega\v\times\bunit.
+\end{equation}
+It conserves speed exactly. For $|\Omega h|\gg1$ its rotation approaches a half-turn, instead of the actual $\Omega h$ modulo $2\pi$. Thus a large step cannot supply the physical incoming phase simply from its raw velocity endpoints. At a sheet a phase error $\delta\theta$ changes the reset by
+\begin{equation}\label{eq:musensitivity}
+ \partial_\theta\Delta\mu\,\delta\theta
+ =\frac m{B_+}(uc+ws\cos\theta)ws\sin\theta\,\delta\theta
+       +O(\delta\theta^2).
+\end{equation}
+Speed conservation does not control this error.
+
+\lit{} Hairer--Lubich--Wang's filtered Boris analysis \cite{filtered} works in the specified maximal ordering, with nonresonant steps $h\le C\epsilon$; it should not be cited as a theorem permitting arbitrarily large $h/\epsilon$. The later large-step study by Hairer--Lubich--Shi \cite{large} treats $0<\epsilon\le h^2\ll1$ for a mildly nonuniform strong field. It studies Boris, a related variational scheme, and a filtered variational scheme. The first two need a modified initial perpendicular velocity in that regime; filtered methods reproduce selected slow dynamics and long-time invariant behavior subject to their nonresonance and ordering assumptions. Removing the physical perpendicular velocity makes those raw states unsuitable for deterministic sheet matching.
+
+Wang--Zhao \cite{wangzhao} analyzes energy-preserving and splitting constructions and uniform errors for positions/parallel velocities in a smooth maximal-ordering regime. A uniform bound for these quantities is not a uniform physical-gyrophase error bound, and none of these smooth results establishes a sharp-sheet scattering map.
+
+\textbf{Governing geometric model.} A genuine variational version starts from a discrete particle action, for example a midpoint approximation to \eqref{eq:fo}. Filtered variational schemes modify the discrete kinetic/geometric terms consistently. Plain Boris is generally volume preserving but not canonical symplectic for nonuniform fields; the exact uniform case and specific variational modifications must be distinguished. An exact exponential velocity rotation evaluated at a frozen position is likewise not automatically a full canonical Hamiltonian flow, since the position--momentum coupling and spatial derivatives matter.
+
+\textbf{Sheet test.} A branch sampled once for an unsplit step has a local velocity defect $O(h\,q\v\times\jump{\B}/m)$ even if the base smooth method is high order \cite{rejected}. Filters do not remove it. Resolve or analytically locate crossings, carry the physical phase separately, and supply a consistent reconstruction; then the method is effectively a hybrid with C1 rather than a standalone sheet solution. Near a grazing event the required refinement can restore gyro-scale cost.
+
+\textbf{Cost and verdict.} A few force evaluations per large step and mature smooth-field analyses make these schemes valuable baselines. They are not the leading deterministic sheet option unless augmented by phase reconstruction and exact events. Their slow-orbit strengths are most relevant in volumes, while their raw large-step gyromotion is not a replacement for the sheet's full phase dynamics.
+
+\section{Option C5: asymptotic-preserving implicit movers}
+\label{sec:ap}
+For Crank--Nicolson define $\bar\v=(\v_{n+1}+\v_n)/2$, $\bar\x=(\x_{n+1}+\x_n)/2$. The basic implicit mover is
+\begin{equation}\label{eq:cn}
+ \frac{\x_{n+1}-\x_n}{h}=\bar\v,\qquad
+ m\frac{\v_{n+1}-\v_n}{h}
+ =q\bigl(\mathbf E(\bar\x)+\bar\v\times\B(\bar\x)\bigr)+\mathbf F_{\rm corr}.
+\end{equation}
+Dotting the second equation with $\bar\v$ gives an exact discrete kinetic-energy identity. In the present magnetic-only problem it conserves energy if $\bar\v\cdot\mathbf F_{\rm corr}=0$. For a uniform field the midpoint velocity has $\bar w^2=w^2/[1+(\Omega h/2)^2]$ while the geometrical CN polygon has the correct gyroradius. Those facts do not give the correct rotation phase \eqref{eq:cayley}.
+
+\lit{} Ricketson--Chac\'on \cite{ricketson} corrects the implicit CN dynamics to recover first-order GC drifts and the physical gyroradius in the large-step magnetized limit while preserving the discrete energy identity. Its effective-force construction separates parallel and perpendicular components. A representative projection form in its derivation is
+\begin{equation}\label{eq:rcforce}
+ \mathbf F_{\rm cons}=
+ \left(\bunit-\frac{\bar v_\parallel\bar\v_\perp}{|\bar\v_\perp|^2}\right)G_\parallel
+ +\left(I-\frac{\bar\v_\perp\bar\v_\perp^T}{|\bar\v_\perp|^2}\right)\mathbf G_\perp,
+\end{equation}
+where $\bunit\cdot\mathbf G_\perp=0$ and $\mathbf G$ is chosen to recover the desired averaged drift force. Its orthogonality to $\bar\v$ follows directly. This equation is not the full algorithm: selecting $\mathbf G$, treating small perpendicular denominators, and respecting the paper's additional numerical time scale/adaptive restrictions are essential. The paper's method is not just a generic projected $-\mu\nabla B$ force.
+
+Cohen, Friedman, Grote, and Vay's drift--Lorentz work \cite{cohen07,cohen09} interpolates full-orbit and drift behavior with physically appropriate gyro-radius and drift limits. It is a related AP strategy, with different details and conservation properties; no claim of exact symplecticity or equivalence to Ricketson--Chac\'on is made here. Neither smooth magnetization interpolation supplies the sheet-specific phase reset automatically.
+
+\textbf{Sheet test.} At a zero-width $B$ jump, $\nabla B$ is not an ordinary bounded force coefficient. The GC correction is derived in a smooth-field magnetized ordering; interpreting it as a delta force would insert a false sheet impulse. The actual particle has a bounded Lorentz force and continuous velocity. An unsplit implicit midpoint may conserve speed through a step yet use the wrong side for much of it, and its large-step phase is wrong even in the uniform limit. Thus neither asymptotic preservation nor energy conservation establishes \eqref{eq:momentreset}.
+
+A hybrid AP solver could retain its large steps where $r_g/L_B\ll1$, detect ring proximity, and use an exact local sheet/full-orbit event solve when ordering fails. This can be efficient when encounters are sparse. Persistent sheet motion may force the adaptive mover to resolve the gyroperiod; an analytic cycle extension would then be needed. The nonlinear solve requires several field evaluations per step, so its cost is $O(n_{\rm Newton}T/H)$ plus fallback work, not simply one cheap step per $H$.
+
+\textbf{Verdict.} A strong energy-conserving comparator and possible volume solver, especially if exact canonicality proves too expensive. Energy is a major long-time advantage in the stated magnetic problem. Exact symplecticity, correct deterministic sheet phase at large steps, and frequency-independent cost for persistent meandering are not established for this application.
+
+\section{Option C6: Pauli-particle slow manifolds and degenerate variational integrators}
+\label{sec:pauli}
+The classical Pauli-particle model used by Xiao--Qin \cite{pauli} has a fixed parameter $\mu_0$ and
+\begin{equation}\label{eq:pauli}
+ L_{\rm P}=\tfrac12m|\dot\x|^2+q\A\cdot\dot\x-\mu_0 B,
+ \quad H_{\rm P}=\frac{|\p-q\A|^2}{2m}+\mu_0 B,
+ \quad m\ddot\x=q\dot\x\times\B-\mu_0\nabla B.
+\end{equation}
+\lit{} Its smooth-field slow manifold is used to construct structure-preserving GC algorithms without the parasitic modes of naive discretizations of a degenerate first-order Lagrangian. The finite perpendicular action is represented by $\mu_0 B$ while the tracked slow trajectory has suppressed fast perpendicular velocity. This is an effective GC mechanism, not the full physical Lorentz orbit with its actual gyrophase.
+
+\textbf{Decisive sheet test.} If $B$ jumps, $\mu_0 B$ is a scalar potential step. Conservation of $H_{\rm P}$ would impose
+\begin{equation}
+ \frac{p_{n,+}^2-p_{n,-}^2}{2m}=-\mu_0\jump{B}
+\end{equation}
+under the usual tangential matching, possibly forbidding transmission and producing reflection. The physical magnetic step has no such potential energy and $\v$ is continuous. If magnitudes agree but directions rotate, this particular potential kick vanishes, but the missing phase still prevents \eqref{eq:witness}. Setting $\mu_0=0$ restores the true Lorentz Hamiltonian, together with its gyroperiod. A phase-preserving exact sheet module can bypass the bad Pauli interface, but then the acceleration belongs to that module, not to a Pauli-sheet slow manifold.
+
+Degenerate variational integrators (DVI) address a different issue. For a first-order phase-space Lagrangian $L=a_i(z)\dot z^i-H(z)$, a generic discretization can double the effective initial data and introduce parasitic modes. Ellison, Finn, Burby, Kraus, Qin, and Tang \cite{dvi} construct appropriately degenerate discrete actions for field lines and GC dynamics so the discrete system has the appropriate one-step character and preserved discrete symplectic form. Schematically,
+\begin{equation}
+ L_d(z_k,z_{k+1})\simeq a_i(z_{k+1})(z_{k+1}^i-z_k^i)-hH(z_{k+1}),
+\end{equation}
+with the rank and coordinate/gauge choices essential; that schematic expression alone is not a proof of proper degeneracy for every $a$.
+
+\textbf{Sheet test, cost, and verdict.} Applying DVI to the fixed-$\mu$ GC action \eqref{eq:gc} preserves the geometry of the wrong sheet model, so it still fails \eqref{eq:momentreset}. Applying it to a consistent six-dimensional reduced action in smooth volumes could be useful, with implicit-solve cost comparable to other symplectic GC steps. A Pauli slow-manifold integrator and DVI are therefore volume-integration options, not direct sharp-sheet fixes. Symplecticity cannot restore the missing gyroaction/phase response or remove a false potential jump.
+
+\section{Option C7: current-sheet scattering and separatrix jump maps}
+\label{sec:scatter}
+\lit{} Speiser's analytical current-sheet orbits \cite{speiser} provide a historical precedent for retaining nonadiabatic particle motion, often including field reversals, electric fields, and a small field normal to the sheet. B\"uchner--Zelenyi \cite{buchner} classifies regular and chaotic motion in magnetotail-like reversals through
+\begin{equation}
+ \kappa=\sqrt{R_{c,\min}/\rho_{\max}},
+\end{equation}
+comparing field-line curvature to gyro-radius. Their regimes and action changes depend on the smooth reversal geometry and additional field components. A SPECTRE sheet with $B_n=0$, finite one-sided $B$, and an actual discontinuity is not automatically the same $\kappa\to0$ problem. Distributional curvature at the jump does not define a useful finite $R_c$; smoothing introduces another ordering/width.
+
+Cary--Escande--Tennyson and Tennyson--Cary--Escande \cite{caryescande,tennyson}, and Neishtadt's verified two-degree-of-freedom treatment \cite{neishtadt87}, describe changes of adiabatic action at a separatrix in slow--fast Hamiltonian systems. A characteristic phase sensitivity involves a logarithm such as
+\begin{equation}
+ \Delta I=\epsilon A\ln(2\sin\pi\xi)+\text{geometry-dependent terms},
+ \quad 0<\xi<1,
+\end{equation}
+where the coefficient, deterministic terms, action definition, and applicable regimes require the specific separatrix model. This displayed dependence is not a universal $\Delta\mu$ formula or a fit for SPECTRE. A slowly varying normal-cycle Hamiltonian from \eqref{eq:normalH} is a natural place to seek that theory if it develops a separatrix. The mere act of crossing the spatial current sheet is not necessarily separatrix crossing in the fast phase portrait.
+
+A kinetic scattering map can be defined without those asymptotics. If $\mathcal S$ is a complete deterministic encounter map and $f_{\rm in}(\theta\mid Z)$ is a justified conditional phase distribution,
+\begin{equation}\label{eq:kernel}
+ K(Z'\mid Z)=\int\delta\bigl(Z'-\pi\mathcal S(Z,\theta)\bigr)
+                     f_{\rm in}(\theta\mid Z)\,\dd\theta,
+\end{equation}
+where $\pi$ discards selected fast variables. For an immediate local crossing this kernel follows from \eqref{eq:fullreset}, but a physical encounter kernel should include returns and an outgoing section. Its moments need not equal the uniform-phase moments in Section~\ref{sec:mu}. A fitted Markov kick independent of the previous encounter is an extra mixing assumption, not a consequence of deterministic chaos or equidistribution alone.
+
+\textbf{What it captures and loses.} A validated kernel can retain phase-averaged pitch/action redistribution, potentially the mean and variance, at $O(1)$ table/interpolation cost per complete encounter. It loses deterministic phase memory, orbit-by-orbit reversibility, and usually symplecticity after projection to fewer variables. Independent local kicks would falsely diffuse $\mu$ in the integrable planar cycle. Even matching two moments need not match losses, because the loss boundary can sample tails and correlations. Sampling the full phase and retaining it produces a deterministic extended map again, close to C1.
+
+\textbf{Verdict.} A useful later ensemble model if NCSX encounters demonstrably mix and loss fractions are the only target. Derive or measure the joint outgoing distribution at physical sections, conserve energy marker by marker, and validate memory assumptions. Do not use a universal separatrix formula as a substitute for the sharp-sheet crossing law.
+
+\section{Strong-gradient gyrokinetics and other relevant ingredients}
+\label{sec:other}
+Dimits's strong-gradient gyrokinetics \cite{dimits} relaxes ordinary fluctuation-amplitude assumptions using small fluctuating drift velocities and additional orderings suitable for edge/profile gradients. The inspected abstract explicitly distinguishes a profile scale $L_p$ and the magnetic-field scale $L_B$, including a subsidiary ordering $L_p/L_B=O(\epsilon)$. It does not establish a controlled gyroaverage over an order-one discontinuity in the \emph{background magnetic direction}. The necessary magnetized orbit and frequency separation remain. It is useful for sharp thermodynamic profiles with a smoother confining field, but neither ``strong gradient'' in the title nor full FLR implies validity for the SPECTRE sheet.
+
+\textbf{Analytic oscillatory quadrature and Hamiltonian splitting.} Exact uniform rotations, Filon-type quadrature of smooth residual forces along helices, and interaction-picture splitting can reduce field-evaluation cost while retaining phase. A canonical residual flow/generating function is needed for symplecticity, and a quadrature whose panel spans an unknown force jump must split at that jump. Applying these ideas to \eqref{eq:Hsplit} or to the exact normal cycle is more relevant than smoothing the sheet in a GC equation. Their curvature-corrected implementation is not derived to a usable high order here.
+
+\textbf{Hamiltonian interpolation.} Constructing a continuous approximate $\A$ and exactly propagating local quadratic Hamiltonians offers an independent route to bounded energy error for the approximate model; Chartier--Faou \cite{piecewise} analyzes related subsystem constructions. For magnetic particles the geometry and the nonseparable $\p\cdot\A$ terms add constraints. Exact propagation of a wrong or nonconverged approximate equilibrium can still give wrong losses.
+
+\textbf{Resolved symplectic full orbit with time transformation.} For an extended Hamiltonian $\mathcal K=g(\x)(H+p_t)$, $g>0$, one has $\dd t/\dd\tau=g$ on its physical shell. A fixed fictitious-step Gauss--Legendre method is symplectic in extended phase space for the smooth transformed problem. It can concentrate work near an encounter, as in the prototype, but it does not itself analytically eliminate gyromotion. Sharp event matching and physical endpoint sampling require their own construction. The supplied record also derives the numerical-shell defect $H-E\sim K/g$, which can be amplified when $g$ is small \cite{rejected}. It remains an important robust fallback, not evidence of an asymptotic gyroperiod-free mover.
+
+These ingredients suggest a hierarchy: exact local oscillatory dynamics first, smooth residual or cycle averaging second, and statistical projection only after deterministic benchmarks establish its regime. A purely phase-independent Lagrangian cannot recover a deterministic map that distinguishes incoming phases at identical retained state; adding enough internal variables can, but changes the proposed model.
+
+\section{Concrete validation against the full-orbit reference}
+\label{sec:validate}
+Validation has to separate local analytic correctness, approximation order, long-time bias, and speed. The scratch checks in Appendix~\ref{app:checks} address only the first category. They do not establish a production SIMPLE implementation or its NCSX confinement accuracy.
+
+\subsection{Local physics and geometry tests}
+Use a standalone sharp-sheet full-orbit reference with exact branch switching and independently converged RK tolerances. For each constant-field side, check the helices against a high-accuracy smooth-side ODE solution; at events compare physical $\x,\v$, all three components of canonical momentum in a matched gauge, energy, and \eqref{eq:fullreset}. Sweep field rotation including near reversal, magnitude ratio, charge sign, parallel pitch, both normal crossing directions, and incoming phase. Include $w=0$ using a nonsingular chart and approach grazing from either side.
+
+For ensembles, compare the complete one-event distribution and the two explicitly defined conditional moments \eqref{eq:muavg}, \eqref{eq:fluxstats}. A test of only \eqref{eq:witness} can miss phase errors. For repeated planar encounters verify that same-side $\mu$ returns identically and that no artificial variance grows; compare explicit events with complete-cycle compression for large $N$. Validate complete-encounter exits, rather than assuming the first sheet crossing is an exit.
+
+Check the tangent map at \emph{fixed physical time}, including event derivatives, and the restricted fixed-energy section form separately. Use analytic/automatic derivatives where available and centered finite differences away from event-topology changes as an independent numerical diagnostic. Inspect $D\Phi^T\omega D\Phi-\omega$ in the same coordinates used by the method. Do not compare a canonical matrix to an untransformed velocity-coordinate Jacobian.
+
+\subsection{Order and transition tests in smooth/curved fields}
+Introduce known curvature/field-gradient families with decreasing $r_g/L_B$ and $r_g/R_\Sigma$ at fixed jump. Keep incoming transversality bounded first, then test grazing separately. Record errors in crossing time, entering phase, velocity, one-sided moments, return period, displacement, and encounter exit. A first-order frozen model should show the conditional scalings in Section~\ref{sec:errors}; do not infer global convergence from a single phase or from energy alone. Compare controlled approximate-$\A$ refinement, macro step $H$, lift order, phase quadrature/order, and full-orbit fallback frequency independently.
+
+For a GC/particle round trip, test the pulled-back two-form, physical reconstruction, phase, energy, and the exact symmetry momenta. An energy projection should be assessed as an additional map, not hidden inside a canonicality claim. Extend orbit duration at fixed numerical parameters to distinguish bounded energy error, drift, and a random walk. Covariances between encounter errors must be measured before claiming $\sqrt N$ accumulation.
+
+\subsection{tok2vol: the exact toroidal momentum oracle}
+In a stationary axisymmetric matched gauge, the full-orbit conserved momentum is
+\begin{equation}\label{eq:pzeta}
+ p_\zeta=m\v\cdot\frac{\partial\x}{\partial\zeta}
+              +q\A\cdot\frac{\partial\x}{\partial\zeta},\qquad\dot p_\zeta=0.
+\end{equation}
+In cylindrical coordinates this is $mR v_\phi+qR A_\phi$; covariant components must not be confused with physical components. Use the actual tok2vol equilibrium and matching gauge contract, not the toy planar sheet's translation momenta. A flat Cartesian tangent patch need not preserve global toroidal symmetry, even if it is locally symplectic. An axisymmetric approximate-$\A$ model or cylindrical normal-form construction is preferable if exact $p_\zeta$ preservation is a goal.
+
+Use full orbit everywhere as the reference. Compare sparse sheet encounters and markers initialized within a few gyroradii of the interface. Record $\max_t|p_\zeta(t)-p_\zeta(0)|$, secular slope, and the event-by-event jumps at GC/particle transitions. Sweep $H$, patch/curvature correction order, and lift order. A symmetry-preserving discrete action should conserve its canonical $p_\zeta$ to nonlinear-solve tolerance; for an approximate lift, report the relation of that discrete invariant to the physical \eqref{eq:pzeta}. Keeping a fitted value while violating the other canonical pairs is not sufficient.
+
+\subsection{NCSX: converged loss fractions, not anecdotal marker fates}
+The supplied README records a small near-interface comparison with 64 markers, $s=0.95$ and $1.95$, $T=2\times10^{-3}$, 3.5\,keV alpha settings, and full orbit everywhere at RK45 tolerance $10^{-9}$ \cite{sheetreadme}. These are historical prototype observations, not independently rerun results. They indicate why near-sheet residence is a decisive cost case; they cannot certify a new method.
+
+A new study should freeze the equilibrium, actual energy/species, starting distribution, gyrophase distribution, random seed, wall criterion, and reference field/gauge conventions. Use identical \emph{physical} initial states, not unverified equal GC coordinates from different lifts. Converge the full-orbit reference through several tighter tolerances and event tolerances; also use a geometrically different high-accuracy solver for a subset. Record energy and event statistics, since a smaller RK tolerance alone need not eliminate cumulative reference bias.
+
+For each candidate run a nested convergence study in $H$, patch accuracy, lift order, phase accuracy, and root tolerance. Compare loss fraction as a function of time, not just the endpoint. Use paired markers to reduce variance, while interpreting chaotic fate changes statistically. If $D_i=L_i^{\rm cand}-L_i^{\rm ref}\in\{-1,0,1\}$, the standard error of the paired fraction difference is
+\begin{equation}
+ \widehat{\mathrm{SE}}(\bar D)=\sqrt{\frac{1}{N(N-1)}\sum_{i=1}^N(D_i-\bar D)^2}.
+\end{equation}
+For an unpaired worst-case absolute fraction standard error $\delta$, $N\gtrsim1/(4\delta^2)$; $\delta=0.01$ needs about 2500 markers, before confidence multipliers. This is a planning calculation, not a claim that a 64-marker test resolves percent-level bias. Use a predeclared transport tolerance and confidence interval; count reference and method discretization error separately from sampling error.
+
+Stratify by near-sheet residence, trapped/passing character, and interface strength. Report joint outgoing $(\mu,u,\theta)$ statistics and encounter correlations when evaluating a statistical map. Timing must include field evaluations, geometry queries, nonlinear iterations, events, fallback gyroperiods, preprocessing, and hardware/thread count. A speed-up that occurs only for markers with no sheet residence misses the problem motivating this note.
+
+\section{Comparison and ranked recommendation}
+\label{sec:rank}
+Let $T_s$ be a resolved smooth/slow time, $H$ a macro step, $N_c$ the number of actual sheet crossings, $n_g$ the resolved full-orbit steps per gyroperiod, and $f_\Sigma$ the residence fraction requiring physical phase treatment. The following are \emph{cost models}, not measured SIMPLE speed-ups:
+\begin{align}
+ C_{\rm FO}&\sim c_f n_g\Omega T,\\
+ C_{\rm hybrid,helix}&\sim c_{\rm gc}T/H+c_{\rm match}N_{\rm switch}
+          +c_{\rm geom}N_c+c_{\rm fb}N_{\rm fallback},\\
+ C_{\rm hybrid,cycle}&\sim c_{\rm gc}T/H+c_{\rm cyc}T_\Sigma/H_\Sigma
+          +\text{transitions, topology changes, and fallback}.
+\end{align}
+The helix event cost $c_{\rm geom}$ can be much smaller than $c_f n_g$, but $N_c=O(f_\Sigma\Omega T)$ for persistent sheet motion. Cycle acceleration is what may remove that frequency factor. If curvature, phase accuracy, or grazing forces $H_\Sigma=O(1/\Omega)$, the proposed saving disappears. The dimensionless benchmark to report is field/geometry work per physical gyroperiod \emph{and} per confinement-time unit at fixed loss-fraction accuracy.
+
+\begin{longtable}{p{.20\linewidth}p{.25\linewidth}p{.22\linewidth}p{.22\linewidth}}
+\toprule
+Option & Sharp-sheet $\Delta\mu$ and phase & Geometry / energy & Cost and verdict\\\midrule\endhead
+Full orbit with resolved exact events & Correct reference, including returns & Exact flow symplectic; numerical RK not symplectic; resolved Gauss needs event treatment & $O(n_g\Omega T)$ in FO regions. Keep reference/fallback.\\
+Phase-carrying helix events & Exact for fixed planar uniform sides; curved error conditional $O(\epsilon)$ per gyro-scale encounter & Exact fixed-model fixed-time map symplectic and energy preserving; naive refreezing is not & $O(N_c)$ cheap algebra/events plus matching. Leading deterministic first step.\\
+Exact planar cycles / slow sheet-cycle extension & Exact cycles retain resets and return correlations; extension unproved & Exact fixed model proved; canonical varying-parameter extension needed & $O(1)$ for any number of identical cycles; macro curved extension is highest-value research.\\
+Stroboscopic / geometric MRC & Correct if microflow and phase reconstruction include events; smooth theorem not uniform at grazing & Symplectic composition if the whole parameter family is canonical; vector estimates alone insufficient & Fixed micro-solve count per macro step when a smooth near-identity branch exists. Rank 2.\\
+Two-scale UA / exponential & Retains phase in smooth fields; sheet needs event/phase-domain treatment & Published smooth-field accuracy is not a sheet symplectic theorem & $O(N_\tau\log N_\tau)$ per macro step. Rank 3 volume alternative.\\
+AP implicit / drift--Lorentz & Correct drifts at large smooth-field steps, raw phase insufficient for deterministic crossing & Ricketson--Chac\'on energy identity is strong; symplecticity not asserted & Implicit macro cost plus events/fallback. Rank 4 comparator/hybrid.\\
+Filtered Boris / large-step variational & Slow accuracy is insufficient for an incoming physical gyrophase; filters can suppress it & Boris generally volume preserving; variational modifications distinct & Cheap smooth-volume steps. Benchmark, not standalone sheet fix.\\
+Validated scattering kernel & Can match chosen ensemble moments/tails; loses deterministic memory unless phase retained & Projected stochastic map usually not symplectic; conserve marker energy explicitly & $O(1)$ per encounter plus offline calibration. Rank 5, conditional ensemble use.\\
+Ring / $J_0$ / Pad\'e GC & Fixed phase-eliminated action fails general reset; mean/variance need extra closure & Can be Hamiltonian for its own model & Cheap slow steps but incorrect sheet physics. Reject standalone.\\
+Pauli slow manifold / fixed-$\mu$ DVI & Missing phase; Pauli $\mu B$ adds false potential step & Structure preserving for reduced model & Useful volume algorithms only. Reject standalone sheet treatment.\\
+\bottomrule
+\end{longtable}
+
+\textbf{1. Phase-carrying Hamiltonian local sheet solver.} The exact canonical pairs, continuous particle matching, helix roots, and fixed-time symplecticity are \proved{}. Start with those and canonical transitions. Include exact cycle compression immediately in the planar oracle; investigate a slowly varying sheet-cycle Hamiltonian for the persistent-residence case. The latter extension and production speed-up are \conj{}. Maintaining the existing full-orbit fallback is part of this recommendation.
+
+\textbf{2. Geometric cycle/stroboscopic acceleration.} Build around the exact sharp-sheet cycle rather than averaging the raw discontinuous force. Smooth geometric composition has literature support, but its event-topology domain and canonical parameter family must be demonstrated. This is the most promising way to finish eliminating the gyroperiod cost after C1 makes individual crossings cheap.
+
+\textbf{3. Phase-reconstructing uniformly accurate volume integration.} Compare it with the extended symplectic GC volume step when accurate gyrophase over long intervals becomes limiting. Varying direction is within the smooth literature; discontinuous direction is not. A symplectic sheet hybrid requires additional work.
+
+\textbf{4. Energy-conserving AP hybrid.} Use as a practical comparator with strong magnetic-only energy control, explicit exact sheet events, and phase reconstruction or resolved fallback. It may be attractive even without exact symplecticity if measured long-time loss bias and cost meet the targets.
+
+\textbf{5. Statistical complete-encounter maps.} Consider only after measuring incoming phase distributions and return correlations. They address ensemble transport rather than deterministic orbits, and their parameter/memory errors need their own convergence evidence.
+
+The decisive negative result is not that fast gyration can never be skipped. It can be skipped exactly in a uniform field and in the integrable planar sheet. The negative result is that eliminating the phase from the retained state prevents a deterministic phase-dependent sheet response. No method reviewed here establishes all four hard constraints for arbitrary curved SPECTRE interfaces over arbitrarily long times. The note supplies an exact local foundation and specific research/validation steps, rather than a claimed finished global solution.
+
+\appendix
+\section{Reproducible algebra and small numerical checks}
+\label{app:checks}
+The scripts below are research scratch artifacts, not additions to SIMPLE or KAMEL. Run them from the directory containing this note:
+\begin{verbatim}
+python flr/check_algebra.py
+python flr/check_local_maps.py
+latexmk -pdf flr_options.tex
+\end{verbatim}
+\pathref{flr/check_algebra.py} uses SymPy 1.14.0. It checks exact identities by simplification to zero, not by substituting a few floating-point values. Nonzero charge, field, frequency, and non-grazing normal velocity are the relevant algebraic domain restrictions. The rotation identity $c^2+s^2=1$ and the explicitly stated phase moments are supplied assumptions. Thirteen checks passed:
+\begin{enumerate}
+\item Canonical uniform-field chart: $D C\Pi D C^T=\operatorname{diag}(J_2,J_2,J_2)$.
+\item Direction-reset speed: $u_+^2+w_+^2=u^2+w^2$.
+\item Uniform-phase mean of $\Delta\mu$.
+\item Uniform-phase variance of $\Delta\mu$.
+\item Flux-weighted mean using $\avg{\cos^2\theta}=1/3$.
+\item Flux-weighted variance using $\avg{\cos^4\theta}=1/5$.
+\item Physical-coordinate sheet saltation preserving the one-sided two-forms.
+\item Helix position derivative.
+\item Helix Lorentz equation.
+\item Helix speed conservation.
+\item Piecewise normal-oscillator equation.
+\item Analytic integral of the normal excursion.
+\item Ring occupation-fraction derivative.
+\end{enumerate}
+The exact outputs are in \pathref{flr/algebra_results.json}. These checks verify formulas. They do not prove field regularity, uniform error estimates, slow-manifold existence, convergence of a formal series, or long-time statistical mixing. Symplecticity and action-derivative proofs in the text also use event transversality and endpoint arguments not reducible to one symbolic matrix identity.
+
+\pathref{flr/check_local_maps.py} independently compares constant-side exact helices to SciPy DOP853, checks repeated explicit events against compressed cycles, and differentiates the fixed-time physical map numerically. Its dimensionless example uses $m=q=1$, $\B_-=(1,0,0)$, $\B_+=1.3(0.8,0.6,0)$, and the sheet state $\x=(0.1,-0.2,0)$, $\v=(0.4,0.25,0.6)$. Results retained in \pathref{flr/local_map_results.json} are:
+\begin{center}
+\begin{tabular}{lr}
+\toprule
+Quantity & Result\\\midrule
+DOP853/exact first excursion maximum state difference & $6.7\times10^{-16}$\\
+DOP853/exact second excursion maximum state difference & $1.3\times10^{-15}$\\
+Plus/minus excursion durations & $2.5190222932$, $3.9311748930$\\
+Tangential displacement per complete cycle & $(1.9657761856,\ 0.2488258251)$\\
+Velocity return difference per complete cycle & $1.1\times10^{-16}$\\
+200 direct cycles versus compression, max state difference & $8.0\times10^{-13}$\\
+Fixed-time finite-difference symplectic defect, one event & $1.9\times10^{-10}$\\
+Computed relative energy difference for that example & $0$ at machine precision\\
+Incoming/outgoing one-sided $\mu$ at the same event & $0.21125$, $0.1390769231$\\
+\bottomrule
+\end{tabular}
+\end{center}
+The finite-difference increment is $2\times10^{-6}$; DOP853 uses relative tolerance $2\times10^{-13}$, absolute tolerance $2\times10^{-14}$, and maximum step $0.035$ in these dimensionless units. The numerical check is a single transversal branch, not a grazing test or an error bound. Its energy result means the arithmetic gave identical squared speeds in that test, not that an arbitrary floating-point implementation has exactly zero energy error forever.
+
+\section{Source audit and claims not established}
+\label{app:sources}
+The copied database contains 10,732 rows in \texttt{items}. \pathref{flr/query_zotero.py} queries only the read-only copy; title and author searches are retained in \pathref{flr/zotero_matches.json} and \pathref{flr/zotero_author_matches.json}. Relevant local PDFs read include Burby (Zotero item 5432, attachment WFNUEBX4), Xiao--Qin (5490/SBHTD5YU), DVI (1710/PC34MH4L), Chartier--Faou (8671/ULWBKXIH), B\"uchner--Zelenyi (10754/K3HVS9AC), the KIM EPS report (41/GSTT2W4R), and SIMPLE canonical coordinates (1/QQKIIHHW). Original attachments remain in \pathref{/home/ert/Zotero/storage}; extracted text and downloaded research manuscripts are in \pathref{flr/}.
+
+Journal bibliography entries were checked against the local PDF masthead and/or primary publisher/Crossref DOI metadata; retrieved metadata are in \pathref{flr/citation_metadata.json}. The initial concurrent metadata request encountered rate limiting; a later spaced request recovered the missing journal records used here. Title-query mismatches and unverified candidate records were not promoted into the bibliography. The book reference uses the local Zotero book record and publisher DOI. The thesis uses the TU Graz repository record and PDF, and the EPS report uses its local first-page bibliographic data. The two-scale exponential reference is explicitly an arXiv version, whose authors/date/title were verified; a journal publication is not assumed.
+
+\textbf{Unverified primary citation.} Neishtadt's 1986 reference \cite{neishtadt86} is consistently listed by other scholarly papers as \emph{Change of an adiabatic invariant at a separatrix}, \emph{Soviet Journal of Plasma Physics} 12, 568--573 (1986). A primary record/full text and the exact translated title were not inspected in this run; that entry is marked accordingly. The verified 1987 journal article \cite{neishtadt87} supports the limited separatrix-theory discussion. No quantitative sheet coefficient is attributed to the unverified 1986 item.
+
+\textbf{Unestablished research claims.} This note does not prove (i) a globally canonical, high-order GC/full-orbit matching transformation for the actual SPECTRE volumes; (ii) a uniformly accurate, symplectic slowly varying sheet-cycle integrator through grazing/separatrix topology changes; (iii) bounded non-growing energy or momentum error for that proposed global hybrid over arbitrary long times; (iv) adequate physical gyrophase accuracy from a fixed-order volume GC model over those times; (v) random-phase/Markov validity of NCSX encounters; or (vi) a measured speed-up at converged loss accuracy. These are the remaining substantive claims, rather than hidden qualifications to an allegedly completed mover. The local planar canonical flow, full moment reset, and cycle compression are established separately.
+
+\begin{thebibliography}{99}

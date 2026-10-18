@@ -1,0 +1,21 @@
+{
+  "smooth_side_DOP853_max_errors": [
+    6.661338147750939e-16,
+    1.3322676295501878e-15
+  ],
+  "cycle_times": [
+    2.5190222931857233,
+    3.9311748929893167
+  ],
+  "cycle_tangent_displacement": [
+    1.9657761855874059,
+    0.2488258251399123
+  ],
+  "cycle_velocity_return_error": 1.1102230246251565e-16,
+  "200_cycles_direct_vs_compressed_max_error": 7.958078640513122e-13,
+  "fixed_time_map_event_count": 1,
+  "finite_difference_symplectic_defect": 1.897254853222563e-10,
+  "energy_relative_error": 0.0,
+  "example_mu_minus": 0.21125,
+  "example_mu_plus": 0.13907692307692304
+}
