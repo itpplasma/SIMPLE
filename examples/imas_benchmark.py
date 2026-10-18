@@ -257,13 +257,25 @@ def ascot_run(equilibrium, markers, path, duration, step, plasma=None):
             a.data.create_input(name)
     if plasma is not None:
         bfield = a.data.bfield.active.read()
-        a.data.create_input(
+        profiles = a.data.create_input(
             "imas plasma",
             equilibrium_ids=equilibrium,
             core_profiles_ids=plasma,
             psi0=bfield["psi0"],
             psi1=bfield["psi1"],
+            dryrun=True,
         )
+        # ASCOT applies collisions after each orbit step and before the RHOMAX
+        # check; plasma_1D raises an input-evaluation error for rho >= its last
+        # grid point, aborting markers that step across rho = 1 instead of
+        # ending them with RHOMAX. Hold the edge values constant outside the
+        # IDS grid, as ASCOT's slowing-down tutorial does with rho in [0, 2].
+        profiles["rho"] = np.append(profiles["rho"], 2.0)
+        profiles["nrho"] += 1
+        for key in ["vtor", "edensity", "etemperature", "itemperature", "idensity"]:
+            values = np.asarray(profiles[key])
+            profiles[key] = np.concatenate((values, values[-1:]), axis=0)
+        a.data.create_input("plasma_1D", **profiles)
     a.simulation_initinputs()
     options = Opt.get_default()
     if not np.isclose(duration / step, round(duration / step), rtol=0, atol=1e-6):
@@ -297,8 +309,20 @@ def ascot_run(equilibrium, markers, path, duration, step, plasma=None):
     start = time.perf_counter()
     result = a.simulation_run(printsummary=False)
     elapsed = time.perf_counter() - start
-    r, phi, z, energy, pitch, condition, elapsed_time = result.getstate(
-        "r", "phi", "z", "ekin", "pitch", "endcond", "time", state="end", mode="gc"
+    r, phi, z, energy, pitch, condition, elapsed_time, rho, *error = result.getstate(
+        "r",
+        "phi",
+        "z",
+        "ekin",
+        "pitch",
+        "endcond",
+        "time",
+        "rho",
+        "errormsg",
+        "errorline",
+        "errormod",
+        state="end",
+        mode="gc",
     )
     out = np.column_stack(
         (
@@ -311,8 +335,12 @@ def ascot_run(equilibrium, markers, path, duration, step, plasma=None):
     )
     codes = np.asarray(condition).astype(int).copy()
     times = elapsed_time.to_value("s").copy()
+    native = {
+        "rho": np.asarray(rho).astype(float).copy(),
+        "error": np.column_stack([np.asarray(e).astype(int) for e in error]),
+    }
     a.simulation_free(inputs=True, markers=True, diagnostics=True)
-    return out, codes, times, elapsed
+    return out, codes, times, elapsed, native
 
 
 def gorilla_run(checkout, field, positions, directory, duration, resolution, species):
@@ -802,7 +830,7 @@ def main():
     start = time.perf_counter()
     pysimple.trace_parallel(states)
     simple_trace_seconds = time.perf_counter() - start
-    ascot, codes, times, ascot_elapsed = ascot_run(
+    ascot, codes, times, ascot_elapsed, native = ascot_run(
         eq, markers, output / "ascot.h5", args.duration, args.step, plasma
     )
     from a5py.ascot5io.state import State
@@ -812,10 +840,18 @@ def main():
     simple_codes = np.asarray(result.distribution[0].markers[1].positions)[:, 6].astype(
         int
     )
+    # Each marker must end with exactly one resolved condition: TLIM (confined
+    # for the whole duration) or RHOMAX (lost). Both loss summaries use this.
     ascot_finished = np.array([State.endcond_check(int(c), "TLIM") for c in codes])
     ascot_lost = np.array([State.endcond_check(int(c), "RHOMAX") for c in codes])
-    if any(State.endcond_check(int(c), "ABORTED") for c in codes):
-        raise RuntimeError("ASCOT reported aborted markers; inspect the run log")
+    ascot_aborted = np.array(
+        [State.endcond_check(int(c), "ABORTED") for c in codes]
+    ) | (native["error"][:, 0] != 0)
+    ascot_unresolved = ascot_aborted | (ascot_finished == ascot_lost)
+    ascot_states = {}
+    for c in codes:
+        name = State.endcond_tostring(int(c)) or f"UNKNOWN({int(c)})"
+        ascot_states[name] = ascot_states.get(name, 0) + 1
     matched = (
         (simple_codes == 0)
         & ascot_finished
@@ -859,7 +895,23 @@ def main():
         "ascot_seconds_tracing": ascot_elapsed,
         "simple_exit_conditions": simple_codes.tolist(),
         "simple_lost_fraction": float(np.mean(simple_codes != 0)),
-        "ascot_lost_fraction": float(np.mean(ascot_lost)),
+        "ascot_lost_fraction": float(np.mean(ascot_lost))
+        if not ascot_unresolved.any()
+        else None,
+        "ascot_loss_definition": "RHOMAX; every other marker must be TLIM",
+        "ascot_end_state_counts": ascot_states,
+        "ascot_unresolved_markers": int(np.sum(ascot_unresolved)),
+        "ascot_native_errors": [
+            {
+                "marker": int(i),
+                "errormsg": int(native["error"][i, 0]),
+                "errorline": int(native["error"][i, 1]),
+                "errormod": int(native["error"][i, 2]),
+                "rho": float(native["rho"][i]),
+                "time_s": float(times[i]),
+            }
+            for i in np.flatnonzero(native["error"].any(axis=1))
+        ],
         "jointly_completed": jointly_completed.tolist(),
         "trajectory_comparison": "disabled for independent collision streams"
         if args.collisions
@@ -894,7 +946,7 @@ def main():
     if args.gorilla and args.collisions:
         report["gorilla"] = "Not compared: GORILLA's core pusher is collisionless"
 
-    def moments(end, completed):
+    def moments(end, completed, lost):
         survival = float(np.mean(completed))
 
         def error(values):
@@ -914,8 +966,8 @@ def main():
             else None
         )
         return {
-            "lost_fraction": 1 - survival,
-            "lost_fraction_standard_error": error(completed.astype(float)),
+            "lost_fraction": float(np.mean(lost)),
+            "lost_fraction_standard_error": error(lost.astype(float)),
             "remaining_energy_eV_per_initial_particle": float(
                 np.mean(end[:, 3] * completed)
             ),
@@ -940,8 +992,10 @@ def main():
         }
 
     report["population_moments"] = {
-        "SIMPLE": moments(simple, simple_codes == 0),
-        "ASCOT5": moments(ascot, ascot_finished),
+        "SIMPLE": moments(simple, simple_codes == 0, simple_codes != 0),
+        "ASCOT5": moments(ascot, ascot_finished, ascot_lost)
+        if not ascot_unresolved.any()
+        else "Not computed: unresolved or aborted ASCOT markers",
     }
     np.savetxt(
         output / "states.csv",
@@ -955,6 +1009,11 @@ def main():
     with imas.DBEntry(str(output / "output.nc"), "w", dd_version="4.1.1") as entry:
         entry.put(result)
     print(json.dumps(report, indent=2))
+    if ascot_unresolved.any():
+        raise RuntimeError(
+            f"{int(np.sum(ascot_unresolved))} ASCOT markers ended unresolved or "
+            f"aborted ({ascot_states}); see ascot_native_errors in the report"
+        )
 
 
 if __name__ == "__main__":
