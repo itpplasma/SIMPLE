@@ -73,6 +73,7 @@ class TestNetCDFResultsOutput:
                 assert 'perp_inv' in ds.variables
                 assert 'iclass' in ds.variables
                 assert 'class_lost' in ds.variables
+                assert 'wall_hit_triangle' not in ds.variables
                 assert np.all(np.isin(ds.variables['orbit_exit_code'][:], [0, 1, 2, 3]))
                 exit_codes = ds.variables['orbit_exit_code'][:]
                 event_residual = ds.variables['boundary_event_radial_residual'][:]

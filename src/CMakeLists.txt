@@ -45,6 +45,7 @@
     orbit_fo_boris.f90
     util.F90
     samplers.f90
+    fusion_source.f90
     cut_detector.f90
     classification.f90
     simple.f90

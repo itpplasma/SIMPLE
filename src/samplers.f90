@@ -143,6 +143,54 @@ contains
 
     end subroutine sample_volume_single
 
+    subroutine sample_fusion_birth(zstart, s_inner, s_outer, integration_coords)
+        use params, only: fusion_grid, num_surf, facE_al, n_d, n_e, &
+            am1, am2, Z1, Z2, sbeg
+        use fusion_source, only: build_birth_cdf, draw_birth, alpha_energy_joule
+        use field_can_mod, only: integ_to_ref
+        real(dp), intent(out) :: zstart(:, :)
+        real(dp), value, intent(in) :: s_inner, s_outer
+        logical, intent(in) :: integration_coords
+        real(dp), allocatable :: cdf(:)
+        real(dp) :: power, x(3)
+        integer :: ipart, unit, n
+
+        if (facE_al /= 1.0_dp .or. n_d /= 4.0_dp .or. n_e /= 2) &
+            error stop 'fusion births require 3.5 MeV alphas: facE_al=1, n_d=4, n_e=2'
+        if (am1 /= 2.0_dp .or. am2 /= 3.0_dp .or. &
+            Z1 /= 1.0_dp .or. Z2 /= 1.0_dp) &
+            error stop 'fusion births require species 1=D and species 2=T'
+        n = size(zstart, 2)
+        if (n < 1) error stop 'fusion births require at least one marker'
+        call build_birth_cdf(s_inner, s_outer, fusion_grid, cdf, power)
+        do ipart = 1, n
+            call draw_birth(s_inner, s_outer, fusion_grid, cdf, zstart(:, ipart))
+            if (integration_coords) then
+                x = zstart(1:3, ipart)
+                call integ_to_ref(x, zstart(1:3, ipart))
+            end if
+        end do
+        num_surf = 2
+        sbeg(1:2) = [s_inner, s_outer]
+        call save_starting_points(zstart)
+        open (newunit=unit, file='alpha_source.dat', status='replace')
+        write (unit, '(a)') '# Equal-weight D-T births; rows of start.dat are markers.'
+        write (unit, '(a)') '# Midpoint source cells, uniform positions within cells.'
+        write (unit, '(a)') '# alpha_power_W uses 3.5 MeV per alpha, not 3.52 MeV.'
+        write (unit, '(a,es24.16)') 'alpha_energy_MeV ', &
+            alpha_energy_joule/1.602176634e-13_dp
+        write (unit, '(a,es24.16)') 'alpha_power_W ', power
+        write (unit, '(a,es24.16)') 'alpha_birth_rate_per_s ', power/alpha_energy_joule
+        write (unit, '(a,es24.16)') 'marker_rate_per_s ', power/alpha_energy_joule/n
+        write (unit, '(a,es24.16)') 'marker_power_W ', power/n
+        write (unit, '(a,i0)') 'marker_count ', n
+        write (unit, '(a,2es24.16)') 's_bounds ', s_inner, s_outer
+        write (unit, '(a,3i8)') 'fusion_grid ', fusion_grid
+        close (unit)
+        print *, 'Total alpha power [W] = ', power
+        print *, 'Equal marker power [W] = ', power/n, ' (alpha_source.dat)'
+    end subroutine sample_fusion_birth
+
     subroutine sample_spectre_surface(zstart)
         !> Place markers on the SPECTRE control surface rho_g = sbeg(1), drawn
         !> uniformly over the real surface: (theta, zeta) grid nodes are picked

@@ -403,6 +403,50 @@ target_link_libraries(test_profiles.x simple)
 add_test(NAME test_profiles COMMAND test_profiles.x)
 set_tests_properties(test_profiles PROPERTIES LABELS "unit")
 
+add_executable(test_fusion_source.x test_fusion_source.f90)
+target_link_libraries(test_fusion_source.x simple)
+foreach(case IN ITEMS flat peaked power negative_density zero_source invalid_bounds
+        invalid_grid hot_profile nonfinite)
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/fusion_${case})
+    add_test(NAME test_fusion_${case} COMMAND test_fusion_source.x ${case})
+    set_tests_properties(test_fusion_${case} PROPERTIES LABELS "unit"
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/fusion_${case})
+endforeach()
+set_tests_properties(test_fusion_negative_density PROPERTIES
+    PASS_REGULAR_EXPRESSION "fusion source: negative profiles")
+set_tests_properties(test_fusion_zero_source PROPERTIES
+    PASS_REGULAR_EXPRESSION "fusion source: total birth rate must be finite and positive")
+set_tests_properties(test_fusion_invalid_bounds PROPERTIES
+    PASS_REGULAR_EXPRESSION "fusion source: require 0 <= s_inner < s_outer <= 1")
+set_tests_properties(test_fusion_invalid_grid PROPERTIES
+    PASS_REGULAR_EXPRESSION "fusion source: grid dimensions must be in")
+set_tests_properties(test_fusion_hot_profile PROPERTIES
+    PASS_REGULAR_EXPRESSION "fusion source: ion temperature outside")
+set_tests_properties(test_fusion_nonfinite PROPERTIES
+    PASS_REGULAR_EXPRESSION "fusion source: nonfinite profiles")
+
+add_executable(test_fusion_birth_equilibrium.x test_fusion_birth_equilibrium.f90)
+target_link_libraries(test_fusion_birth_equilibrium.x simple)
+add_dependencies(test_fusion_birth_equilibrium.x generate_test_boozer_chartmap)
+set(fusion_equilibrium_cases vmec vmec_peaked chartmap annulus interior trace bad_energy)
+if(ENABLE_OPENMP)
+    list(APPEND fusion_equilibrium_cases vmec_parallel chartmap_parallel)
+endif()
+foreach(case IN LISTS fusion_equilibrium_cases)
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/fusion_${case})
+    set(fusion_input ${WOUT_FILE})
+    if(case MATCHES "^chartmap")
+        set(fusion_input ${CMAKE_CURRENT_BINARY_DIR}/test_boozer_chartmap.nc)
+    endif()
+    add_test(NAME test_fusion_${case}
+        COMMAND test_fusion_birth_equilibrium.x ${fusion_input} ${case})
+    set_tests_properties(test_fusion_${case} PROPERTIES LABELS "integration"
+        TIMEOUT 120 ENVIRONMENT "OMP_NUM_THREADS=1"
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/fusion_${case})
+endforeach()
+set_tests_properties(test_fusion_bad_energy PROPERTIES
+    PASS_REGULAR_EXPRESSION "fusion births require 3.5 MeV alphas")
+
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/start_integration_coordinates)
 add_executable(test_start_integration_coordinates.x
     test_start_integration_coordinates.f90)
@@ -585,10 +629,15 @@ add_test(NAME test_stencil_utils COMMAND test_stencil_utils.x)
 
 
     if(SIMPLE_ENABLE_CGAL)
+        configure_file(${CMAKE_SOURCE_DIR}/test/fixtures/wall_facet_order.stl
+            wall_facet_order.stl COPYONLY)
+        configure_file(${CMAKE_SOURCE_DIR}/test/fixtures/wall_facet_order_binary.stl
+            wall_facet_order_binary.stl COPYONLY)
         add_executable(test_stl_wall_intersection.x test_stl_wall_intersection.f90)
         target_link_libraries(test_stl_wall_intersection.x simple testing_utils)
         add_test(NAME test_stl_wall_intersection COMMAND test_stl_wall_intersection.x)
-        set_tests_properties(test_stl_wall_intersection PROPERTIES LABELS "unit;wall")
+        set_tests_properties(test_stl_wall_intersection PROPERTIES
+            LABELS "unit;wall" FIXTURES_SETUP stl_wall_hits)
     endif()
 
 add_executable(test_sorting.x test_sorting.f90)
