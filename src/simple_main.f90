@@ -2589,6 +2589,7 @@ contains
                         anorb%si%last_event_fraction_width = 1.d0
                         ierr_orbit = SYMPLECTIC_STEP_BOUNDARY
                     else if (ierr_orbit /= 0) then
+                        ierr_orbit = SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
                         anorb%si = si_step_start
                         anorb%f = f_step_start
                     else if (symplectic_status == SYMPLECTIC_STEP_BOUNDARY) then
@@ -2931,6 +2932,7 @@ contains
                         anorb%si%last_event_fraction_width = 1.d0
                         ierr_orbit = SYMPLECTIC_STEP_BOUNDARY
                     else if (ierr_orbit /= 0) then
+                        ierr_orbit = SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
                         anorb%si = si_step_start
                         anorb%f = f_step_start
                     else if (symplectic_status == SYMPLECTIC_STEP_BOUNDARY) then
