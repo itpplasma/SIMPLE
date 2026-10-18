@@ -4,7 +4,8 @@ program study_spectre_orbits
     ! separate outputs; a numerical failure never counts as physical loss.
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-    use omp_lib, only: omp_get_wtime, omp_get_max_threads, omp_set_num_threads
+    !$ use omp_lib, only: omp_get_max_threads, omp_set_num_threads
+    use timing, only: get_wtime
     use simple_api, only: simple_read_config, simple_init, simple_sample_volume
     use simple, only: init_sympl
     use params, only: ntestpart, trace_time, v0, dtaumin, relerr, integmode, &
@@ -46,7 +47,7 @@ program study_spectre_orbits
     type(sympl_spectre_state_t) :: state
     integer :: status, m, k, nsteps, stride, capacity, rec, unit, j, nfail
     integer :: entries, exits, losses, failures, counts(5), terminal, iface, side
-    integer :: requested_samples, bulk(3)
+    integer :: requested_samples, bulk(3), nthreads
 
     call get_command_argument(1, fixture)
     call get_environment_variable('SIMPLE_SPECTRE_STUDY_INPUT', config_file)
@@ -61,7 +62,9 @@ program study_spectre_orbits
     call get_environment_variable('SIMPLE_SPECTRE_STUDY_SAMPLES', message)
     if (len_trim(message) > 0) read (message, *) requested_samples
     call get_environment_variable('OMP_NUM_THREADS', message)
-    if (len_trim(message) == 0) call omp_set_num_threads(8)
+    !$ if (len_trim(message) == 0) call omp_set_num_threads(8)
+    nthreads = 1
+    !$ nthreads = omp_get_max_threads()
     if (len_trim(prefix) == 0) prefix = 'study'
     if (len_trim(sampling) == 0) sampling = 'volume'
     if (len_trim(config_file) == 0) then
@@ -75,7 +78,7 @@ program study_spectre_orbits
         write (unit, '(a)') 'deterministic=.true., ran_seed=12345 /'
         close (unit)
     end if
-    setup0 = omp_get_wtime()
+    setup0 = get_wtime()
     call simple_read_config(trim(config_file), status, message)
     if (status /= 0) then
         print *, trim(message)
@@ -83,7 +86,7 @@ program study_spectre_orbits
     end if
     call simple_init
     call init_magfie(SPECTRE)
-    setup_s = omp_get_wtime() - setup0
+    setup_s = get_wtime() - setup0
     allocate (starts(5, ntestpart))
     if (len_trim(starts_file) > 0) then
         open (newunit=unit, file=trim(starts_file), status='old')
@@ -134,14 +137,14 @@ program study_spectre_orbits
     records = 0.0_dp
     result = 0.0_dp
     call sympl_landing_stats_reset
-    trace0 = omp_get_wtime()
+    trace0 = get_wtime()
     ! Match production's one-marker dynamic chunks; FO-heavy markers are rare
     ! and a static block would leave threads idle behind them.
     !$omp parallel do schedule(dynamic, 1) private(m, k, y, z, si, field, &
     !$omp state, status, fraction, begin_marker, elapsed, worst_shell, rec, &
     !$omp terminal, fo_before, fo_start, was_active, episode_open)
     do m = 1, ntestpart
-        begin_marker = omp_get_wtime()
+        begin_marker = get_wtime()
         y = starts(:, m)
         ! Match production's per-marker dispatch reset before initialization.
         call set_spectre_volume_lock(0)
@@ -214,12 +217,12 @@ program study_spectre_orbits
         samples(m) = rec
         result(:, m) = [elapsed, real(terminal, dp), &
             state%fo_elapsed*sqrt2/v0/max(elapsed, tiny(1.0_dp)), &
-            worst_shell, omp_get_wtime() - begin_marker, &
+            worst_shell, get_wtime() - begin_marker, &
             real(state%warning_hold_count, dp), real(min(k, nsteps), dp)]
         call set_spectre_volume_lock(0)
     end do
     !$omp end parallel do
-    trace_s = omp_get_wtime() - trace0
+    trace_s = get_wtime() - trace0
     call sympl_fo_stats(entries, exits, losses, failures, counts)
     nfail = count(nint(result(2, :)) /= SYMPL_SPECTRE_OK .and. &
         nint(result(2, :)) /= SYMPL_SPECTRE_LOSS)
@@ -251,7 +254,7 @@ program study_spectre_orbits
     open (newunit=unit, file=trim(prefix)//'_summary.json', status='replace')
     write (unit, '(a)') '{'
     write (unit, '(a,i0,a)') '"markers":', ntestpart, ','
-    write (unit, '(a,i0,a)') '"threads":', omp_get_max_threads(), ','
+    write (unit, '(a,i0,a)') '"threads":', nthreads, ','
     write (unit, '(a,es24.16,a)') '"duration_s":', trace_time, ','
     write (unit, '(a,es24.16,a)') '"setup_s":', setup_s, ','
     write (unit, '(a,es24.16,a)') '"trace_s":', trace_s, ','
