@@ -1,47 +1,37 @@
-.. SIMPLE documentation master file
-
 SIMPLE
 ======
 
 **S**\ ymplectic **I**\ ntegration **M**\ ethods for **P**\ article **L**\ oss
 **E**\ stimation.
 
-SIMPLE traces guiding-centre orbits of energetic particles in
-three-dimensional magnetic fields and reports when and where they leave the
-plasma. Its main application is the fast computation of fusion alpha-particle
-losses in stellarators, both for the analysis of a given configuration and
-inside a stellarator optimisation loop. The orbits are integrated with
-symplectic methods in canonical coordinates, which improve long-time
-behaviour at suitable time steps. Regular and chaotic
-orbits can be classified early, which shortens the computation further.
+SIMPLE traces guiding-centre orbits of energetic particles, by default
+3.5 MeV fusion alphas, in 3D magnetic fields (VMEC, Boozer chartmaps from GVEC
+or booz_xform, coils, SPECTRE) and records when, where and with which energy
+they leave the plasma. It integrates in canonical coordinates with symplectic
+schemes and classifies orbits as regular or chaotic. It is written in Fortran
+with OpenMP, an optional CUDA backend and the Python package ``pysimple``.
 
 .. figure:: /_static/figures/front.png
-   :alt: Alpha-particle loss locations and confinement in the public QA example.
+   :alt: Loss positions of alphas on the last closed flux surface of a
+         quasi-axisymmetric stellarator and the confined fraction over time.
    :width: 90%
 
-SIMPLE is written in Fortran with OpenMP parallelisation, an optional CUDA
-backend for GPUs and a Python interface, ``pysimple``. It reads VMEC
-equilibria, Boozer chartmaps (also from GVEC and booz_xform), coil files and
-SPECTRE equilibria. It is distributed under the MIT License. The source code
-is at https://github.com/itpplasma/SIMPLE.
+   Landreman–Paul QA equilibrium at reactor scale, 3000 collisionless 3.5 MeV
+   alphas started at :math:`s = 0.5`: guiding-centre positions of the 194 lost
+   markers on the LCFS (left) and confined fraction, split into passing and
+   trapped, over 50 ms (right).
 
-How to read this documentation
-------------------------------
+**Users start here:** :doc:`getting-started/installation`,
+:doc:`getting-started/quickstart`, then the :doc:`tutorials/index` and the
+task pages of the :doc:`user-guide/index`. Every input key is in
+:doc:`reference/input-parameters`.
 
-* :doc:`getting-started/installation` and :doc:`getting-started/quickstart`
-  get a first loss computation running in a few minutes.
-* The :doc:`tutorials/index` walk through three complete applications:
-  a loss fraction from VMEC, wall heat loads, and SIMPLE inside an
-  optimisation loop.
-* The :doc:`user-guide/index` explains inputs, runs and outputs task by task.
-* :doc:`model/index` documents the physical model and the numerical methods
-  with their equations.
-* :doc:`verification/index` collects the published benchmarks and the test
-  suite.
-* :doc:`reference/index` lists every input parameter and the Python API.
+**Developers start here:** :doc:`model/index` for the equations as
+implemented, :doc:`development/index` for build, layout and tests, and
+:doc:`verification/index` for what the test suite checks.
 
-If you use SIMPLE in a publication, cite the references listed in
-:doc:`reference/publications`.
+Cite: :doc:`reference/publications`. Source: https://github.com/itpplasma/SIMPLE
+(MIT License).
 
 .. toctree::
    :maxdepth: 2
@@ -85,9 +75,3 @@ If you use SIMPLE in a publication, cite the references listed in
    :caption: Development
 
    development/index
-
-Indices
--------
-
-* :ref:`genindex`
-* :ref:`modindex`

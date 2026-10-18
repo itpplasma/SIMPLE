@@ -1,90 +1,98 @@
 Wall heat loads
 ===============
 
-SIMPLE gives the position and time at which each lost particle leaves the
-confinement region. Heat loads follow by weighting each lost marker with its
-share of the alpha power and its remaining energy, and dividing by the area on
-which it arrives. Two levels of detail are available.
+SIMPLE records where and when each lost marker leaves the plasma. This page
+sets up the two heat-load estimates: on the last closed flux surface (LCFS)
+from a standard run, and on a triangulated first wall from an STL file.
+Method: :doc:`/model/heat-loads`. Worked example:
+:doc:`/tutorials/wall-heat-loads`.
 
 Losses on the last closed flux surface
 --------------------------------------
 
-The default run stops a particle when its guiding centre crosses the last
-closed flux surface (LCFS), exit code 1. Its final state in ``times_lost.dat``
-and ``results.nc`` (``zend``, ``xend_cart``) is the crossing point. Binning
-these points in the poloidal and toroidal angle and dividing by the area of
-the bins gives the heat flux on the LCFS:
+A standard run stops a marker when its guiding centre crosses the LCFS (exit
+code 1). Its final state ``zend`` and ``xend_cart`` in ``results.nc``
+(``output_results_netcdf = .true.``) is the crossing point. Binning these
+points in :math:`(\vartheta, \varphi)`, weighting each by :math:`(v/v_0)^2`
+and dividing by the bin area from a chartmap gives the LCFS heat flux; use
+``docs/tutorials/scripts/lcfs_heat_flux.py``. The estimate needs no wall
+geometry and ignores plasma–wall distance, gyroradius and shadowing.
 
-.. math::
-
-   q_\text{bin} = \frac{P_\alpha}{N A_\text{bin}}
-                  \sum_{i \in \text{bin}} \left(\frac{v_i}{v_0}\right)^2 ,
-
-with the alpha power :math:`P_\alpha = P_\text{fusion}/5` for D-T, the number
-of markers :math:`N` and the bin area :math:`A_\text{bin}`. Without collisions
-:math:`v_i = v_0`. :doc:`/tutorials/wall-heat-loads` (Part A) does this for a
-reactor-scale QA configuration. ``DOC/wall-heat-loads.md``
-(:doc:`/reference/design-notes`) discusses the slowing-down weighting, the
-area computation and typical values.
-
-This estimate is fast and needs no wall geometry. It does not include the
-distance between plasma and wall, the finite gyroradius (several centimetres
-for 3.5 MeV alphas), or shadowing by wall structures.
+Limitation: ``pysimple.engineering.WallHeatMap.from_netcdf`` reports no losses
+for a standard run (it selects ``class_lost``, set only by classification
+runs) and reads ``zend`` with transposed axes; use the tutorial script.
 
 Losses on an STL first wall
 ---------------------------
 
-For losses on the real wall geometry, SIMPLE follows the guiding centres
-beyond the LCFS and intersects each integration step with a triangulated wall
-surface. This needs
+SIMPLE follows the guiding centres beyond the LCFS and intersects each
+accepted step with the wall surface.
 
-* a build with ``-DSIMPLE_ENABLE_CGAL=ON`` (:doc:`/getting-started/installation`),
-* ``coord_input``: a chartmap that extends beyond the LCFS and records its
-  position in the attribute ``rho_lcfs`` (:doc:`field-sources`),
-* ``field_input``: a field that is valid between LCFS and wall, normally the
-  coil field, with ``isw_field_type = 3`` or ``4`` (or ``5`` with
-  ``integmode = 0``),
-* ``wall_input``: the wall as an STL file, with ``wall_units = 'm'`` or
-  ``'mm'``,
-* ``output_results_netcdf = .true.`` to write the hit points.
+.. list-table::
+   :header-rows: 1
+   :widths: 30 70
 
-.. code-block:: fortran
+   * - Setting
+     - Requirement
+   * - build
+     - ``-DSIMPLE_ENABLE_CGAL=ON`` (:doc:`/getting-started/installation`)
+   * - ``coord_input``
+     - chartmap reaching beyond the LCFS, with attribute ``rho_lcfs`` < 1
+       (:doc:`field-sources`)
+   * - ``field_input``
+     - field valid between LCFS and wall, normally the coil field
+   * - ``isw_field_type``
+     - ``3`` or ``4`` (canonical on the chartmap), or ``5`` with
+       ``integmode = 0``
+   * - ``wall_input``
+     - STL file, closed surface around the LCFS, facet order as in the CAD
+       export
+   * - ``wall_units``
+     - ``'m'`` (default) or ``'mm'``, the STL length unit
+   * - ``output_results_netcdf``
+     - ``.true.``, to write the hits
 
-   &config
-   netcdffile = 'wout.nc'
-   field_input = 'coils.simple'
-   coord_input = 'chartmap_wall.nc'
-   isw_field_type = 3
-   wall_input = 'first_wall.stl'
-   wall_units = 'mm'
-   output_results_netcdf = .true.
-   /
+The wall is queried only after an accepted step has ended outside the LCFS
+(:math:`\rho > \rho_\text{lcfs}`), because a chord between two points inside
+the LCFS can cut a non-convex wall. A hit ends the marker with exit code 2 and
+writes ``wall_hit = 1``, ``wall_hit_cart``, ``wall_hit_normal_cart``,
+``wall_hit_angle_rad`` (0 is normal incidence) and ``wall_hit_triangle``
+(zero-based facet index in STL file order, ``-1`` without hit). A marker that
+reaches the outer chartmap boundary without a hit ends according to
+``chart_boundary_kind`` (:doc:`/model/wall-intersection`). Positions are
+guiding-centre positions; full orbits (``orbit_model = 7``) do not support
+walls.
 
-SIMPLE queries the wall only after an accepted step has ended outside the
-LCFS (``rho > rho_lcfs``), because a straight chord between two points inside
-the LCFS can cut a non-convex wall without a physical loss. A particle that
-hits the wall ends with exit code 2. ``results.nc`` then contains
-``wall_hit = 1``, the intersection point ``wall_hit_cart``, the unit normal
-of the hit triangle and the incidence angle. A particle that reaches the outer
-chartmap boundary without a wall hit ends according to
-``chart_boundary_kind``. The algorithm is described in
-:doc:`/model/wall-intersection`; :doc:`/tutorials/wall-heat-loads` (Part B)
-runs the complete chain on public data.
+With collisions (``swcoll = .true.`` and a ``&profiles`` namelist,
+:doc:`running`), hits occur at reduced energy. Choose ``trace_time`` relative
+to the slowing-down time of the profiles: much shorter measures prompt losses,
+comparable resolves losses at reduced energy. The hit keeps the momentum of
+the kicks before the intersecting step, so hit energies have the time
+resolution of the microstep.
 
-The positions are guiding-centre positions. The true impact point of the
-particle differs by up to one gyroradius. Full-orbit tracing
-(``orbit_model = 7``) does not support walls yet.
+Heat load per triangle
+----------------------
 
-Known issues at this revision
------------------------------
+``pysimple.wall_heat_load.TriangleHeatLoad`` deposits each hit on its facet
+(formulas and metric definitions in :doc:`/model/heat-loads`). It needs the
+original STL with unchanged facet order; the loader checks file name and facet
+count.
 
-* ``pysimple.engineering.WallHeatMap.from_netcdf`` selects lost particles by
-  the ``class_lost`` flag of ``results.nc``. That flag is only set by
-  classification runs (``src/simple_main.f90``), so the method reports no
-  losses for a standard run. It also indexes ``zend`` as (phase, particle),
-  while ``results.nc`` stores (particle, phase). The tutorial script reads
-  ``orbit_exit_code`` and ``zend`` directly.
-* ``python -m libneo.convert_coils_to_simple`` drops the zero-current points
-  that close each coil in the STELLOPT format, so that consecutive coils are
-  joined by spurious current segments. Use
-  ``test/tests/convert_coils_stellopt_to_simple.py``.
+.. code-block:: python
+
+   from pysimple.wall_heat_load import TriangleHeatLoad
+
+   load = TriangleHeatLoad.from_netcdf("results.nc", "wall.stl",
+                                       total_alpha_power_MW=600.0)
+   print(load.summary(threshold_W_m2=1e5))  # peak, p95, wetted area, ...
+   load.to_vtk("wall_heat.vtk")     # ParaView, cell data per facet
+   load.to_netcdf("wall_heat.nc")   # arrays plus vertices(triangle, vertex, xyz)
+   load.to_stl("wall_heat.stl")     # geometry plus wall_heat.stl.nc sidecar
+
+Per facet it provides ``power_W``, ``power_density_W_m2``,
+``power_density_per_MW`` (W/m² per MW of source alpha power) and
+``hit_count``; geometry is in metres. Equal marker weights are power-correct
+only for fusion-weighted births (``startmode = 7``, :doc:`/alpha-birth`); for
+other start distributions pass ``marker_weights`` (one relative source weight
+per marker). No smoothing is applied: check ``hit_count`` and convergence
+with marker number.

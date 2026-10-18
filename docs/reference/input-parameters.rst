@@ -1,16 +1,13 @@
 Input parameters
 ================
 
-A run is configured by the ``&config`` and ``&profiles`` namelists of
-``simple.in``. The file ``examples/simple_full.in`` lists every key with its
-default value and meaning. The test ``test_config_reference`` checks it
-against the compiled defaults, so it is always complete and current. A run
-needs only the keys that differ from the defaults.
-
-:doc:`/input-reference` lists the parameter types, defaults and bounds
-generated from the Fortran declarations. Guidance for choosing values is in
-:doc:`/user-guide/running` and in ``DOC/config.md``
-(:doc:`design-notes`).
+A run reads the ``&config`` and ``&profiles`` namelists from ``simple.in``
+and needs only the keys that differ from the defaults.
+``examples/simple_full.in`` below lists every key with its default and
+meaning; ``test_config_reference`` checks it against the compiled defaults.
+:doc:`/input-reference` gives types, defaults and bounds generated from the
+Fortran declarations, and :doc:`numerical-settings` explains the keys that set
+step size, event location and random streams.
 
 .. literalinclude:: ../../examples/simple_full.in
    :language: fortran
@@ -19,9 +16,11 @@ generated from the Fortran declarations. Guidance for choosing values is in
 Preflight validation
 --------------------
 
-Check input keys, types and basic bounds before running SIMPLE::
+Check keys, types and bounds before a run:
+
+.. code-block:: bash
 
    python tools/check_input.py simple.in examples/*.in
 
-The validator uses the generated schema. Runtime checks of files, fields and
-interacting options remain the responsibility of SIMPLE.
+The validator uses the generated schema ``docs/input-reference.json``. File
+contents, fields and interacting options are checked by SIMPLE at run time.

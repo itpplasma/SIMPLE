@@ -1,63 +1,55 @@
-Performance tips
-================
+Performance
+===========
 
-A SIMPLE run has two phases: the field setup (VMEC splines, Boozer or
-canonical transformation, starting surface) and the particle tracing. The log
-prints the time of each phase. For a few hundred particles the setup can
-dominate; for thousands of particles the tracing does.
+This page lists what sets the run time of SIMPLE and how to reduce it. A run
+has two phases, both timed in the log: field setup (splines, canonical or
+Boozer transformation, start surface) and tracing. Setup dominates for a few
+hundred markers, tracing for thousands. Measured scaling and profile:
+:doc:`/performance/efss-hpc/index`.
 
-Build
------
+Build and threads
+-----------------
 
-* Use ``make CONFIG=Fast`` (native CPU optimisation) for production runs.
-* ``SIMPLE_DETERMINISTIC_FP=ON`` disables fast-math. Use it for regression
-  comparisons, not for production.
-
-Parallel runs
--------------
-
-* Set ``OMP_NUM_THREADS`` to the number of physical cores, and
-  ``OMP_PROC_BIND=spread``, ``OMP_PLACES=cores`` on multi-socket nodes.
-* For large ensembles, run independent cases (equilibria, seeds or batches
-  with ``batch_size``) as separate jobs. Example Slurm scripts are in
-  ``RUN/``.
-* For many particles in Boozer coordinates without collisions, walls or
+* Production: ``make CONFIG=Fast`` (native CPU tuning). Use
+  ``-DSIMPLE_DETERMINISTIC_FP=ON`` (no fast-math) only for regression
+  comparisons.
+* Markers are traced in parallel with OpenMP. Set ``OMP_NUM_THREADS`` to the
+  physical cores, ``OMP_PLACES=cores`` and ``OMP_PROC_BIND=spread``. Tracing
+  scales nearly linearly up to 16 threads; setup is mostly serial.
+* One run uses one node. Spread large ensembles over independent jobs
+  (equilibria, seeds, or ``batch_size`` batches); cluster scripts are in
+  :doc:`/hpc/index`.
+* For many markers in Boozer coordinates without collisions, walls or
   classification, use the CUDA backend (:doc:`gpu`).
 
-Physics settings that set the cost
-----------------------------------
+Physics settings
+----------------
 
-* The cost is proportional to ``ntestpart`` times ``trace_time`` for confined
-  particles. Lost particles stop early.
-* ``contr_pp`` (default :math:`-1`) skips strongly passing particles, which
-  are well confined. In :doc:`/tutorials/loss-fraction` 130 of 256 particles
-  are skipped this way; tracing them (``contr_pp = -1d10``) roughly doubles
-  the number of orbits traced to the end.
+* Cost is proportional to ``ntestpart`` × ``trace_time`` for confined
+  markers; lost markers stop early.
+* ``contr_pp`` (default :math:`-1`) counts strongly passing markers as
+  confined without tracing. In :doc:`/tutorials/loss-fraction` this skips 130
+  of 256 markers; ``contr_pp = -1d10`` traces them.
 * ``fast_class = .true.`` with ``tcut > 0`` stops regular trapped orbits after
   classification (:doc:`classification`).
-* A logarithmic macrostep grid (``macrostep_time_grid = 'log'``) resolves early
-  losses without increasing the number of microsteps.
+* ``macrostep_time_grid = 'log'`` resolves early losses in time without
+  adding microsteps.
 
 Numerical settings
 ------------------
 
-* ``npoiper2`` sets the step size. Symplectic Euler can give bounded long-time
-  energy errors at suitable steps, but symplecticity alone does not guarantee
-  stability at large steps. Check
-  the loss fraction for convergence by halving the step. ``DOC/config.md``
-  gives guidance (:doc:`/reference/design-notes`).
-* Higher-order integrators (``integmode`` 3 to 7, 15) are more accurate per
-  step but cost more per step. Symplectic Euler is usually the fastest
-  choice for loss fractions.
-* ``multharm``, ``ns_s`` and ``ns_tp`` set the spline resolution of the VMEC
-  field. Lower values speed up the setup for quick scans (for example
-  ``multharm = 3``).
-* ``canonical_grid_nr``, ``canonical_grid_ntheta`` and
-  ``canonical_grid_nphi`` set the grid of the Meiss and Albert
-  transformation. Change one at a time in resolution studies.
+* ``npoiper2`` (default 256) sets the step size. Check the loss fraction for
+  convergence by halving the step; symplecticity does not guarantee stability
+  at large steps.
+* Higher-order integrators (``integmode`` 3 to 7, 15) cost more per step;
+  symplectic Euler (``integmode = 1``) is usually fastest for loss fractions.
+* ``multharm``, ``ns_s`` and ``ns_tp`` set the VMEC spline resolution; lower
+  values (for example ``multharm = 3``) speed up setup for scans.
+* ``canonical_grid_nr``, ``canonical_grid_ntheta``, ``canonical_grid_nphi``
+  set the Meiss and Albert transformation grid; change one at a time in
+  resolution studies.
 
-The :doc:`/performance/efss-hpc/index` gives measured OpenMP scaling,
-profiles and commands for reproducing the comparison.
+Guidance per key: :doc:`/reference/numerical-settings`.
 
 .. toctree::
    :maxdepth: 1
