@@ -1,87 +1,97 @@
 Orbit classification
 ====================
 
-Without collisions, a guiding-centre orbit that lies on an invariant torus
-(a regular orbit) is confined for all times if the torus lies inside the
-plasma. Only chaotic orbits can be lost after a long time, and their loss time
-is unpredictable. SIMPLE classifies orbits as regular or chaotic from a short
-piece of trajectory. Albert, Kasilov and Kernbichler (2020, JPP) used a
-fractal-dimension classifier to stop regular orbits early; Albert et al.
-(2023) introduced two faster classifiers based on the parallel adiabatic
-invariant and on the topology of the orbit footprints, and confinement
-metrics derived from them. The implementation is in ``src/classification.f90``,
-``src/check_orbit_type.f90`` and ``src/cut_detector.f90``.
+This page defines the footprints and the three classifiers that label an
+orbit regular or chaotic from a short trace, and the class codes written to
+the outputs. Usage: :doc:`/user-guide/classification`.
 
-Footprints in Poincaré sections
--------------------------------
+Without collisions only chaotic orbits are lost late, so a regular orbit
+can be stopped early (Albert, Kasilov and Kernbichler 2020, fractal
+classifier; Albert et al. 2023, :math:`J_\parallel` and topological
+classifiers and metrics). Code: ``src/classification.f90``,
+``src/check_orbit_type.f90``, ``src/cut_detector.f90``. Classification
+excludes collisions and full-orbit tracing.
 
-Two kinds of Poincaré sections are used.
+Footprints
+----------
 
-* **Banana tips** of trapped orbits: the points where :math:`v_\parallel`
-  changes sign from negative to positive. Each tip is located by Lagrange
-  interpolation over a stencil of integration points around the sign change.
-  Its footprint is the radial position and an angle at the tip.
-* **Field-period planes** :math:`\varphi = \text{const}` (offset
-  ``cut_in_per`` within the period) for passing orbits.
-
-Between two consecutive tips the code accumulates the parallel adiabatic
-invariant
+The classifier keeps a stencil of the last ``nplagr`` :math:`= 4`
+microstep states :math:`(r,\vartheta,\varphi,v/v_0,\lambda)` together with the
+running integral
 
 .. math::
 
-   J_\parallel \propto \oint v_\parallel^2 \, d\tau ,
+   J_\parallel = \int \lambda^2\, d\tau ,
 
-which is proportional to :math:`\oint m v_\parallel \, dl` along the orbit.
+which, at constant speed, is proportional to the parallel adiabatic invariant
+:math:`\oint m v_\parallel\, dl` over one bounce.
 
-:math:`J_\parallel` classifier
-------------------------------
+* **Banana tips**: when :math:`\lambda` changes sign from negative to
+  positive, the state is interpolated to :math:`\lambda = 0` by a Lagrange
+  polynomial in :math:`\lambda` through the stencil. The footprint is
+  :math:`(r,\vartheta)` at the tip, together with :math:`J_\parallel` since
+  the previous tip; :math:`J_\parallel` is then reset.
+* **Field-period planes**: when :math:`\varphi` crosses a multiple of
+  :math:`2\pi/N_\text{fp}`, the state is interpolated to the plane in the same
+  way; the footprint is :math:`(r,\vartheta)`.
 
-For a regular trapped orbit, the tip footprints lie on a closed curve, and
-:math:`J_\parallel` is a smooth function along this curve, because it is an
-adiabatic invariant of the bounce motion. The classifier sorts the footprints
-of ``nturns`` recurrences along the curve and tests whether
-:math:`J_\parallel` varies smoothly within a tolerance. If so, the orbit is
-regular (class 1), otherwise stochastic (class 2). Orbits that do not complete
-enough recurrences remain unclassified (class 0).
+Tip footprints feed all three classifiers; plane footprints only the fractal
+one.
 
-Topological classifier
-----------------------
+Class codes
+-----------
 
-The same footprints are tested for the topology of an "ideal" regular orbit:
-the footprints must recur on a single closed line, and their order along the
-line must advance monotonically from one recurrence to the next. Orbits that
-pass both tests are ideal (class 1), others non-ideal (class 2).
+``class_parts.dat`` and ``results.nc`` store three codes per marker
+(:doc:`/user-guide/outputs`): :math:`J_\parallel`, topological, fractal.
+Each is 0 (unclassified), 1 (regular) or 2 (chaotic). Passing markers skipped
+by ``notrace_passing`` or ``contr_pp`` get 1 in all three.
 
-Both classifiers need only a few bounce periods (``nturns`` recurrences,
-default 8). With ``fast_class = .true.``, the tracing of a trapped orbit stops
-when the :math:`J_\parallel` classifier finds it regular, and the orbit is
-counted as confined.
+:math:`J_\parallel` and topological classifiers
+-----------------------------------------------
+
+``check_orbit_type`` processes the tip footprints in order. A *recurrence*
+occurs when the angle of a new footprint lies between the angles of the
+first two footprints (angles taken modulo :math:`2\pi` around the first).
+If the first recurrence comes after at most 10 footprints, both codes are 2.
+Otherwise, once ``nturns`` (default 8) recurrences are collected:
+
+* **Topological**: the numbers of footprints between consecutive recurrences
+  must be consistent with one closed curve. For every multiplicity
+  :math:`m \le \texttt{nturns}/2`, each interval of :math:`m` recurrences must
+  contain :math:`N_m` or :math:`N_m - 1` footprints, where :math:`N_m` is the
+  first such interval (``check_recurs``). In addition, the footprints of each
+  recurrence, sorted by angle, must keep their order in the following
+  recurrences. Both conditions hold: code 1 (ideal); otherwise 2.
+* :math:`J_\parallel`: code 1 if :math:`|J_\parallel^{(k)} - J_\parallel^{(2)}|
+  \le 15` for every tip :math:`k` up to the last recurrence, otherwise 2.
+  :math:`J_\parallel` is in units of :math:`\tau` (cm), so the tolerance is
+  absolute.
+
+With ``fast_class = .true.`` and without ``class_plot``, a trapped marker is
+stopped and counted confined once its :math:`J_\parallel` code is 1.
 
 Fractal classifier
 ------------------
 
-At the cut time ``tcut`` the collected footprints (tips for trapped orbits,
-field-period crossings for passing orbits) are analysed with a box-counting
-method that estimates their Minkowski dimension: the footprints of a regular
-orbit fill a curve (dimension 1), those of a chaotic orbit fill an area
-(dimension 2). The measure is compared with a fixed threshold (0.2 in
-``src/classification.f90``). This classifier needs much longer tracing than
-the other two, but it also applies to passing orbits.
+At the microstep ``ntcut`` (from ``tcut``) the :math:`N` collected footprints
+of each kind are box-counted (``fract_dimension``) on their bounding
+rectangle in :math:`(r,\vartheta)` with a :math:`2^n \times 2^n` grid,
+:math:`n = \lfloor\log_4 N\rfloor`, so that the number of boxes is about
+:math:`N`. The occupied fraction
 
-Confinement metrics
--------------------
+.. math::
 
-The classes give metrics for collisionless losses that need far less tracing
-time than a direct loss computation (Albert et al. 2023):
+   \phi = N_\text{boxes}/4^n
 
-* the fraction of chaotic trapped orbits on a surface or in the volume,
-* the radial extent of regular regions in the space of the perpendicular
-  invariant, which act as barriers for chaotic orbits that start further
-  inside.
+is :math:`\sim 2^{-n}` for footprints on a curve and of order one for an
+area; :math:`\phi > 0.2` (box-counting dimension
+:math:`d > 2 + \log 0.2/\log 2^n`) is chaotic. Tip footprints set the fractal
+code; chaotic plane footprints only mark the orbit as not regular. This
+classifier needs far longer traces but also covers passing orbits.
 
-Because pitch-angle scattering becomes important only after the alphas have
-lost a large part of their energy, these metrics remain informative with
-collisions.
+Albert et al. (2023) derive two metrics from the codes: the fraction of
+chaotic trapped orbits, and the radial extent of regular regions in
+:math:`J_\perp`, which bound chaotic orbits starting further inside.
 
 References
 ----------

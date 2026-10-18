@@ -1,177 +1,153 @@
 Guiding-centre model
 ====================
 
+This page derives the four-dimensional canonical system that the symplectic
+integrators advance, its normalisation in the code, and the invariants and
+the trapping parameter reported in the outputs.
+Usage: :doc:`/user-guide/running`.
+
 Phase-space Lagrangian
 ----------------------
 
-SIMPLE follows the guiding centre of a charged particle of mass :math:`m` and
-charge :math:`e` (here :math:`e = Z e_0` with charge number ``n_e``) in a
-static magnetic field :math:`\mathbf{B} = \nabla \times \mathbf{A}` without
-electric field. In Gaussian units, the guiding-centre phase-space Lagrangian
-in arbitrary spatial coordinates :math:`x^k` is (Littlejohn 1983)
+A particle of mass :math:`m = n_d m_p` and charge :math:`e = n_e e_0`
+(``n_d``, ``n_e``) moves in a static field
+:math:`\mathbf B = \nabla\times\mathbf A` without electric field. In Gaussian
+units and arbitrary spatial coordinates :math:`x^k`, the guiding-centre
+phase-space Lagrangian to first order in :math:`\rho_L/L` is (Littlejohn 1983)
 
 .. math::
    :label: lagrangian
 
-   L = \left( m v_\parallel h_k + \frac{e}{c} A_k \right) \dot x^k
-       - J_\perp \dot\phi - H ,
+   L = \Bigl(m v_\parallel h_k + \frac{e}{c} A_k\Bigr)\dot x^k
+       + \frac{mc}{e}\,\mu\,\dot\gamma - H,
    \qquad
-   H = \frac{m v_\parallel^2}{2} + J_\perp \omega_c ,
+   H = \frac{m v_\parallel^2}{2} + \mu B ,
 
-with the covariant components :math:`h_k = B_k / B` of the unit vector along
-the field, the gyrophase :math:`\phi`, the perpendicular adiabatic invariant
-:math:`J_\perp = m v_\perp^2 / (2 \omega_c)` and the cyclotron frequency
-:math:`\omega_c = e B / (m c)`. The magnetic moment
-:math:`\mu = m v_\perp^2 / (2B)` is related by :math:`J_\perp \omega_c = \mu B`.
-The guiding-centre position is accurate to first order in the ratio of the
-gyroradius :math:`\rho` to the scale length of the field.
-
-:math:`\phi` is cyclic, so :math:`J_\perp` and :math:`\mu` are constants of
-motion. :math:`H` does not depend on time, so the energy is conserved. Four
-phase-space variables remain: three for the position and one for the parallel
-motion.
+with covariant components :math:`h_k = B_k/B`, gyrophase :math:`\gamma` and
+magnetic moment :math:`\mu = m v_\perp^2/(2B)`. :math:`\gamma` is cyclic, so
+:math:`\mu` is constant; :math:`H` has no explicit time dependence, so the
+energy is constant. Position and :math:`v_\parallel` remain: four
+phase-space variables.
 
 Canonical form
 --------------
 
-In coordinates :math:`(r, \vartheta, \varphi)` in which the radial covariant
-components of both :math:`\mathbf{A}` and :math:`\mathbf{h}` vanish,
-:math:`A_r = h_r = 0`, the Lagrangian :eq:`lagrangian` becomes canonical:
+If the coordinates :math:`(r,\vartheta,\varphi)` satisfy
+:math:`A_r = h_r = 0` (construction in :doc:`coordinates`), the
+:math:`\dot r` term of :eq:`lagrangian` vanishes and
 
 .. math::
    :label: canonical
 
-   L = p_\vartheta \dot\vartheta + p_\varphi \dot\varphi - H,
-   \qquad
-   p_\vartheta = m v_\parallel h_\vartheta + \frac{e}{c} A_\vartheta ,
-   \qquad
-   p_\varphi = m v_\parallel h_\varphi + \frac{e}{c} A_\varphi .
+   L = p_\vartheta\dot\vartheta + p_\varphi\dot\varphi - H, \qquad
+   p_\vartheta = m v_\parallel h_\vartheta + \frac{e}{c}A_\vartheta, \qquad
+   p_\varphi = m v_\parallel h_\varphi + \frac{e}{c}A_\varphi ,
 
-The angles :math:`(\vartheta, \varphi)` and the momenta
-:math:`(p_\vartheta, p_\varphi)` form two canonical pairs. How such coordinates
-are constructed for VMEC equilibria, Boozer chartmaps and general fields is
-described in :doc:`coordinates`.
-
-The integrators do not use :math:`p_\vartheta` as an independent variable.
-They use the four variables
+so :math:`(\vartheta,p_\vartheta)` and :math:`(\varphi,p_\varphi)` are
+canonical pairs. The integrators carry
 
 .. math::
 
-   z = (r, \vartheta, \varphi, p_\varphi),
+   z = (r,\vartheta,\varphi,p_\varphi)
 
-in which all field quantities are evaluated. Given :math:`z`, the parallel
-velocity and the other momentum follow from :eq:`canonical`:
+and evaluate the field at :math:`(r,\vartheta,\varphi)`. Everything else is a
+function of :math:`z`:
 
 .. math::
    :label: vpar
 
-   v_\parallel = \frac{p_\varphi - (e/c) A_\varphi(r, \vartheta, \varphi)}
-                      {m h_\varphi(r, \vartheta, \varphi)},
-   \qquad
-   p_\vartheta(z) = m v_\parallel h_\vartheta + \frac{e}{c} A_\vartheta ,
-   \qquad
-   H(z) = \frac{m v_\parallel^2}{2} + \mu B(r, \vartheta, \varphi).
+   v_\parallel(z) = \frac{p_\varphi - (e/c)A_\varphi}{m h_\varphi}, \qquad
+   p_\vartheta(z) = m v_\parallel h_\vartheta + \frac{e}{c}A_\vartheta, \qquad
+   H(z) = \frac{m v_\parallel^2}{2} + \mu B .
 
-The radial coordinate :math:`r` is a non-canonical variable, defined
-implicitly by :math:`p_\vartheta(z)`. Hamilton's equations for the canonical
-pairs read
+``get_val`` in ``src/field_can.f90`` implements :eq:`vpar`;
+``get_derivatives`` and ``get_derivatives2`` add first and second
+:math:`z`-derivatives by the chain rule. Since :math:`r` replaces
+:math:`p_\vartheta`, Hamilton's equations follow by the implicit-function
+theorem at fixed :math:`p_\vartheta(z)`:
 
 .. math::
    :label: hamilton
 
-   \dot p_\vartheta = -\left.\frac{\partial H}{\partial \vartheta}\right|_{p},
-   \quad
-   \dot \vartheta = \left.\frac{\partial H}{\partial p_\vartheta}\right|_{q},
-   \quad
-   \dot p_\varphi = -\left.\frac{\partial H}{\partial \varphi}\right|_{p},
-   \quad
-   \dot \varphi = \left.\frac{\partial H}{\partial p_\varphi}\right|_{q},
+   \dot\vartheta = \frac{\partial_r H}{\partial_r p_\vartheta}, \quad
+   \dot p_\vartheta = -\partial_\vartheta H
+      + \frac{\partial_r H}{\partial_r p_\vartheta}\,\partial_\vartheta p_\vartheta, \quad
+   \dot\varphi = \partial_{p_\varphi} H
+      - \frac{\partial_r H}{\partial_r p_\vartheta}\,\partial_{p_\varphi} p_\vartheta, \quad
+   \dot p_\varphi = -\partial_\varphi H
+      + \frac{\partial_r H}{\partial_r p_\vartheta}\,\partial_\varphi p_\vartheta .
 
-where the derivatives at constant canonical variables are obtained from
-derivatives in :math:`z` by the implicit function theorem, for example
-
-.. math::
-
-   \left.\frac{\partial H}{\partial p_\vartheta}\right|_{q}
-     = \frac{\partial_r H}{\partial_r p_\vartheta},
-   \qquad
-   \left.\frac{\partial H}{\partial \vartheta}\right|_{p}
-     = \partial_\vartheta H
-       - \frac{\partial_r H}{\partial_r p_\vartheta}\,
-         \partial_\vartheta p_\vartheta .
-
-This formulation, symplectic integration with non-canonical quadrature
-points, is the subject of Albert, Kasilov and Kernbichler (2020, J. Comput.
-Phys.). It requires :math:`\partial_r p_\vartheta \neq 0`. In flux coordinates
-:math:`\partial_r p_\vartheta \approx (e/c)\, \partial_r A_\vartheta =
-(e/c)\, \psi_\text{tor}'`, which is non-zero away from the magnetic axis. The
-code is in ``src/field_can.f90`` (``get_val`` and its derivatives) and
-``src/orbit_symplectic*.f90``.
+With :math:`\partial_{p_\varphi} H = v_\parallel/h_\varphi` and
+:math:`\partial_{p_\varphi} p_\vartheta = h_\vartheta/h_\varphi` (normalised
+units) the third equation becomes
+:math:`\dot\varphi = (v_\parallel - h_\vartheta\,\partial_r H/\partial_r
+p_\vartheta)/h_\varphi`, as coded in ``sympl_euler1_advance_angles`` and
+``gauss_canfield_residual``. Albert, Kasilov and Kernbichler (2020, JCP)
+introduced this non-canonical quadrature. It requires
+:math:`\partial_r p_\vartheta \approx (e/c)\,\psi_\text{tor}'(r) \neq 0`,
+which fails at the axis for :math:`r=\rho`; for :math:`r=s` the polar
+singularity at :math:`s=0` remains (treatment in :doc:`integrators`).
 
 Normalisation
 -------------
 
-The code uses Gaussian units with lengths in cm and fields in G. The particle
-energy is :math:`E_0 = 3.5\,\text{MeV}/\text{facE\_al}` and the reference
-speed is the birth speed
+Inside the code all lengths are in cm, fields in G, and the reference speed
+is the birth speed
 
 .. math::
 
-   v_0 = \sqrt{2 E_0 / m}.
+   v_0 = \sqrt{2E_0/m}, \qquad E_0 = 3.5\,\text{MeV}/\texttt{facE\_al},
+   \qquad \rho_0 = \frac{m c v_0}{e}\ \ (\texttt{ro0},\ \text{G cm}),
 
-The physical path-length time is :math:`\tau = v_0 t`. The symplectic
-integrators use :math:`\bar\tau = \tau/\sqrt{2}`, with velocities normalised
-to :math:`v_0/\sqrt{2}`, energies to
-:math:`E_0` and momenta divided by :math:`m v_0/\sqrt{2}`, which introduces the
-reference gyroradius :math:`\rho_0 = m c v_0 / (\sqrt{2} e)` (unit G cm) in
-the normalised momenta, :math:`\bar p_k = \bar v_\parallel h_k + A_k/\rho_0`.
-The output state uses :math:`v/v_0` and the pitch
-:math:`\lambda = v_\parallel / v`.
+set in ``src/params.f90`` (``params_init``). Time is the path length
+:math:`\tau = v_0 t`. The public state of a marker is
+:math:`z_\text{out} = (r,\vartheta,\varphi,v/v_0,\lambda)`.
 
-The time step is set by ``npoiper2``: the step in :math:`\tau` is
-:math:`2\pi R_0 / \text{npoiper2}`, with the major radius :math:`R_0` of the
-equilibrium. A macrostep, after which the results are recorded, contains an
-integer number of such microsteps.
+The symplectic integrators use a second set of normalised quantities, marked
+by a bar, in which the Hamiltonian has the form
+:math:`\bar H = \bar v_\parallel^2/2 + J_\perp B`:
 
-Invariants and the trapping parameter
--------------------------------------
+.. csv-table::
+   :header: "Quantity", "Definition", "In the code"
+   :widths: 24 46 30
 
-The perpendicular invariant reported in the outputs is
-:math:`J_\perp \propto (1 - \lambda^2) v^2 / B` at the start point. The
-trapping parameter
+   "parallel velocity", ":math:`\bar v_\parallel = \sqrt2\,v_\parallel/v_0 = \sqrt2\,(v/v_0)\lambda`", "``f%vpar``"
+   "perpendicular invariant", ":math:`J_\perp = 2\mu/(m v_0^2) = (v/v_0)^2(1-\lambda^2)/B`", "``f%mu`` (G\ :sup:`-1`)"
+   "Hamiltonian", ":math:`\bar H = 2H/(m v_0^2) = (v/v_0)^2`", "``f%H``"
+   "gyroradius parameter", ":math:`\bar\rho_0 = \rho_0/\sqrt2`", "``f%ro0``"
+   "canonical momenta", ":math:`\bar p_k = p_k/(m v_0/\sqrt2) = \bar v_\parallel h_k + A_k/\bar\rho_0`", "``si%z(4)`` :math:`=\bar p_\varphi`, ``f%pth``"
+   "time", ":math:`\bar t = \tau/\sqrt2`", "``si%dt`` :math:`=\Delta\tau/\sqrt2`"
 
-.. math::
+With these definitions Hamilton's equations keep their form,
+:math:`d\bar q/d\bar t = \partial\bar H/\partial\bar p`, because
+:math:`\partial H/\partial p = (v_0/\sqrt2)\,\partial\bar H/\partial\bar p`.
+``src/simple.f90`` (``encode_symplectic_state``) is the single conversion
+from :math:`z_\text{out}` to :math:`(r,\vartheta,\varphi,\bar p_\varphi)`;
+the reverse map is
+:math:`v/v_0 = \sqrt{\bar H} = \sqrt{J_\perp B + \bar v_\parallel^2/2}` and
+:math:`\lambda = \bar v_\parallel/(\sqrt2\,v/v_0)`. After a collision
+``update_momentum`` re-encodes the state in the same way (:doc:`collisions`).
 
-   \kappa = \left((1 - \lambda^2) \frac{B_\text{max}}{B} - 1\right)
-            \frac{B_\text{min}}{B_\text{max} - B_\text{min}}
+Invariants and trapping parameter
+---------------------------------
 
-uses the extrema :math:`B_\text{min}`, :math:`B_\text{max}` of the field
-strength on the start surface. :math:`\kappa < 0` is passing,
-:math:`0 \le \kappa \le 1` trapped.
-
-Collisions
-----------
-
-With ``swcoll = .true.``, Coulomb collisions with a Maxwellian background of
-electrons and two ion species are added by operator splitting: after each
-integration step of length :math:`\Delta\tau`, the speed and the pitch are
-changed by a Monte Carlo step (``src/collis_alphas.f90``, ``stost``):
+For each marker the outputs report, at the start point
+(``compute_pitch_angle_params`` in ``src/simple_main.f90``),
 
 .. math::
 
-   \Delta\lambda = \sqrt{2 D_{\lambda} (1 - \lambda^2) \Delta\tau}\, \xi_1
-                   - 2 \lambda D_{\lambda} \Delta\tau ,
-   \qquad
-   \Delta p = \sqrt{2 D_{p} \Delta\tau}\, \xi_2 + F_p \Delta\tau ,
+   J_\perp = \frac{(v/v_0)^2(1-\lambda^2)}{B}, \qquad
+   \kappa = \Bigl((1-\lambda^2)\frac{B_\text{max}}{B} - 1\Bigr)
+            \frac{B_\text{min}}{B_\text{max}-B_\text{min}},
 
-with independent random numbers :math:`\xi_{1,2}` of zero mean and unit
-variance (:math:`\pm 1` for the pitch, uniformly distributed for the
-speed), the pitch-angle scattering coefficient :math:`D_\lambda`, the energy
-diffusion coefficient :math:`D_p` and the drag :math:`F_p` for the normalised
-momentum :math:`p = v/v_0`. The coefficients are computed for the local
-background densities and temperatures from the ``&profiles`` namelist. Drag
-on electrons and ions slows the alphas down; pitch-angle scattering moves them
-between trapped and passing orbits.
+where :math:`B_\text{min}` and :math:`B_\text{max}` are the extrema of
+:math:`B` on the start surface (``get_bminmax``). :math:`\kappa < 0` is
+equivalent to :math:`\lambda^2 > 1 - B/B_\text{max}`, i.e. a passing orbit;
+:math:`\kappa = 0` is the trapped-passing boundary and :math:`\kappa = 1` a
+deeply trapped particle at :math:`B_\text{min}`; ``contr_pp`` skips passing
+markers by :math:`\kappa`. Without collisions :math:`\bar H`,
+:math:`J_\perp` and, in axisymmetry, :math:`\bar p_\varphi` are invariants;
+``src/orbit_invariants.f90`` converts between states and invariants.
 
 References
 ----------

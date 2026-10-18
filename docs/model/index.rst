@@ -1,11 +1,8 @@
 Model and methods
 =================
 
-This part documents what SIMPLE computes and how. It is a technical reference
-for the physical model, the coordinates, the numerical integrators, the orbit
-classification and the wall intersection. The derivations are published in
-the papers listed in :doc:`/reference/publications`; the pages below state the
-equations as implemented and point to the source files.
+These pages state the equations SIMPLE solves, as the code solves them, with
+the implementing routine for each.
 
 .. toctree::
    :maxdepth: 2
@@ -13,8 +10,10 @@ equations as implemented and point to the source files.
    guiding-centre
    coordinates
    integrators
+   collisions
    classification
    wall-intersection
+   heat-loads
    extensions
 
 .. figure:: /_static/figures/pipeline.svg
@@ -24,38 +23,36 @@ equations as implemented and point to the source files.
          intersected with the wall, and written as loss statistics.
    :width: 100%
 
-   Pipeline of a SIMPLE run.
+   Phases of a ``simple.x`` run.
 
-Overview of a run
------------------
+Phases of a run
+---------------
 
-1. **Field setup.** The magnetic field is read from a VMEC equilibrium, a
-   Boozer chartmap, a coil file or a SPECTRE equilibrium. SIMPLE constructs
-   coordinates in which the guiding-centre Lagrangian is canonical
-   (:doc:`coordinates`) and splines the field components needed by the
-   integrator.
-2. **Sampling.** Particles start on a flux surface or in a volume with an
-   isotropic pitch distribution and the birth energy.
-3. **Tracing.** Each guiding-centre orbit is integrated with a symplectic
-   method in canonical coordinates (:doc:`integrators`) until it leaves the
-   plasma, hits the wall, or reaches the tracing time. Particles are
-   distributed over OpenMP threads (or GPU threads).
-4. **Classification** (optional). Regular and chaotic orbits are identified
-   from a short piece of trajectory (:doc:`classification`).
-5. **Output.** Loss times, exit positions, exit codes and confined fractions
-   are written per particle and per time.
+1. **Field.** Read a VMEC equilibrium, a chartmap, a coil file or a SPECTRE
+   equilibrium; construct coordinates in which the guiding-centre Lagrangian
+   is canonical and spline :math:`A_\vartheta, A_\varphi, h_\vartheta,
+   h_\varphi, B` (:doc:`coordinates`).
+2. **Sampling.** Draw start positions in reference coordinates with speed
+   :math:`v_0` and pitch :math:`\lambda` (:doc:`/user-guide/running`).
+3. **Tracing.** Advance each marker in its own OpenMP iteration with the
+   selected integrator (:doc:`integrators`), optionally followed by a Monte
+   Carlo collision step per microstep (:doc:`collisions`), until it crosses
+   the loss boundary or the wall (:doc:`wall-intersection`) or reaches
+   ``trace_time``.
+4. **Classification** (optional): label regular and chaotic orbits from
+   their Poincaré footprints (:doc:`classification`).
+5. **Output** (:doc:`/user-guide/outputs`).
 
-Scope and assumptions
----------------------
+Assumptions
+-----------
 
-* Test particles: the energetic particles do not modify the field. The field
-  is static.
-* Guiding-centre motion, to first order in the ratio of gyroradius to the
-  scale length of the field (:doc:`guiding-centre`). A full-orbit option and
-  hybrid full-orbit treatment for SPECTRE interfaces are described in
-  :doc:`extensions`.
-* No electric field in the standard model.
-* Optional Coulomb collisions with a Maxwellian background as a Monte Carlo
-  operator.
-* The default loss boundary is the last closed flux surface; a triangulated
-  wall can be used instead (:doc:`wall-intersection`).
+* Test particles in a static magnetic field; no electric field.
+* Guiding-centre motion to first order in :math:`\rho_L/L`; the guiding
+  centre, not the particle, defines losses and wall hits. Full-orbit tracing
+  is an alternative model (:doc:`extensions`).
+* Non-relativistic (``rmu = 1e8`` in ``src/params.f90``).
+* Collisions are a test-particle operator with a Maxwellian background of
+  electrons and two ion species, using alpha-particle mass and charge
+  (:doc:`collisions`).
+* A marker is lost when it leaves the last closed flux surface or the
+  chartmap domain, or hits an STL wall.
