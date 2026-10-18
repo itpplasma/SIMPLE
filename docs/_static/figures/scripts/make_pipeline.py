@@ -85,8 +85,9 @@ def label(x, y, text, size=12, anchor="middle", weight=None, cls="label"):
 
 def build() -> str:
     fs = 14.5  # box title size; body lines use fs - 1
-    for x, text in zip(COL_X, ["1  Sources", "2  Field", "3  Canonical", "4  Orbits",
-                               "5  Outputs"]):
+    for x, text in zip(
+        COL_X, ["1  Sources", "2  Field", "3  Canonical", "4  Orbits", "5  Outputs"]
+    ):
         label(x + 3, 30, text, size=16, anchor="start", weight="700")
 
     # 1  Sources: field_input / coord_input (examples/simple_full.in).
@@ -115,17 +116,35 @@ def build() -> str:
     xa, xb = COL_X[0] + COL_W, x2
     arrow(xa, ys[0] + bh / 2, xb - 2, ys[0] + bh / 2)
     cy = reps["chart"][0] + bh / 2
-    path(f"M{xa},{ys[1] + bh / 2} C{xa + 12},{ys[1] + bh / 2} {xb - 14},{cy - 8} {xb - 2},{cy - 8}")
-    path(f"M{xa},{ys[2] + bh / 2} C{xa + 12},{ys[2] + bh / 2} {xb - 14},{cy + 8} {xb - 2},{cy + 8}")
+    path(
+        f"M{xa},{ys[1] + bh / 2} C{xa + 12},{ys[1] + bh / 2} {xb - 14},{cy - 8} {xb - 2},{cy - 8}"
+    )
+    path(
+        f"M{xa},{ys[2] + bh / 2} C{xa + 12},{ys[2] + bh / 2} {xb - 14},{cy + 8} {xb - 2},{cy + 8}"
+    )
     arrow(xa, ys[3] + bh / 2, xb - 2, ys[3] + bh / 2)
     arrow(xa, ys[4] + bh / 2, xb - 2, ys[4] + bh / 2)
 
     # 3  Canonical coordinates: integ_coords 0, 2, 3, 4, 6.
     x3 = COL_X[2]
     ctop, cbot = ys[0], ys[3] + bh
-    box(x3, ctop, COL_W, cbot - ctop, "canon",
-        ["Boozer", "canonical flux", "Meiss", "Albert", "", "radial gauge",
-         "A_r = h_r = 0"], size=fs + 0.5)
+    box(
+        x3,
+        ctop,
+        COL_W,
+        cbot - ctop,
+        "canon",
+        [
+            "Boozer",
+            "canonical flux",
+            "Meiss",
+            "Albert",
+            "",
+            "radial gauge",
+            "A_r = h_r = 0",
+        ],
+        size=fs + 0.5,
+    )
     box(x3, ys[4], COL_W, bh, "canon", ["Per-volume", "Meiss (SPECTRE)"], size=fs)
     for key in ("vmec", "chart", "coils"):
         y = reps[key][0] + bh / 2
@@ -135,21 +154,46 @@ def build() -> str:
     # 4  Orbit integration: integmode, orbit_model, crossing_level, gpu_*.
     x4 = COL_X[3]
     gc_h = 112
-    box(x4, ys[0], COL_W, gc_h, "orbit",
-        ["Guiding centre", "symplectic Euler,", "midpoint, Gauss,", "Lobatto; RK45;",
-         "collisions optional"], size=fs)
+    box(
+        x4,
+        ys[0],
+        COL_W,
+        gc_h,
+        "orbit",
+        [
+            "Guiding centre",
+            "symplectic Euler,",
+            "midpoint, Gauss,",
+            "Lobatto; RK45;",
+            "collisions optional",
+        ],
+        size=fs,
+    )
     fo_y = ys[0] + gc_h + gap
     fo_h = 92
-    box(x4, fo_y, COL_W, fo_h, "orbit",
+    box(
+        x4,
+        fo_y,
+        COL_W,
+        fo_h,
+        "orbit",
         ["Full orbit", "Boris (Boozer chart);", "SPECTRE GC↔FO", "near interfaces"],
-        size=fs)
+        size=fs,
+    )
     be_y = fo_y + fo_h + gap
     half = (COL_W - 8) / 2
     be_h = ys[4] + bh - be_y
     box(x4, be_y, half, be_h, "orbit", ["CPU", "OpenMP"], size=fs)
     # CUDA supports guiding-centre RK in Boozer coordinates, not full orbit.
-    box(x4 + half + 8, be_y, half, be_h, "orbit",
-        ["GPU", "CUDA", "RK", "Boozer"], size=fs)
+    box(
+        x4 + half + 8,
+        be_y,
+        half,
+        be_h,
+        "orbit",
+        ["GPU", "CUDA", "RK", "Boozer"],
+        size=fs,
+    )
     arrow(x3 + COL_W, (ctop + cbot) / 2, x4 - 2, (ctop + cbot) / 2)
     arrow(x3 + COL_W, ys[4] + bh / 2 - 12, x4 - 2, fo_y + fo_h / 2 + 18)
 
@@ -173,30 +217,66 @@ def build() -> str:
     py_y = ys[4] + bh + 52
     fx, fw = COL_X[1], COL_X[4] + COL_W - COL_X[1]
     fill, stroke = STAGES["py"]
-    out.append(f'<rect x="{fx}" y="{py_y}" width="{fw}" height="118" rx="9" '
-               f'fill="none" stroke="{stroke}" stroke-width="1.6"/>')
-    label(fx + 10, py_y + 22, "pysimple  (Python)", size=15, anchor="start",
-          weight="700")
+    out.append(
+        f'<rect x="{fx}" y="{py_y}" width="{fw}" height="118" rx="9" '
+        f'fill="none" stroke="{stroke}" stroke-width="1.6"/>'
+    )
+    label(
+        fx + 10, py_y + 22, "pysimple  (Python)", size=15, anchor="start", weight="700"
+    )
     iy, ih = py_y + 34, 72
-    box(COL_X[1], iy, COL_W, ih, "py",
-        ["Python API", "same core and", "simple.in"], size=fs)
-    box(COL_X[2], iy, COL_W, ih, "py",
-        ["plotting", "loss statistics,", "energy vs J_perp"], size=fs)
-    box(COL_X[3], iy, COL_X[4] + COL_W - COL_X[3], ih, "py",
-        ["engineering", "wall heat-flux maps from loss positions,",
-         "port placement"], size=fs)
-    box(COL_X[0], iy, COL_W, ih, "py",
-        ["External", "optimiser", "loss objective"], size=fs, dash="6 4")
+    box(
+        COL_X[1],
+        iy,
+        COL_W,
+        ih,
+        "py",
+        ["Python API", "same core and", "simple.in"],
+        size=fs,
+    )
+    box(
+        COL_X[2],
+        iy,
+        COL_W,
+        ih,
+        "py",
+        ["plotting", "loss statistics,", "energy vs J_perp"],
+        size=fs,
+    )
+    box(
+        COL_X[3],
+        iy,
+        COL_X[4] + COL_W - COL_X[3],
+        ih,
+        "py",
+        ["engineering", "wall heat-flux maps from loss positions,", "port placement"],
+        size=fs,
+    )
+    box(
+        COL_X[0],
+        iy,
+        COL_W,
+        ih,
+        "py",
+        ["External", "optimiser", "loss objective"],
+        size=fs,
+        dash="6 4",
+    )
     # Outputs feed pysimple; pysimple feeds an external optimiser.
     arrow(x5 + COL_W / 2, out_bot, x5 + COL_W / 2, py_y - 2)
     arrow(fx, iy + ih / 2, COL_X[0] + COL_W + 2, iy + ih / 2)
     # Loop back to the sources.
     ax_ = COL_X[0] + COL_W / 2
     path(f"M{ax_},{iy} L{ax_},{ys[4] + bh + 2}", dashed=True)
-    label(ax_ + 8, ys[4] + bh + 26, "new equilibrium", size=12.5, anchor="start",
-          cls="note")
-    label(ax_ + 8, ys[4] + bh + 42, "or coils", size=12.5, anchor="start",
-          cls="note")
+    label(
+        ax_ + 8,
+        ys[4] + bh + 26,
+        "new equilibrium",
+        size=12.5,
+        anchor="start",
+        cls="note",
+    )
+    label(ax_ + 8, ys[4] + bh + 42, "or coils", size=12.5, anchor="start", cls="note")
     ly = py_y + 118
 
     css = (
@@ -211,8 +291,8 @@ def build() -> str:
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {total_h}" '
         f'width="{W}" height="{total_h}" role="img" '
         f'aria-labelledby="title desc">\n'
-        "<title id=\"title\">SIMPLE workflow</title>\n"
-        "<desc id=\"desc\">Field sources (VMEC, GVEC and booz_xform via Boozer "
+        '<title id="title">SIMPLE workflow</title>\n'
+        '<desc id="desc">Field sources (VMEC, GVEC and booz_xform via Boozer '
         "chartmap converters, coils, SPECTRE) feed a splined field representation, "
         "canonical coordinates, guiding-centre integration on CPU or Boozer RK "
         "on GPU, full-orbit integration on CPU, and outputs "

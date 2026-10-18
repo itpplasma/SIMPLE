@@ -166,6 +166,9 @@ minimum and maximum, not confidence intervals.
 | 16      | 22.50   | 22.55   | 22.53   | 17.29   | 12.32   | 77.0%      |
 +---------+---------+---------+---------+---------+---------+------------+
 
+.. figure:: strong-scaling.png
+   :alt: Whole-process strong scaling from the retained measurements.
+
 The 16-thread mean tracing speedup is 15.71 (efficiency 98.2%). Every
 CPU fraction curve agrees exactly (maximum absolute difference 0,
 acceptance tolerance 1e-12). Sampled final confinement is 1 and
@@ -196,6 +199,9 @@ Sources: :download:`64 <markers64.csv>`, :download:`128 <markers128.csv>` and th
 +-----------+-----------+-----------+-----------+-----------+-----------+
 | 256       | 22.50     | 22.55     | 22.53     | 17.29     | 11.36     |
 +-----------+-----------+-----------+-----------+-----------+-----------+
+
+.. figure:: marker-throughput.png
+   :alt: Marker-count scaling and CPU throughput from the retained measurements.
 
 CPU profile
 -----------

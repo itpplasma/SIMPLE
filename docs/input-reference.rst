@@ -7,17 +7,6 @@ Generated from the Fortran declarations; do not edit this page by hand.
 The readers are ``src/params.f90:read_config_namelist``,
 ``src/profiles.f90:read_profiles`` and ``app/spectre_poincare.f90:read_input``.
 
-Validate an input from the repository root (Python standard library only)::
-
-   python tools/check_input.py simple.in examples/*.in
-
-The preflight reports unknown keys with suggestions, type errors, array
-bounds and selected basic value constraints from the JSON schema. It returns
-a nonzero status on errors. Runtime checks of files, fields and interacting
-options remain the responsibility of SIMPLE. This is not a full Fortran parser.
-It supports scalar and rank-one indexed/section assignments, repetition,
-null values, comments, quoted strings, and slash or END group terminators.
-
 Regenerate after configuring SIMPLE so that libneo sources are available::
 
    make configure CONFIG=Fast
@@ -25,7 +14,6 @@ Regenerate after configuring SIMPLE so that libneo sources are available::
    python tools/generate_input_reference.py --check
 
 For a custom libneo checkout, pass ``--libneo-source PATH`` to the generator.
-CTest checks both this page and the :download:`JSON schema <input-reference.json>` for staleness.
 Type selectors, shapes and initial defaults retain their source expressions;
 named constants are also resolved in JSON's ``default_value`` and ``extent``.
 A scalar initializer for an array applies to every element. Character lengths

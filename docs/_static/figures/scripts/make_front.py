@@ -181,15 +181,19 @@ def draw_torus(ax, wout_path: Path, theta_l, phi_l, trapped):
         for p, t in zip(pl, trapped)
     ]
     marker_depth = pl[:, 2] + 0.02 * float(np.ptp(pts[..., 2]))
-    rgba = {k: matplotlib.colors.to_rgba(simple_style.COLORS[k])
-            for k in ("trapped", "passing")}
+    rgba = {
+        k: matplotlib.colors.to_rgba(simple_style.COLORS[k])
+        for k in ("trapped", "passing")
+    }
     marker_face = np.array([rgba["trapped"] if t else rgba["passing"] for t in trapped])
 
     polys = list(quads[:, :, :2]) + list(marker_polys)
     faces = np.vstack([np.column_stack([face, np.ones(len(face))]), marker_face])
     edges = np.vstack(
-        [np.column_stack([face, np.ones(len(face))]),
-         np.tile([0.1, 0.1, 0.1, 1.0], (len(marker_polys), 1))]
+        [
+            np.column_stack([face, np.ones(len(face))]),
+            np.tile([0.1, 0.1, 0.1, 1.0], (len(marker_polys), 1)),
+        ]
     )
     widths = np.concatenate([np.full(len(face), 0.3), np.full(len(marker_polys), 0.4)])
     order = np.argsort(np.concatenate([depth, marker_depth]))
@@ -206,9 +210,8 @@ def draw_torus(ax, wout_path: Path, theta_l, phi_l, trapped):
     ax.axis("off")
 
 
-def plot(workdir: Path, out: Path) -> None:
+def plot_results(res, cf, wout_path: Path, out: Path) -> None:
     simple_style.use()
-    res, cf = load_results(workdir)
     lost = res["orbit_exit_code"] == 1
     zl = res["zend"][lost]
     if not np.allclose(zl[:, 0], 1.0, atol=1e-6):
@@ -216,7 +219,7 @@ def plot(workdir: Path, out: Path) -> None:
     theta_l, phi_l = zl[:, 1], zl[:, 2]
 
     # Consistency check: VMEC LCFS at (theta, phi) must reproduce xend_cart.
-    _, _, xm, xn, rmnc, zmns = lcfs(workdir / "wout.nc", 2, 2)
+    _, _, xm, xn, rmnc, zmns = lcfs(wout_path, 2, 2)
     Rl, Zl = eval_rz(theta_l, phi_l, xm, xn, rmnc, zmns)
     xyz = np.stack([Rl * np.cos(phi_l), Rl * np.sin(phi_l), Zl], axis=-1)
     err = np.abs(xyz * 100.0 - res["xend_cart"][lost]).max()
@@ -226,10 +229,13 @@ def plot(workdir: Path, out: Path) -> None:
 
     t_end = cf[-1, 0]
     # Check the event-resolved curves against SIMPLE's confined_fraction.dat.
-    grid = confined_curves(res["times_lost"], res["orbit_exit_code"],
-                           res["trap_par"], cf[:, 0])
-    dev = max(np.abs(grid["passing"] - cf[:, 1]).max(),
-              np.abs(grid["trapped"] - cf[:, 2]).max())
+    grid = confined_curves(
+        res["times_lost"], res["orbit_exit_code"], res["trap_par"], cf[:, 0]
+    )
+    dev = max(
+        np.abs(grid["passing"] - cf[:, 1]).max(),
+        np.abs(grid["trapped"] - cf[:, 2]).max(),
+    )
     print(f"max deviation from confined_fraction.dat = {dev:.3g}")
     if dev > 1.5 / lost.size:
         raise SystemExit("event-resolved curves disagree with confined_fraction.dat")
@@ -237,57 +243,116 @@ def plot(workdir: Path, out: Path) -> None:
 
     fig = plt.figure(figsize=(10.0, 4.6))
     ax3 = fig.add_axes([0.0, 0.10, 0.60, 0.77])
-    draw_torus(ax3, workdir / "wout.nc", theta_l, phi_l, trapped)
-    fig.text(0.015, 0.975, "Alpha-particle loss positions on the last closed flux surface",
-             fontsize=12, fontweight="bold", va="top")
-    fig.text(0.015, 0.915,
-             "Landreman-Paul QA, reactor scale  ·  3.5 MeV alphas started at s = 0.5  "
-             "·  guiding centre, collisionless",
-             fontsize=9, va="top", color=simple_style.COLORS["neutral"])
+    draw_torus(ax3, wout_path, theta_l, phi_l, trapped)
+    fig.text(
+        0.015,
+        0.975,
+        "Alpha-particle loss positions on the last closed flux surface",
+        fontsize=12,
+        fontweight="bold",
+        va="top",
+    )
+    fig.text(
+        0.015,
+        0.915,
+        "Landreman-Paul QA, reactor scale  ·  3.5 MeV alphas started at s = 0.5  "
+        "·  guiding centre, collisionless",
+        fontsize=9,
+        va="top",
+        color=simple_style.COLORS["neutral"],
+    )
     handles = []
     for key, mk in (("trapped", "o"), ("passing", "D")):
         n_k = int(np.count_nonzero(trapped if key == "trapped" else ~trapped))
-        handles.append(plt.Line2D([], [], ls="none", marker=mk, ms=6 if mk == "o" else 5,
-                                  mfc=simple_style.COLORS[key], mec="#1A1A1A", mew=0.5,
-                                  label=f"lost, {key} at start ({n_k})"))
-    ax3.legend(handles=handles, loc="lower left", bbox_to_anchor=(0.03, -0.1),
-               ncol=2, handletextpad=0.3, columnspacing=1.2)
+        handles.append(
+            plt.Line2D(
+                [],
+                [],
+                ls="none",
+                marker=mk,
+                ms=6 if mk == "o" else 5,
+                mfc=simple_style.COLORS[key],
+                mec="#1A1A1A",
+                mew=0.5,
+                label=f"lost, {key} at start ({n_k})",
+            )
+        )
+    ax3.legend(
+        handles=handles,
+        loc="lower left",
+        bbox_to_anchor=(0.03, -0.1),
+        ncol=2,
+        handletextpad=0.3,
+        columnspacing=1.2,
+    )
 
     ax = fig.add_axes([0.67, 0.17, 0.27, 0.66])
     # Include every loss event so the step locations retain their actual times.
     loss_times = res["times_lost"][lost]
     t_start = min(1e-6, loss_times.min()) if loss_times.size else 1e-6
     t = np.unique(np.concatenate(([t_start, t_end], loss_times)))
-    curves = confined_curves(res["times_lost"], res["orbit_exit_code"],
-                             res["trap_par"], t)
+    curves = confined_curves(
+        res["times_lost"], res["orbit_exit_code"], res["trap_par"], t
+    )
     for key in ("total", "passing", "trapped"):
         y = curves[key]
-        ax.step(t, y, where="post", color=simple_style.COLORS[key],
-                ls=simple_style.LINESTYLES[key])
-        ax.annotate(key, (t[-1], y[-1]), xytext=(4, 0), textcoords="offset points",
-                    va="center", fontsize=9, color=simple_style.COLORS[key],
-                    annotation_clip=False)
+        ax.step(
+            t,
+            y,
+            where="post",
+            color=simple_style.COLORS[key],
+            ls=simple_style.LINESTYLES[key],
+        )
+        ax.annotate(
+            key,
+            (t[-1], y[-1]),
+            xytext=(4, 0),
+            textcoords="offset points",
+            va="center",
+            fontsize=9,
+            color=simple_style.COLORS[key],
+            annotation_clip=False,
+        )
     ax.set_xscale("log")
     ax.set_xlim(t[0], t_end)
     ax.set_ylim(0, 1.0)
     ax.set_xlabel("time (s)")
     ax.set_ylabel("confined fraction of all markers")
-    ax.set_title(f"{lost.sum()} of {lost.size} markers lost by {t_end * 1e3:g} ms",
-                 fontsize=10, loc="left")
-    fig.text(0.995, 0.005, f"SIMPLE {res['version']}", ha="right", va="bottom",
-             fontsize=7, color=simple_style.COLORS["neutral"])
+    ax.set_title(
+        f"{lost.sum()} of {lost.size} markers lost by {t_end * 1e3:g} ms",
+        fontsize=10,
+        loc="left",
+    )
+    fig.text(
+        0.995,
+        0.005,
+        f"SIMPLE {res['version']}",
+        ha="right",
+        va="bottom",
+        fontsize=7,
+        color=simple_style.COLORS["neutral"],
+    )
     simple_style.save(fig, out, dpi=130)
     print(f"wrote {out}")
+
+
+def plot(workdir: Path, out: Path) -> None:
+    res, cf = load_results(workdir)
+    plot_results(res, cf, workdir / "wout.nc", out)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--simple-exe", type=Path, default=REPO / "build" / "simple.x")
-    parser.add_argument("--workdir", type=Path, default=REPO / "build" / "figures" / "front")
-    parser.add_argument("--out", type=Path,
-                        default=REPO / "build" / "figures" / "front.png")
-    parser.add_argument("--plot-only", action="store_true",
-                        help="reuse an existing run in --workdir")
+    parser.add_argument(
+        "--workdir", type=Path, default=REPO / "build" / "figures" / "front"
+    )
+    parser.add_argument(
+        "--out", type=Path, default=REPO / "build" / "figures" / "front.png"
+    )
+    parser.add_argument(
+        "--plot-only", action="store_true", help="reuse an existing run in --workdir"
+    )
     args = parser.parse_args()
     if not args.plot_only:
         run_simple(args.workdir.resolve(), args.simple_exe.resolve())

@@ -34,6 +34,9 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r docs/requirements.txt
 
+      - name: Generate documentation figures
+        run: python docs/_static/figures/scripts/build_doc_figures.py
+
       - name: Build Sphinx docs
         run: sphinx-build -W -b html docs docs/_build/html
 

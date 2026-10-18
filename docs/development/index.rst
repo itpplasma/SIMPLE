@@ -71,6 +71,7 @@ Build this documentation
 .. code-block:: bash
 
    python -m pip install -r docs/requirements.txt
+   python docs/_static/figures/scripts/build_doc_figures.py
    sphinx-build -W -b html docs docs/_build/html
 
 ``-W`` turns warnings into errors. The Python API pages are generated from the
@@ -80,5 +81,5 @@ is mocked. Figures and their generation scripts are in
 
 The workflow ``.github/workflows/docs.yml`` checks every branch and pull
 request with warnings treated as errors. Only ``main`` is published to
-GitHub Pages at ``latest/``; other builds remain downloadable CI artifacts. The same two commands build the site on any other CI system, for
+GitHub Pages at ``latest/``; other builds remain downloadable CI artifacts. The same commands build the site on any other CI system, for
 example a GitLab Pages job that copies ``docs/_build/html`` to ``public/``.

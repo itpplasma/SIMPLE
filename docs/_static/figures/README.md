@@ -1,8 +1,21 @@
 # Documentation figures
 
-The README and Sphinx documentation use the text-based workflow schematic.
-The scripts also produce scientific plots locally; generated PNG and PDF
-outputs are not committed.
+The documentation build renders figures from the sources in this directory.
+Generated PNG and PDF outputs are ignored and are published with the site;
+they are not committed to main.
+
+```bash
+python docs/_static/figures/scripts/build_doc_figures.py
+sphinx-build -W -b html docs docs/_build/html
+```
+
+The front figure uses the reviewed public QA run represented in
+`data/front/losses.csv`, population metadata and 101 confinement samples.
+The 194 loss events retain their positions, times and passing/trapped classes.
+The other markers contribute through population counts. Plotting checks the
+event-based confinement against the saved samples and positions against the
+public VMEC equilibrium, downloaded at a pinned commit and checked by SHA-256.
+CI renders these text sources without running the simulation again.
 
 | Figure | Script | Input |
 |---|---|---|
@@ -48,6 +61,9 @@ capability is added or removed.
 make CONFIG=Fast
 python docs/_static/figures/scripts/make_front.py               # run and plot
 python docs/_static/figures/scripts/make_front.py --plot-only   # replot only
+python docs/_static/figures/scripts/export_front_data.py \
+  build/figures/front docs/_static/figures/data/front \
+  --source-revision SOURCE_COMMIT --libneo-revision LIBNEO_COMMIT
 ```
 
 The script downloads the public VMEC equilibrium

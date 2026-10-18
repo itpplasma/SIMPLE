@@ -15,3 +15,13 @@ generated from the Fortran declarations. Guidance for choosing values is in
 .. literalinclude:: ../../examples/simple_full.in
    :language: fortran
    :caption: examples/simple_full.in
+
+Preflight validation
+--------------------
+
+Check input keys, types and basic bounds before running SIMPLE::
+
+   python tools/check_input.py simple.in examples/*.in
+
+The validator uses the generated schema. Runtime checks of files, fields and
+interacting options remain the responsibility of SIMPLE.
