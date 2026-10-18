@@ -1,6 +1,7 @@
 name: Mirror to EUFUS GitLab
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     tags: ["**"]
@@ -16,7 +17,9 @@ concurrency:
 jobs:
   mirror:
     name: Push main and tags to EUFUS GitLab
-    if: github.repository == 'itpplasma/SIMPLE' && github.event_name == 'push'
+    if: >-
+      github.repository == 'itpplasma/SIMPLE' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
@@ -27,7 +30,8 @@ jobs:
         id: credentials
         run: |
           if [ -z "${EUFUS_GITLAB_TOKEN:-}" ]; then
-            echo "::notice::EUFUS_GITLAB_TOKEN is absent; skipping the EUFUS mirror"
+            echo "::error::EUFUS_GITLAB_TOKEN is absent; the EUFUS mirror cannot be updated"
+            exit 1
           else
             echo "available=true" >> "$GITHUB_OUTPUT"
           fi
