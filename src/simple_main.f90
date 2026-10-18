@@ -330,6 +330,7 @@ contains
 
         call read_config(config_file)
         call validate_orbit_model_config
+        call validate_gpu_production_config
         call print_phase_time('Configuration reading completed')
         call read_profiles_config(config_file)
         call print_phase_time('Profiles configuration reading completed')
@@ -464,6 +465,28 @@ contains
                 '7 = full orbit)'
         end select
     end subroutine validate_orbit_model_config
+
+    !> Reject unsupported gpu_mode='production' runs before any field setup.
+    !> The native CUDA kernel reads compact RK tables that libneo fills only
+    !> from a Boozer chartmap carrying them (#569).
+    subroutine validate_gpu_production_config
+        use field_boozer_chartmap, only: has_boozer_rk_tables
+        use magfie_sub, only: BOOZER
+        use params, only: field_input
+
+        if (trim(gpu_mode) /= 'production') return
+        if (isw_field_type /= BOOZER .or. swcoll .or. &
+            len_trim(wall_input) > 0 .or. class_plot .or. fast_class .or. &
+            ntcut > 0 .or. output_orbits_macrostep .or. orbit_model /= ORBIT_GC) &
+            error stop 'gpu_mode=production requires Boozer GC loss tracing '// &
+            'without collisions, wall, orbit output, or classifiers'
+        if (.not. has_boozer_rk_tables(field_input)) then
+            print *, 'gpu_mode=production: field_input = ', trim(field_input)
+            error stop 'gpu_mode=production needs field_input to be a Boozer '// &
+                'chartmap with RK tables (libneo booz_xform_to_boozer_chartmap); '// &
+                'VMEC, coil, SPECTRE and chartmap-coordinate fields are unsupported'
+        end if
+    end subroutine validate_gpu_production_config
 
     subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
         use spectre_fo_field, only: spectre_fo_field_clear
@@ -930,12 +953,7 @@ contains
         real(dp) :: cuda_profile_ms(5)
         logical :: landreman_mode, cuda_native_backend
 
-        if (isw_field_type /= BOOZER .or. swcoll .or. len_trim(wall_input) > 0 .or. &
-            class_plot .or. fast_class .or. ntcut > 0 .or. &
-            output_orbits_macrostep .or. orbit_model /= ORBIT_GC) then
-            error stop 'gpu_mode=production requires Boozer GC loss tracing without '// &
-                'collisions, wall, orbit output, or classifiers'
-        end if
+        call validate_gpu_production_config
 
         backend_name = trim(gpu_backend)
         select case (trim(backend_name))

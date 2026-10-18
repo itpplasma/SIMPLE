@@ -17,6 +17,7 @@ module simple_api
     use magfie_sub, only: TEST, CANFLUX, BOOZER
     use field_boozer_chartmap, only: is_boozer_chartmap
     use field_can_mod, only: integ_to_ref
+    use simple_main, only: validate_gpu_production_config
     use simple_main, only: validate_orbit_model_config, init_run, &
         init_sampling_field, sample_start, init_tracing_field, init_counters, &
         trace_parallel, classify_parallel, trace_orbit, write_output, &
@@ -96,6 +97,7 @@ contains
             end if
         end if
         call validate_orbit_model_config
+        call validate_gpu_production_config
         call init_run(tracer)
         call init_sampling_field
         active_field = FIELD_SAMPLING
