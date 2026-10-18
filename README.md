@@ -9,6 +9,10 @@ classify regular and chaotic orbits from Poincare plots. The main application
 is fast evaluation of fusion alpha-particle losses during stellarator
 optimization.
 
+![Alpha-particle loss positions on the last closed flux surface of a reactor-scale quasi-axisymmetric stellarator and confined fraction versus time, computed with SIMPLE](docs/_static/figures/front.png)
+
+![SIMPLE workflow: field sources, field representation, canonical coordinates, orbit integration, outputs and pysimple post-processing](docs/_static/figures/pipeline.svg)
+
 The standard run uses a VMEC equilibrium in NetCDF format, nested magnetic
 flux surfaces, and collisionless guiding-center orbits. Other field and orbit
 modes are documented in `examples/simple_full.in` and `DOC/config.md`. The
