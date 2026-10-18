@@ -14,6 +14,8 @@ import urllib.request
 import re
 import subprocess
 import os
+import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
 import numpy as np
@@ -66,7 +68,9 @@ def fetch(case, cache):
     if hashlib.sha256(data).hexdigest() != checksum:
         raise ValueError(f"Checksum mismatch: {path}")
     if not path.exists():
-        path.write_bytes(data)
+        temporary = path.with_suffix(f".download-{os.getpid()}")
+        temporary.write_bytes(data)
+        temporary.replace(path)
     return path
 
 
@@ -494,6 +498,111 @@ def cylinder(directory, duration, step, energy, species):
     print(json.dumps(report, indent=2))
 
 
+def suite(args, output):
+    """Run a matrix in isolated processes because both solvers hold global state."""
+    jobs = []
+    if args.suite in ("verification", "all"):
+        for case in ["circular", "large-aspect", *SOURCES]:
+            for resolution, step in [(48, 1e-8), (96, 1e-8), (96, 5e-9)]:
+                options = [
+                    "--case",
+                    case,
+                    "--resolution",
+                    str(resolution),
+                    "--step",
+                    str(step),
+                ]
+                if args.gorilla and step == 1e-8:
+                    options += ["--gorilla", str(args.gorilla)]
+                jobs.append((f"{case}-r{resolution}-dt{step:g}", options))
+        for step in [1e-10, 5e-11]:
+            jobs.append(
+                (
+                    f"cylinder-dt{step:g}",
+                    ["--case", "cylinder", "--duration", "1e-6", "--step", str(step)],
+                )
+            )
+        for case in ["circular", "large-aspect", *SOURCES]:
+            jobs.append(
+                (
+                    f"alpha-{case}",
+                    [
+                        "--case",
+                        case,
+                        "--species",
+                        "alpha",
+                        "--energy",
+                        "3500000",
+                        "--dense",
+                        "--duration",
+                        "1e-4",
+                    ],
+                )
+            )
+    if args.suite in ("collisions", "all"):
+        for case in ["circular", *SOURCES]:
+            for step in [5e-7, 2.5e-7]:
+                jobs.append(
+                    (
+                        f"collisions-{case}-dt{step:g}",
+                        [
+                            "--case",
+                            case,
+                            "--collisions",
+                            "--species",
+                            "alpha",
+                            "--energy",
+                            "3500000",
+                            "--dense",
+                            "--copies",
+                            str(max(20, args.copies)),
+                            "--duration",
+                            "1e-3",
+                            "--step",
+                            str(step),
+                        ],
+                    )
+                )
+    summary = {"suite": args.suite, "planned": len(jobs), "runs": []}
+
+    def execute(job):
+        name, options = job
+        command = [
+            sys.executable,
+            str(Path(__file__).resolve()),
+            "--output",
+            str(output / name),
+            "--cache",
+            str(args.cache),
+            *options,
+        ]
+        try:
+            with (output / f"{name}.log").open("w") as log:
+                result = subprocess.run(
+                    command, stdout=log, stderr=subprocess.STDOUT, timeout=1800
+                )
+            return {
+                "name": name,
+                "exit_code": result.returncode,
+                "report": str(output / name / "report.json"),
+            }
+        except subprocess.TimeoutExpired:
+            return {"name": name, "exit_code": 124, "error": "Run exceeded 1800 s"}
+
+    with ThreadPoolExecutor(max_workers=args.jobs) as executor:
+        pending = [executor.submit(execute, job) for job in jobs]
+        for future in as_completed(pending):
+            result = future.result()
+            summary["runs"].append(result)
+            (output / "suite.json").write_text(json.dumps(summary, indent=2) + "\n")
+            print(
+                f"{len(summary['runs'])}/{len(jobs)} {result['name']}: exit {result['exit_code']}",
+                flush=True,
+            )
+    if any(r["exit_code"] != 0 for r in summary["runs"]):
+        raise SystemExit(1)
+
+
 def main():
     import imas
     import pysimple
@@ -512,6 +621,10 @@ def main():
     parser.add_argument("--duration", type=float, default=1e-5)
     parser.add_argument("--step", type=float, default=1e-8)
     parser.add_argument("--resolution", type=int, default=48)
+    parser.add_argument("--suite", choices=["verification", "collisions", "all"])
+    parser.add_argument(
+        "--jobs", type=int, default=2, help="Concurrent isolated benchmark processes"
+    )
     parser.add_argument(
         "--gorilla", type=Path, help="Built GORILLA checkout (optional third code)"
     )
@@ -563,6 +676,10 @@ def main():
             "Require positive duration/step and an integer number of ASCOT steps"
         )
     output.mkdir(parents=True, exist_ok=False)
+    if args.jobs < 1:
+        parser.error("jobs must be positive")
+    if args.suite:
+        return suite(args, output)
     if args.case == "cylinder":
         return cylinder(output, args.duration, args.step, args.energy, args.species)
     if args.case in SOURCES:
@@ -682,7 +799,8 @@ def main():
         "case": args.case,
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "revisions": {
-            "SIMPLE": revision(repository),
+            "benchmark": revision(repository),
+            "SIMPLE": revision(Path(pysimple.__file__).resolve().parents[2]),
             "ASCOT5": revision(Path(a5py.__file__).resolve().parents[1]),
         },
         "dd_version": "4.1.1",
