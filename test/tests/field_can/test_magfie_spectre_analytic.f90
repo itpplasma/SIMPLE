@@ -14,7 +14,7 @@ program test_magfie_spectre_analytic
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use magfie_sub, only: magfie, init_magfie, set_magfie_spectre_field, &
-                          compute_hcurl, SPECTRE, M_TO_CM
+                          SPECTRE, M_TO_CM
     use field_spectre, only: spectre_field_t, create_spectre_field
     use util, only: twopi
     implicit none
@@ -89,10 +89,11 @@ contains
     end subroutine seed_rng
 
     subroutine magfie_spectre_fd(fld, x, sqrtg_cm, bder, hcurl)
-        !> Verbatim central-difference drift derivatives from magfie_spectre before
-        !> the analytic switch: the radial stencil stays inside the current volume
-        !> [floor(rho_g), floor(rho_g)+1] so the |B| interface jump never enters
-        !> the difference. Uses the analytic sqrtg so only bder and dh_i/dx differ.
+        !> Central-difference drift derivatives: the radial stencil stays inside
+        !> the current volume [floor(rho_g), floor(rho_g)+1] so the |B| interface
+        !> jump never enters the difference. Uses the analytic sqrtg, and spells
+        !> out the curl definition so the oracle shares no index convention with
+        !> magfie.
         type(spectre_field_t), intent(in) :: fld
         real(dp), intent(in) :: x(3), sqrtg_cm
         real(dp), intent(out) :: bder(3), hcurl(3)
@@ -129,7 +130,10 @@ contains
             dhcov(:, j) = (hcov_p - hcov_m)*M_TO_CM/denom
         end do
 
-        call compute_hcurl(sqrtg_cm, dhcov, hcurl)
+        ! hcurl^i = eps^ijk d_j h_k / sqrt(g), with d_j h_k = dhcov(k, j).
+        hcurl(1) = (dhcov(3, 2) - dhcov(2, 3))/sqrtg_cm
+        hcurl(2) = (dhcov(1, 3) - dhcov(3, 1))/sqrtg_cm
+        hcurl(3) = (dhcov(2, 1) - dhcov(1, 2))/sqrtg_cm
     end subroutine magfie_spectre_fd
 
 end program test_magfie_spectre_analytic

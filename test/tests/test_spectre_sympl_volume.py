@@ -1,40 +1,19 @@
 #!/usr/bin/env python3
-"""Behavioural test for SPECTRE per-volume symplectic guiding-center tracing (#439).
-
-Runs simple.x on the committed libneo SPECTRE fixture (G3V3L3Fi) with integ_coords
-= 6 (SPECTRE) and integmode > 0, markers seeded mid-volume 2 (rho_g = 1.5). The
-alpha orbits leave the volume within ~1e-6 s, so a short trace with fine steps
-(high npoiper2) keeps every marker confined while resolving ~1e5 symplectic steps.
-
-Scenarios:
-  1. Energy: the total energy (p_abs**2 = H) drifts by less than a bound and is
-     non-secular (linear-fit slope consistent with zero) over the trace, for the
-     symplectic Euler (integmode 1) and midpoint (integmode 3) schemes.
-  2. Cross-scheme: the two symplectic schemes integrate the same canonical
-     Hamiltonian, so their (rho_g, theta) trajectories agree over the trace.
-  3. RK45 cross-check: the direct chart RK45 (integmode 0) and the canonical
-     symplectic (integmode 3) both confine every marker to volume 2 and track the
-     same orbit initially. They use different guiding-center formulations for
-     SPECTRE (RK45 evaluates finite-difference drifts on the stacked chart; the
-     symplectic path uses the exact per-volume Meiss Hamiltonian), so they diverge
-     at O(rho*) -- a bound, not a tight equality.
-
-Usage:
-    test_spectre_sympl_volume.py <simple.x> <spectre_test.h5>
-"""
+"""Single-volume SPECTRE energy, cross-scheme and RK45 comparison."""
 import os
 import subprocess
 import sys
 import tempfile
 
 import numpy as np
+from spectre_test_utils import axis_volume
 from netCDF4 import Dataset
 
 NTESTPART = 24
 NTIMSTEP = 200
 NPOIPER2 = 6000000        # fine steps -> ~1e5 microsteps within the confined window
-TRACE_TIME = 8.0e-8       # shorter than the ~1e-6 s volume-2 confinement time
-SBEG = 1.5                # mid-volume 2 (volumes are [0,1], [1,2], [2,3])
+TRACE_TIME = 8.0e-8       # short trace within the unchanged axis volume
+SBEG = 0.5
 RAN_SEED = 42
 
 ENERGY_DRIFT_MAX = 5.0e-6   # bounded energy error over the trace
@@ -115,8 +94,7 @@ def traj_agreement(sa, tha, sb, thb, mask, k):
     return ds, dth
 
 
-def main():
-    binary, h5 = sys.argv[1], sys.argv[2]
+def check(binary, h5):
     failures = []
 
     s3, th3, pa3 = run_mode(binary, h5, 3)
@@ -171,4 +149,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    with axis_volume(sys.argv[2]) as field:
+        check(sys.argv[1], field)

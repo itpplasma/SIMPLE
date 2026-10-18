@@ -1,0 +1,8 @@
+{
+  "suite": "FO scalar generator exact identities",
+  "total": 257,
+  "passed": 257,
+  "proved": 257,
+  "by_probe": 0,
+  "failed": 0
+}
