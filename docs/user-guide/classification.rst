@@ -1,57 +1,49 @@
 Orbit classification
 ====================
 
-Without collisions, a regular guiding-centre orbit stays confined if its
-invariant torus lies entirely inside the loss boundary. SIMPLE can classify
-orbits as regular or chaotic
-from a short part of their trajectory. This has two uses:
+SIMPLE can label collisionless orbits as regular or chaotic from a short part
+of their trajectory. Use it to stop tracing regular trapped orbits early
+(about ten times faster loss computations, Albert, Kasilov and Kernbichler
+2020) or as a confinement metric for optimisation (Albert et al. 2023).
 
-* **Acceleration** of loss computations: regular trapped orbits are counted as
-  confined and their tracing stops early (``fast_class``). Albert, Kasilov and
-  Kernbichler (2020, JPP) report a speed-up of about one order of magnitude.
-* **Confinement metrics** for optimisation: the fraction of chaotic orbits,
-  and the extent of regular regions that act as barriers, measure the alpha
-  confinement with much shorter tracing (Albert et al. 2023).
-
-The methods are described in :doc:`/model/classification`.
+Method: :doc:`/model/classification`.
 
 Classifiers
 -----------
 
-Three classifiers are available. Each gives 0 (not classified), 1 (regular)
-or 2 (chaotic) per particle.
+Codes per marker: 0 not classified, 1 regular, 2 chaotic (also 1 for deeply
+passing markers skipped by ``contr_pp``).
 
-:math:`J_\parallel` classifier
-   Uses the conservation of the parallel adiabatic invariant at the banana
-   tips of trapped orbits. Needs ``nturns`` tip recurrences.
-Topological classifier
-   Tests whether the footprints of the banana tips in the Poincaré section
-   lie on a closed curve, with recurrence and monotonicity conditions
-   ("ideal" orbits). Needs ``nturns`` tip recurrences.
-Fractal classifier
-   Estimates the Minkowski (box-counting) dimension of the Poincaré cut of the
-   orbit, accumulated until the cut time ``tcut``. Needs much longer tracing.
+:math:`J_\parallel`
+   Conservation of the parallel adiabatic invariant between successive
+   banana tips of trapped orbits; needs ``nturns`` tip recurrences.
+Topological ("ideal orbit")
+   Whether the banana-tip footprints in the Poincaré section lie on a closed
+   curve; needs ``nturns`` tip recurrences.
+Fractal
+   Box-counting dimension of the orbit's Poincaré cut accumulated until
+   ``tcut``; needs much longer tracing.
 
 Settings
 --------
 
-.. code-block:: fortran
+===============  ============  ===================================================
+Key              Default       Meaning
+===============  ============  ===================================================
+``tcut``         ``-1d0``      cut time in s; ``> 0`` enables the classifiers
+``nturns``       8             tip recurrences for :math:`J_\parallel` and topology
+``fast_class``   ``.false.``   stop trapped orbits that :math:`J_\parallel` finds
+                               regular; they count as confined (not with
+                               ``class_plot``)
+``class_plot``   ``.false.``   also enables the classifiers; moves starts to the
+                               cut and writes plot data to ``fort.*`` files
+``cut_in_per``   ``0d0``       toroidal cut position as a fraction of a period
+===============  ============  ===================================================
 
-   &config
-   nturns = 8            ! tip recurrences for the J_par and topological test
-   fast_class = .true.   ! stop regular trapped orbits after classification
-   tcut = 1d-1           ! fractal classification at this time (s); -1 = off
-   class_plot = .false.  ! write Poincare plot data (fort.* files)
-   cut_in_per = 0d0      ! position of the cut in the field period, [0, 1]
-   /
-
-``simple.x`` runs the classifiers when ``tcut > 0`` or
-``class_plot = .true.``; ``fast_class`` then stops the tracing of regular
-trapped orbits. The classifiers use the symplectic integrators
-(``integmode > 0``) and cannot be combined with collisions. With
-``tcut > 0`` or ``class_plot = .true.``, SIMPLE writes
-``class_parts.dat``: index, start radius, perpendicular invariant and the
-three classes (:math:`J_\parallel`, topological, fractal).
+Classification cannot be combined with collisions or GPU tracing. With
+classification on, SIMPLE writes ``class_parts.dat`` (index, start radius, :math:`J_\perp`, codes for
+:math:`J_\parallel`, topological, fractal) and fills ``iclass`` in
+``results.nc``.
 
 Python
 ------
@@ -65,9 +57,16 @@ Python
    c = pysimple.classify_fast(start, nturns=8)      # J_par and topology
    f = pysimple.classify_fractal(start, tcut=0.1)   # fractal dimension
 
-The result dictionaries contain ``passing``, ``lost``, ``jpar``,
-``topology`` and ``fractal`` in addition to the trace results.
-:doc:`/tutorials/optimisation-loop` uses ``classify_fast`` as a confinement
-metric. ``examples/classify_fast.py`` and ``examples/classify_fractal.py``
-(:doc:`/examples`) are complete scripts, and
+Each result adds ``passing``, ``lost``, ``jpar``, ``topology`` and
+``fractal`` to the trace results. Complete scripts: ``examples/classify_fast.py``
+and ``examples/classify_fractal.py`` (:doc:`/examples`);
 ``examples/classification/`` reproduces the figures of Albert et al. (2023).
+:doc:`/tutorials/optimisation-loop` uses ``classify_fast`` as an objective.
+
+References
+----------
+
+* C. G. Albert, S. V. Kasilov, W. Kernbichler, J. Plasma Phys. 86,
+  815860201 (2020), https://doi.org/10.1017/S0022377820000203
+* C. G. Albert, R. Buchholz, S. V. Kasilov, W. Kernbichler, K. Rath,
+  J. Plasma Phys. 89, 955890301 (2023), https://doi.org/10.1017/S0022377823000351
