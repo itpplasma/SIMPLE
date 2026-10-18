@@ -26,13 +26,27 @@ def run(
 def changed_lines(base: str) -> dict[Path, set[int]]:
     """Diff the merge base against tracked working files, in source coordinates."""
     ancestor = run(["git", "merge-base", base, "HEAD"], check=True).stdout.strip()
-    names = run(
-        ["git", "diff", "--no-ext-diff", "--no-renames", "--name-only", "-z", ancestor],
-        check=True,
-    ).stdout
+    entries = iter(
+        run(
+            [
+                "git",
+                "diff",
+                "--no-ext-diff",
+                "--find-renames",
+                "--name-status",
+                "--diff-filter=ACMR",
+                "-z",
+                ancestor,
+            ],
+            check=True,
+        ).stdout.split("\0")[:-1]
+    )
     files: dict[Path, set[int]] = {}
-    for name in filter(None, names.split("\0")):
-        path = Path(name)
+    for status in entries:
+        paths = [next(entries)]
+        if status.startswith(("R", "C")):
+            paths.append(next(entries))
+        path = Path(paths[-1])
         if not path.is_file():
             continue
         diff = run(
@@ -41,11 +55,11 @@ def changed_lines(base: str) -> dict[Path, set[int]]:
                 "diff",
                 "--no-ext-diff",
                 "--no-textconv",
-                "--no-renames",
+                "--find-renames",
                 "--unified=0",
                 ancestor,
                 "--",
-                name,
+                *paths,
             ],
             check=True,
         ).stdout
