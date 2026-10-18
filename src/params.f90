@@ -795,7 +795,6 @@ contains
         classification_enabled = (ntcut > 0) .or. class_plot .or. fast_class
     end function classification_enabled
 
-
     subroutine reset_seed_if_deterministic(stream_id)
         ! for run with fixed random seed
         integer, intent(in), optional :: stream_id
