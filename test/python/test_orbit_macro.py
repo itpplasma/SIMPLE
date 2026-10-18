@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import os
 import subprocess
 from pathlib import Path
 
@@ -52,8 +51,7 @@ def _read_orbits_nc(path: Path) -> dict[str, np.ndarray]:
         }
 
 
-@pytest.mark.usefixtures("vmec_file")
-def test_macrostep_orbit_parity(tmp_path: Path, vmec_file: str) -> None:
+def test_macrostep_orbit_parity(tmp_path: Path, vmec_file: str, monkeypatch) -> None:
     if not SIMPLE_EXE.exists():
         pytest.skip("simple.x is not built; run CMake/Ninja build first")
 
@@ -71,25 +69,10 @@ def test_macrostep_orbit_parity(tmp_path: Path, vmec_file: str) -> None:
     subprocess.run([str(SIMPLE_EXE), "simple.in"], cwd=fortran_dir, check=True)
     assert (fortran_dir / "orbits.nc").exists()
 
-    # Use same start.dat for Python to ensure exact parity
-    start_path = python_dir / "start.dat"
-    start_path.write_text((fortran_dir / "start.dat").read_text())
-
-    # Run Python API (clean module-level state)
-    # Use isw_field_type=0 (TEST) to match Fortran config
-    pysimple.init(
-        vmec_path,
-        deterministic=True,
-        notrace_passing=0,
-        npoiper2=64,
-        num_surf=1,
-        trace_time=1.0e-3,
-        isw_field_type=0,
-    )
-    # Use wrapper to set sbeg (f90wrap array access workaround)
-    pysimple._fortran_backend.params_wrapper.set_sbeg(1, surface)
-
-    particles = pysimple.load_particles(start_path)
+    # Python reads the same simple.in and start states as simple.x.
+    monkeypatch.chdir(python_dir)
+    pysimple.init(config=fortran_dir / "simple.in")
+    particles = pysimple.load_particles(fortran_dir / "start.dat")
 
     # Read Fortran NetCDF output
     fortran_orbits = _read_orbits_nc(fortran_dir / "orbits.nc")
@@ -105,11 +88,7 @@ def test_macrostep_orbit_parity(tmp_path: Path, vmec_file: str) -> None:
     }
 
     for i in range(n_particles):
-        result = pysimple.trace_orbit(
-            particles[:, i],
-            integrator="midpoint",
-            return_trajectory=True,
-        )
+        result = pysimple.trace_orbit(particles[:, i], return_trajectory=True)
 
         # Stack trajectories
         python_orbits["time"].append(result["times"])

@@ -142,7 +142,7 @@ contains
     end subroutine toroidal_regularized_position_map
 
     subroutine toroidal_position_shift(x, ppar, shift, ierr)
-        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+        use finite_check, only: is_finite
         use parmot_mod, only: ro0
         use magfie_sub, only: magfie_refcoords
         real(dp), intent(in) :: x(3), ppar
@@ -158,7 +158,7 @@ contains
         if (abs(sqrtg*bphi) <= 100.0_dp*tiny(1.0_dp)) return
         shift(1) = ro0*ppar*hcovar(2)/(sqrtg*bphi)
         shift(2) = -ro0*ppar*hcovar(1)/(sqrtg*bphi)
-        if (.not. all(ieee_is_finite(shift))) then
+        if (.not. all(is_finite(shift))) then
             shift = 0.0_dp
             return
         end if
@@ -218,7 +218,7 @@ contains
 
     subroutine orbit_timestep_toroidal_regularized(z, dtau, relerr, ierr, &
             step_limit)
-        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+        use finite_check, only: is_finite
         use odeint_allroutines_sub, only: odeint_allroutines, &
             odeint_has_failed
         use chamb_sub, only: chamb_can
@@ -264,7 +264,7 @@ contains
 
         call odeint_allroutines(y, 4, context, 0.0_dp, dtau, relerr, &
             toroidal_regularized_rhs, step_limit=step_limit)
-        if (odeint_has_failed() .or. .not. all(ieee_is_finite(y))) then
+        if (odeint_has_failed() .or. .not. all(is_finite(y))) then
             z = z_initial
             ierr = 2
             return
@@ -814,7 +814,7 @@ contains
 
         subroutine orbit_timestep_axis(z,dtau,dtaumin,relerr,ierr,step_limit, &
                 axis_floor,near_axis_limit)
-            use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+            use finite_check, only: is_finite
             use odeint_allroutines_sub, only : odeint_has_failed
             use chamb_sub, only : chamb_can
             !
@@ -842,9 +842,9 @@ contains
             snear_axis=0.01d0
             if(present(axis_floor)) axis_floor_local=axis_floor
             if(present(near_axis_limit)) snear_axis=near_axis_limit
-            if(.not.ieee_is_finite(axis_floor_local) .or. &
+            if(.not.is_finite(axis_floor_local) .or. &
                 axis_floor_local.le.0.d0 .or. &
-                .not.ieee_is_finite(snear_axis) .or. &
+                .not.is_finite(snear_axis) .or. &
                 snear_axis.le.axis_floor_local .or. snear_axis.gt.1.d0) then
                 ierr=2
                 return
@@ -873,7 +873,7 @@ contains
                         !
                         call integrate_axis_segment(z,tau1,tau2,relerr,.false., &
                             axis_floor_local,step_limit)
-                        if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
+                        if (odeint_has_failed() .or. .not. all(is_finite(z))) then
                             z=z_initial
                             ierr=2
                             return
@@ -890,7 +890,7 @@ contains
                         !
                         call integrate_axis_segment(z,tau1,tau2,relerr,.true., &
                             axis_floor_local,step_limit)
-                        if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
+                        if (odeint_has_failed() .or. .not. all(is_finite(z))) then
                             z=z_initial
                             ierr=2
                             return
@@ -907,7 +907,7 @@ contains
                         !
                         call integrate_axis_segment(z,tau1,tau2,relerr,.true., &
                             axis_floor_local,step_limit)
-                        if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
+                        if (odeint_has_failed() .or. .not. all(is_finite(z))) then
                             z=z_initial
                             ierr=2
                             return
@@ -917,7 +917,7 @@ contains
                         !
                         call integrate_axis_segment(z,tau1,tau2,relerr,.false., &
                             axis_floor_local,step_limit)
-                        if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
+                        if (odeint_has_failed() .or. .not. all(is_finite(z))) then
                             z=z_initial
                             ierr=2
                             return
@@ -949,7 +949,7 @@ contains
                     !
                     call integrate_axis_segment(z,tau1,tau2,relerr,.false., &
                         axis_floor_local,step_limit)
-                    if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
+                    if (odeint_has_failed() .or. .not. all(is_finite(z))) then
                         z=z_initial
                         ierr=2
                         return
@@ -966,7 +966,7 @@ contains
                     !
                     call integrate_axis_segment(z,tau1,tau2,relerr,.true., &
                         axis_floor_local,step_limit)
-                    if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
+                    if (odeint_has_failed() .or. .not. all(is_finite(z))) then
                         z=z_initial
                         ierr=2
                         return
@@ -983,7 +983,7 @@ contains
                     !
                     call integrate_axis_segment(z,tau1,tau2,relerr,.true., &
                         axis_floor_local,step_limit)
-                    if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
+                    if (odeint_has_failed() .or. .not. all(is_finite(z))) then
                         z=z_initial
                         ierr=2
                         return
@@ -993,7 +993,7 @@ contains
                     !
                     call integrate_axis_segment(z,tau1,tau2,relerr,.false., &
                         axis_floor_local,step_limit)
-                    if (odeint_has_failed() .or. .not. all(ieee_is_finite(z))) then
+                    if (odeint_has_failed() .or. .not. all(is_finite(z))) then
                         z=z_initial
                         ierr=2
                         return

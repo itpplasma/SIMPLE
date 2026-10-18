@@ -18,8 +18,8 @@ program test_spectre_sympl_volume
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use simple, only: tracer_t
-    use simple_main, only: init_field
-    use params, only: read_config, netcdffile, ns_s, ns_tp, multharm
+    use simple_main, only: init_field, init_tracing_field
+    use params, only: read_config, netcdffile, ns_s, ns_tp, multharm, integmode
     use field_can_mod, only: field_can_t, field_can_init, eval_field => evaluate
     use field_can_spectre, only: spectre_volumes, spectre_mvol
     use field_spectre, only: spectre_field_t, create_spectre_field
@@ -37,7 +37,7 @@ program test_spectre_sympl_volume
     type(tracer_t) :: norb
 
     if (command_argument_count() < 2) then
-        print *, 'usage: test_spectre_sympl_volume <construction|pphi> <file.h5>'
+        print *, 'usage: test_spectre_sympl_volume <construction|pphi|reject> <file.h5>'
         error stop 1
     end if
     call get_command_argument(1, mode)
@@ -48,7 +48,19 @@ program test_spectre_sympl_volume
     call read_config(config_file)
     call init_field(norb, netcdffile, ns_s, ns_tp, multharm, MIDPOINT)
 
+    ! This test verifies smooth per-volume canonical fields directly, without
+    ! invoking the orbit tracing API or crossing an interface.
+    block
+        use orbit_symplectic_base, only: sympl_rmax
+        sympl_rmax = real(spectre_mvol + 1, dp)
+    end block
+
     select case (trim(mode))
+    case ('reject')
+        print *, 'SPECTRE sampling-only configuration accepted'
+        integmode = 0  ! GC RK45 has no multi-volume crossing treatment.
+        call init_tracing_field
+        error stop 'multi-volume tracing activation was accepted'
     case ('construction')
         call check_construction(trim(h5file))
     case ('pphi')
@@ -69,6 +81,7 @@ contains
         write (unit, '(A)') "  field_input = '"//h5//"'"
         write (unit, '(A)') '  integ_coords = 6'
         write (unit, '(A)') '  integmode = 3'
+        write (unit, '(A)') '  generate_start_only = .true.'
         write (unit, '(A)') '  ntestpart = 1'
         write (unit, '(A)') '  trace_time = 1.0d-4'
         write (unit, '(A)') '  sbeg = 1.5d0'

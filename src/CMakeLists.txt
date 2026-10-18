@@ -1,6 +1,7 @@
     set(SOURCES
         ${CMAKE_BINARY_DIR}/version.f90
         lapack_interfaces.f90
+        finite_check.f90
         sorting_mod.f90
         wall/chartmap_metadata.f90
         wall/stl_wall_intersection.F90
@@ -27,14 +28,12 @@
     field_line_spectre.f90
     field_can.f90
     magfie.f90
-    magfie_wrapper.f90
     magfie_can_boozer.f90
     chamb_m.f90
     sub_alpha_lifetime_can.f90
-    spectre_sheet_gc.f90
-    spectre_fo_hybrid.f90
-    interface_crossing.f90
     spectre_orbit.f90
+    spectre_fo_field.f90
+    spectre_fo_hybrid.f90
     spectre_sympl_orbit.f90
     get_canonical_coordinates.F90
     orbit_symplectic_base.f90
@@ -46,6 +45,7 @@
     orbit_fo_boris.f90
     util.F90
     samplers.f90
+    fusion_source.f90
     cut_detector.f90
     classification.f90
     simple.f90
@@ -58,7 +58,6 @@
     netcdf_results_output.f90
     callback.f90
     params.f90
-    params_wrapper.f90
     sorting.f90
     check_orbit_type.f90
     find_bminmax.f90
@@ -68,6 +67,7 @@
     timing.f90
     simple_gpu.f90
     simple_main.f90
+    simple_api.f90
     simple_entry.f90
     )
 
@@ -114,14 +114,6 @@ list(APPEND SOURCES
     if(SIMPLE_ENABLE_CGAL)
         target_link_libraries(simple PUBLIC stl_wall_cgal)
     endif()
-
-# Link pyplot library to SIMPLE
-target_link_libraries(simple PUBLIC pyplot)
-# `diag_albert.f90` consumes pyplot_module.mod while `pyplot` is a separate
-# target. A link edge alone does not order compilation of the dependent target
-# under Ninja, so a clean parallel build can compile diag_albert before the
-# module file exists.
-add_dependencies(simple pyplot)
 
 # Apply SIMPLE-specific compile options
 target_compile_options(simple PRIVATE ${SIMPLE_COMPILE_OPTIONS})

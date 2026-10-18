@@ -1,0 +1,13 @@
+{
+  "format_version": 1,
+  "markers": 3000,
+  "passing_markers": 2210,
+  "losses": 194,
+  "numerical_failures": 0,
+  "plot_label": "public QA reference run",
+  "reported_binary_version": "v1.5.0-290-ga1ede79-dirty",
+  "reviewed_source_revision": "fe2de273681642ed1f651d3c14c5e23e398fb458",
+  "libneo_revision": "f6090e8150c2f5b1c0afde09baadf79b50b1ffe7",
+  "source_results_sha256": "df504164b1b736add79ee0ddb26e7fc5102b440010725e964be71dd84a3fa34c",
+  "description": "Loss coordinates and event times from the reviewed 3000-marker public Landreman-Paul QA example. Non-lost markers are retained by population counts; their individual states are not needed for this figure. Confinement samples independently check the event-based curves."
+}

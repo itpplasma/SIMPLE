@@ -1,6 +1,6 @@
 module classification
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+    use finite_check, only: quiet_nan
     !$ use omp_lib
     use params, only: zstart, zend, times_lost, trap_par, perp_inv, iclass, &
         ntimstep, confpart_trap, confpart_pass, notrace_passing, contr_pp, &
@@ -492,7 +492,7 @@ contains
         endif
         orbit_exit_code(ipart) = class_result%exit_code
         if (class_result%exit_code >= ORBIT_EXIT_NUMERICAL_DOMAIN) then
-            times_lost(ipart) = ieee_value(0.0_dp, ieee_quiet_nan)
+            times_lost(ipart) = quiet_nan()
         else
             times_lost(ipart) = kt*dtaumin/v0
         end if
