@@ -68,6 +68,9 @@ make build-deterministic
 make test-fast
 ```
 
+For a verified CINECA Leonardo deployment and a derived Pitagora recipe, see
+[the CINECA guide](docs/hpc/cineca.md) and its Slurm templates.
+
 ### Python interface
 
 Create the recommended repository-local environment with:
