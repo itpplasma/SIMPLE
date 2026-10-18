@@ -166,3 +166,11 @@ volume and full orbits near the interfaces, where the field jumps:
 or :math:`s` with ``spectre_sbeg_is_toroidal_flux = .true.`` (``startmode = 1``). The interface
 controls ``spectre_fo_entry_larmor``, ``spectre_fo_tolerance`` and
 ``spectre_fo_grid`` are explained in :doc:`/model/extensions`.
+
+Each volume builds its own Meiss canonical coordinates on a grid of
+``spectre_ncon_r`` (default 48) by ``spectre_ncon_th`` (48) by
+``spectre_ncon_phi`` points. With ``spectre_ncon_phi = -1`` (default) SIMPLE
+uses 32 points, or 8 for an axisymmetric field (all toroidal mode numbers
+zero); a positive value is used as given. Memory scales with
+:math:`M_\text{vol}\,n_r n_\vartheta n_\varphi`; the log line
+``spectre_construction_grid`` reports the grid in use.
