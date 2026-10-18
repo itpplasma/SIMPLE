@@ -1,0 +1,81 @@
+name: Bug report
+description: A crash, wrong result, build failure or regression.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please search existing issues first. A short reproducer with few
+        particles, a short `trace_time` and `deterministic = .True.` makes the
+        problem much easier to locate. Do not attach confidential equilibria.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What goes wrong, in one or two sentences.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: SIMPLE version
+      description: Commit (`git rev-parse --short HEAD`) or release tag.
+      placeholder: e.g. fe2de27 or v1.5.1
+    validations:
+      required: true
+  - type: textarea
+    id: build
+    attributes:
+      label: Build command and options
+      description: >-
+        The `make` or `cmake` command, `CONFIG`, `FLAGS`, `LIBNEO_REF` or
+        `LIBNEO_PATH`, and whether Python, OpenMP, CUDA or OpenACC are enabled.
+      placeholder: make CONFIG=Fast
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Compiler and system
+      description: Output of `gfortran --version` (or the compiler used) and `uname -a`.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: input
+    attributes:
+      label: Input files
+      description: >-
+        The `simple.in` used, and the field input (VMEC `wout` file, Boozer
+        chartmap, coils). Attach small files or describe how to obtain them.
+      render: fortran
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: Error messages, relevant output lines or plots.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: reproducer
+    attributes:
+      label: Minimal reproducer
+      description: The commands that reproduce the problem from a clean checkout.
+      render: shell
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: >-
+        For example the last revision that worked, or whether the problem
+        depends on the number of OpenMP threads.
