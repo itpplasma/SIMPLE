@@ -1,8 +1,11 @@
 program test_axis_crossing_midpoint
     !> Axis crossing with the symplectic midpoint integrator.
     !>
-    !> A converged midpoint step that ends at r < 0 is continued on the opposite
-    !> ray, (r, theta) -> (|r|, theta + pi). The carried p_theta must then be
+    !> A midpoint step accepted at r < 0 is continued on the opposite ray,
+    !> (r, theta) -> (|r|, theta + pi). The crossing produced here is the
+    !> warning-mode acceptance in accept_warning_axis_crossing: the radial
+    !> Newton iterate cycles through the r = 0.01 floor of newton_midpoint and
+    !> is not a root of the midpoint equations. The carried p_theta must then be
     !> the momentum at the new chart point: linear extrapolation from the last
     !> Newton iterate in the old chart is not a local Taylor increment across
     !> the flip. The independent oracle is a fresh field evaluation at the
