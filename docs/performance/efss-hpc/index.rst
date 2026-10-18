@@ -131,7 +131,7 @@ worktree. The Python scripts require NumPy and Matplotlib.
    python tools/perf/efss_scaling.py --executable build-cuda/simple.x --gpu --timeout 300 \
      --wout build/evidence/wout.nc --output build/evidence/gpu --markers 256 --threads 16
    python tools/perf/plot_efss_scaling.py build/evidence/full-strong256/measurements.csv \
-     docs/performance/efss-hpc/strong-scaling.png
+     build/evidence/strong-scaling.png
 
 Reproduction needs fresh output directories: the runner deliberately
 refuses to overwrite per-run directories. Every run retains
@@ -166,11 +166,6 @@ minimum and maximum, not confidence intervals.
 | 16      | 22.50   | 22.55   | 22.53   | 17.29   | 12.32   | 77.0%      |
 +---------+---------+---------+---------+---------+---------+------------+
 
-.. figure:: strong-scaling.png
-   :alt: Whole-process strong scaling
-
-   Whole-process strong scaling
-
 The 16-thread mean tracing speedup is 15.71 (efficiency 98.2%). Every
 CPU fraction curve agrees exactly (maximum absolute difference 0,
 acceptance tolerance 1e-12). Sampled final confinement is 1 and
@@ -201,11 +196,6 @@ Sources: :download:`64 <markers64.csv>`, :download:`128 <markers128.csv>` and th
 +-----------+-----------+-----------+-----------+-----------+-----------+
 | 256       | 22.50     | 22.55     | 22.53     | 17.29     | 11.36     |
 +-----------+-----------+-----------+-----------+-----------+-----------+
-
-.. figure:: marker-throughput.png
-   :alt: Marker-count scaling and CPU throughput
-
-   Marker-count scaling and CPU throughput
 
 CPU profile
 -----------
@@ -279,7 +269,7 @@ marker-status changes and is not a statistical confidence bound.
    MPLCONFIGDIR=build/evidence/mpl python tools/perf/plot_efss_throughput.py \
      --cpu build/evidence/markers64/measurements.csv \
      build/evidence/markers128/measurements.csv build/evidence/full-strong256/measurements.csv \
-     --output docs/performance/efss-hpc/marker-throughput.png
+     --output build/evidence/marker-throughput.png
 
 Interpretation and limits
 -------------------------
