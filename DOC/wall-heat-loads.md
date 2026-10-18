@@ -163,7 +163,8 @@ CMAKE_BUILD_PARALLEL_LEVEL=8 make test CONFIG=Fast \
 ```
 
 CTest generates the chartmap fixture automatically. The test checks the
-collisionless momentum invariant, the negligible-density limit, reduced
+collisionless momentum invariant, the original 20 $\mu$s negligible-density
+limit (the collision table floors density at 1 cm$^{-3}$), reduced
 energy on delayed wall hits, and identical particle results in two seeded
 one-thread runs. It writes `build/test/tests/collisional_stl_wall/wall_hits.csv`
 with mode, marker, hit energy fraction, hit time in seconds, and incidence

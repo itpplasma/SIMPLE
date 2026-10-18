@@ -94,7 +94,8 @@ def write_wall(chartmap: Path, output: Path) -> None:
 
 
 def run_case(base: Path, name: str, simple: Path, starts: np.ndarray,
-             *, collisions: bool, density: float, npoiper2: int = 64) -> dict[str, np.ndarray]:
+             *, collisions: bool, density: float, npoiper2: int = 64,
+             trace_time: float = TRACE_TIME) -> dict[str, np.ndarray]:
     work = base / name
     work.mkdir(exist_ok=True)
     (work / "results.nc").unlink(missing_ok=True)
@@ -113,7 +114,7 @@ isw_field_type = 5
 integmode = 0
 startmode = 2
 ntestpart = {len(starts)}
-trace_time = {TRACE_TIME:.17e}
+trace_time = {trace_time:.17e}
 ntimstep = 101
 npoiper2 = {npoiper2}
 contr_pp = -1d10
@@ -213,23 +214,27 @@ def main() -> None:
                                reference["wall_hit_cart"][indices],
                                rtol=0, atol=0.5)  # cm; below STL mesh resolution
     print("PASS: collisionless 64/128-interval segment convergence")
+    # Retain the original 20 us limiting comparison: the density floor gives
+    # nonzero kicks, whose orbit displacement grows over the longer wall trace.
+    limit_reference = run_case(base, "collisionless_limit", simple, starts,
+                               collisions=False, density=2.5e20, trace_time=2e-5)
     dilute = run_case(base, "dilute", simple, starts,
-                      collisions=True, density=1e6)
-    collisional = run_case(base, "collisional", simple, starts,
-                           collisions=True, density=2.5e20)
-    hit_coll = check_hits(collisional, "collisional")
-    repeat = run_case(base, "repeat", simple, starts,
-                      collisions=True, density=2.5e20)
+                      collisions=True, density=1e6, trace_time=2e-5)
     # RK conserves the collisionless momentum; tolerance is well above relerr.
     np.testing.assert_allclose(reference["zend"][hit_ref, 3], 1,
                                rtol=0, atol=1e-7)
     # The local collision table floors ni at 1 cm^-3: this is a limiting check,
     # rather than an exact zero, with noise proportional to sqrt(density).
     for key in ("wall_hit", "orbit_exit_code"):
-        np.testing.assert_array_equal(dilute[key], reference[key], err_msg=key)
+        np.testing.assert_array_equal(dilute[key], limit_reference[key], err_msg=key)
     for key in ("zend", "times_lost", "wall_hit_cart", "wall_hit_angle_rad"):
-        np.testing.assert_allclose(dilute[key], reference[key],
+        np.testing.assert_allclose(dilute[key], limit_reference[key],
                                    rtol=2e-6, atol=2e-8, err_msg=key)
+    collisional = run_case(base, "collisional", simple, starts,
+                           collisions=True, density=2.5e20)
+    hit_coll = check_hits(collisional, "collisional")
+    repeat = run_case(base, "repeat", simple, starts,
+                      collisions=True, density=2.5e20)
     for key in RESULT_VARS:
         np.testing.assert_array_equal(repeat[key], collisional[key], err_msg=key)
     # Exclude prompt hits: these must have experienced several collision kicks.
