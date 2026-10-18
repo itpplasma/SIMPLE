@@ -46,6 +46,10 @@ make CONFIG=Debug    # debugging; also Profile
 make clean           # remove build/
 ```
 
+When changing the profile of an existing build, run `make reconfigure
+CONFIG=Fast` (or `CONFIG=Debug`) before `make`. The test targets below, except
+`test-all`, reconfigure automatically.
+
 The build fetches libneo, fortplot and fortnum through CMake `FetchContent`.
 Select a libneo revision with `make LIBNEO_REF=<branch|tag|sha>` or use a local
 checkout with `make LIBNEO_PATH=/path/to/libneo`. The `fpm.toml` is
@@ -62,11 +66,15 @@ source .venv/bin/activate
 ```
 
 The default setup also builds and installs `pysimple` and selects OpenBLAS.
-Install OpenBLAS first. With Homebrew, make its installation visible to CMake:
+Install OpenBLAS first. With Homebrew, make its installation visible to CMake
+and select GNU C/C++ as well as GNU Fortran for OpenMP. Replace `16` below
+with the installed GCC major version. Select compilers before the first
+configuration, or run `make clean` when switching toolchains.
 
 ```bash
 brew install openblas
-CMAKE_PREFIX_PATH="$(brew --prefix openblas)" FC=gfortran ./setup-venv.sh
+CMAKE_PREFIX_PATH="$(brew --prefix openblas)" \
+    CC=gcc-16 CXX=g++-16 FC=gfortran ./setup-venv.sh
 ```
 
 Use `./setup-venv.sh --no-pysimple` to install only the Python dependencies.
