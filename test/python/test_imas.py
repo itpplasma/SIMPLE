@@ -11,7 +11,7 @@ from pysimple.imas._common import initialize
 from pysimple.imas.equilibrium import _geqdsk_input, equilibrium_to_chartmap
 
 
-def circular_equilibrium(version="4.1.1", *, sign=1, aspect=10):
+def circular_equilibrium(version="4.1.1", *, sign=1, field=1, aspect=10):
     """Divergence-free circular flux surfaces, independent of native geometry.
 
     In physical cylindrical coordinates psi=C*((R-R0)**2+Z**2), F=R0*B0.
@@ -20,7 +20,7 @@ def circular_equilibrium(version="4.1.1", *, sign=1, aspect=10):
     eq = imas.IDSFactory(version=version).new("equilibrium")
     initialize(eq, [0])
     eq.vacuum_toroidal_field.r0 = aspect
-    eq.vacuum_toroidal_field.b0 = [2]
+    eq.vacuum_toroidal_field.b0 = [2*field]
     eq.time_slice.resize(1)
     t = eq.time_slice[0]
     t.time = 0
@@ -34,13 +34,13 @@ def circular_equilibrium(version="4.1.1", *, sign=1, aspect=10):
     p2.grid.dim1, p2.grid.dim2 = r, z
     p2.psi = scale*c*((r[:, None]-aspect)**2+z[None, :]**2)
     setattr(p2, "b_field_tor" if version.startswith("3.") else "b_field_phi",
-            2*aspect/r[:, None]*np.ones((1, len(z))))
+            field*2*aspect/r[:, None]*np.ones((1, len(z))))
     s = np.linspace(0, 1, len(r))
     p1 = t.profiles_1d
     p1.psi = scale*c*s
-    p1.f = np.full(len(s), 2*aspect)
+    p1.f = np.full(len(s), field*2*aspect)
     p1.pressure = np.zeros(len(s))
-    p1.q = -2*aspect/(2*c*np.sqrt(aspect**2-s))
+    p1.q = -field*2*aspect/(2*c*np.sqrt(aspect**2-s))
     p1.rho_tor_norm = np.sqrt((aspect-np.sqrt(aspect**2-s)) /
                              (aspect-np.sqrt(aspect**2-1)))
     q = t.global_quantities
@@ -137,6 +137,27 @@ def test_bulk_profiles_no_fitting_or_species_loss():
     ids.profiles_1d[0].electrons.density = [1e19]*3
     with pytest.raises(ValueError, match="quasineutral"):
         plasma_profiles(ids)
+
+
+@pytest.mark.parametrize("field", [1, -1])
+@pytest.mark.parametrize("sign", [1, -1])
+@pytest.mark.parametrize("version", ["3.42.2", "4.1.1"])
+def test_chartmap_extent_all_flux_directions(tmp_path, version, sign, field):
+    """libneo's scan stops at a signed flux; a reversed sign gives ~3 mm."""
+    netCDF4 = pytest.importorskip("netCDF4")
+    pytest.importorskip("_efit_to_boozer")
+    path = equilibrium_to_chartmap(
+        circular_equilibrium(version, sign=sign, field=field), tmp_path/"c.nc",
+        nstep=360, nlabel=32, ntheta_int=64, nsurfmax=400, nsurf=64, nrho=24,
+        ntheta=48)
+    with netCDF4.Dataset(path) as ds:
+        x, y, z = [np.asarray(ds.variables[n][:]) for n in "xyz"]
+        torflux = float(ds.torflux)
+    minor = np.sqrt((np.hypot(x, y)*.01-10)**2+(z*.01)**2)
+    assert .98 < minor.max() < 1.01
+    # Toroidal flux per radian of the unit disc at R*B_phi=20 T m, in G cm^2;
+    # SIMPLE's chartmap convention gives it the sign opposite to B_phi.
+    np.testing.assert_allclose(torflux, -field*20*(10-np.sqrt(99))*1e8, rtol=.01)
 
 
 @pytest.fixture(scope="module", params=[1, -1])

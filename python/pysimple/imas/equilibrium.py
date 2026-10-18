@@ -132,7 +132,12 @@ def equilibrium_to_chartmap(ids, output, *, time=None, timeout=1200, **resolutio
     output = Path(output).expanduser().resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     options = dict(resolution)
-    options["psimax"] = abs(data["PsiedgeVs"] - data["PsiaxisVs"]) * 1e8
+    # libneo's field_eq shifts the G-EQDSK psi map by its header axis flux and
+    # converts Wb/rad to G cm^2, so the scan compares psi - psi_axis against a
+    # SIGNED psimax and stops in the axis-to-edge flux direction
+    # (itpplasma/libneo#434). An unsigned value stops reversed-flux scans at
+    # the first surface and yields a millimetre-sized chartmap.
+    options["psimax"] = (data["PsiedgeVs"] - data["PsiaxisVs"]) * 1e8
     with tempfile.TemporaryDirectory(prefix="simple-imas-equilibrium-") as tmp:
         gfile = Path(tmp) / "equilibrium.geqdsk"
         candidate = Path(tmp) / "chartmap.nc"
