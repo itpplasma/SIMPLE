@@ -107,7 +107,8 @@ rebuild with deterministic floating point (`SIMPLE_DETERMINISTIC_FP=ON`) first.
 
 Select tests by name with `TEST=<regex>`, for example
 `make test-fast TEST=test_finite_check`. The value passes through `make`, so
-write a regex anchor `$` as `$$`. Set `VERBOSE=1` for verbose test output;
+single-quote a regex and write an anchor `$` as `$$`, for example
+`TEST='test_finite_check$$'`. Set `VERBOSE=1` for verbose test output;
 otherwise CTest shows output on failure. Add `CONFIG=Fast` to any target to
 use the Fast profile.
 
