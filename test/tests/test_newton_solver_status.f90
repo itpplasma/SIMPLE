@@ -196,7 +196,7 @@ program test_newton_solver_status
   residual = 1.0_dp
   call solve_newton_system(matrix, residual, status)
   if (status /= SYMPLECTIC_STEP_LINEAR_SOLVE) then
-    error stop 'singular Newton system did not report its LAPACK failure'
+    error stop 'singular Newton system did not report its linear-solve failure'
   end if
 
   matrix = 0.0_dp
@@ -210,6 +210,8 @@ program test_newton_solver_status
   if (any(residual /= [2.0_dp, -3.0_dp])) then
     error stop 'Newton system returned the wrong correction'
   end if
+
+  call test_pivoted_solve
 
   matrix3 = 0.0_dp
   matrix3(1, 1) = 1.0e-8_dp
@@ -536,6 +538,30 @@ contains
       error stop 'solver-basin failure changed the accepted state'
     end if
   end subroutine test_solver_basin_is_not_boundary
+
+  subroutine test_pivoted_solve
+    ! Gauss3-size system (n = 12) with a zero leading diagonal: needs row
+    ! pivoting. Checks the residual of A x = b against a stored copy.
+    integer, parameter :: n = 12
+    real(dp) :: a(n, n), a0(n, n), b(n), b0(n)
+    integer :: i, j, st
+
+    do j = 1, n
+      do i = 1, n
+        a(i, j) = 1.0_dp/real(i + 2*j - 1, dp) + merge(2.0_dp, 0.0_dp, i == j)
+      end do
+    end do
+    a(1, 1) = 0.0_dp
+    a(2, 1) = 3.0_dp
+    b = [(sin(real(i, dp)), i = 1, n)]
+    a0 = a
+    b0 = b
+    call solve_newton_system(a, b, st)
+    if (st /= SYMPLECTIC_STEP_OK) error stop 'pivoted Newton system failed'
+    if (maxval(abs(matmul(a0, b) - b0)) > 1.0e-13_dp) then
+      error stop 'pivoted Newton system has a large residual'
+    end if
+  end subroutine test_pivoted_solve
 
   subroutine test_lcfs_location
     real(dp), parameter :: timesteps(3) = [0.02_dp, 0.01_dp, 0.005_dp]
