@@ -2,9 +2,8 @@
 
 These recipes and [CPU](../../examples/hpc/pitagora/dcgp.slurm) and
 [GPU](../../examples/hpc/pitagora/booster.slurm) jobs have **not been tested on
-Pitagora**. Login is currently refused for our user (user-supplied status);
-no remote execution was attempted. Local workstation results are in
-[the scaling report](../performance/efss-hpc-2026-10-18/report.md).
+Pitagora**. Local workstation results are in
+[the scaling report](../performance/efss-hpc/index.rst).
 
 ## Public allocation information
 
