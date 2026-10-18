@@ -112,6 +112,25 @@ Run the checker's regression tests with:
 python -m unittest discover -s test/python -p test_changed_line_lint.py -v
 ```
 
+CI keeps the existing GNU test jobs and adds GCC 13 smoke tests plus GCC 14
+fast-suite coverage on non-draft PRs and pushes to `main`. Coverage reports are
+attached as the `fast-suite-coverage` artifact and summarized in the job summary.
+To collect coverage locally with GNU Fortran, GCC's matching `gcov`, and `lcov`:
+
+```bash
+make test-fast CONFIG=Debug \
+    FLAGS='-DENABLE_COVERAGE=ON -DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF'
+cmake --build build --target coverage
+lcov --summary build/coverage_filtered.info
+```
+
+The `CI` workflow's **Run workflow** (`workflow_dispatch`) also offers
+non-blocking Intel ifx and LLVM flang smoke jobs. These reuse the Make/CMake
+build with Python integration and GNU-only deterministic options disabled;
+compiler portability failures remain visible for investigation. The additional
+GCC jobs run on manual dispatch only when `full` is `true`, preserving the small
+libneo smoke gate.
+
 ## CPU quickstart
 
 Copy `examples/simple.in` and provide a VMEC file named `wout.nc`:
