@@ -90,7 +90,7 @@ OMP_NUM_THREADS=16 CMAKE_BUILD_PARALLEL_LEVEL=16 \
 
 Run this inside an allocated GPU job. It enables deterministic floating point;
 reconfigure the intended setting before timing. See
-[GPU controls](../../DOC/gpu-cuda.md). Use Boozer guiding-center tracing,
+[GPU controls](../user-guide/gpu.rst). Use Boozer guiding-center tracing,
 `gpu_mode='production'`, `gpu_backend='cuda-native'`, `gpu_method='dopri'`,
 `gpu_landreman=.true.`, and `gpu_num_devices=1`. The local direct-VMEC production attempt currently
 fails at `src/simple_cuda_native.f90:133` before CUDA tracing; see the linked

@@ -90,7 +90,7 @@ NetCDF-C is still required by SIMPLE's C test-data generator.
 Python 3 is required for test drivers even with both Python options disabled
 (`test/tests/CMakeLists.txt:47`). This recipe does not build or validate
 `pysimple`; its separate prerequisites are in `requirements.txt` and
-[the Python guide](../../python/README.rst). No Python packages were installed
+[the Python guide](../user-guide/python.rst). No Python packages were installed
 on Leonardo for this native smoke test.
 
 ## Short tests and example
@@ -192,7 +192,7 @@ as completed trajectories.
 
 GPU execution requires an allocated GPU. Do not run CUDA tests on login nodes
 or the serial partition. The native CUDA path and valid input restrictions are
-documented in [DOC/gpu-cuda.md](../../DOC/gpu-cuda.md).
+documented in [DOC/gpu-cuda.md](../user-guide/gpu.rst).
 
 The GNU/CUDA A100 compilation uses the CPU environment above plus CUDA 12.3:
 
