@@ -8,9 +8,14 @@ from ._common import factory, ids_version, initialize, require_imas
 from .equilibrium import equilibrium_to_chartmap
 from .markers import fill_marker_slice, fill_species, read_markers
 from .plasma import plasma_profiles
-from .wall import wall_to_stl
 
 EV_TO_J = 1.602176634e-19
+
+WALL_UNSUPPORTED = (
+    "Wall-intersection tracing is not yet supported for IDS equilibria: the "
+    "equilibrium chartmap ends at the LCFS and losses are counted there "
+    "(exit code 1). Omit the wall IDS."
+)
 
 
 def run(
@@ -42,6 +47,8 @@ def run(
     """
     import pysimple
 
+    if wall is not None:
+        raise ValueError(WALL_UNSUPPORTED)
     if not np.isfinite(duration) or duration <= 0:
         raise ValueError("duration must be positive and finite")
     if (equilibrium is None) == (field is None):
@@ -91,9 +98,7 @@ def run(
             "SIMPLE's collision operator currently supports alpha markers (A=4, Z=2) only"
         )
     versions = {
-        ids_version(i)
-        for i in [markers, equilibrium, core_profiles, wall]
-        if i is not None
+        ids_version(i) for i in [markers, equilibrium, core_profiles] if i is not None
     }
     if len(versions) != 1:
         raise ValueError("Convert input IDS to a common Data Dictionary version first")
@@ -119,23 +124,12 @@ def run(
             collision_table, collision_settings = plasma_profiles(
                 core_profiles, time=start_time
             )
-        wall_settings = {}
-        if wall is not None:
-            from pysimple._tracing import _api
-
-            if not _api.simple_wall_supported():
-                raise RuntimeError(
-                    "IDS walls require SIMPLE built with SIMPLE_ENABLE_CGAL=ON"
-                )
-            path = wall_to_stl(wall, directory / "wall.stl", time=start_time)
-            wall_settings = {"wall_input": str(path), "wall_units": "m"}
         for population, target in zip(populations, output.distribution):
             config = {
                 "contr_pp": -1e30,
                 "notrace_passing": 0,
                 **collision_settings,
                 **settings,
-                **wall_settings,
                 "n_d": population.mass_number,
                 "n_e": population.charge,
                 "trace_time": duration,
@@ -231,6 +225,8 @@ def run_entry(
     Output is created with mode ``x`` so an existing dataset is never replaced.
     ``occurrence`` selects the marker occurrence; other IDS use occurrence zero.
     """
+    if wall:
+        raise ValueError(WALL_UNSUPPORTED)
     imas = require_imas()
     if marker_ids not in ("distribution_sources", "distributions"):
         raise ValueError("marker_ids must be distribution_sources or distributions")
@@ -238,8 +234,6 @@ def run_entry(
         kwargs = {"equilibrium": entry.get("equilibrium")}
         if core_profiles:
             kwargs["core_profiles"] = entry.get("core_profiles")
-        if wall:
-            kwargs["wall"] = entry.get("wall")
         result = run(entry.get(marker_ids, occurrence), **kwargs, **options)
     with imas.DBEntry(str(output_uri), "x", dd_version=dd_version) as entry:
         entry.put(result)
@@ -264,7 +258,9 @@ def main(argv=None):
     )
     parser.add_argument("--dd-version", default="4.1.1")
     parser.add_argument("--core-profiles", action="store_true")
-    parser.add_argument("--wall", action="store_true")
+    parser.add_argument(
+        "--wall", action="store_true", help="rejected: walls are not yet supported"
+    )
     parser.add_argument(
         "--settings", type=Path, help="JSON object of SIMPLE &config settings"
     )
