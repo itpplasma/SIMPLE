@@ -368,6 +368,16 @@ $N_\text{fp}$, `fper` $= 2\pi/N_\text{fp}$ and `rmajor`, the $m = n = 0$
 harmonic of $R$ on the outermost interface (m), so that `params_init` derives
 $\Delta\tau$ as for VMEC.
 
+The canonical Gauss-2 full-orbit evaluator in
+`concept/fo_symplectic_proof/spectre_fo_gauss2.f90` retains the same smooth
+embedding and vector potential. It caches field-constant angular factors and
+shares radial profiles between Fourier modes. Predictor and residual-only
+stage evaluations request first-order field jets and a FortSym-generated
+Hamiltonian leaf without Hessian outputs; Newton corrections and tangent maps
+use the complete jets. Small stage evaluations run serially. Energy tests reuse
+H at the next step's start and evaluate the final endpoint explicitly, retaining
+the energy envelope and drift diagnostics at every accepted step.
+
 ### 6.1 Field lines
 
 `src/field_line_spectre.f90` traces field lines inside one volume as a

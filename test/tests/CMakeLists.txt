@@ -1482,9 +1482,8 @@ add_test(NAME test_fo_gauss2_resolution_large_matched_policy COMMAND test_fo_sym
 set_tests_properties(test_fo_gauss2_resolution_large_matched_policy PROPERTIES
     LABELS "regression;integration;slow" TIMEOUT 3600)
 
-# Each FO step evaluates its field jets as up to four OpenMP tasks; results do
-# not depend on the thread count. Reserve the cores: the stage barriers come
-# every few microseconds, so an oversubscribed run stalls on preempted threads.
+# Gauss stages are too small to repay an OpenMP team. Run each serial orbit
+# on one reserved core, also when CTest schedules independent tests together.
 set(FO_STEPPER_TESTS test_fo_symplectic test_fo_symplectic_long
     test_fo_symplectic_resolved test_fo_symplectic_resolved_long
     test_fo_symplectic_newton_boundary test_fo_gauss2_original_oracle
@@ -1496,7 +1495,7 @@ foreach(fo_probe IN ITEMS base half quarter tight base_short captured)
     list(APPEND FO_STEPPER_TESTS test_fo_gauss2_resolution_${fo_probe})
 endforeach()
 set_tests_properties(${FO_STEPPER_TESTS} PROPERTIES
-    PROCESSORS 4 ENVIRONMENT "OMP_NUM_THREADS=4")
+    PROCESSORS 1 ENVIRONMENT "OMP_NUM_THREADS=1")
 
 add_subdirectory(
     "${CMAKE_SOURCE_DIR}/concept/fo_gc_derivations/D_canonical_switch"

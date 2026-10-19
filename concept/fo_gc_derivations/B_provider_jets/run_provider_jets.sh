@@ -14,7 +14,7 @@ cp "$fo_gauss2" "$here/build/src/spectre_fo_gauss2.f90"
 cp "$libneo/src/interpolate/batch_interpolate_3d.f90" "$here/build/src/"
 cp "$libneo/src/spectre/spectre_basis.f90" "$here/build/src/"
 ( cd "$here/build/src" && sha256sum -c --quiet - ) <<'SUMS'
-6890146f4539968c2f4f660830837be5f555503eb714b860751a6478c9b5f1ad  spectre_fo_gauss2.f90
+04c601d268abf17558af15a8bfbb34406a08ee64780f8d07fe0fb0ebe0b1d0d6  spectre_fo_gauss2.f90
 a249da9ca99fc217f621f498ad727d1c7dd3cc6ff02fd7ea079e6b43ab8adfc9  batch_interpolate_3d.f90
 21c3cefd7c6a518a9090e9a98fc2547a14fe7521c46479ff6e8e8a5f2d406d7d  spectre_basis.f90
 SUMS
