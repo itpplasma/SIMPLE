@@ -2,7 +2,7 @@ program test_radial_potential_config
     ! Only the Boozer canonical field applies Phi(s); other paths must reject a
     ! nonzero radial_electric_potential_slope instead of ignoring it.
     use params, only: radial_electric_potential_slope, integmode, orbit_model, &
-        gpu_mode, ORBIT_FULL_ORBIT, validate_radial_electric_potential
+                      gpu_mode, ORBIT_FULL_ORBIT, validate_radial_electric_potential
     use velo_mod, only: isw_field_type
     use magfie_sub, only: BOOZER, VMEC
 
