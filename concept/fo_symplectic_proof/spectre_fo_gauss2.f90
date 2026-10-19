@@ -35,14 +35,14 @@ contains
         if (allocated(gauge)) deallocate(gauge)
         allocate(gauge(2, 2, spectre_field%data%mn, spectre_field%data%Mvol))
         gauge = 0.0_dp
-        if (allocated(angular_factor)) deallocate(angular_factor)
-        allocate(angular_factor(0:3, 0:3, spectre_field%data%mn))
+        if (allocated(angular_factor)) deallocate (angular_factor)
+        allocate (angular_factor(0:3, 0:3, spectre_field%data%mn))
         angular_factor = 0.0_dp
         do j = 1, spectre_field%data%mn
             do z = 0, 3
                 do t = 0, 3 - z
                     angular_factor(t, z, j) = real(spectre_field%data%im(j), dp)**t* &
-                        real(-spectre_field%data%in(j), dp)**z
+                                              real(-spectre_field%data%in(j), dp)**z
                 end do
             end do
         end do
@@ -495,7 +495,7 @@ contains
         call metric_jets(z(1:3), width, gj, first_order)
         call potential_jets(z(1:3), width, ro0, aj, first_order)
         call jet_eval(z, aj, gj, energy, f, df, e0, length, gmin, &
-                      radial_scale, kenergy, monitor, grad, hess, radial_jet, first_order)
+                    radial_scale, kenergy, monitor, grad, hess, radial_jet, first_order)
     end subroutine gauss2_eval
 
     subroutine metric_jets(q, width, gj, first_order)
@@ -544,7 +544,7 @@ contains
     end subroutine potential_jets
 
     subroutine jet_eval(z, aj, gj, energy, f, df, e0, length, gmin, &
-                        radial_scale, kenergy, monitor, grad, hess, radial_jet, first_order)
+                    radial_scale, kenergy, monitor, grad, hess, radial_jet, first_order)
         real(dp), intent(in) :: z(6), aj(3, 10), gj(6, 10)
         real(dp), intent(out) :: energy, f(6), df(6, 6)
         real(dp), intent(in), optional :: e0, length, gmin, radial_scale
@@ -588,10 +588,10 @@ contains
         if (present(first_order)) first = first_order
         if (first) then
             call fo_eval_first(z(4:6), aj, gj, 1.0_dp, 1.0_dp, energy0, &
-                tj, energy, ke, gh, hh, f, df)
+                               tj, energy, ke, gh, hh, f, df)
         else
             call fo_eval(z(4:6), aj, gj, 1.0_dp, 1.0_dp, energy0, &
-                tj, energy, ke, gh, hh, f, df)
+                         tj, energy, ke, gh, hh, f, df)
         end if
         if (present(kenergy)) kenergy = ke
         if (present(monitor)) monitor = tj(1)
