@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
   workflow_dispatch:
     inputs:
       libneo_ref:
@@ -137,16 +137,26 @@ jobs:
 
       - name: Install Python package
         if: github.event_name != 'workflow_dispatch' || inputs.full == 'true'
-        run: python -m pip install -e . --no-build-isolation -Ccmake.define.SIMPLE_DETERMINISTIC_FP=ON
+        run: python -m pip install -e '.[imas]' --no-build-isolation -Ccmake.define.SIMPLE_DETERMINISTIC_FP=ON
 
+      # Full tier: skipped on upper layers of a PR stack (base is not main)
+      # unless the PR is labeled full-ci.
       - name: Run Slow Tests (Python)
-        if: github.event_name != 'workflow_dispatch' || inputs.full == 'true'
+        if: >-
+          (github.event_name != 'workflow_dispatch' || inputs.full == 'true') &&
+          (github.event_name != 'pull_request' ||
+          github.event.pull_request.base.ref == github.event.repository.default_branch ||
+          contains(github.event.pull_request.labels.*.name, 'full-ci'))
         env:
           SIMPLE_GVEC_QA_CACHE_ROOT: ${{ github.workspace }}/.ci-data/gvec_qa_roundtrip
         run: make test-slow
 
       - name: Run Regression Tests (Golden Record)
-        if: github.event_name != 'workflow_dispatch' || inputs.full == 'true'
+        if: >-
+          (github.event_name != 'workflow_dispatch' || inputs.full == 'true') &&
+          (github.event_name != 'pull_request' ||
+          github.event.pull_request.base.ref == github.event.repository.default_branch ||
+          contains(github.event.pull_request.labels.*.name, 'full-ci'))
         run: make test-regression
 
       - name: Upload test results
@@ -155,7 +165,11 @@ jobs:
         with:
           name: test-results
           path: |
-            build/Testing/
+            build/test/Testing/
+            build/test/tests/golden_record/runs/**/simple.in
+            build/test/tests/golden_record/runs/**/start.dat
+            build/test/tests/golden_record/runs/**/times_lost.dat
+            build/test/tests/golden_record/runs/**/orbit_exit_code.dat
 
   gcc-matrix:
     permissions:
@@ -164,9 +178,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     if: >-
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'workflow_dispatch' && inputs.full == 'true') ||
-      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)) &&
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.base.ref == github.event.repository.default_branch ||
+      contains(github.event.pull_request.labels.*.name, 'full-ci'))
     strategy:
       fail-fast: false
       matrix:
@@ -377,8 +394,9 @@ jobs:
       - name: Run CGAL Wall Tests
         run: |
           make clean
-          # Full-torus cylindrical chartmaps: itpplasma/libneo#429.
-          REF="${{ inputs.libneo_ref || 'a816f928b8dcf2211db81e710b92f0f3d10fe0b5' }}"
+          # Full-torus cylindrical chartmaps (itpplasma/libneo#429) and the regular
+          # near-axis Boozer field (itpplasma/libneo#437).
+          REF="${{ inputs.libneo_ref || '924ba7735366d95c2c6855bf00bd0e46b8c05cf2' }}"
           make test CONFIG=Fast \
             FLAGS="-DSIMPLE_ENABLE_CGAL=ON -DENABLE_PYTHON_INTERFACE=ON -DSIMPLE_ENABLE_PYTHON_TOOLS=ON -DLIBNEO_REF=$REF" \
             TEST='test_chartmap_metadata|test_stl_wall_intersection|test_collisional_stl_wall|test_triangle_heat_load|test_profiles' VERBOSE=1
@@ -391,8 +409,66 @@ jobs:
         with:
           name: cgal-wall-results
           path: |
-            build/Testing/
+            build/test/Testing/
             build/test/tests/collisional_stl_wall/
+
+  vmecpp:
+    name: VMEC++ Direct Geometry
+    runs-on: ubuntu-24.04
+    if: >-
+      ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)) &&
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.base.ref == github.event.repository.default_branch ||
+      contains(github.event.pull_request.labels.*.name, 'full-ci'))
+
+    timeout-minutes: 60
+    env:
+      OMP_NUM_THREADS: 1
+      OPENBLAS_NUM_THREADS: 1
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gfortran \
+            g++ \
+            git-lfs \
+            cmake \
+            ninja-build \
+            pkg-config \
+            zlib1g-dev \
+            libgsl-dev \
+            libhdf5-dev \
+            libfftw3-dev \
+            libnetcdf-dev \
+            libnetcdff-dev \
+            libopenblas-dev \
+            liblapack-dev \
+            openmpi-bin \
+            libopenmpi-dev
+
+      - name: Configure SIMPLE with VMEC++
+        run: |
+          cmake -S . -B build -GNinja -DCMAKE_BUILD_TYPE=Release \
+            -DSIMPLE_ENABLE_VMECPP=ON
+
+      - name: Build SIMPLE with VMEC++
+        run: cmake --build build --config Release
+
+      - name: Run VMEC++ tests
+        run: ctest --test-dir build/test -R vmecpp --output-on-failure
 
   build-docs:
     name: Build Documentation

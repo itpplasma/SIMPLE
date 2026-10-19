@@ -1,23 +1,27 @@
 User guide
 ==========
 
-The user guide explains how to prepare inputs, run SIMPLE and interpret the
-outputs. The physics and numerics behind each option are in
-:doc:`/model/index`; the complete list of input keys is in
-:doc:`/reference/input-parameters`.
+One page per task; all keys with defaults: :doc:`/reference/input-parameters`.
+
+* Inputs and coordinates: :doc:`field-sources`. Run settings: :doc:`running`.
+* Fusion-weighted starts: :doc:`/alpha-birth`.
+* Files and exit codes: :doc:`outputs`. Plots: :doc:`postprocessing`.
+* Regular/chaotic orbits: :doc:`classification`. Walls: :doc:`wall-heat-loads`.
+* Python: :doc:`python`. IMAS IDS: :doc:`imas`. GPU: :doc:`gpu`. Cost and clusters:
+  :doc:`performance`, :doc:`/hpc/index`.
 
 .. toctree::
-   :maxdepth: 2
+   :hidden:
 
    field-sources
    running
    /alpha-birth
    outputs
-   /postprocessing
-   wall-heat-loads
+   postprocessing
    classification
+   wall-heat-loads
    python
+   imas
    gpu
    performance
-   /hpc/cineca
-   /hpc/pitagora
+   /hpc/index

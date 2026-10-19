@@ -1,9 +1,9 @@
 Quick start
 ===========
 
-This page runs a first loss computation in a few minutes. It uses a public
-quasi-axisymmetric reactor-scale VMEC equilibrium (Landreman and Paul 2022)
-from the simsopt test files and the input ``examples/simple.in``.
+This page computes the alpha-particle loss fraction of a public
+quasi-axisymmetric reactor-scale VMEC equilibrium (Landreman and Paul 2022,
+from the simsopt test files) with ``examples/simple.in``.
 
 Run
 ---
@@ -13,39 +13,24 @@ From the repository root, after :doc:`installation`:
 .. code-block:: bash
 
    mkdir -p run
-   cp examples/simple.in run/simple.in
-   wget https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc \
-       -O run/wout.nc
+   cp examples/simple.in run/
+   curl -L -o run/wout.nc https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc
    cd run
    ../build/simple.x simple.in
-
-The input file is a Fortran namelist:
 
 .. literalinclude:: ../../examples/simple.in
    :language: fortran
    :caption: examples/simple.in
 
-It traces 128 alpha particles with 3.5 MeV for 10 ms. They start on the flux
-surface with normalised toroidal flux :math:`s = 0.3` with random pitch.
-``isw_field_type = 2`` selects Boozer coordinates, in which SIMPLE builds the
-canonical guiding-centre equations. All other keys keep their defaults, which
-are listed in ``examples/simple_full.in`` (:doc:`/reference/input-parameters`).
+The run traces 128 alpha particles of 3.5 MeV for 10 ms, started on the
+surface :math:`s = 0.3` (normalised toroidal flux) with random angles and
+uniformly random pitch :math:`\lambda = v_\parallel/v`. ``isw_field_type = 2``
+integrates in Boozer coordinates. All other keys keep the defaults of
+``examples/simple_full.in``. The run takes 20–30 s on a workstation; most of
+it is field setup, which the log reports phase by phase.
 
-On a workstation the run takes about ten seconds. Most of it is the setup of
-the field splines and the Boozer transformation. The log ends with lines such
-as::
-
-   INFO: Particle tracing completed       2.902 s (Total:       10.572 s)
-    Total field evaluations:              74735691
-   INFO: Output writing completed       0.026 s (Total:       10.598 s)
-
-Results
--------
-
-The run directory now contains the result files. The most important one is
-``confined_fraction.dat``. Its columns are the time in seconds, the confined
-fraction of passing particles, the confined fraction of trapped particles and
-the number of numerically resolved particles:
+Result
+------
 
 .. code-block:: bash
 
@@ -53,24 +38,23 @@ the number of numerically resolved particles:
 
 ::
 
-   1.0000000000000000E-002  0.76562500000000000  0.22656250000000000  128
+   1.0000000000000000E-002  0.70312500000000000  0.29687500000000000  128
 
-The loss fraction is :math:`1 - (f_\text{pass} + f_\text{trap})` at the last
-time, here :math:`1 - 0.992 = 0.008`: one of 128 particles left the plasma
-within 10 ms. The start positions and pitches are random, so another run
-gives slightly different numbers; with 128 particles, zero to a few losses are
-expected in this optimised configuration. Add ``deterministic = .true.`` to
-``simple.in`` for a fixed random seed. ``times_lost.dat`` contains the loss
-time of each particle, and :doc:`/user-guide/outputs` describes all files.
+The columns are time (s), confined fraction of passing markers, confined
+fraction of trapped markers and the number of numerically resolved markers.
+The loss fraction at 10 ms is :math:`1 - f_\text{pass} - f_\text{trap} = 0`:
+no marker left the plasma. Starts are random, so another run differs; in this
+optimised configuration 0 to a few of 128 markers are lost. Add
+``deterministic = .true.`` for a fixed seed.
 
-The script ``examples/run_example.sh`` runs the same case in
-``/tmp/simple_example``.
+``orbit_exit_code.dat`` shows code 3 for about half of the markers: deeply
+passing markers (trapping parameter :math:`\le` ``contr_pp``) are counted as
+confined without tracing. ``times_lost.dat`` holds the loss time and end state
+of every marker. :doc:`/user-guide/outputs` describes all files and codes.
 
-Next steps
-----------
+Next
+----
 
-* :doc:`/tutorials/loss-fraction` computes and compares the loss fractions of
-  a quasi-axisymmetric and a quasi-helical equilibrium and plots the result.
-* :doc:`/user-guide/running` explains the choice of particle number, tracing
-  time, integrator and starting positions.
-* :doc:`/model/index` explains what is computed.
+* :doc:`/tutorials/loss-fraction`: QA versus QH with statistical errors.
+* :doc:`/user-guide/running`: markers, time, integrator, starts, collisions.
+* :doc:`/model/index`: what is computed.

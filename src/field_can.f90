@@ -28,7 +28,20 @@ procedure(evaluate_base), pointer :: evaluate => null()
 procedure(coordinate_transform), pointer :: integ_to_ref => identity_transform
 procedure(coordinate_transform), pointer :: ref_to_integ => identity_transform
 
+!> Build the regular near-axis field representation (libneo boozer_regular,
+!> evaluated in X = rho cos(theta), Y = rho sin(theta), phi) alongside the
+!> polar splines when a Boozer field is initialised. Off by default: the
+!> representation costs a second 3D spline and only the Cartesian canonical
+!> chart evaluates it.
+    logical :: regular_axis_field = .false.
+
 contains
+
+    subroutine set_regular_axis_field(enabled)
+        logical, intent(in) :: enabled
+
+        regular_axis_field = enabled
+    end subroutine set_regular_axis_field
 
     subroutine init_field_can_boozer_chartmap_compact()
         call field_can_from_name("boozer")
@@ -163,12 +176,17 @@ subroutine init_field_can(field_id, field_noncan, n_r, n_th, n_phi, &
   use boozer_chartmap, only : load_boozer_from_chartmap
   use field_can_meiss, only : get_meiss_coordinates
   use field_can_albert, only : get_albert_coordinates
+        use boozer_regular, only: set_boozer_regular_enabled
 
   integer, intent(in) :: field_id
   class(magnetic_field_t), intent(in), optional :: field_noncan
   integer, intent(in), optional :: n_r, n_th, n_phi
   real(dp), intent(in), optional :: transformation_relerr
   type(vmec_field_t) :: vmec_field
+
+        ! The libneo Boozer builders read this switch; set it on every
+        ! initialisation so a library run that changes fields starts clean.
+        call set_boozer_regular_enabled(regular_axis_field .and. field_id == BOOZER)
 
   if (present(field_noncan)) then
     call field_can_from_id(field_id, field_noncan, n_r, n_th, n_phi, &
@@ -254,20 +272,20 @@ end subroutine field_can_init
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-subroutine get_val(f, pphi)
-  !
-  ! computes values of H, pth and vpar at z=(r, th, ph, pphi)
-  !
-  !
-  type(field_can_t), intent(inout) :: f
-  real(dp), intent(in) :: pphi
-  !$acc routine seq
+    subroutine get_val(f, pphi)
+        !
+        ! computes values of H, pth and vpar at z=(r, th, ph, pphi)
+        !
+        !
+        type(field_can_t), intent(inout) :: f
+        real(dp), intent(in) :: pphi
+        !$acc routine seq
 
-  f%vpar = (pphi - f%Aph/f%ro0)/f%hph
-  f%H = f%vpar**2/2d0 + f%mu*f%Bmod
-  f%pth = f%hth*f%vpar + f%Ath/f%ro0
+        f%vpar = (pphi - f%Aph/f%ro0)/f%hph
+        f%H = f%vpar**2/2d0 + f%mu*f%Bmod + f%Phie
+        f%pth = f%hth*f%vpar + f%Ath/f%ro0
 
-end subroutine get_val
+    end subroutine get_val
 
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -286,7 +304,7 @@ subroutine get_derivatives(f, pphi)
   f%dvpar(1:3) = -(f%dAph/f%ro0 + f%dhph*f%vpar)/f%hph
   f%dvpar(4)   = 1d0/f%hph
 
-  f%dH(1:3) = f%vpar*f%dvpar(1:3) + f%mu*f%dBmod
+        f%dH(1:3) = f%vpar*f%dvpar(1:3) + f%mu*f%dBmod + f%dPhie
   f%dH(4)   = f%vpar/f%hph
 
   f%dpth(1:3) = f%dvpar(1:3)*f%hth + f%vpar*f%dhth + f%dAth/f%ro0
@@ -319,7 +337,7 @@ subroutine get_derivatives2(f, pphi)
   f%d2vpar(6) = f%d2vpar(6) - 2d0*f%dhph(3)*f%dvpar(3)
   f%d2vpar(1:6) = f%d2vpar(1:6)/f%hph
 
-  f%d2H(1:6) = f%vpar*f%d2vpar(1:6) + f%mu*f%d2Bmod ! + qi*d2Phie
+        f%d2H(1:6) = f%vpar*f%d2vpar(1:6) + f%mu*f%d2Bmod + f%d2Phie
   f%d2H(1) = f%d2H(1) + f%dvpar(1)**2
   f%d2H(2) = f%d2H(2) + f%dvpar(1)*f%dvpar(2)
   f%d2H(3) = f%d2H(3) + f%dvpar(1)*f%dvpar(3)

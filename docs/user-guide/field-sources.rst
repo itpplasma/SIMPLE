@@ -1,79 +1,55 @@
-Inputs and field sources
-========================
+Field sources and coordinates
+=============================
 
-A run is configured by the ``&config`` namelist of ``simple.in`` and, for
-collisions, the ``&profiles`` namelist. ``simple.x`` reads ``simple.in`` from
-the working directory or the file given as the first argument. All keys have
-defaults; ``examples/simple_full.in`` lists them
-(:doc:`/reference/input-parameters`).
+This page tells you which files to give SIMPLE for each kind of magnetic
+field and which integration coordinates work with it. Keys belong to the
+``&config`` namelist of ``simple.in`` (:doc:`/reference/input-parameters`).
 
-Three keys select the files:
+Method: :doc:`/model/coordinates`.
 
-``field_input``
-   The magnetic field: a VMEC ``wout`` file, a Boozer chartmap, a coil file or
-   a SPECTRE HDF5 file. The type is detected from the file.
-``coord_input``
+Input files
+-----------
+
+``field_input`` (default ``''``)
+   The magnetic field: VMEC ``wout`` (``.nc``), Boozer chartmap (``.nc``),
+   SPECTRE (``.h5``) or a coil file. The type is detected from the file.
+``coord_input`` (default ``''``)
    The reference coordinates in which start points and results are given:
-   a VMEC ``wout`` file or a chartmap. Defaults to ``netcdffile``, then to
+   a VMEC ``wout`` file or a chartmap. Empty means ``netcdffile``, then
    ``field_input``.
-``netcdffile``
-   A VMEC ``wout`` file. It is the fallback for the two keys above, and the
-   default ``wout.nc`` is used when a VMEC file is required.
+``netcdffile`` (default ``''``)
+   VMEC ``wout`` file; fallback for both keys above. Where a VMEC file is
+   required and all three are empty, ``wout.nc`` is used.
 
-``integ_coords`` (or its older alias ``isw_field_type``) selects the
-coordinates in which the orbits are integrated:
+Integration coordinates
+-----------------------
 
-.. list-table::
-   :header-rows: 1
-   :widths: 8 16 28 48
+``integ_coords`` selects the coordinates in which orbits are integrated. Its
+older alias ``isw_field_type`` (default 0) applies when ``integ_coords`` is
+unset (default ``-1000``).
 
-   * - Value
-     - Name
-     - Coordinates
-     - Use
-   * - 0
-     - CANFLUX
-     - :math:`(s, \vartheta_c, \varphi_c)`
-     - Canonical flux coordinates from VMEC (symplectic).
-   * - 1
-     - VMEC
-     - :math:`(s, \vartheta, \varphi)`
-     - VMEC coordinates, Runge-Kutta only.
-   * - 2
-     - BOOZER
-     - :math:`(s, \vartheta_B, \varphi_B)`
-     - Boozer coordinates from VMEC or a Boozer chartmap (symplectic).
-       The standard choice for nested flux surfaces.
-   * - 3
-     - MEISS
-     - :math:`(r, \vartheta_c, \varphi_c)`
-     - Canonical coordinates without flux surfaces, for example for coil
-       fields (symplectic).
-   * - 4
-     - ALBERT
-     - :math:`(\psi, \vartheta_c, \varphi_c)`
-     - Meiss coordinates with a radial coordinate proportional to
-       :math:`A_\vartheta` (symplectic).
-   * - 5
-     - REFCOORDS
-     - reference coordinates
-     - ``field_input`` splined on ``coord_input``, Runge-Kutta only.
-   * - 6
-     - SPECTRE
-     - :math:`(\rho_g, \vartheta, \zeta)`
-     - Per-volume coordinates of SPECTRE/SPEC equilibria.
-   * - -1
-     - TEST
-     - :math:`(r, \vartheta, \varphi)`
-     - Analytic tokamak field for tests.
-
-The coordinates and the canonical transformations are described in
-:doc:`/model/coordinates`.
+=====  ===========  ======================================  ==============================
+Value  Name         Coordinates                             Use
+=====  ===========  ======================================  ==============================
+0      CANFLUX      :math:`(s, \vartheta_c, \varphi_c)`     canonical flux coordinates
+                                                            from VMEC; symplectic
+1      VMEC         :math:`(s, \vartheta, \varphi)`         VMEC; ``integmode = 0`` only
+2      BOOZER       :math:`(s, \vartheta_B, \varphi_B)`     Boozer, from VMEC or a Boozer
+                                                            chartmap; symplectic; standard
+                                                            for nested flux surfaces
+3      MEISS        :math:`(\rho, \vartheta_c, \varphi_c)`  canonical without flux
+                                                            surfaces, e.g. coils; symplectic
+4      ALBERT       :math:`(\psi, \vartheta_c, \varphi_c)`  as MEISS with
+                                                            :math:`\psi \propto A_\vartheta`;
+                                                            symplectic
+5      REFCOORDS    reference coordinates                   ``field_input`` splined on
+                                                            ``coord_input``; ``integmode = 0``
+6      SPECTRE      :math:`(\rho_g, \vartheta, \zeta)`      per-volume SPECTRE/SPEC
+-1     TEST         :math:`(r, \vartheta, \varphi)`         analytic tokamak for tests
+=====  ===========  ======================================  ==============================
 
 VMEC equilibria
 ---------------
-
-A VMEC ``wout*.nc`` file in NetCDF format is the standard input:
 
 .. code-block:: fortran
 
@@ -82,77 +58,74 @@ A VMEC ``wout*.nc`` file in NetCDF format is the standard input:
    isw_field_type = 2      ! Boozer
    /
 
-SIMPLE splines :math:`R`, :math:`Z` and :math:`\lambda` of VMEC over
-:math:`s` and the angles (orders ``ns_s``, ``ns_tp``; angular resolution
-``multharm``), transforms to Boozer or canonical flux coordinates and splines
-the canonical field components. Near the magnetic axis the VMEC harmonics are
-continued smoothly (``axis_healing``; ``'polyfit'`` is recommended and will
-become the default).
+SIMPLE splines VMEC's :math:`R`, :math:`Z` and :math:`\lambda` over :math:`s`
+(order ``ns_s``, default 5) and the angles (order ``ns_tp``, default 5, on
+:math:`m_\text{max}\,` ``multharm`` :math:`+1` poloidal and
+:math:`n_\text{max}\,` ``multharm`` :math:`+1` toroidal points, ``multharm``
+default 5), transforms to Boozer or canonical flux coordinates and splines the
+canonical field components. ``axis_healing`` selects how the VMEC harmonics
+are continued to the axis; use ``'polyfit'``, which replaces them below
+``s_axis_heal`` (default 0.01) by a polynomial in :math:`s`.
 
-``vmec_B_scale`` and ``vmec_RZ_scale`` multiply the field and the size of the
-device. They allow a quick scan of a configuration at another field or size
-without a new equilibrium; a scaled equilibrium is still an MHD equilibrium
-only if the pressure is scaled consistently.
+``vmec_B_scale`` and ``vmec_RZ_scale`` (default 1) multiply the field and
+the device size, for scans without a new equilibrium. The scaled field is an
+MHD equilibrium only with consistently scaled pressure.
 
-Start positions, ``sbeg`` and ``start.dat`` refer to VMEC coordinates
-:math:`(s, \vartheta, \varphi)` with :math:`s` the normalised toroidal flux.
+Start positions (``sbeg``, ``start.dat``) are given in VMEC coordinates
+:math:`(s, \vartheta, \varphi)`.
 
 Boozer chartmaps (GVEC, booz_xform)
 -----------------------------------
 
-A Boozer chartmap is a NetCDF file with the geometry and the Boozer field
-components on a uniform grid. SIMPLE runs from it without a VMEC file:
+A Boozer chartmap is a NetCDF file with geometry and Boozer field components
+on a uniform grid; no VMEC file is needed:
 
 .. literalinclude:: ../../examples/simple_chartmap.in
    :language: fortran
    :caption: examples/simple_chartmap.in
 
-``field_input`` and ``coord_input`` both point to the chartmap. ``sbeg`` is
-still the normalised toroidal flux :math:`s`; the chartmap radial coordinate is
-:math:`\rho = \sqrt{s}`. The schema, sign conventions and scaling rules are in
-:doc:`/boozer-chartmap-schema`.
-
-Converters in ``tools/`` write chartmaps from other codes:
+``sbeg`` stays the normalised toroidal flux :math:`s`; positions in
+``start.dat`` and the outputs use the chartmap radius :math:`\rho=\sqrt{s}`.
+Format, signs and scaling: :doc:`/boozer-chartmap-schema`. Converters:
 
 .. code-block:: bash
 
-   # GVEC (needs the gvec Python package, installed by setup-venv.sh)
+   # GVEC (gvec Python package; installed by setup-venv.sh)
    python tools/gvec_to_boozer_chartmap.py parameter_final.ini State_final.dat \
        boozer_chartmap.nc
-
-   # booz_xform output
+   # booz_xform
    python tools/booz_xform_to_boozer_chartmap.py boozmn_case.nc boozer_chartmap.nc
 
-Both accept ``--nrho``, ``--ntheta`` and a toroidal resolution option
-(``--nphi`` or ``--nzeta``). The GVEC converter computes Boozer coordinates
-with GVEC's own transformation and handles the orientation change to SIMPLE's
-left-handed convention (option ``--flip``). SIMPLE does not link GVEC at run
-time. The tested reference workflow is ``test/tests/run_gvec_qa_roundtrip.py``.
+Both take ``--nrho``, ``--ntheta`` and ``--nphi`` (GVEC) or ``--nzeta``
+(booz_xform). The GVEC converter reverses one angle (``--flip tor``, default,
+or ``pol``) for SIMPLE's left-handed convention; its tested workflow is
+``test/tests/run_gvec_qa_roundtrip.py``.
+
+IMAS equilibrium IDS
+--------------------
+
+``pysimple.imas`` converts an axisymmetric equilibrium IDS through libneo into
+a Boozer chartmap and traces IDS markers in it; positions and outputs use the
+chartmap radius :math:`\rho`. Setup and conventions: :doc:`imas`.
 
 Coil fields
 -----------
 
-A coil file gives the field of filamentary coils by the Biot-Savart law. It is
-needed when particles are followed outside the last closed flux surface, for
-example to a wall. The SIMPLE coil format is a text file: the number of points
-in the first line, then one line per point with :math:`x, y, z` in metres and
-the current in ampere. Point :math:`i` and point :math:`i+1` are joined by a
-straight segment that carries the current of point :math:`i`, so a current of
-zero ends a coil. The converter of the test suite translates the
-STELLOPT/MAKEGRID format and keeps these zero-current points:
+Coil fields follow particles outside the last closed flux surface (LCFS).
+The coil file is text: the number of points, then :math:`x, y, z` (m) and
+current (A) per line. Points :math:`i` and :math:`i+1` are joined by a
+straight segment carrying the current of point :math:`i`; a zero current ends
+a coil. Convert STELLOPT/MAKEGRID files with
 
 .. code-block:: bash
 
    python test/tests/convert_coils_stellopt_to_simple.py coils.c09r00 coils.simple
 
-At this revision, ``python -m libneo.convert_coils_to_simple`` drops the
-zero-current points, so that consecutive coils are joined by spurious current
-segments; do not use it for SIMPLE input.
+``python -m libneo.convert_coils_to_simple`` drops the zero-current points and
+so joins consecutive coils by spurious segments; do not use it for SIMPLE.
 
-Coil fields need canonical coordinates that do not assume flux surfaces
-(``isw_field_type = 3`` or ``4``) or the Runge-Kutta path on reference
-coordinates (``isw_field_type = 5``, ``integmode = 0``). A VMEC file
-(``netcdffile``) is still used for the start positions and as reference
+Coil fields need ``integ_coords = 3`` or ``4``, or ``integ_coords = 5`` with
+``integmode = 0``. A VMEC file still provides start positions and reference
 coordinates unless ``coord_input`` is a chartmap:
 
 .. code-block:: fortran
@@ -163,14 +136,13 @@ coordinates unless ``coord_input`` is a chartmap:
    isw_field_type = 3      ! Meiss
    /
 
-The coil set and the VMEC equilibrium must describe the same field; SIMPLE
-does not check this; see the warning in :doc:`/tutorials/wall-heat-loads`.
+SIMPLE does not check that coils and equilibrium describe the same field.
 
 Chartmaps beyond the LCFS
 -------------------------
 
-For wall losses, the reference coordinates must continue beyond the last
-closed flux surface. libneo writes such chartmaps from a VMEC file:
+Wall losses need reference coordinates that continue beyond the LCFS. libneo
+writes such a chartmap from a VMEC file:
 
 .. code-block:: bash
 
@@ -178,62 +150,34 @@ closed flux surface. libneo writes such chartmaps from a VMEC file:
    python -m libneo.chartmap_cli from-vmec-extended wout.nc chartmap_wall.nc \
        --nrho 33 --ntheta 65 --nzeta 33 --boundary-offset 0.15
 
-The global attribute ``rho_lcfs`` records the radial position of the LCFS.
-``chart_boundary_kind`` defines what the outer boundary of a chartmap means: a
-loss at the LCFS, a loss at a wall, or the end of the numerical domain
-(:doc:`/reference/input-parameters`). Other subcommands of
-``libneo.chartmap_cli`` build chartmaps from an STL boundary
-(``from-stl``) or extend a VMEC chartmap to an STL wall
-(``from-vmec-to-wall``); they need the optional Python packages
-``map2disc`` and ``shapely``.
+The global attribute ``rho_lcfs`` records the LCFS radius.
+``chart_boundary_kind`` (default ``'auto'``) declares what the outer chartmap
+boundary is: ``'lcfs'`` (loss, exit code 1), ``'wall'`` (exit code 2) or
+``'domain'`` (numerical exit 101); ``'auto'`` means ``'lcfs'`` if
+``rho_lcfs = 1``, else ``'domain'``. The subcommands ``from-stl`` (chartmap
+inside an STL boundary) and ``from-vmec-to-wall`` (VMEC extended to an STL
+wall) need the Python packages ``map2disc`` and ``shapely``.
 
 SPECTRE equilibria
 ------------------
 
-SPECTRE/SPEC multi-region relaxed MHD equilibria (HDF5, ``.h5``) are detected
-from ``field_input``. They require ``integ_coords = 6``. SIMPLE integrates
-guiding-centre orbits per volume and switches to full orbits near the
-interfaces between volumes, where the field jumps:
+SPECTRE/SPEC multi-region relaxed MHD equilibria (HDF5) require
+``integ_coords = 6``. SIMPLE integrates guiding-centre orbits inside each
+volume and full orbits near the interfaces, where the field jumps:
 
 .. literalinclude:: ../../examples/simple_spectre.in
    :language: fortran
    :caption: examples/simple_spectre.in
 
-``sbeg`` is the SPECTRE radial label :math:`\rho_g \in [0, M_\text{vol}]`.
-The interface treatment and its controls (``crossing_level``,
-``spectre_fo_entry_larmor``, ``spectre_fo_tolerance``, ``spectre_fo_grid``)
-are described in :doc:`/reference/design-notes`.
+``sbeg`` is the SPECTRE radial label :math:`\rho_g \in [0, M_\text{vol}]`,
+or :math:`s` with ``spectre_sbeg_is_toroidal_flux = .true.`` (``startmode = 1``). The interface
+controls ``spectre_fo_entry_larmor``, ``spectre_fo_tolerance`` and
+``spectre_fo_grid`` are explained in :doc:`/model/extensions`.
 
-Start positions
----------------
-
-``startmode`` selects how start positions are generated:
-
-.. list-table::
-   :header-rows: 1
-   :widths: 10 90
-
-   * - Value
-     - Start positions
-   * - 1
-     - Random points along one field line on the surface ``sbeg``, weighted
-       by volume (default). ``grid_density`` places them on a grid instead.
-   * - 2
-     - Read ``start.dat``: :math:`(s, \vartheta, \varphi, v/v_0,
-       v_\parallel/v)` per line in reference coordinates.
-   * - 3
-     - Read an ANTS-format start file.
-   * - 4
-     - A random batch of the lines of ``start.dat``.
-   * - 5
-     - Uniform random :math:`s` in a range set by ``num_surf`` and
-       ``sbeg``, random angles.
-   * - 6
-     - Read ``start.dat`` with positions in integration coordinates.
-
-Modes 1 and 5 write the generated positions to ``start.dat``. The pitch
-:math:`v_\parallel/v` is uniform in :math:`[-1, 1]`, the speed is the birth
-speed (:math:`v/v_0 = 1`). The particle species is set by ``n_e`` (charge
-number), ``n_d`` (mass number) and ``facE_al`` (energy :math:`3.5\,\text{MeV}
-/ \text{facE\_al}`). All angles are in radians and are not wrapped to
-:math:`[0, 2\pi)`.
+Each volume builds its own Meiss canonical coordinates on a grid of
+``spectre_ncon_r`` (default 48) by ``spectre_ncon_th`` (48) by
+``spectre_ncon_phi`` points. With ``spectre_ncon_phi = -1`` (default) SIMPLE
+uses 32 points, or 8 for an axisymmetric field (all toroidal mode numbers
+zero); a positive value is used as given. Memory scales with
+:math:`M_\text{vol}\,n_r n_\vartheta n_\varphi`; the log line
+``spectre_construction_grid`` reports the grid in use.
