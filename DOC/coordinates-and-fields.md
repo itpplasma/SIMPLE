@@ -6,6 +6,18 @@ fit together.
 
 Update this file when coordinates or field-loading paths change.
 
+The IMAS actor (`docs/user-guide/imas.rst`) loads an equilibrium IDS as a libneo
+Boozer chartmap. Its Cartesian geometry covers the full toroidal period even for
+an axisymmetric field; its covariant toroidal field is G, not the transform
+normalization G + iota*I; its uniform rho grid and the uniform s abscissa of
+A_phi are distinct grids.
+
+`simple_cylindrical_to_reference` and `simple_reference_to_cylindrical` map
+`(R [m], phi [rad], Z [m])` to and from the loaded reference coordinates (radius
+s for VMEC, rho for chartmaps) with one status per point; TEST and SPECTRE
+references are rejected. Integration coordinates are unchanged, and the
+tabulated collision-profile abscissa is s for VMEC and Boozer integration.
+
 Fusion birth sampling (`startmode = 7`) uses the VMEC volume Jacobian in
 `(s,theta,phi)` for VMEC input, or the field-derived Boozer Jacobian
 `torflux*(iota*B_theta+B_zeta)/B^2` in integration `(s,theta_B,zeta_B)` for
