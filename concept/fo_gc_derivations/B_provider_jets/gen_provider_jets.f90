@@ -1305,7 +1305,7 @@ contains
         call expect(fprov, 321, 'wave = [real(m, dp), -real(n, dp)]')
         call expect(fprov, 323, 'c = [cos(arg), -sin(arg), -cos(arg), sin(arg)]')
         call expect(fprov, 44, &
-            'angular_factor(t, z, j) = real(spectre_field%data%im(j), dp)**t* &')
+                   'angular_factor(t, z, j) = real(spectre_field%data%im(j), dp)**t* &')
         call expect(fprov, 341, 'factor = angular_factor(t, z, ii)')
         call expect(fprov, 342, 'jets(r, t, z, comp) = jets(r, t, z, comp) + factor* &')
         call expect(fprov, 343, '(coeff(1, r)*c(mod(t + z, 4)) &')

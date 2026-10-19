@@ -114,16 +114,16 @@ contains
             call initial(z, rhos(r))
             do mode = 0, 1
                 call generated_eval(z, width, ro0, en, f, df, 0.01_dp, &
-                    0.12_dp, 0.1_dp, real(mode, dp), ke, mon, grad)
+                                    0.12_dp, 0.1_dp, real(mode, dp), ke, mon, grad)
                 call generated_eval(z, width, ro0, en1, f1, df1, 0.01_dp, &
-                    0.12_dp, 0.1_dp, real(mode, dp), ke1, mon1, grad1, &
-                    first_order=.true.)
+                                    0.12_dp, 0.1_dp, real(mode, dp), ke1, mon1, grad1, &
+                                    first_order=.true.)
                 error = max( &
-                    abs(en1 - en)/max(abs(en), tiny(1.0_dp)), &
-                    abs(ke1 - ke)/max(abs(ke), tiny(1.0_dp)), &
-                    abs(mon1 - mon)/max(abs(mon), tiny(1.0_dp)), &
-                    maxval(abs(f1 - f))/max(maxval(abs(f)), tiny(1.0_dp)), &
-                    maxval(abs(grad1 - grad))/max(maxval(abs(grad)), tiny(1.0_dp)))
+                        abs(en1 - en)/max(abs(en), tiny(1.0_dp)), &
+                        abs(ke1 - ke)/max(abs(ke), tiny(1.0_dp)), &
+                        abs(mon1 - mon)/max(abs(mon), tiny(1.0_dp)), &
+                        maxval(abs(f1 - f))/max(maxval(abs(f)), tiny(1.0_dp)), &
+                        maxval(abs(grad1 - grad))/max(maxval(abs(grad)), tiny(1.0_dp)))
                 if (error > 64*epsilon(1.0_dp)) &
                     error stop 'first-order value/RHS differs from full evaluation'
             end do
