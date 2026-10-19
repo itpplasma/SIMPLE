@@ -613,6 +613,54 @@ if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     add_dependencies(diag_orbit.x fortplot)
 endif()
 
+# FortSym generators for the pointwise leaves in src/generated. The checked-in
+# output is the build input; regeneration needs a FortSym build tree at the
+# pinned revision (configure with -DSIMPLE_FORTSYM_BUILD=<fortsym build>).
+set(SIMPLE_FORTSYM_BUILD "" CACHE PATH "Optional FortSym build tree for regeneration")
+set(SIMPLE_FORTSYM_REVISION "7138102caa60bbd6cac5c59ab49488101b80745b")
+if(SIMPLE_FORTSYM_BUILD)
+    file(STRINGS "${SIMPLE_FORTSYM_BUILD}/CMakeCache.txt" fortsym_source
+        REGEX "^CMAKE_HOME_DIRECTORY:INTERNAL=")
+    string(REPLACE "CMAKE_HOME_DIRECTORY:INTERNAL=" "" fortsym_source
+        "${fortsym_source}")
+    execute_process(COMMAND git -C "${fortsym_source}" rev-parse HEAD
+        OUTPUT_VARIABLE fortsym_revision OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE fortsym_revision_status)
+    if(NOT fortsym_revision_status EQUAL 0 OR
+            NOT fortsym_revision STREQUAL SIMPLE_FORTSYM_REVISION)
+        message(FATAL_ERROR "Regeneration requires FortSym ${SIMPLE_FORTSYM_REVISION}")
+    endif()
+    configure_file(gen/simple_fortsym_revision.inc.in
+        ${CMAKE_BINARY_DIR}/gen_include/simple_fortsym_revision.inc @ONLY)
+    add_library(simple_gen_support STATIC gen/simple_gen_support.f90)
+    target_include_directories(simple_gen_support PUBLIC
+        ${SIMPLE_FORTSYM_BUILD}/include ${CMAKE_BINARY_DIR}/gen_include)
+    target_link_libraries(simple_gen_support PUBLIC
+        ${SIMPLE_FORTSYM_BUILD}/lib/libfortsym${CMAKE_SHARED_LIBRARY_SUFFIX})
+    set_target_properties(simple_gen_support PROPERTIES
+        Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/gen_modules)
+    add_executable(gen_darboux_chart gen/gen_darboux_chart.f90)
+    target_link_libraries(gen_darboux_chart PRIVATE simple_gen_support)
+    target_include_directories(gen_darboux_chart PRIVATE ${CMAKE_BINARY_DIR}/gen_modules)
+    set(darboux_generated
+        ${CMAKE_SOURCE_DIR}/src/generated/darboux_chart_leaves.inc
+        ${CMAKE_SOURCE_DIR}/src/generated/test_field_regular_leaves.inc)
+    add_custom_target(regenerate_gen_darboux_chart
+        COMMAND gen_darboux_chart ${darboux_generated}
+        DEPENDS gen_darboux_chart)
+    if(SIMPLE_TESTING)
+        enable_testing()
+        add_test(NAME generated_darboux_chart_leaves_current
+            COMMAND ${CMAKE_COMMAND}
+                -DGENERATOR=$<TARGET_FILE:gen_darboux_chart>
+                "-DOUTPUTS=${CMAKE_BINARY_DIR}/gen_check/darboux_chart_leaves.inc;${CMAKE_BINARY_DIR}/gen_check/test_field_regular_leaves.inc"
+                "-DREFERENCES=${darboux_generated}"
+                -P ${CMAKE_SOURCE_DIR}/cmake/CheckGenerated.cmake)
+        set_tests_properties(generated_darboux_chart_leaves_current PROPERTIES
+            LABELS "unit")
+    endif()
+endif()
+
 if (ENABLE_PYTHON_INTERFACE)
 	add_subdirectory(python)
 endif ()

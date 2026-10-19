@@ -47,6 +47,20 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
         real(dp) :: last_step_fraction = 1d0
         real(dp) :: last_event_radial_residual = 0d0
         real(dp) :: last_event_fraction_width = 0d0
+
+        ! Cartesian (Darboux) canonical chart, orbit_symplectic_darboux:
+        ! w = (X, Y, phi, p_phi), field point u = sqrt(s) (cos, sin) theta,
+        ! sign sigma, vector field and du/dt at w, and the (z, mu) that w
+        ! encodes; any other z or mu re-encodes w at the next step.
+        logical :: chart_valid = .false.
+        real(dp) :: chart_sigma = 1d0
+        real(dp) :: chart_kappa = 0d0
+        real(dp) :: chart_mu = 0d0
+        real(dp) :: chart_w(4) = 0d0
+        real(dp) :: chart_u(2) = 0d0
+        real(dp) :: chart_rhs(4) = 0d0
+        real(dp) :: chart_udot(2) = 0d0
+        real(dp) :: chart_z(4) = 0d0
     end type symplectic_integrator_t
 
     !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
