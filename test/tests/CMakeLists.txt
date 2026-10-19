@@ -872,6 +872,17 @@ set_tests_properties(test_continuous_classifier_scores PROPERTIES LABELS "unit")
             LABELS "unit;wall" FIXTURES_SETUP stl_wall_hits)
     endif()
 
+# Cartesian (Darboux) canonical chart on the analytic tokamak: leaves vs
+# independent oracles, step properties, axis-grazing markers.
+add_executable(test_darboux_chart.x test_darboux_chart.f90)
+target_link_libraries(test_darboux_chart.x simple)
+foreach(_darboux_part IN ITEMS leaves step axis)
+    add_test(NAME test_darboux_chart_${_darboux_part}
+        COMMAND test_darboux_chart.x ${_darboux_part})
+    set_tests_properties(test_darboux_chart_${_darboux_part} PROPERTIES
+        LABELS "unit" TIMEOUT 600)
+endforeach()
+
 add_executable(test_sorting.x test_sorting.f90)
 target_link_libraries(test_sorting.x simple)
 add_test(NAME test_sorting COMMAND test_sorting.x)
