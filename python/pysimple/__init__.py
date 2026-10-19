@@ -38,6 +38,7 @@ __all__ = [
     "SECTION_EXTREMUM_UNKNOWN", "SECTION_B_MINIMUM", "SECTION_B_MAXIMUM",
     "CUT_ANY", "CUT_TIP", "CUT_TOROIDAL",
 ]
+__all__ += ["cylindrical_to_reference", "reference_to_cylindrical"]
 
 
 def __getattr__(name):

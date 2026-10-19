@@ -137,7 +137,7 @@ jobs:
 
       - name: Install Python package
         if: github.event_name != 'workflow_dispatch' || inputs.full == 'true'
-        run: python -m pip install -e . --no-build-isolation -Ccmake.define.SIMPLE_DETERMINISTIC_FP=ON
+        run: python -m pip install -e '.[imas]' --no-build-isolation -Ccmake.define.SIMPLE_DETERMINISTIC_FP=ON
 
       - name: Run Slow Tests (Python)
         if: github.event_name != 'workflow_dispatch' || inputs.full == 'true'
