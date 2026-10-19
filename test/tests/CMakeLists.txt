@@ -1299,6 +1299,20 @@ endif()
 # The GOLDEN_RECORD_SKIP_CASES env var is still honored by
 # compare_golden_results.sh for future intentional-divergence bug fixes;
 # pass it through ENVIRONMENT when needed.
+# One fixture builds the main reference and downloads the shared test data,
+# so the per-case tests below never race on the shared clone, build or files.
+add_test(
+    NAME golden_record_prepare
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/golden_record.sh main
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+set_tests_properties(golden_record_prepare PROPERTIES
+    TIMEOUT 1200  # Initial main clone/build on CI
+    LABELS "golden_record;regression"
+    FIXTURES_SETUP golden_record_reference
+    ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record;GOLDEN_RECORD_PREPARE_ONLY=1"
+)
+
 foreach(CASE ${GOLDEN_RECORD_TEST_CASES})
     add_test(
         NAME golden_record_${CASE}
@@ -1307,8 +1321,9 @@ foreach(CASE ${GOLDEN_RECORD_TEST_CASES})
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     )
     set_tests_properties(golden_record_${CASE} PROPERTIES
-        TIMEOUT 1200  # Includes initial main clone/build on CI
+        TIMEOUT 1200
         LABELS "golden_record;regression"
+        FIXTURES_REQUIRED golden_record_reference
         ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record;GOLDEN_RECORD_RTOL=1.5e-7"
     )
     if(CASE STREQUAL "collision")

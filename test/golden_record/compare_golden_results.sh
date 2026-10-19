@@ -265,7 +265,11 @@ compare_cases() {
         # Performance comparison (guard against >20% slowdown by default)
         ref_time_file="$REFERENCE_DIR/$CASE/runtime_seconds.txt"
         cur_time_file="$CURRENT_DIR/$CASE/runtime_seconds.txt"
-        if [ -f "$ref_time_file" ] && [ -f "$cur_time_file" ]; then
+        # GOLDEN_RECORD_PERF_GATE=0 skips it: under parallel test load the
+        # ref/cur runtime ratio scatters by +-30% with identical code.
+        if [ "${GOLDEN_RECORD_PERF_GATE:-1}" = "0" ]; then
+            echo "  perf: gate disabled (GOLDEN_RECORD_PERF_GATE=0)"
+        elif [ -f "$ref_time_file" ] && [ -f "$cur_time_file" ]; then
             python - <<PY
 import os
 ref = float(open("${ref_time_file}", "r", encoding="utf-8").read().strip())
