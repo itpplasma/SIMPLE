@@ -19,15 +19,15 @@ program test_darboux_chart
     use boozer_regular, only: regular_field_t
     use field_can_base, only: field_can_t, n_field_evaluations
     use field_can_mod, only: field_can_from_name, eval_field => evaluate, &
-        get_val, get_derivatives
+                             get_val, get_derivatives
     use field_can_test, only: evaluate_test_regular
     use orbit_symplectic, only: orbit_sympl_init, orbit_timestep_sympl
     use orbit_symplectic_base, only: symplectic_integrator_t, &
-        SYMPLECTIC_STEP_OK, MIDPOINT, GAUSS1, GAUSS2, GAUSS3, GAUSS4
+                            SYMPLECTIC_STEP_OK, MIDPOINT, GAUSS1, GAUSS2, GAUSS3, GAUSS4
     use orbit_symplectic_darboux, only: darboux_configure, darboux_advance, &
-        darboux_point_eval, darboux_stage_eval, darboux_field_point, &
-        darboux_stats, darboux_stats_reset, DARBOUX_FIELD_NONE, &
-        DARBOUX_FIELD_TEST
+                          darboux_point_eval, darboux_stage_eval, darboux_field_point, &
+                               darboux_stats, darboux_stats_reset, DARBOUX_FIELD_NONE, &
+                                        DARBOUX_FIELD_TEST
 
     implicit none
 
@@ -120,11 +120,11 @@ contains
                 dpol(:, 2) = [f%dAth(2), f%dAph(2), f%dhth(2), f%dhph(2), f%dBmod(2)]
                 ! d/dr = (x d/dx + y d/dy)/r, d/dtheta = x d/dy - y d/dx
                 dreg(:, 1) = (x*[rf%dAth(1), rf%dAph(1), rf%dhth(1), rf%dhph(1), &
-                    rf%dBmod(1)] + y*[rf%dAth(2), rf%dAph(2), rf%dhth(2), &
-                    rf%dhph(2), rf%dBmod(2)])/r
+                                 rf%dBmod(1)] + y*[rf%dAth(2), rf%dAph(2), rf%dhth(2), &
+                                                   rf%dhph(2), rf%dBmod(2)])/r
                 dreg(:, 2) = x*[rf%dAth(2), rf%dAph(2), rf%dhth(2), rf%dhph(2), &
-                    rf%dBmod(2)] - y*[rf%dAth(1), rf%dAph(1), rf%dhth(1), &
-                    rf%dhph(1), rf%dBmod(1)]
+                                rf%dBmod(2)] - y*[rf%dAth(1), rf%dAph(1), rf%dhth(1), &
+                                                  rf%dhph(1), rf%dBmod(1)]
                 err = max(err, maxval(abs(pol - reg)), maxval(abs(dpol - dreg)))
             end do
         end do
@@ -180,8 +180,8 @@ contains
         type(field_can_t) :: f
         type(regular_field_t) :: rf
         real(dp) :: r, th, pphi, mu, u(2), kappa, pth, ham, vpar, chart(2), &
-            rhs(4), gu(2, 2), udot(2), thdot, pthdot, phdot, pphdot, sigma, jj, &
-            ref(4), err, errh, err_chain
+                   rhs(4), gu(2, 2), udot(2), thdot, pthdot, phdot, pphdot, sigma, jj, &
+                    ref(4), err, errh, err_chain
         integer :: i
 
         err = 0.0_dp
@@ -214,7 +214,7 @@ contains
             ! Chain rule of the chart map: G du/dt + C_phi,p_phi (dphi, dp_phi)
             ! = (dX, dY)/dt; here C does not depend on phi.
             err_chain = max(err_chain, maxval(abs(matmul(gu, udot) - rhs(1:2) &
-                + chart_pphi(u, pphi, sigma, mu)*rhs(4)))/maxval(abs(rhs(1:2))))
+                        + chart_pphi(u, pphi, sigma, mu)*rhs(4)))/maxval(abs(rhs(1:2))))
         end do
         call check(errh < 1.0e-12_dp, 'H, p_theta and chart map vs polar', errh)
         call check(err < 1.0e-10_dp, 'vector field vs polar equations', err)
@@ -242,7 +242,7 @@ contains
     subroutine check_stage_jacobian()
         type(regular_field_t) :: rf
         real(dp) :: u(2), phi, pphi, sigma, mu, chart(2), rhs(4), fu(4, 2), &
-            fw(4, 2), gu(2, 2), gw(2, 2), cp(2), cm(2), rp(4), rm(4), d, err, scl
+                   fw(4, 2), gu(2, 2), gw(2, 2), cp(2), cm(2), rp(4), rm(4), d, err, scl
         real(dp) :: kappa, pth, ham, vpar, g2(2, 2), udot(2)
         integer :: icase, k
 
@@ -263,9 +263,9 @@ contains
                 call darboux_point_eval(u - d*unit2(k), phi, pphi, sigma, mu, ro0, &
                                         rf, kappa, pth, ham, vpar, cm, rm, g2, udot)
                 err = max(err, maxval(abs(fu(:, k) - (rp - rm)/(2*d))) &
-                    /max(maxval(abs(fu(:, k))), scl))
+                          /max(maxval(abs(fu(:, k))), scl))
                 err = max(err, maxval(abs(gu(:, k) - (cp - cm)/(2*d))) &
-                    /maxval(abs(gu)))
+                          /maxval(abs(gu)))
             end do
             d = 1.0e-6_dp*max(abs(pphi), 1.0_dp)
             call darboux_point_eval(u, phi, pphi + d, sigma, mu, ro0, rf, kappa, &
@@ -273,9 +273,9 @@ contains
             call darboux_point_eval(u, phi, pphi - d, sigma, mu, ro0, rf, kappa, &
                                     pth, ham, vpar, cm, rm, g2, udot)
             err = max(err, maxval(abs(fw(:, 2) - (rp - rm)/(2*d))) &
-                /max(maxval(abs(fw(:, 2))), scl))
+                      /max(maxval(abs(fw(:, 2))), scl))
             err = max(err, maxval(abs(gw(:, 2) - (cp - cm)/(2*d))) &
-                /max(maxval(abs(gw(:, 2))), 1.0e-30_dp))
+                      /max(maxval(abs(gw(:, 2))), 1.0e-30_dp))
             ! Axisymmetric field: no phi dependence.
             err = max(err, maxval(abs(fw(:, 1)))/scl, maxval(abs(gw(:, 1))))
         end do
@@ -465,15 +465,15 @@ contains
         integer(int64), intent(in) :: nst
         integer, parameter :: n_mark = 6
         real(dp), parameter :: s0(n_mark) = [5.0e-4_dp, 1.0e-4_dp, 1.0e-6_dp, &
-            1.0e-8_dp, 1.0e-10_dp, 1.0e-12_dp]
+                                             1.0e-8_dp, 1.0e-10_dp, 1.0e-12_dp]
         real(dp), parameter :: th0(n_mark) = [0.0_dp, 1.0_dp, 2.0_dp, 3.0_dp, &
-            4.0_dp, 5.0_dp]
+                                              4.0_dp, 5.0_dp]
         real(dp), parameter :: vpar0(n_mark) = [-0.3_dp, -0.3_dp, -0.3_dp, &
-            -0.28_dp, -0.32_dp, -0.3_dp]
+                                                -0.28_dp, -0.32_dp, -0.3_dp]
         type(symplectic_integrator_t) :: si
         type(field_can_t) :: f
         real(dp) :: z(4), h0, pph0, e, emax, pphmax, smin, t, tsum, esum, ttsum, &
-            tesum, slope, dt
+                    tesum, slope, dt
         integer(int64) :: k, nev0, passes
         integer :: imark, ierr
         logical :: inside
