@@ -901,6 +901,31 @@ set_tests_properties(test_gpu_midpoint_bench PROPERTIES
 # Boozer RK chartmap, so segmented CUDA accounting is covered by
 # test_cuda_native_bridge instead.
 
+# #569: gpu_mode='production' with a VMEC field must stop at input
+# validation, before the field setup, naming the supported field source.
+set(GPU_VMEC_DIR ${CMAKE_CURRENT_BINARY_DIR}/gpu_production_vmec)
+file(MAKE_DIRECTORY ${GPU_VMEC_DIR})
+file(CREATE_LINK ${WOUT_FILE} ${GPU_VMEC_DIR}/wout.nc SYMBOLIC)
+file(WRITE ${GPU_VMEC_DIR}/simple.in "&config
+trace_time = 1d-3
+sbeg = 0.3d0
+ntestpart = 64
+netcdffile = 'wout.nc'
+isw_field_type = 2
+deterministic = .true.
+gpu_mode = 'production'
+gpu_backend = 'cuda-native'
+/
+")
+add_test(NAME test_gpu_production_rejects_vmec
+    COMMAND $<TARGET_FILE:simple.x> simple.in
+    WORKING_DIRECTORY ${GPU_VMEC_DIR})
+set_tests_properties(test_gpu_production_rejects_vmec PROPERTIES
+    LABELS "unit"
+    PASS_REGULAR_EXPRESSION "Boozer chartmap with RK tables"
+    FAIL_REGULAR_EXPRESSION "Configuration reading completed"
+    TIMEOUT 60)
+
 # Macrostep log grid tests (issue: performance regression with log grid)
 add_executable(test_macrostep_log_grid.x test_macrostep_log_grid.f90)
 target_link_libraries(test_macrostep_log_grid.x simple)
