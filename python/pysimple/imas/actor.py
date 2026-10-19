@@ -98,9 +98,7 @@ def run(
             "SIMPLE's collision operator currently supports alpha markers (A=4, Z=2) only"
         )
     versions = {
-        ids_version(i)
-        for i in [markers, equilibrium, core_profiles]
-        if i is not None
+        ids_version(i) for i in [markers, equilibrium, core_profiles] if i is not None
     }
     if len(versions) != 1:
         raise ValueError("Convert input IDS to a common Data Dictionary version first")
