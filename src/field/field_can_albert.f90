@@ -90,6 +90,20 @@ contains
         call integ_to_ref_meiss(xmeiss, xref)
     end subroutine integ_to_ref_albert
 
+    !> Reference radius of integ_to_ref_albert without the angular splines.
+    function integ_to_ref_radius_albert(xinteg) result(r_ref)
+        use field_can_meiss, only: integ_to_ref_radius_meiss
+
+        real(dp), intent(in) :: xinteg(3)
+        real(dp) :: r_ref
+        real(dp) :: xmeiss(3), y_batch(1)
+
+        call evaluate_batch_splines_3d(spl_r_batch, xinteg, y_batch)
+        xmeiss(1) = y_batch(1)
+        xmeiss(2:3) = xinteg(2:3)
+        r_ref = integ_to_ref_radius_meiss(xmeiss)
+    end function integ_to_ref_radius_albert
+
     subroutine ref_to_integ_albert(xref, xinteg)
         use field_can_meiss, only: ref_to_integ_meiss, spl_field_batch
 
