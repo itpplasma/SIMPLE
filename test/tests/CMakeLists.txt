@@ -220,6 +220,7 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS AND SIMPLE_HAVE_MAP2DISC)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(generate_chartmap_ncsx_map2disc PROPERTIES
         LABELS "integration;python"
+        RESOURCE_GROUPS "mem_gb:1"
         TIMEOUT 600
         FIXTURES_SETUP chartmap_ncsx_map2disc)
 
@@ -237,6 +238,7 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS AND SIMPLE_HAVE_MAP2DISC)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(generate_chartmap_ncsx_map2disc_wall PROPERTIES
         LABELS "integration;python"
+        RESOURCE_GROUPS "mem_gb:1"
         TIMEOUT 600
         FIXTURES_SETUP chartmap_ncsx_map2disc_wall)
 
@@ -251,6 +253,7 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS AND SIMPLE_HAVE_MAP2DISC)
             WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
         set_tests_properties(test_collisional_stl_wall PROPERTIES
             LABELS "integration;python;wall"
+            RESOURCE_GROUPS "mem_gb:11"
             TIMEOUT 1200
             PROCESSORS 1
             FIXTURES_REQUIRED chartmap_ncsx_map2disc_wall)
@@ -268,6 +271,7 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS AND SIMPLE_HAVE_MAP2DISC)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(test_chartmap_ncsx_map2disc_wall_offset PROPERTIES
         LABELS "integration;plot;python"
+        RESOURCE_GROUPS "mem_gb:1"
         TIMEOUT 180
         FIXTURES_REQUIRED chartmap_ncsx_map2disc_wall)
 endif()
@@ -881,7 +885,8 @@ add_test(NAME test_splined_field_derivatives
     COMMAND test_splined_field_derivatives.x
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_splined_field_derivatives PROPERTIES
-    LABELS "integration")
+    LABELS "integration"
+    RESOURCE_GROUPS "mem_gb:1")
 
 add_executable(test_bder_from_splines.x test_bder_from_splines.f90)
 target_link_libraries(test_bder_from_splines.x simple)
@@ -890,7 +895,8 @@ add_test(NAME test_bder_from_splines
     COMMAND test_bder_from_splines.x
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_bder_from_splines PROPERTIES
-    LABELS "integration")
+    LABELS "integration"
+    RESOURCE_GROUPS "mem_gb:1")
 
 add_executable(test_splined_kernel_bench.x test_splined_kernel_bench.f90)
 target_link_libraries(test_splined_kernel_bench.x simple)
@@ -900,6 +906,7 @@ add_test(NAME test_splined_kernel_bench
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_splined_kernel_bench PROPERTIES
     LABELS "unit;performance"
+    RESOURCE_GROUPS "mem_gb:13"
     TIMEOUT 120)
 
 add_executable(test_refcoords_file_detection.x test_refcoords_file_detection.f90)
@@ -949,7 +956,7 @@ add_test(NAME test_chartmap_pipeline
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_chartmap_pipeline PROPERTIES
     LABELS "unit"
-    RUN_SERIAL TRUE
+    RESOURCE_GROUPS "mem_gb:10"
     TIMEOUT 120)
 
 # Chartmap R,Z consistency tests
@@ -962,7 +969,7 @@ add_test(NAME test_chartmap_rz_consistency
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_chartmap_rz_consistency PROPERTIES
     LABELS "unit"
-    RUN_SERIAL TRUE
+    RESOURCE_GROUPS "mem_gb:10"
     TIMEOUT 120)
 
 # Batch spline optimization test
@@ -1260,6 +1267,7 @@ add_test(
 )
 set_tests_properties(gc_ck_ncsx_vmec_vs_meiss PROPERTIES
     TIMEOUT 600
+    RESOURCE_GROUPS "mem_gb:12"
     LABELS "system;integration;plot;slow"
 )
 
@@ -1311,6 +1319,17 @@ foreach(CASE ${GOLDEN_RECORD_TEST_CASES})
         LABELS "golden_record;regression"
         ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record;GOLDEN_RECORD_RTOL=1.5e-7"
     )
+    # Peak RSS rounded up in GiB; see docs/development/testing.rst.
+    if(CASE STREQUAL "albert_coils")
+        set_tests_properties(golden_record_${CASE} PROPERTIES
+            RESOURCE_GROUPS "mem_gb:15")
+    elseif(CASE STREQUAL "boozer_ncsx")
+        set_tests_properties(golden_record_${CASE} PROPERTIES
+            RESOURCE_GROUPS "mem_gb:8")
+    elseif(CASE STREQUAL "meiss_coils")
+        set_tests_properties(golden_record_${CASE} PROPERTIES
+            RESOURCE_GROUPS "mem_gb:13")
+    endif()
     if(CASE STREQUAL "collision")
         # Intentional stream/operator correction: preserve the run and timing;
         # analytic collision tests supply the physical distribution oracles.

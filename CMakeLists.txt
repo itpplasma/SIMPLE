@@ -682,5 +682,6 @@ endif ()
 
 if (SIMPLE_TESTING)
 	enable_testing()
+    include(CTestMemoryResources)
     add_subdirectory(test)
 endif ()

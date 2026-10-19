@@ -52,6 +52,11 @@ echo "Output directory: $RUN_DIR"
 echo "Test cases: $TEST_CASES"
 echo "Checking for optional symplectic tokamak regression..."
 
+# Cases share downloaded equilibria and converted coils. Finish preparation
+# before another case reads them, then allow their numerical runs to overlap.
+exec {test_data_lock}>"$TEST_DATA_DIR/.prepare.lock"
+flock "$test_data_lock"
+
 # Download wout.nc if not present in test data directory
 WOUT_FILE="$TEST_DATA_DIR/wout.nc"
 if [ ! -f "$WOUT_FILE" ]; then
@@ -106,6 +111,8 @@ with open(sys.argv[2], "w") as f:
         f.write(f"{x:.14E}   {y:.14E}   {z:.14E}   {I:.14E}\n")
 EOF
 fi
+flock -u "$test_data_lock"
+exec {test_data_lock}>&-
 
 # Run each test case
 for test_case in $TEST_CASES; do

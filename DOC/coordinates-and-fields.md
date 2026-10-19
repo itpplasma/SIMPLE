@@ -85,6 +85,17 @@ Newton iteration from $s \approx (d_\text{axis}/d_\text{boundary})^2$: at most
 (`libneo_coordinates_vmec.f90`). It can fail outside the plasma and near the
 boundary ([#288](https://github.com/itpplasma/SIMPLE/issues/288)).
 
+The NCSX spline derivative tests (`test_splined_field_derivatives`,
+`test_bder_from_splines`, `test_magfie_refcoords_splines` and
+`test_hcurl_from_dhcov_splines`) use angular multiplier 1 for their VMEC
+coordinate fixture. They retain quintic splines, the 201 radial surfaces,
+the field sampling grids and all finite-difference checks and tolerances.
+This bounds the three VMEC coordinate spline arrays to 0.43 GiB per process.
+CTest reserves memory for these and the full-resolution NCSX consumers with
+`RESOURCE_GROUPS` (`mem_gb`, one slot per GiB of measured peak RSS rounded up).
+See [Testing](../docs/development/testing.rst) for the generated resource spec
+and the memory budget used by local tests and CI.
+
 ### 1.3 Chartmap coordinates
 
 `chartmap_coordinate_system_t` reads a NetCDF file with Cartesian geometry

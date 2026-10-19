@@ -114,6 +114,13 @@ main() {
     mkdir -p "$GOLDEN_RECORD_BASE_DIR"
     mkdir -p "$TEST_DATA_DIR"
 
+    # Resource groups allow cases to overlap. Protect only shared reference
+    # preparation; the numerical runs below use separate case directories.
+    local ref_build_lock
+    mkdir -p "$(dirname "$PROJECT_ROOT_REF")"
+    exec {ref_build_lock}>"$PROJECT_ROOT_REF.build.lock"
+    flock "$ref_build_lock"
+
     local REF_CONTRACT_STAMP="$PROJECT_ROOT_REF/build/.golden-libneo-ref"
     if [ -f "$PROJECT_ROOT_REF/build/simple.x" ] && \
        [ "$(cat "$REF_CONTRACT_STAMP" 2>/dev/null)" != "$GOLDEN_LIBNEO_REF" ]; then
@@ -128,6 +135,8 @@ main() {
     else
         echo "Using existing reference build at: $PROJECT_ROOT_REF/build/simple.x"
     fi
+    flock -u "$ref_build_lock"
+    exec {ref_build_lock}>&-
 
     # Check if current version needs building (it should already be built)
     if [ ! -f "$PROJECT_ROOT_CUR/build/simple.x" ]; then
