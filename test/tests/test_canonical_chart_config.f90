@@ -2,7 +2,7 @@ program test_canonical_chart_config
     !> canonical_chart = 'cartesian' is accepted only with integmode 3-7, the
     !> guiding-centre model, a Boozer or test field and gpu_mode = 'off'.
     use params, only: canonical_chart, integmode, orbit_model, gpu_mode, &
-        ORBIT_GC, ORBIT_FULL_ORBIT, validate_canonical_chart
+                      ORBIT_GC, ORBIT_FULL_ORBIT, validate_canonical_chart
     use velo_mod, only: isw_field_type
     use magfie_sub, only: TEST, CANFLUX, BOOZER, MEISS, ALBERT, SPECTRE
 
