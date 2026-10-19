@@ -671,7 +671,7 @@ add_test(NAME test_stencil_utils COMMAND test_stencil_utils.x)
     set_tests_properties(test_explicit_loss_detection PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "system;python"
-        TIMEOUT 3600)
+        TIMEOUT 600)
 
     # E2E test: VMEC-Boozer vs chartmap confined fractions
     add_test(NAME test_e2e_boozer_chartmap

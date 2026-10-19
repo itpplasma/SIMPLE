@@ -30,6 +30,9 @@ drift back inside before the trace ended.
 import shutil
 import subprocess
 import sys
+import os
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -40,8 +43,7 @@ SIMPLE_X = BUILD_DIR / "simple.x"
 WOUT = SCRIPT_DIR.parent / "test_data" / "wout.nc"
 WORKDIR = BUILD_DIR / "explicit_loss_detection"
 
-NPART = 64
-TRACE = 1e-2
+RUN_TIMEOUT = 600
 
 # Two launch surfaces, because the explicit drivers have to re-impose two
 # separate chart invariants that the symplectic schemes get from their Newton
@@ -71,7 +73,15 @@ TRACE = 1e-2
 #
 # contr_pp is forced far negative so no particle is skipped as
 # certainly-confined without ever being integrated.
-LAUNCH_SURFACES = [0.75, 0.05]
+#
+# Each surface carries its own marker count and trace time, because the cost
+# is dominated by Gauss-Radau (about 4 s per marker at trace_time 1e-2 in a
+# Release build, against ~7 s of fixed start-up for every other run). The outer
+# surface needs enough markers and time to lose a handful; the near-axis smoke
+# check needs only a few markers and a short trace.
+#
+# (sbeg, number of markers, trace_time)
+LAUNCH_SURFACES = [(0.75, 64, 1e-4), (0.05, 8, 3e-4)]
 SIMPLE_IN = """\
 &config
 trace_time = {trace}d0
@@ -110,19 +120,25 @@ EXPLICIT = [
 ]
 
 
-def run(case, integmode, relerr, startmode, start_src, sbeg):
+def run(case, integmode, relerr, startmode, start_src, sbeg, npart, trace,
+        threads=None):
     d = WORKDIR / case
     if d.exists():
         shutil.rmtree(d)
     d.mkdir(parents=True)
     (d / "wout.nc").symlink_to(WOUT)
     (d / "simple.in").write_text(SIMPLE_IN.format(
-        trace=TRACE, npart=NPART, integmode=integmode, relerr=relerr,
+        trace=trace, npart=npart, integmode=integmode, relerr=relerr,
         startmode=startmode, sbeg=sbeg))
     if start_src is not None:
         shutil.copy2(start_src, d / "start.dat")
+    env = dict(os.environ)
+    if threads is not None:
+        env["OMP_NUM_THREADS"] = str(threads)
+    t0 = time.monotonic()
     res = subprocess.run([str(SIMPLE_X)], cwd=d, capture_output=True,
-                         text=True, timeout=1800)
+                         text=True, env=env, timeout=RUN_TIMEOUT)
+    print(f"  [{case}: {time.monotonic() - t0:.1f} s]", flush=True)
     if res.returncode != 0:
         print(res.stdout[-2000:])
         print(res.stderr[-2000:])
@@ -136,46 +152,55 @@ def read(d):
     return data[:, 1], data[:, 5]
 
 
-def classify(tlost):
+def classify(tlost, trace):
     """Confined markers reached the end of the trace; lost ones did not.
 
-    SIMPLE writes times_lost = trace_time for a marker that survives rather
+    SIMPLE writes times_lost = trace time for a marker that survives rather
     than a sentinel, so the comparison has to be against the trace time. NaN
     marks an integrator fault, which is neither.
     """
     finite = ~np.isnan(tlost)
-    confined = finite & (tlost >= 0.999999 * TRACE)
-    lost = finite & (tlost > 0) & (tlost < 0.999999 * TRACE)
+    confined = finite & (tlost >= 0.999999 * trace)
+    lost = finite & (tlost > 0) & (tlost < 0.999999 * trace)
     return confined, lost, int(np.sum(~finite))
 
 
-def check_surface(sbeg, failures):
+def check_surface(sbeg, npart, trace, failures):
     """Run the reference and every explicit mode from one launch surface."""
     tag = f"s{sbeg:g}".replace(".", "")
     name, mode, relerr = REFERENCE
     d_ref = run(f"{tag}_{name}", mode, relerr, startmode=1, start_src=None,
-                sbeg=sbeg)
+                sbeg=sbeg, npart=npart, trace=trace)
     tl_ref, s_ref = read(d_ref)
-    _, lost_ref, _ = classify(tl_ref)
+    _, lost_ref, _ = classify(tl_ref, trace)
     n_lost_ref = int(np.sum(lost_ref))
-    print(f"  sbeg={sbeg:<5g} {name:14s} lost {n_lost_ref:3d}/{NPART}  "
+    print(f"  sbeg={sbeg:<5g} {name:14s} lost {n_lost_ref:3d}/{npart}  "
           f"max final s {np.nanmax(s_ref):.4f}")
 
     # Monte-Carlo tolerance on a loss count of N markers: loose enough that a
     # genuine resolution difference between correct methods passes, far tighter
     # than the 3x gap the missing domain check produced.
-    tol = max(4, int(round(3.0 * np.sqrt(max(n_lost_ref, 1)))))
+    tol = max(2, int(round(1.5 * np.sqrt(max(n_lost_ref, 1)))))
 
-    for name, mode, relerr in EXPLICIT:
-        d = run(f"{tag}_{name}", mode, relerr, startmode=2,
-                start_src=d_ref / "start.dat", sbeg=sbeg)
+    # The runs are independent once the reference has written start.dat, and
+    # a few seconds of start-up dominate each one, so run them side by side
+    # on one thread apiece.
+    with ThreadPoolExecutor(max_workers=len(EXPLICIT)) as pool:
+        futures = [
+            pool.submit(run, f"{tag}_{name}", mode, relerr, startmode=2,
+                        start_src=d_ref / "start.dat", sbeg=sbeg, npart=npart,
+                        trace=trace, threads=1)
+            for name, mode, relerr in EXPLICIT]
+        dirs = [f.result() for f in futures]
+
+    for (name, mode, relerr), d in zip(EXPLICIT, dirs):
         tlost, s = read(d)
-        confined, lost, faults = classify(tlost)
+        confined, lost, faults = classify(tlost, trace)
         n_lost = int(np.sum(lost))
         n_escaped = int(np.sum(confined & (s > 1.0 + 1e-6)))
         worst = float(np.nanmax(s[confined])) if np.any(confined) else 0.0
 
-        print(f"  sbeg={sbeg:<5g} {name:14s} lost {n_lost:3d}/{NPART}  "
+        print(f"  sbeg={sbeg:<5g} {name:14s} lost {n_lost:3d}/{npart}  "
               f"max final s of confined {worst:.4f}  "
               f"escaped {n_escaped}  faulted {faults}")
 
@@ -201,7 +226,7 @@ def main():
         sys.exit("missing simple.x or wout.nc")
 
     failures = []
-    losses = [check_surface(sbeg, failures) for sbeg in LAUNCH_SURFACES]
+    losses = [check_surface(sbeg, npart, trace, failures) for sbeg, npart, trace in LAUNCH_SURFACES]
 
     # The outer surface must actually lose markers, or the boundary check has
     # nothing to detect and a pass would mean nothing. The near-axis surface is
