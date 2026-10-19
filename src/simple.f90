@@ -25,19 +25,22 @@ public
   integer, parameter :: ORBIT_FO_LOSS = 2
   integer, parameter :: ORBIT_FO_NUMERICAL = 3
 
-  type :: tracer_t
-    real(dp) :: fper
-    real(dp) :: dtau, dtaumin, v0
-    integer          :: n_e, n_d
+    type :: tracer_t
+        real(dp) :: fper
+        real(dp) :: dtau, dtaumin, v0
+        integer          :: n_e, n_d
 
-    integer :: integmode = 0 ! 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Midpoint, 4-7 = Gauss1-4, 15 = Lobatto3
-    real(dp) :: relerr
+        ! integmode: 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Midpoint, 4-7 = Gauss1-4,
+        ! 15 = Lobatto3, 20 = Gauss-Radau, 21 = Bulirsch-Stoer, 22 = Cash-Karp,
+        ! 24 = TDRK (fixed step), 25 = TDRK (adaptive)
+        integer :: integmode = 0
+        real(dp) :: relerr
 
-    type(field_can_t) :: f
-    type(symplectic_integrator_t) :: si
-    type(multistage_integrator_t) :: mi
-    type(fo_state_t) :: fo   ! full-orbit Boris state (orbit_model=ORBIT_FULL_ORBIT)
-  end type tracer_t
+        type(field_can_t) :: f
+        type(symplectic_integrator_t) :: si
+        type(multistage_integrator_t) :: mi
+        type(fo_state_t) :: fo   ! full-orbit Boris state (orbit_model=ORBIT_FULL_ORBIT)
+    end type tracer_t
 
   interface tstep
       module procedure timestep

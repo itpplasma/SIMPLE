@@ -414,6 +414,16 @@ endif()
 add_executable (test_collis.x ../../src/test_collis.f90)
 target_link_libraries(test_collis.x simple)
 
+# Explicit high-order integmodes on the 4D canonical chart: energy drift must
+# respond to the tolerance, and the four adaptive methods must agree. Uses the
+# analytic test field, so it needs no VMEC file.
+add_executable(test_explicit_integmodes.x test_explicit_integmodes.f90)
+target_link_libraries(test_explicit_integmodes.x simple)
+add_test(NAME test_explicit_integmodes COMMAND test_explicit_integmodes.x)
+set_tests_properties(test_explicit_integmodes PROPERTIES
+    LABELS "unit"
+    TIMEOUT 300)
+
 add_executable(test_config_reference.x test_config_reference.f90)
 target_link_libraries(test_config_reference.x simple)
 add_test(NAME test_config_reference
@@ -707,6 +717,18 @@ add_test(NAME test_stencil_utils COMMAND test_stencil_utils.x)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "system;python"
         TIMEOUT 1800)
+
+    # The explicit integmodes must notice a marker leaving the plasma. They
+    # hand a whole substep to an adaptive integrator and see nothing between
+    # its endpoints, so without an explicit radius check a marker that crossed
+    # s = 1 was integrated onwards and reported as confined.
+    add_test(NAME test_explicit_loss_detection
+        COMMAND ${BOOZER_CHARTMAP_PYTHON}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_explicit_loss_detection.py)
+    set_tests_properties(test_explicit_loss_detection PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        LABELS "system;python"
+        TIMEOUT 600)
 
     # E2E test: VMEC-Boozer vs chartmap confined fractions
     add_test(NAME test_e2e_boozer_chartmap
