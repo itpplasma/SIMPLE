@@ -21,7 +21,8 @@ module simple_main
                  boundary_event_time_width, integmode, relerr, trace_time, class_plot, &
                    fast_class, generate_start_only, ntcut, iclass, bmin, bmax, zstart, &
                       zend, trap_par, perp_inv, sbeg, ntimstep, should_skip, &
-                      reset_seed_if_deterministic, particle_stream_id, field_input, &
+                      reset_seed_if_deterministic, particle_stream_id, &
+                      classification_enabled, field_input, &
                       isw_field_type, reuse_batch, &
                       max_consecutive_warning_holds, &
                      coord_input, wall_input, wall_units, wall_hit, wall_hit_triangle, &
@@ -1570,9 +1571,8 @@ contains
     end subroutine init_bminmax
 
     logical function needs_bminmax_cache()
-        ! Match the current readers. Classifier semantics are kept unchanged
-        ! here; broad classifier changes belong in the classifier PR.
-        if ((ntcut > 0) .or. class_plot) then
+        ! Match the current readers.
+        if (classification_enabled()) then
             needs_bminmax_cache = num_surf > 1
         else
             needs_bminmax_cache = num_surf /= 1
@@ -1933,7 +1933,7 @@ contains
 
         if (swcoll) call reset_seed_if_deterministic(particle_stream_id(ipart))
 
-        if (ntcut > 0 .or. class_plot) then
+        if (classification_enabled()) then
             call trace_orbit_with_classifiers(anorb, ipart, class_result)
             if (class_plot) then
                 call write_classification_results(ipart, class_result)
@@ -3199,19 +3199,35 @@ contains
     end subroutine collide
 
     subroutine write_output
-        use field_can_base, only: n_field_evaluations
+        use field_can_base, only: n_field_evaluations, n_field_evaluations_d1, &
+                                  n_field_evaluations_d2
         use params, only: output_results_netcdf
         use netcdf_results_output, only: write_results_netcdf
 
         integer(8) :: total_field_evaluations
+        integer(8) :: total_field_evaluations_d1, total_field_evaluations_d2
 
         ! Sum field evaluations across all threads
         total_field_evaluations = 0
-        !$omp parallel reduction(+:total_field_evaluations)
+        total_field_evaluations_d1 = 0
+        total_field_evaluations_d2 = 0
+        !$omp parallel reduction(+:total_field_evaluations, &
+        !$omp&                   total_field_evaluations_d1, &
+        !$omp&                   total_field_evaluations_d2)
         total_field_evaluations = total_field_evaluations + n_field_evaluations
+        total_field_evaluations_d1 = total_field_evaluations_d1 + &
+                                     n_field_evaluations_d1
+        total_field_evaluations_d2 = total_field_evaluations_d2 + &
+                                     n_field_evaluations_d2
         !$omp end parallel
 
         print *, "Total field evaluations: ", total_field_evaluations
+        ! Split by derivative depth: first derivatives only (what explicit
+        ! Runge-Kutta paths need) versus second derivatives (what the implicit
+        ! symplectic Jacobians need). The two cost different amounts, so a fair
+        ! cost-per-accuracy comparison has to weight them separately.
+        print *, "  first-derivative  (mode_secders=0): ", total_field_evaluations_d1
+        print *, "  second-derivative (mode_secders>0): ", total_field_evaluations_d2
 
         call write_results
 
@@ -3300,7 +3316,7 @@ contains
         end do
         close (unit)
 
-        if (ntcut > 0 .or. class_plot) then
+        if (classification_enabled()) then
             open (newunit=unit, file='class_parts.dat', recl=1024)
             do i = 1, ntestpart
                 write (unit, *) i, zstart(1, i), perp_inv(i), iclass(:, i)
