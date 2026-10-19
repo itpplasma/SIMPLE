@@ -32,6 +32,9 @@ implicit none
 
 procedure(orbit_timestep_sympl_i), pointer :: orbit_timestep_sympl => null()
 procedure(orbit_timestep_sympl_i), pointer, private :: raw_timestep_sympl => null()
+! Gauss steps keep the last collocation stage in the field cache between steps;
+! the endpoint cache is refreshed once per macrostep, where callers read it.
+    logical, private :: refresh_gauss_field = .false.
 
 contains
 
@@ -276,8 +279,11 @@ recursive subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
       print *, 'invalid mode for orbit_timestep_sympl: ', mode_init
       error stop
   end select
+        refresh_gauss_field = any(mode_init == [GAUSS1, GAUSS2, GAUSS3, GAUSS4])
   if (mode_init /= RK45 .and. sympl_rmax <= 1d0) then
     orbit_timestep_sympl => orbit_timestep_sympl_with_boundary
+        else if (refresh_gauss_field) then
+            orbit_timestep_sympl => orbit_timestep_sympl_raw_refreshed
   else if (mode_init /= RK45) then
     orbit_timestep_sympl => raw_timestep_sympl
   end if
@@ -1973,7 +1979,18 @@ recursive subroutine orbit_timestep_sympl_with_boundary(si, f, ierr)
     error stop 'symplectic timestep implementation is not initialized'
   end if
   call advance_symplectic_with_boundary(si, f, raw_timestep_sympl, ierr)
+        if (refresh_gauss_field .and. ierr == SYMPLECTIC_STEP_OK) &
+            call refresh_endpoint_field(si, f)
 end subroutine orbit_timestep_sympl_with_boundary
+
+    recursive subroutine orbit_timestep_sympl_raw_refreshed(si, f, ierr)
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        integer, intent(out) :: ierr
+
+        call raw_timestep_sympl(si, f, ierr)
+        if (ierr == SYMPLECTIC_STEP_OK) call refresh_endpoint_field(si, f)
+    end subroutine orbit_timestep_sympl_raw_refreshed
 
 subroutine advance_symplectic_with_boundary(si, f, raw_step, ierr)
   type(symplectic_integrator_t), intent(inout) :: si
@@ -2064,64 +2081,61 @@ end subroutine advance_symplectic_with_boundary
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-    subroutine reconstruct_gauss_endpoint(si, f, status)
-        ! The Gauss update advances (theta, phi, p_theta, p_phi). Its last
-        ! collocation radius and field cache are not the physical endpoint.
-        ! Invert p_theta(r, theta_end, phi_end, p_phi_end) at fixed updated
-        ! canonical momenta, then refresh endpoint values and first derivatives. Second derivatives
-        ! are refreshed by the next Newton evaluation, as for the existing steppers.
-        type(symplectic_integrator_t), intent(inout) :: si
-        type(field_can_t), intent(inout) :: f
-        integer, intent(out) :: status
-        type(field_can_t) :: endpoint_field
-        integer, parameter :: max_iterations = 32
-        real(dp) :: target_pth, radius, residual, slope, correction, next_radius
-        real(dp) :: radial_tolerance
-        integer :: iteration
+    pure function gauss_endpoint_radius(s, c, radius, radius_rate) &
+        result(radius_end)
+        ! The Gauss update advances (theta, phi, p_theta, p_phi); the radius is
+        ! only defined implicitly by p_theta(r, theta, phi, p_phi). Along the
+        ! collocation polynomial u(tau) the radius R(u(tau)) is known exactly at
+        ! the stages, R(u(c_k)) = r_k, together with its tau-derivative
+        ! dt*dr/dt from the stage rates (u'(c_k) = f(u(c_k)) by collocation).
+        ! Hermite extrapolation of these 2s conditions to tau = 1 gives the
+        ! endpoint radius to O(dt**(2s)) per step, the order of the method,
+        ! without a field evaluation. The error does not accumulate: every step
+        ! solves its stage radii from the constraint again and uses this value
+        ! only as the reported state and as the next Newton guess.
+        integer, intent(in) :: s
+        real(dp), intent(in) :: c(s), radius(s), radius_rate(s)
+        real(dp) :: radius_end
+        real(dp) :: node(2*s), table(2*s)
+        integer :: i, j, n
 
-        target_pth = f%pth
-        radius = si%z(1)
-        ! Absolute tolerance in the normalized radial chart (Gauss tolref(1)=1).
-        radial_tolerance = max(si%atol, si%rtol)
-        status = SYMPLECTIC_STEP_MAXITER
-        do iteration = 1, max_iterations
-            if (.not. finite_newton_iterate([radius])) return
-            if (radius < 0d0) return ! Let the established retry/axis recovery handle it.
-            if (radius > sympl_rmax) then
-                status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
-                return
-            end if
-            endpoint_field = f
-            call eval_field(endpoint_field, radius, si%z(2), si%z(3), 0)
-            call get_derivatives(endpoint_field, si%z(4))
-            residual = endpoint_field%pth - target_pth
-            slope = endpoint_field%dpth(1)
-            if (.not. finite_newton_iterate([residual, slope])) return
-            if (abs(slope) <= tiny(1d0)) then
-                status = SYMPLECTIC_STEP_LINEAR_SOLVE
-                return
-            end if
-            correction = residual/slope
-            if (abs(correction) <= radial_tolerance) then
-                si%z(1) = radius
-                f = endpoint_field
-                f%pth = target_pth ! Preserve the canonical Gauss update exactly.
-                status = SYMPLECTIC_STEP_OK
-                return
-            end if
-            next_radius = radius - correction
-            if (next_radius > sympl_rmax) then
-                if (radius == sympl_rmax) then
-                    status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
-                    return
-                end if
-                ! Test the boundary before classifying an outward Newton proposal.
-                ! A physical crossing enters the existing fractional-step event solve.
-                next_radius = sympl_rmax
-            end if
-            radius = next_radius
+        n = 2*s
+        do i = 1, s
+            node(2*i - 1) = c(i)
+            node(2*i) = c(i)
+            table(2*i - 1) = radius(i)
+            table(2*i) = radius(i)
         end do
-    end subroutine reconstruct_gauss_endpoint
+        ! Divided differences in place; repeated nodes take the derivative.
+        do j = 1, n - 1
+            do i = n, j + 1, -1
+                if (j == 1 .and. mod(i, 2) == 0) then
+                    table(i) = radius_rate(i/2)
+                else
+                    table(i) = (table(i) - table(i - 1))/(node(i) - node(i - j))
+                end if
+            end do
+        end do
+        radius_end = table(n)
+        do i = n - 1, 1, -1
+            radius_end = table(i) + (1d0 - node(i))*radius_end
+        end do
+    end function gauss_endpoint_radius
+
+    subroutine refresh_endpoint_field(si, f)
+        ! A Gauss step leaves the last collocation stage in the field cache,
+        ! while callers read f%vpar and f%Bmod at the endpoint after each
+        ! macrostep. Refresh the cache there once, keeping the canonical p_theta
+        ! of the update rather than the one implied by the extrapolated radius.
+        type(symplectic_integrator_t), intent(in) :: si
+        type(field_can_t), intent(inout) :: f
+        real(dp) :: canonical_pth
+
+        canonical_pth = f%pth
+        call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
+        call get_derivatives(f, si%z(4))
+        f%pth = canonical_pth
+    end subroutine refresh_endpoint_field
 
 recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
   !
@@ -2140,6 +2154,7 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
   type(field_can_t) :: accepted_field
   type(symplectic_integrator_t) :: accepted_integrator
   real(dp) :: a(s,s), b(s), c(s), Hprime(s), dz(4*s)
+        real(dp) :: radius_rate(s), radius_end, phi_rate, pphi_rate
 
   do k = 1,s
     fs(k) = f
@@ -2254,13 +2269,32 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
       si%z(4) = si%z(4) - si%dt*b(l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))
     end do
 
-            call reconstruct_gauss_endpoint(si, f, newton_status)
-            if (newton_status /= SYMPLECTIC_STEP_OK) then
+            do k = 1, s
+                ! dr/dt from d/dt p_theta(r, theta, phi, p_phi) = dp_theta/dt along the
+                ! stage; the theta terms cancel against p_theta's own rate.
+                phi_rate = (fs(k)%vpar - Hprime(k)*fs(k)%hth)/fs(k)%hph
+                pphi_rate = -(fs(k)%dH(3) - Hprime(k)*fs(k)%dpth(3))
+                radius_rate(k) = si%dt*(-fs(k)%dH(2) - fs(k)%dpth(3)*phi_rate &
+                                        - fs(k)%hth/fs(k)%hph*pphi_rate)/fs(k)%dpth(1)
+            end do
+            radius_end = gauss_endpoint_radius(s, c, x(1:4*s:4), radius_rate)
+            if (.not. finite_newton_iterate([radius_end])) then
                 si = accepted_integrator
                 f = accepted_field
-                ierr = newton_status
+                ierr = SYMPLECTIC_STEP_MAXITER
                 return
             end if
+            if (radius_end > sympl_rmax) then
+                ! A crossing inside the last stage interval; the boundary event solve
+                ! locates it on the step fraction.
+                si = accepted_integrator
+                f = accepted_field
+                ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+                return
+            end if
+            ! The polar chart cannot represent a negative radius. Near the axis keep
+            ! the last stage radius, as before; the next step solves its stages anew.
+            if (radius_end >= 0d0) si%z(1) = radius_end
 
     ktau = ktau+1
   enddo
