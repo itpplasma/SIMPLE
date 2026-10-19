@@ -108,15 +108,20 @@ deliverable: it is the only way to tell whether the generated kernel is faster,
 slower, or as accurate as the hand-written one, and that finding belongs in
 SIMPLE where the consequence lands.
 
-### Baseline (this repository, gfortran 14, one core)
+### Baseline (this repository, gfortran 16, one core)
 
-Measured by `test_splined_kernel_bench.x` on the NCSX coils workload:
+Measured by `test_splined_kernel_bench.x` on the NCSX coils workload, with the
+evaluation points precomputed outside the timed loops:
 
 ```
-T (value only)          = ~1.1e-6 s/eval
-T (value + derivative)  = ~3.2e-6 s/eval
-X ulp (max, Bmod)       = ~2.7e9 ulp vs direct field  (~6e-7 relative)
+T (value only)          = ~7.7e-7 s/eval
+T (value + derivative)  = ~5.9e-7 s/eval
+max relative error Bmod = ~5.7e-7 vs direct field  (gate: < 1e-3)
+X ulp (max, Bmod)       = ~2.7e9 ulp (diagnostic)
 ```
+
+The two timings are within run-to-run noise of each other on one core; the
+derivative path is not measurably dearer at this workload size.
 
 The ulp figure is spline-interpolation accuracy at the default 62x63x64 grid,
 not a rounding-error bound. It is the accuracy the kernel delivers today; a
