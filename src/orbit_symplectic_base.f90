@@ -40,7 +40,10 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
     ! CASHKARP45 is the classical adaptive workhorse on this same chart.
     ! integmode = 0 also runs a Cash-Karp, but on the 5D drift-kinetic form with
     ! a different right-hand side and coordinates, so its accuracy and cost are
-    ! not commensurable with anything here.
+    ! not commensurable with anything here. CASH_KARP = 8 and DORMAND_PRINCE = 9
+    ! above are a different thing again: they select the RK5(4) kernels of the
+    ! GPU tracing paths (simple_gpu, simple_cuda_native). CASHKARP45 is the CPU
+    ! method on the canonical chart and does not dispatch to them.
     integer, parameter :: RADAU15 = 20, GBS16 = 21, CASHKARP45 = 22, &
                           TDRK24 = 24, TDRK24A = 25
     integer, parameter :: SYMPLECTIC_STEP_OK = 0
