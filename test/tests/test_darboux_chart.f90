@@ -62,6 +62,7 @@ program test_darboux_chart
         call check_polar_agreement()
     case ('axis')
         call check_axis(nsteps)
+        call check_kick()
     case default
         error stop 'usage: test_darboux_chart.x leaves|step|axis [nsteps]'
     end select
@@ -526,5 +527,47 @@ contains
         end do
         call darboux_configure(DARBOUX_FIELD_NONE, 1)
     end subroutine check_axis
+
+    !> A collision kick changes v_par and mu at fixed (r, theta, phi) the
+    !> way simple_main update_momentum does. The next step re-encodes the
+    !> Darboux state, after which the new energy is conserved.
+    subroutine check_kick()
+        type(symplectic_integrator_t) :: si
+        type(field_can_t) :: f
+        real(dp) :: z(4), dt, h1, emax, vpar_new, p_new
+        integer(int64) :: encodes
+        integer :: k, ierr
+
+        dt = twopi/256.0_dp
+        call darboux_configure(DARBOUX_FIELD_TEST, 2)
+        call start_marker(1.0e-3_dp, 0.3_dp, -0.3_dp, f, z)
+        call orbit_sympl_init(si, f, z, dt, 1, 1.0e-12_dp, GAUSS2)
+        call darboux_stats_reset()
+        do k = 1, 1000
+            call orbit_timestep_sympl(si, f, ierr)
+            if (ierr /= 0) error stop 'check_kick: step failed'
+        end do
+        encodes = darboux_stats%encodes
+        ! Kick: |v| = 0.9, pitch 0.5 (update_momentum with the regular f).
+        p_new = 0.9_dp
+        vpar_new = 0.5_dp*p_new
+        f%vpar = vpar_new
+        f%mu = 0.5_dp*(p_new**2 - vpar_new**2)/f%Bmod
+        si%z(4) = f%vpar*f%hph + f%Aph/f%ro0
+        call get_val(f, si%z(4))
+        si%pthold = f%pth
+        h1 = f%H
+        emax = 0.0_dp
+        do k = 1, 1000
+            call orbit_timestep_sympl(si, f, ierr)
+            if (ierr /= 0) error stop 'check_kick: step after kick failed'
+            emax = max(emax, abs(f%H - h1)/h1)
+        end do
+        call check(darboux_stats%encodes == encodes + 1, &
+                   'kick re-encodes the Darboux state once', &
+                   real(darboux_stats%encodes - encodes, dp))
+        call check(emax < 1.0e-6_dp, 'energy after kick conserved', emax)
+        call darboux_configure(DARBOUX_FIELD_NONE, 1)
+    end subroutine check_kick
 
 end program test_darboux_chart

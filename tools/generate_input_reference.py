@@ -49,6 +49,7 @@ RULES = {
     "num_surf": {"min": 0, "max": 2},
     "startmode": {"min": 1, "max": 7},
     "integmode": {"choices": [-1, 0, 1, 2, 3, 4, 5, 6, 7, 15]},
+    "canonical_chart": {"choices": ["polar", "cartesian"]},
     "orbit_model": {"choices": [0, 7]},
     "orbit_coord": {"choices": [0, 1]},
     "grid_density": {"min": 0, "max": 1},

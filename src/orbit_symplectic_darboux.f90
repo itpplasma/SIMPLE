@@ -41,6 +41,7 @@ module orbit_symplectic_darboux
     public :: darboux_configure, darboux_enabled, darboux_stages
     public :: orbit_timestep_sympl_darboux, darboux_encode, darboux_advance
     public :: darboux_point_eval, darboux_stage_eval, darboux_field_point
+    public :: darboux_field_values
     public :: darboux_stats_t, darboux_stats, darboux_stats_reset
 
     integer, parameter :: DARBOUX_FIELD_NONE = 0
@@ -232,6 +233,25 @@ contains
                            gu, gw)
     end subroutine darboux_stage_eval
 
+    subroutine darboux_field_values(r, theta, phi, f)
+        !> Replace the field values in f by the regular field at the
+        !> integrator point (r, theta, phi), so that start states, reseeds and
+        !> collision kicks use the Hamiltonian the chart integrates.
+        real(dp), intent(in) :: r, theta, phi
+        type(field_can_t), intent(inout) :: f
+        type(regular_field_t) :: rf
+        real(dp) :: rho, ue(2)
+
+        rho = sqrt(max(s_from_radius(r), 0.0_dp))
+        call field_point(rho*[cos(theta), sin(theta)], ue)
+        call regular_eval(ue(1), ue(2), phi, 0, rf)
+        f%Ath = rf%Ath
+        f%Aph = rf%Aph
+        f%hth = rf%hth
+        f%hph = rf%hph
+        f%Bmod = rf%Bmod
+    end subroutine darboux_field_values
+
     subroutine darboux_encode(si, f, status)
         !> Darboux state of the phase point (si%z, f%mu): field point from
         !> (r, theta), sigma = sign(p_theta/s), w = (C(u), phi, p_phi).
@@ -297,7 +317,10 @@ contains
         status = SYMPLECTIC_STEP_OK
         ns = darboux_stages
         n = 6*ns
-        s_max = s_from_radius(sympl_rmax)
+        ! Iterates may leave the domain transiently (the field extends
+        ! smoothly); only a wild excursion is rejected here. The domain test
+        ! that locates the boundary event applies to the converged end point.
+        s_max = 4.0_dp*s_from_radius(sympl_rmax)
 
         do i = 1, ns
             o = 6*(i - 1)
@@ -388,7 +411,11 @@ contains
                 status = SYMPLECTIC_STEP_LINEAR_SOLVE
                 return
             end if
-            if (all(abs(r2) <= rtol*xy_ref)) return
+            if (all(abs(r2) <= rtol*xy_ref)) then
+                if (u1(1)**2 + u1(2)**2 > s_from_radius(sympl_rmax)) &
+                    status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+                return
+            end if
             call rk_solve(2, g2, r2, info)
             if (info /= 0) then
                 status = SYMPLECTIC_STEP_LINEAR_SOLVE
@@ -434,7 +461,7 @@ contains
         integer, intent(out) :: status
         type(regular_field_t) :: rf
         real(dp) :: w1(4), u1(2), rhs1(4), udot1(2), kappa1, ham1, vpar1
-        real(dp) :: theta1, xy_ref
+        real(dp) :: theta1, xy_ref, r1
 
         xy_ref = sqrt(2.0_dp*abs(si%chart_kappa))
         call darboux_advance(si%chart_w, si%chart_u, si%chart_rhs, si%chart_udot, &
@@ -452,7 +479,12 @@ contains
 
         theta1 = atan2(u1(2), u1(1))
         theta1 = si%z(2) + modulo(theta1 - si%z(2) + pi, twopi) - pi
-        si%z = [radius_from_s(u1(1)**2 + u1(2)**2), theta1, w1(3), w1(4)]
+        r1 = radius_from_s(u1(1)**2 + u1(2)**2)
+        ! s = x**2 + y**2 rounds to 1 - 2**-53 below the boundary; the
+        ! boundary event search (locate_symplectic_boundary) converges on an
+        ! end point exactly at sympl_rmax, so snap the last few ulp.
+        if (abs(r1 - sympl_rmax) <= 4.0_dp*spacing(sympl_rmax)) r1 = sympl_rmax
+        si%z = [r1, theta1, w1(3), w1(4)]
         f%Ath = rf%Ath
         f%Aph = rf%Aph
         f%hth = rf%hth

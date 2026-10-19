@@ -11,6 +11,7 @@ module simple
   use field, only : vmec_field_t
   use field_can_mod, only : eval_field => evaluate, init_field_can, field_can_t, get_val
   use orbit_fo_boris, only : fo_state_t, fo_init, fo_step, fo_to_gc
+  use orbit_symplectic_darboux, only : darboux_enabled, darboux_field_values
   use diag_mod, only : icounter
   use chamb_sub, only : chamb_can
 
@@ -61,6 +62,8 @@ contains
     real(dp) :: jperp_local, psi_star_local
 
     call eval_field(f, z0(1), z0(2), z0(3), 0)
+    ! The Cartesian canonical chart integrates the regular field.
+    if (darboux_enabled()) call darboux_field_values(z0(1), z0(2), z0(3), f)
     jperp_local = z0(4)**2*(1.0_dp - z0(5)**2)/f%Bmod
     psi_star_local = f%Aph + ro0*z0(4)*z0(5)*f%hph
 

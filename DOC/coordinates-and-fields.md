@@ -307,6 +307,17 @@ default and only the Cartesian canonical chart uses it;
 `test_boozer_regular_axis_field_{vmec,chartmap}` compare it with the polar
 splines away from the axis.
 
+**Cartesian canonical chart.** `canonical_chart = 'cartesian'` sets this
+switch in `simple_main.init_field` and selects the field source of
+`orbit_symplectic_darboux` (`darboux_configure`): `evaluate_boozer_regular`
+for Boozer fields, `evaluate_test_regular` (`field_can_test`, generated
+polynomials) for the test field. The step maps its end point back to the
+integrator radius (`s` for Boozer, `r = sqrt(s)` for the test field) and
+`theta`, and fills the values in `field_can_t` (A, h, B, v_par, H, p_theta)
+from the regular field; derivative components of `field_can_t` are not
+updated on that path. `encode_symplectic_state` also takes the start values
+from the regular field.
+
 **Meiss.** The construction needs only a toroidal covariant field component
 that does not vanish, not flux surfaces, so VMEC, chartmap and coil fields on
 any reference work. Phase 1 integrates the transformation ODE radially on the
