@@ -294,6 +294,19 @@ For Boozer chartmaps the Boozer splines come from the chartmap
 $s \to \rho = \sqrt s$. The RK45 GPU path evaluates the same Boozer splines
 on the device; `test_gpu_orbit_bench` compares it with the host.
 
+**Regular near-axis Boozer field.** With `field_can_mod`
+`set_regular_axis_field(.true.)` before `init_field_can`, the libneo Boozer
+builders (internal VMEC conversion and `load_boozer_from_chartmap`) also
+construct `boozer_regular`: the same field in $X = \sqrt s\cos\vartheta_B$,
+$Y = \sqrt s\sin\vartheta_B$, $\varphi_B$ with a $\vartheta$-independent axis
+value, $A_\vartheta = \psi_\text{tor}\, s$ and $B_\vartheta = s\, i(\rho)$, $C^2$
+through the axis (libneo#437). `evaluate_boozer_regular(x, y, phi, mode, rf)`
+in `field_can_boozer` returns values and first/second derivatives in
+$(X, Y, \varphi)$ and counts as one field evaluation. The switch is off by
+default and only the Cartesian canonical chart uses it;
+`test_boozer_regular_axis_field_{vmec,chartmap}` compare it with the polar
+splines away from the axis.
+
 **Meiss.** The construction needs only a toroidal covariant field component
 that does not vanish, not flux surfaces, so VMEC, chartmap and coil fields on
 any reference work. Phase 1 integrates the transformation ODE radially on the
@@ -444,6 +457,7 @@ the spline grid as well as in the time step.
 |---|---|
 | `spline_vmec_data`, `splint_vmec_data` | VMEC splines and their evaluation |
 | `vmec_to_boozer`, `boozer_to_vmec`, `splint_boozer_coord` | Boozer coordinates |
+| `set_boozer_regular_enabled`, `eval_boozer_regular` | regular near-axis Boozer field |
 | `vmec_to_can`, `can_to_vmec`, `splint_can_coord` | canonical flux coordinates |
 | `make_vmec_coordinate_system`, `make_chartmap_coordinate_system`, `detect_refcoords_file_type` | reference coordinates |
 | `create_spectre_field`, `spectre_evaluate_der` | SPECTRE fields |

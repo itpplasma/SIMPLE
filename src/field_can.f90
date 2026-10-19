@@ -28,7 +28,20 @@ procedure(evaluate_base), pointer :: evaluate => null()
 procedure(coordinate_transform), pointer :: integ_to_ref => identity_transform
 procedure(coordinate_transform), pointer :: ref_to_integ => identity_transform
 
+!> Build the regular near-axis field representation (libneo boozer_regular,
+!> evaluated in X = rho cos(theta), Y = rho sin(theta), phi) alongside the
+!> polar splines when a Boozer field is initialised. Off by default: the
+!> representation costs a second 3D spline and only the Cartesian canonical
+!> chart evaluates it.
+    logical :: regular_axis_field = .false.
+
 contains
+
+    subroutine set_regular_axis_field(enabled)
+        logical, intent(in) :: enabled
+
+        regular_axis_field = enabled
+    end subroutine set_regular_axis_field
 
     subroutine init_field_can_boozer_chartmap_compact()
         call field_can_from_name("boozer")
@@ -163,12 +176,17 @@ subroutine init_field_can(field_id, field_noncan, n_r, n_th, n_phi, &
   use boozer_chartmap, only : load_boozer_from_chartmap
   use field_can_meiss, only : get_meiss_coordinates
   use field_can_albert, only : get_albert_coordinates
+        use boozer_regular, only: set_boozer_regular_enabled
 
   integer, intent(in) :: field_id
   class(magnetic_field_t), intent(in), optional :: field_noncan
   integer, intent(in), optional :: n_r, n_th, n_phi
   real(dp), intent(in), optional :: transformation_relerr
   type(vmec_field_t) :: vmec_field
+
+        ! The libneo Boozer builders read this switch; set it on every
+        ! initialisation so a library run that changes fields starts clean.
+        call set_boozer_regular_enabled(regular_axis_field .and. field_id == BOOZER)
 
   if (present(field_noncan)) then
     call field_can_from_id(field_id, field_noncan, n_r, n_th, n_phi, &
