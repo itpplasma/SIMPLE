@@ -7,6 +7,7 @@ ntestpart = 1024                 ! number of test particles (markers)
 n_e = 2                          ! test particle charge number Z
 n_d = 4d0                        ! test particle mass number A (proton masses)
 facE_al = 1d0                    ! energy divisor: particle energy = 3.5 MeV / facE_al
+particle_energy_eV = -1d0        ! > 0: particle energy in eV (facE_al must then be 1 or consistent)
 startmode = 1                    ! initial conditions, see the list below
 !   1 = random on field line on surface sbeg(1), volume-weighted (grid if grid_density set)
 !   2 = read start.dat (s, theta, phi in reference coordinates, v/v0, v_par/v)
@@ -45,6 +46,8 @@ integmode = 1                    ! integrator: 0 = RK45 (adaptive, non-canonical
 !                                  1 = symplectic Euler (explicit-implicit),
 !                                  2 = symplectic Euler (implicit-explicit), 3 = midpoint,
 !                                  4-7 = Gauss 1-4 stages, 15 = Lobatto IIIA-IIIB 3 stages,
+!                                  20 = Gauss-Radau, 21 = Bulirsch-Stoer, 22 = Cash-Karp,
+!                                  24 = TDRK (fixed step), 25 = TDRK (adaptive),
 !                                  -1 = RK45 without loading the field_input field object.
 !                                  Values > 0 require a canonical integ_coords (not 1 or 5)
 relerr = 1d-13                   ! relative tolerance of the implicit (Newton) and RK solves
@@ -65,6 +68,7 @@ coord_input = ''                 ! reference coordinate file: VMEC wout or chart
 !                                  '' = netcdffile, then field_input
 netcdffile = ''                  ! VMEC wout file; deprecated fallback for field_input and
 !                                  coord_input; '' = 'wout.nc' where a VMEC file is required
+radial_electric_potential_slope = 0d0 ! Boozer integration: Phi(s) = slope*s added to H; 0 = off
 integ_coords = -1000             ! integration coordinates: -1 = TEST (analytic tokamak),
 !                                  0 = CANFLUX (canonical flux), 1 = VMEC, 2 = BOOZER,
 !                                  3 = MEISS, 4 = ALBERT, 5 = REFCOORDS (field_input splined
@@ -109,6 +113,11 @@ cut_in_per = 0d0                 ! cut phi as a fraction of one field period, [0
 ! Collisions (&config scalars)
 swcoll = .false.                 ! .true.: collisions with the background plasma (&profiles);
 !                                  incompatible with classification and full orbit
+collision_model = 'full'         ! 'full': Coulomb operator; 'lorentz_nustar': monoenergetic
+!                                  pitch-angle scattering, p_abs unchanged
+nu_star_standard = -1d0          ! Lorentz mode: nu* = R0*nu/(abs(iota)*v0), >= 0
+lorentz_major_radius_cm = -1d0   ! Lorentz mode: local major radius R0, cm, > 0
+lorentz_iota = 0d0               ! Lorentz mode: local rotational transform, nonzero
 am1 = 2d0                        ! mass number of background ion species 1
 am2 = 3d0                        ! mass number of background ion species 2
 Z1 = 1d0                         ! charge number of background ion species 1

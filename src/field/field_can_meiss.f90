@@ -35,7 +35,7 @@ use interpolate, only : &
     evaluate_batch_splines_3d, evaluate_batch_splines_3d_der, &
     evaluate_batch_splines_3d_der2
 use util, only : twopi
-use field_can_base, only : field_can_t, n_field_evaluations
+    use field_can_base, only: count_field_evaluation, field_can_t
     use field, only : magnetic_field_t, vmec_field_t, field_clone
     use field_splined, only: splined_field_t
     use field_spectre, only: spectre_field_t
@@ -288,7 +288,7 @@ subroutine evaluate_meiss(f, r, th_c, ph_c, mode_secders)
 
     real(dp) :: x(3)
 
-    n_field_evaluations = n_field_evaluations + 1
+        call count_field_evaluation(mode_secders)
 
     x = [r, th_c, ph_c]
 
@@ -311,6 +311,17 @@ subroutine integ_to_ref_meiss(xinteg, xref)
     xref(2) = modulo(xinteg(2), twopi)
     xref(3) = modulo(xinteg(3) + y_batch(1), twopi)  ! y_batch(1) is lam_phi
 end subroutine integ_to_ref_meiss
+
+
+!> Reference radius of integ_to_ref_meiss without the angular splines.
+function integ_to_ref_radius_meiss(xinteg) result(r_ref)
+    real(dp), intent(in) :: xinteg(3)
+    real(dp) :: r_ref
+    real(dp) :: xref(3)
+
+    call coord_scaling%inverse(xinteg, xref)
+    r_ref = xref(1)
+end function integ_to_ref_radius_meiss
 
 
 subroutine ref_to_integ_meiss(xref, xinteg)

@@ -12,6 +12,8 @@ f90wrap==0.3.0
 # Testing
 pytest>=9.0
 pytest-cov>=6.2
+imas-python>=2.3,<3
+imas-data-dictionaries>=4.1.1
 netCDF4>=1.7
 gvec==1.4.1
 

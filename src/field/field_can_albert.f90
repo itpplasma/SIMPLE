@@ -25,7 +25,7 @@ module field_can_albert
         BatchSplineData3D, construct_batch_splines_3d, &
         evaluate_batch_splines_3d, evaluate_batch_splines_3d_der, &
         evaluate_batch_splines_3d_der2
-    use field_can_base, only: field_can_t, n_field_evaluations
+    use field_can_base, only: count_field_evaluation, field_can_t
     use field_can_meiss, only: xmin, xmax, n_r, n_th, n_phi, order, periodic, twopi, &
                                get_grid_point, &
                 init_albert => init_meiss, init_transformation, spline_transformation, &
@@ -61,7 +61,7 @@ contains
 
         real(dp) :: x(3)
 
-        n_field_evaluations = n_field_evaluations + 1
+        call count_field_evaluation(mode_secders)
 
         x = [r, th_c, ph_c]
 
@@ -89,6 +89,20 @@ contains
         xmeiss(2:3) = xinteg(2:3)
         call integ_to_ref_meiss(xmeiss, xref)
     end subroutine integ_to_ref_albert
+
+    !> Reference radius of integ_to_ref_albert without the angular splines.
+    function integ_to_ref_radius_albert(xinteg) result(r_ref)
+        use field_can_meiss, only: integ_to_ref_radius_meiss
+
+        real(dp), intent(in) :: xinteg(3)
+        real(dp) :: r_ref
+        real(dp) :: xmeiss(3), y_batch(1)
+
+        call evaluate_batch_splines_3d(spl_r_batch, xinteg, y_batch)
+        xmeiss(1) = y_batch(1)
+        xmeiss(2:3) = xinteg(2:3)
+        r_ref = integ_to_ref_radius_meiss(xmeiss)
+    end function integ_to_ref_radius_albert
 
     subroutine ref_to_integ_albert(xref, xinteg)
         use field_can_meiss, only: ref_to_integ_meiss, spl_field_batch

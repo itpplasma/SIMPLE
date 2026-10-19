@@ -1,22 +1,16 @@
 Installation
 ============
 
-SIMPLE is built from source with CMake. The build produces the executable
-``build/simple.x``, the Fortran library ``libsimple`` and, when the Python
-prerequisites are present, the Python package ``pysimple``. All commands on
-this page are run from the root of the repository.
+This page builds ``build/simple.x``, the library ``libsimple`` and optionally
+the Python package ``pysimple`` from source. Run all commands from the
+repository root.
 
 Prerequisites
 -------------
 
-* CMake 3.22 or newer and Ninja
-* GNU Fortran (gfortran) and Git
-* NetCDF-C and NetCDF-Fortran
-* LAPACK and BLAS (OpenBLAS for ``setup-venv.sh``)
-* OpenMP (part of gfortran)
-* Python 3.10 or newer with ``venv``, for ``pysimple`` and the tools
-
-On common systems:
+CMake ≥ 3.22, Ninja, GNU Fortran, Git, NetCDF-C and NetCDF-Fortran, LAPACK
+and BLAS (OpenBLAS for ``setup-venv.sh``), and Python ≥ 3.10 with ``venv`` for
+``pysimple`` and the tools in ``tools/``.
 
 .. code-block:: bash
 
@@ -30,9 +24,8 @@ On common systems:
    # macOS with Homebrew
    brew install gcc cmake ninja netcdf netcdf-fortran lapack openblas
 
-On macOS, select the Homebrew GNU toolchain before the first configuration
-if other compilers are installed. This also avoids requiring OpenMP support
-from Apple Clang. Expose the Homebrew headers and libraries to the compiler:
+On macOS, select the Homebrew GNU compilers before the first configuration;
+Apple Clang has no OpenMP:
 
 .. code-block:: bash
 
@@ -42,78 +35,46 @@ from Apple Clang. Expose the Homebrew headers and libraries to the compiler:
    export CPATH="$(brew --prefix)/include${CPATH:+:$CPATH}"
    export LIBRARY_PATH="$(brew --prefix)/lib${LIBRARY_PATH:+:$LIBRARY_PATH}"
 
-The build downloads further dependencies with CMake ``FetchContent``:
-`libneo <https://github.com/itpplasma/libneo>`_ (field, spline and
-coordinate routines), `fortnum <https://github.com/lazy-fortran/fortnum>`_
-(root finders and ODE integrators), fortio (scientific file I/O, through
-libneo) and `fortplot <https://github.com/lazy-fortran/fortplot>`_ (plots).
-The fortnum and fortplot revisions are pinned in
-``cmake/dependency_versions.json``. Unless ``LIBNEO_REF`` is set, libneo
-follows the matching SIMPLE branch when it exists in libneo, otherwise
-libneo's ``main`` branch. The build machine therefore needs network access
-to GitHub on the first configuration.
+The first configuration downloads, with CMake ``FetchContent`` and therefore
+with network access to GitHub, `libneo <https://github.com/itpplasma/libneo>`_
+(fields, splines, coordinates, chartmaps), `fortnum
+<https://github.com/lazy-fortran/fortnum>`_ (root finders, ODE integrators),
+fortio (file I/O, through libneo) and `fortplot
+<https://github.com/lazy-fortran/fortplot>`_. Pinned revisions are in
+``cmake/dependency_versions.json``.
 
-Get the source
---------------
+Build
+-----
 
 .. code-block:: bash
 
    git clone https://github.com/itpplasma/SIMPLE.git
    cd SIMPLE
-
-Build with CMake
-----------------
-
-The ``Makefile`` wraps CMake and Ninja:
-
-.. code-block:: bash
-
    make                 # Release build in build/
-   make CONFIG=Fast     # native optimisation (recommended for production runs)
+   make CONFIG=Fast     # native CPU flags; use for production runs
 
-This is equivalent to
+``make`` runs ``cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release`` and
+``cmake --build build``. Further options:
 
-.. code-block:: bash
+=================================  =============  ================================================
+Option                             Default        Effect
+=================================  =============  ================================================
+``CMAKE_BUILD_TYPE``               ``Release``    ``Release``, ``Fast`` (native CPU flags),
+                                                  ``Debug`` or ``Profile``
+``ENABLE_OPENMP``                  ``ON``         OpenMP over particles
+``ENABLE_PYTHON_INTERFACE``        ``ON``         ``pysimple`` bindings (needs numpy, f90wrap)
+``SIMPLE_ENABLE_CGAL``             ``OFF``        STL walls with CGAL (downloads CGAL, needs
+                                                  Boost headers); :doc:`/user-guide/wall-heat-loads`
+``SIMPLE_ENABLE_CUDA``             ``OFF``        native CUDA tracing; :doc:`/user-guide/gpu`
+``SIMPLE_DETERMINISTIC_FP``        ``OFF``        no fast-math, bitwise reproducible
+                                                  (``make build-deterministic``)
+``LIBNEO_REF``                     automatic      libneo branch, tag or commit
+                                                  (``make LIBNEO_REF=...``)
+``LIBNEO_SOURCE_DIR``              unset          local libneo checkout (``make LIBNEO_PATH=...``)
+=================================  =============  ================================================
 
-   cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-   cmake --build build
-
-Useful CMake options:
-
-.. list-table::
-   :header-rows: 1
-   :widths: 35 15 50
-
-   * - Option
-     - Default
-     - Purpose
-   * - ``CMAKE_BUILD_TYPE``
-     - ``Release``
-     - ``Release``, ``Fast`` (native CPU flags), ``Debug`` or ``Profile``.
-   * - ``ENABLE_OPENMP``
-     - ``ON``
-     - OpenMP parallelisation over particles.
-   * - ``ENABLE_PYTHON_INTERFACE``
-     - ``ON``
-     - Build the ``pysimple`` bindings (needs numpy and f90wrap).
-   * - ``SIMPLE_ENABLE_CGAL``
-     - ``OFF``
-     - STL wall intersection with CGAL (downloads CGAL headers, needs Boost
-       headers). See :doc:`/user-guide/wall-heat-loads`.
-   * - ``SIMPLE_ENABLE_CUDA``
-     - ``OFF``
-     - Native CUDA kernels for GPU tracing. See :doc:`/user-guide/gpu`.
-   * - ``SIMPLE_DETERMINISTIC_FP``
-     - ``OFF``
-     - Disable fast-math for bitwise reproducible results
-       (``make build-deterministic``).
-   * - ``LIBNEO_REF`` / ``LIBNEO_SOURCE_DIR``
-     - matching branch or main
-     - Select a libneo branch or use a local checkout
-       (``make LIBNEO_REF=...`` or ``make LIBNEO_PATH=...``).
-
-Several builds can live side by side in different build directories, for
-example a CGAL build:
+Builds with different options live in separate build directories, for
+example with CGAL:
 
 .. code-block:: bash
 
@@ -121,12 +82,11 @@ example a CGAL build:
        -DSIMPLE_ENABLE_CGAL=ON
    cmake --build build-cgal --target simple.x
 
-Python package with pip
------------------------
+Python package
+--------------
 
-The script ``setup-venv.sh`` creates a virtual environment ``.venv`` in the
-repository, installs the Python requirements, builds SIMPLE and installs
-``pysimple`` into the environment in editable mode:
+``setup-venv.sh`` creates ``.venv`` in the repository, installs the Python
+requirements, builds SIMPLE and installs ``pysimple`` in editable mode:
 
 .. code-block:: bash
 
@@ -134,23 +94,18 @@ repository, installs the Python requirements, builds SIMPLE and installs
    source .venv/bin/activate
    python -c "import pysimple"
 
-The script runs the following steps, which can also be used in an existing
-environment:
+In an existing environment, run ``python -m pip install -r requirements.txt``
+and ``python -m pip install --no-build-isolation -e .``; pip builds the
+Fortran code with scikit-build-core in ``_skbuild/`` (several minutes). ``python -m pip install '.[plotting]'``
+adds Matplotlib and netCDF4 for :doc:`/user-guide/postprocessing`.
 
-.. code-block:: bash
-
-   python -m pip install -r requirements.txt
-   python -m pip install --no-build-isolation -e .
-
-``pip`` builds the Fortran code with scikit-build-core in ``_skbuild/``. The
-first build takes several minutes.
-
-Check the installation
-----------------------
+Check
+-----
 
 .. code-block:: bash
 
    make test-fast
 
-runs the fast part of the test suite with a deterministic floating-point
-build. :doc:`quickstart` runs a first physics case.
+builds with ``SIMPLE_DETERMINISTIC_FP=ON`` and runs all tests except those
+labelled ``slow``, ``regression``, ``performance`` and ``scalability``. Next:
+:doc:`quickstart`.

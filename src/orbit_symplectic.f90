@@ -6,7 +6,7 @@ use field_can_mod, only: field_can_t, get_val, get_derivatives, get_derivatives2
   eval_field => evaluate
 use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
   RK45, EXPL_IMPL_EULER, IMPL_EXPL_EULER, MIDPOINT, GAUSS1, GAUSS2, GAUSS3, GAUSS4, &
-  LOBATTO3, S_MAX, orbit_timestep_sympl_i, extrap_field, sympl_rmax, &
+  LOBATTO3, RADAU15, GBS16, CASHKARP45, TDRK24, TDRK24A, S_MAX, orbit_timestep_sympl_i, extrap_field, sympl_rmax, &
   coeff_rk_gauss, coeff_rk_lobatto, f_rk_lobatto, &
   SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN, &
   SYMPLECTIC_STEP_MAXITER, SYMPLECTIC_STEP_LINEAR_SOLVE, &
@@ -15,13 +15,16 @@ use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_
   boundary_event_radial_tolerance, symplectic_newton_warning_mode
 use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_expl_impl_euler_quasi, &
   timestep_impl_expl_euler_quasi, timestep_midpoint_quasi, orbit_timestep_rk45, &
+                  orbit_timestep_radau15, orbit_timestep_gbs16, orbit_timestep_tdrk24, &
+                                    orbit_timestep_tdrk24a, orbit_timestep_cashkarp45, &
+                                      reset_explicit_step_carry, &
+                                      si_quasi => si, f_quasi => f, &
   timestep_rk_gauss_quasi, timestep_rk_lobatto_quasi
 use orbit_symplectic_euler1, only: sympl_euler1_residual, sympl_euler1_jacobian, &
   sympl_euler1_newton_iter, sympl_euler1_extrapolate_field, &
   sympl_euler1_advance_angles
-use orbit_rk_core, only: rk_gauss_residual, rk_gauss_jacobian, MODEL_GC
+use orbit_rk_core, only: rk_gauss_residual, rk_gauss_jacobian, rk_solve, MODEL_GC
 use vector_potentail_mod, only: torflux
-use lapack_interfaces, only: dgesv
 use diag_counters, only: count_event, EVT_NEWTON1_MAXIT, EVT_NEWTON2_MAXIT, &
   EVT_RK_GAUSS_MAXIT, EVT_RK_LOBATTO_MAXIT, EVT_FIXPOINT_MAXIT, EVT_R_NEGATIVE, &
   EVT_MIDPOINT_MAXIT, EVT_WARNING_MAXIT_ACCEPT, &
@@ -231,6 +234,7 @@ recursive subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
 
   si%atol = 1d-15
   si%rtol = rtol_init
+        call reset_explicit_step_carry
 
   si%ntau = ntau
   si%dt = dt
@@ -273,6 +277,21 @@ recursive subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
     case (LOBATTO3)
       raw_timestep_sympl => orbit_timestep_sympl_lobatto3
       orbit_timestep_quasi => orbit_timestep_quasi_lobatto3
+        case (RADAU15)
+            raw_timestep_sympl => orbit_timestep_sympl_radau15
+            orbit_timestep_quasi => orbit_timestep_radau15
+        case (GBS16)
+            raw_timestep_sympl => orbit_timestep_sympl_gbs16
+            orbit_timestep_quasi => orbit_timestep_gbs16
+        case (TDRK24)
+            raw_timestep_sympl => orbit_timestep_sympl_tdrk24
+            orbit_timestep_quasi => orbit_timestep_tdrk24
+        case (TDRK24A)
+            raw_timestep_sympl => orbit_timestep_sympl_tdrk24a
+            orbit_timestep_quasi => orbit_timestep_tdrk24a
+        case (CASHKARP45)
+            raw_timestep_sympl => orbit_timestep_sympl_cashkarp45
+            orbit_timestep_quasi => orbit_timestep_cashkarp45
     case default
       print *, 'invalid mode for orbit_timestep_sympl: ', mode_init
       error stop
@@ -283,6 +302,75 @@ recursive subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
     orbit_timestep_sympl => raw_timestep_sympl
   end if
 end subroutine orbit_sympl_init
+
+    !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+    !
+! Bridges the explicit high-order steppers, which live on the quasi path and
+! read the module-level state there, into the symplectic stepper signature the
+! driver calls. The quasi state is threadprivate, so this is thread safe.
+!
+! The copies are the price of reusing f_ode unchanged, which is what keeps the
+! comparison honest: these methods integrate exactly the same right-hand side
+! as the symplectic schemes, through the same field evaluations.
+    recursive subroutine orbit_timestep_sympl_radau15(si, f, ierr)
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        integer, intent(out) :: ierr
+
+        si_quasi = si
+        f_quasi = f
+        call orbit_timestep_radau15(ierr)
+        si = si_quasi
+        f = f_quasi
+    end subroutine orbit_timestep_sympl_radau15
+
+    recursive subroutine orbit_timestep_sympl_gbs16(si, f, ierr)
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        integer, intent(out) :: ierr
+
+        si_quasi = si
+        f_quasi = f
+        call orbit_timestep_gbs16(ierr)
+        si = si_quasi
+        f = f_quasi
+    end subroutine orbit_timestep_sympl_gbs16
+
+    recursive subroutine orbit_timestep_sympl_tdrk24(si, f, ierr)
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        integer, intent(out) :: ierr
+
+        si_quasi = si
+        f_quasi = f
+        call orbit_timestep_tdrk24(ierr)
+        si = si_quasi
+        f = f_quasi
+    end subroutine orbit_timestep_sympl_tdrk24
+
+    recursive subroutine orbit_timestep_sympl_tdrk24a(si, f, ierr)
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        integer, intent(out) :: ierr
+
+        si_quasi = si
+        f_quasi = f
+        call orbit_timestep_tdrk24a(ierr)
+        si = si_quasi
+        f = f_quasi
+    end subroutine orbit_timestep_sympl_tdrk24a
+
+    recursive subroutine orbit_timestep_sympl_cashkarp45(si, f, ierr)
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        integer, intent(out) :: ierr
+
+        si_quasi = si
+        f_quasi = f
+        call orbit_timestep_cashkarp45(ierr)
+        si = si_quasi
+        f = f_quasi
+    end subroutine orbit_timestep_sympl_cashkarp45
 
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -728,14 +816,17 @@ pure logical function matrix3_near_singular(matrix, determinant)
     abs(determinant) <= epsilon(1d0)*matrix_scale**3
 end function matrix3_near_singular
 
+! Small dense Newton solve (n = 2 .. 4*s) by in-house LU with partial pivoting.
+! No library call and no allocation: LAPACK/OpenBLAS dgesv per step exhausted
+! OpenBLAS memory regions and scaled badly with thread count.
 subroutine solve_newton_system(matrix, residual, status)
   real(dp), intent(inout) :: matrix(:, :), residual(:)
   integer, intent(out) :: status
 
-  integer :: info, n, pivot(size(residual))
+  integer :: info, n
 
   n = size(residual)
-  call dgesv(n, 1, matrix, n, pivot, residual, n, info)
+  call rk_solve(n, matrix, residual, info)
   if (info == 0) then
     status = SYMPLECTIC_STEP_OK
   else
@@ -2062,6 +2153,46 @@ end subroutine advance_symplectic_with_boundary
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
+    pure subroutine hermite_endpoint(s, nq, c, value, rate, value_end)
+        ! Extrapolate smooth functions of the Gauss collocation polynomial u(tau)
+        ! to the step end tau = 1 from their values and tau-derivatives at the s
+        ! stages. By collocation u'(c_k) = f(u(c_k)), so the stage rates follow
+        ! from the stage field caches, and the 2s Hermite conditions give the
+        ! endpoint to O(dt**(2s)) per step, the order of the method, with no
+        ! field evaluation. Columns of value and rate are the nq quantities.
+        integer, intent(in) :: s, nq
+        real(dp), intent(in) :: c(s), value(s, nq), rate(s, nq)
+        real(dp), intent(out) :: value_end(nq)
+        real(dp) :: node(2*s), table(2*s)
+        integer :: i, j, n, q
+
+        n = 2*s
+        do i = 1, s
+            node(2*i - 1) = c(i)
+            node(2*i) = c(i)
+        end do
+        do q = 1, nq
+            do i = 1, s
+                table(2*i - 1) = value(i, q)
+                table(2*i) = value(i, q)
+            end do
+            ! Divided differences in place; repeated nodes take the derivative.
+            do j = 1, n - 1
+                do i = n, j + 1, -1
+                    if (j == 1 .and. mod(i, 2) == 0) then
+                        table(i) = rate(i/2, q)
+                    else
+                        table(i) = (table(i) - table(i - 1))/(node(i) - node(i - j))
+                    end if
+                end do
+            end do
+            value_end(q) = table(n)
+            do i = n - 1, 1, -1
+                value_end(q) = table(i) + (1d0 - node(i))*value_end(q)
+            end do
+        end do
+    end subroutine hermite_endpoint
+
 recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
   !
   type(symplectic_integrator_t), intent(inout) :: si
@@ -2079,6 +2210,8 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
   type(field_can_t) :: accepted_field
   type(symplectic_integrator_t) :: accepted_integrator
   real(dp) :: a(s,s), b(s), c(s), Hprime(s), dz(4*s)
+        real(dp) :: stage_value(s, 6), stage_rate(s, 6), endpoint_value(6)
+        real(dp) :: radius_end, r_rate, theta_rate, phi_rate, pphi_rate, canonical_pth
 
   do k = 1,s
     fs(k) = f
@@ -2170,6 +2303,14 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
         fs(k)%hph = fs(k)%hph + fs(k)%dhph(1)*dz(1) &  ! d/dr
                       + fs(k)%dhph(2)*dz(2) &
                       + fs(k)%dhph(3)*dz(3)
+
+                    ! Not used by the update, but extrapolated to the endpoint cache.
+                    fs(k)%Ath = fs(k)%Ath + fs(k)%dAth(1)*dz(1) + fs(k)%dAth(2)*dz(2) &
+                                + fs(k)%dAth(3)*dz(3)
+                    fs(k)%Aph = fs(k)%Aph + fs(k)%dAph(1)*dz(1) + fs(k)%dAph(2)*dz(2) &
+                                + fs(k)%dAph(3)*dz(3)
+                    fs(k)%Bmod = fs(k)%Bmod + fs(k)%dBmod(1)*dz(1) &
+                                 + fs(k)%dBmod(2)*dz(2) + fs(k)%dBmod(3)*dz(3)
       end do
     else
       do k = 1, s
@@ -2193,8 +2334,77 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
       si%z(4) = si%z(4) - si%dt*b(l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))
     end do
 
+            ! The update advances (theta, phi, p_theta, p_phi); the radius is
+            ! defined only implicitly by p_theta. Report the endpoint radius and
+            ! field cache by Hermite extrapolation of the stages. The error does not
+            ! accumulate: each step solves its stage radii from the constraint
+            ! again, and the endpoint only seeds the next Newton guess.
+            ! Stage values and rates in tau = t/dt of r and of the cached field
+            ! values callers read after the step (vpar and H follow from p_phi).
+            ! dr/dt follows from d/dt p_theta(r, theta, phi, p_phi) = dp_theta/dt
+            ! along the stage; the theta terms cancel against p_theta's own rate.
+            do k = 1, s
+                theta_rate = si%dt*Hprime(k)
+                phi_rate = si%dt*(fs(k)%vpar - Hprime(k)*fs(k)%hth)/fs(k)%hph
+                pphi_rate = -si%dt*(fs(k)%dH(3) - Hprime(k)*fs(k)%dpth(3))
+                r_rate = (-si%dt*fs(k)%dH(2) - fs(k)%dpth(3)*phi_rate &
+                          - fs(k)%hth/fs(k)%hph*pphi_rate)/fs(k)%dpth(1)
+                stage_value(k, 1) = x(4*k - 3)
+                stage_value(k, 2) = fs(k)%Ath
+                stage_value(k, 3) = fs(k)%Aph
+                stage_value(k, 4) = fs(k)%hth
+                stage_value(k, 5) = fs(k)%hph
+                stage_value(k, 6) = fs(k)%Bmod
+                stage_rate(k, 1) = r_rate
+                stage_rate(k, 2) = chain_rate(fs(k)%dAth)
+                stage_rate(k, 3) = chain_rate(fs(k)%dAph)
+                stage_rate(k, 4) = chain_rate(fs(k)%dhth)
+                stage_rate(k, 5) = chain_rate(fs(k)%dhph)
+                stage_rate(k, 6) = chain_rate(fs(k)%dBmod)
+            end do
+            call hermite_endpoint(s, 6, c, stage_value, stage_rate, endpoint_value)
+            radius_end = endpoint_value(1)
+            if (.not. finite_newton_iterate([radius_end])) then
+                si = accepted_integrator
+                f = accepted_field
+                ierr = SYMPLECTIC_STEP_MAXITER
+                return
+            end if
+            if (radius_end > sympl_rmax) then
+                ! A crossing inside the last stage interval; the boundary event solve
+                ! locates it on the step fraction.
+                si = accepted_integrator
+                f = accepted_field
+                ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+                return
+            end if
+            ! The polar chart cannot represent a negative radius. Near the axis keep
+            ! the last stage radius and cache, as before; the next step solves its
+            ! stages anew.
+            if (radius_end >= 0d0) then
+                si%z(1) = radius_end
+                canonical_pth = f%pth
+                f%Ath = endpoint_value(2)
+                f%Aph = endpoint_value(3)
+                f%hth = endpoint_value(4)
+                f%hph = endpoint_value(5)
+                f%Bmod = endpoint_value(6)
+                call get_val(f, si%z(4))
+                f%pth = canonical_pth
+            end if
+
     ktau = ktau+1
   enddo
+
+    contains
+
+        pure real(dp) function chain_rate(gradient)
+            ! d/dtau of a field value along the stage from its (r, theta, phi) gradient.
+            real(dp), intent(in) :: gradient(3)
+
+            chain_rate = gradient(1)*r_rate + gradient(2)*theta_rate &
+                         + gradient(3)*phi_rate
+        end function chain_rate
 
 end subroutine orbit_timestep_sympl_rk_gauss
 
