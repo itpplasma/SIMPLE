@@ -46,6 +46,8 @@ integmode = 1                    ! integrator: 0 = RK45 (adaptive, non-canonical
 !                                  1 = symplectic Euler (explicit-implicit),
 !                                  2 = symplectic Euler (implicit-explicit), 3 = midpoint,
 !                                  4-7 = Gauss 1-4 stages, 15 = Lobatto IIIA-IIIB 3 stages,
+!                                  20 = Gauss-Radau, 21 = Bulirsch-Stoer, 22 = Cash-Karp,
+!                                  24 = TDRK (fixed step), 25 = TDRK (adaptive),
 !                                  -1 = RK45 without loading the field_input field object.
 !                                  Values > 0 require a canonical integ_coords (not 1 or 5)
 relerr = 1d-13                   ! relative tolerance of the implicit (Newton) and RK solves
