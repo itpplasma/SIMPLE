@@ -22,7 +22,12 @@ contains
 
         call eval_boozer_regular(x, y, phi, mode, rf)
 
-        n_field_evaluations = n_field_evaluations + 1
+        ! Only mode 2 carries second derivatives, the d2 class of the counter.
+        if (mode >= 2) then
+            call count_field_evaluation(1)
+        else
+            call count_field_evaluation(0)
+        end if
     end subroutine evaluate_boozer_regular
 
     subroutine integ_to_ref_boozer_chartmap(xinteg, xref)
