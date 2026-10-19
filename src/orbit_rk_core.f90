@@ -9,8 +9,8 @@ module orbit_rk_core
   ! The arithmetic is lifted byte-identically from the former f_rk_gauss /
   ! jac_rk_gauss bodies in orbit_symplectic. coeff_rk_gauss stays in
   ! orbit_symplectic_base (plain data) and is called inside the kernels. The
-  ! Newton shell here uses the device LU solve rk_solve; the GC CPU path keeps
-  ! dgesv in orbit_symplectic for byte-identical results.
+  ! Newton shell here uses the LU solve rk_solve, which the CPU symplectic
+  ! integrators in orbit_symplectic also use (no LAPACK call per step).
   use, intrinsic :: iso_fortran_env, only: dp => real64
   use util, only: twopi
   use field_can_mod, only: field_can_t, get_derivatives2, eval_field => evaluate
@@ -167,7 +167,7 @@ contains
 
   ! Device-portable dense LU solve A x = rhs with partial pivoting, in place on
   ! rhs. n <= 4*S_MAX (n <= 16 for s <= 4). info = 0 on success, else the failing
-  ! pivot column. Replaces dgesv on the device; the GC CPU path keeps dgesv.
+  ! pivot column. Replaces dgesv on CPU and device: thread-safe, no allocation.
   pure subroutine rk_solve(n, A, rhs, info)
     !$acc routine seq
     integer, intent(in) :: n
