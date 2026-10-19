@@ -1,6 +1,7 @@
 module field_can_boozer
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use field_can_base, only: count_field_evaluation, field_can_t, twopi
+    use field_can_base, only: apply_radial_electric_potential, &
+                              count_field_evaluation, field_can_t, twopi
 
     implicit none
 
@@ -58,6 +59,7 @@ contains
         integer, intent(in) :: mode_secders
 
         call eval_field_booz(f, r, th_c, ph_c, mode_secders)
+        call apply_radial_electric_potential(f, r)
 
         call count_field_evaluation(mode_secders)
     end subroutine evaluate_boozer

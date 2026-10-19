@@ -94,3 +94,25 @@ of statistical independence.
 Batch draws (`batch_size`) use `ran_seed` also without `deterministic`.
 Collision substeps are chosen automatically; their bounds are in
 {doc}`/model/collisions`.
+
+## Particle energy, Lorentz collisions and radial potential
+
+- `particle_energy_eV` (default `-1`) sets the energy directly. With `-1` the
+  energy is `3.5d6/facE_al` eV. A nondefault `facE_al` must agree with an
+  explicit energy, otherwise input validation fails.
+- `collision_model` (default `'full'`): `'lorentz_nustar'` selects
+  monoenergetic pitch-angle scattering for `swcoll = .true.`; requires
+  `nu_star_standard >= 0`, `lorentz_major_radius_cm > 0` and nonzero
+  `lorentz_iota`, with `nu_star_standard = R0*nu/(abs(iota)*v0)`. `p_abs`
+  stays unchanged. See {doc}`/model/collisions`.
+- `radial_electric_potential_slope` (default `0`) adds `Phi(s) = slope*s` to
+  the Boozer canonical Hamiltonian. `Phi` is added directly to the normalized
+  `H = vpar**2/2 + mu*B + Phi`, so it is in the units of `H`, and the slope is
+  per unit of the Boozer radial variable `r = s` (normalized toroidal flux).
+  A nonzero slope requires `integ_coords = 2` (Boozer), a symplectic
+  `integmode > 0`, `orbit_model = 0` and `gpu_mode = 'off'`; other
+  configurations stop with an error, since only the Boozer canonical field
+  applies the potential.
+- With `output_results_netcdf` and `output_orbits_macrostep`, `results.nc` and
+  `orbits.nc` carry the effective energy, collision model and these values as
+  global attributes.
