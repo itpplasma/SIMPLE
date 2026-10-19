@@ -1482,14 +1482,21 @@ add_test(NAME test_fo_gauss2_resolution_large_matched_policy COMMAND test_fo_sym
 set_tests_properties(test_fo_gauss2_resolution_large_matched_policy PROPERTIES
     LABELS "regression;integration;slow" TIMEOUT 3600)
 
-# Each FO step evaluates its field jets as up to four independent OpenMP tasks;
-# results do not depend on the thread count. Reserve the cores for long orbits.
-set_tests_properties(test_fo_symplectic_long test_fo_symplectic_resolved_long
-    test_fo_symplectic_second_long test_fo_symplectic_second_resolved_long
-    test_fo_gauss2_resolution_base test_fo_gauss2_resolution_half
-    test_fo_gauss2_resolution_quarter test_fo_gauss2_resolution_tight
-    test_fo_gauss2_resolution_base_short test_fo_gauss2_resolution_captured
-    test_fo_gauss2_resolution_large_matched_policy PROPERTIES PROCESSORS 4)
+# Each FO step evaluates its field jets as up to four OpenMP tasks; results do
+# not depend on the thread count. Reserve the cores: the stage barriers come
+# every few microseconds, so an oversubscribed run stalls on preempted threads.
+set(FO_STEPPER_TESTS test_fo_symplectic test_fo_symplectic_long
+    test_fo_symplectic_resolved test_fo_symplectic_resolved_long
+    test_fo_symplectic_newton_boundary test_fo_gauss2_original_oracle
+    test_fo_gauss2_resolution_large_matched_policy)
+foreach(fo_suffix IN ITEMS second second_long second_resolved second_resolved_long)
+    list(APPEND FO_STEPPER_TESTS test_fo_symplectic_${fo_suffix})
+endforeach()
+foreach(fo_probe IN ITEMS base half quarter tight base_short captured)
+    list(APPEND FO_STEPPER_TESTS test_fo_gauss2_resolution_${fo_probe})
+endforeach()
+set_tests_properties(${FO_STEPPER_TESTS} PROPERTIES
+    PROCESSORS 4 ENVIRONMENT "OMP_NUM_THREADS=4")
 
 add_subdirectory(
     "${CMAKE_SOURCE_DIR}/concept/fo_gc_derivations/D_canonical_switch"
