@@ -38,8 +38,14 @@ cut_in_per = 0d0
 /
 """
 
-# Files whose line order follows thread scheduling are compared as sorted sets.
-EXACT = ("fort.20000", "class_parts.dat", "times_lost.dat", "confined_fraction.dat")
+# Sorting preserves duplicate rows while ignoring thread scheduling order.
+EXACT = (
+    "fort.20000",
+    "class_parts.dat",
+    "orbit_exit_code.dat",
+    "times_lost.dat",
+    "confined_fraction.dat",
+)
 UNORDERED = ("fort.10000", "fort.10011")
 THREADS = (1, 4, 4, 4)
 
