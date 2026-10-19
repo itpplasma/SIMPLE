@@ -1598,6 +1598,11 @@ contains
         navail = acc_get_num_devices(acc_device_nvidia)
         if (navail < 1) navail = 1
         ngpu = min(req, navail)
+#ifndef _OPENMP
+        ! Without OpenMP the device split below runs as one thread with dev = 0,
+        ! which would trace only the first npart/ngpu particles.
+        ngpu = 1
+#endif
 #endif
         if (ngpu <= 1) then
             call trace_orbits_gpu_range(si, f, npart, 1, npart, ntimstep, &
