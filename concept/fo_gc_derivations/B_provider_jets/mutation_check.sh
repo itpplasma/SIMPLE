@@ -12,7 +12,7 @@ muts=(
  "batch_interpolate_3d.f90|1805|s/b1(k3, 3)/b0(k3, 3)/"
  "spectre_fo_gauss2.f90|120|s/2.0_dp\*s(0)/3.0_dp*s(0)/"
  "spectre_fo_gauss2.f90|117|s/-2.0_dp\/t/-3.0_dp\/t/"
- "spectre_fo_gauss2.f90|336|s/d2(:, j, k)/d2(:, j, l)/"
+ "spectre_fo_gauss2.f90|375|s/d2(:, j, k)/d2(:, j, l)/"
  "spectre_basis.f90|43|s/2.0_dp\*cheby(ll - 1, 0)/3.0_dp*cheby(ll - 1, 0)/"
  "spectre_basis.f90|289|s/+ rmi\*rni/- rmi*rni/"
  "spectre_basis.f90|93|s/(m + 1)\*m\*(m - 1)/(m + 1)*m*(m + 1)/"

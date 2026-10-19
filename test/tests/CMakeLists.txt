@@ -1482,6 +1482,15 @@ add_test(NAME test_fo_gauss2_resolution_large_matched_policy COMMAND test_fo_sym
 set_tests_properties(test_fo_gauss2_resolution_large_matched_policy PROPERTIES
     LABELS "regression;integration;slow" TIMEOUT 3600)
 
+# Each FO step evaluates its field jets as up to four independent OpenMP tasks;
+# results do not depend on the thread count. Reserve the cores for long orbits.
+set_tests_properties(test_fo_symplectic_long test_fo_symplectic_resolved_long
+    test_fo_symplectic_second_long test_fo_symplectic_second_resolved_long
+    test_fo_gauss2_resolution_base test_fo_gauss2_resolution_half
+    test_fo_gauss2_resolution_quarter test_fo_gauss2_resolution_tight
+    test_fo_gauss2_resolution_base_short test_fo_gauss2_resolution_captured
+    test_fo_gauss2_resolution_large_matched_policy PROPERTIES PROCESSORS 4)
+
 add_subdirectory(
     "${CMAKE_SOURCE_DIR}/concept/fo_gc_derivations/D_canonical_switch"
     "${CMAKE_CURRENT_BINARY_DIR}/canonical_switch")
