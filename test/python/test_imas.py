@@ -6,7 +6,7 @@ import pytest
 imas = pytest.importorskip("imas")
 
 from pysimple.imas import (Markers, plasma_profiles, read_markers, run,
-                          run_entry, wall_to_stl, write_markers)
+                          run_entry, write_markers)
 from pysimple.imas._common import initialize
 from pysimple.imas.equilibrium import _geqdsk_input, equilibrium_to_chartmap
 
@@ -238,49 +238,11 @@ def test_database_actor_and_core_profiles(tmp_path):
     assert np.all(np.isfinite(pysimple.reference_to_cylindrical([.5, 0, 0])))
 
 
-def test_wall_ids_cartesian_order_and_one_based_triangles(tmp_path):
-    ids = imas.IDSFactory(version="4.1.1").new("wall")
-    initialize(ids, [2.0])
-    ids.description_ggd.resize(1)
-    ids.description_ggd[0].grid_ggd.resize(1)
-    grid = ids.description_ggd[0].grid_ggd[0]
-    grid.time = 2.0
-    grid.space.resize(1)
-    space = grid.space[0]
-    space.coordinates_type.resize(3)
-    for coordinate, index in zip(space.coordinates_type, [3, 1, 2]):
-        coordinate.index = index
-    space.objects_per_dimension.resize(3)
-    nodes = space.objects_per_dimension[0].object
-    nodes.resize(3)
-    for node, geometry in zip(nodes, [[0, 1, 0], [0, 2, 0], [1, 1, 0]]):
-        node.geometry = geometry
-    faces = space.objects_per_dimension[2].object
-    faces.resize(1)
-    faces[0].nodes = [1, 2, 3]
-    ids.validate()
-    path = wall_to_stl(ids, tmp_path/"wall.stl", time=2)
-    vertices = np.array([[float(x) for x in line.split()[1:]]
-                        for line in path.read_text().splitlines() if line.startswith("vertex")])
-    np.testing.assert_array_equal(vertices, [[1, 0, 0], [2, 0, 0], [1, 0, 1]])
-    faces[0].nodes = [0, 2, 3]
-    with pytest.raises(ValueError, match="one-based"):
-        wall_to_stl(ids, path)
-
-
-def test_wall_ids_axisymmetric_limiter(tmp_path):
-    ids = imas.IDSFactory(version="4.1.1").new("wall")
-    ids.ids_properties.homogeneous_time = 2
-    ids.description_2d.resize(1)
-    ids.description_2d[0].limiter.unit.resize(1)
-    outline = ids.description_2d[0].limiter.unit[0].outline
-    outline.r, outline.z = [1, 2, 2, 1, 1], [0, 0, 1, 1, 0]
-    ids.validate()
-    path = wall_to_stl(ids, tmp_path/"wall.stl", toroidal_points=16)
-    vertices = np.array([[float(x) for x in line.split()[1:]]
-                        for line in path.read_text().splitlines() if line.startswith("vertex")])
-    radii = np.hypot(vertices[:, 0], vertices[:, 1])
-    np.testing.assert_allclose(np.min(radii), 1)
-    np.testing.assert_allclose(np.max(radii), 2)
-    np.testing.assert_allclose(np.min(vertices[:, 2]), 0)
-    np.testing.assert_allclose(np.max(vertices[:, 2]), 1)
+def test_wall_ids_rejected_before_tracing(circular_chartmap, tmp_path):
+    wall = imas.IDSFactory(version="4.1.1").new("wall")
+    with pytest.raises(ValueError, match="not yet supported.*LCFS.*Omit the wall"):
+        run(source(rate=True), field=circular_chartmap, wall=wall,
+            duration=1e-6, source_interval=.2, workdir=tmp_path)
+    with pytest.raises(ValueError, match="not yet supported"):
+        run_entry(tmp_path/"in.nc", tmp_path/"out.nc", wall=True, duration=1e-6)
+    assert not (tmp_path/"out.nc").exists()
