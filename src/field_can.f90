@@ -272,20 +272,20 @@ end subroutine field_can_init
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-subroutine get_val(f, pphi)
-  !
-  ! computes values of H, pth and vpar at z=(r, th, ph, pphi)
-  !
-  !
-  type(field_can_t), intent(inout) :: f
-  real(dp), intent(in) :: pphi
-  !$acc routine seq
+    subroutine get_val(f, pphi)
+        !
+        ! computes values of H, pth and vpar at z=(r, th, ph, pphi)
+        !
+        !
+        type(field_can_t), intent(inout) :: f
+        real(dp), intent(in) :: pphi
+        !$acc routine seq
 
-  f%vpar = (pphi - f%Aph/f%ro0)/f%hph
-  f%H = f%vpar**2/2d0 + f%mu*f%Bmod
-  f%pth = f%hth*f%vpar + f%Ath/f%ro0
+        f%vpar = (pphi - f%Aph/f%ro0)/f%hph
+        f%H = f%vpar**2/2d0 + f%mu*f%Bmod + f%Phie
+        f%pth = f%hth*f%vpar + f%Ath/f%ro0
 
-end subroutine get_val
+    end subroutine get_val
 
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -304,7 +304,7 @@ subroutine get_derivatives(f, pphi)
   f%dvpar(1:3) = -(f%dAph/f%ro0 + f%dhph*f%vpar)/f%hph
   f%dvpar(4)   = 1d0/f%hph
 
-  f%dH(1:3) = f%vpar*f%dvpar(1:3) + f%mu*f%dBmod
+        f%dH(1:3) = f%vpar*f%dvpar(1:3) + f%mu*f%dBmod + f%dPhie
   f%dH(4)   = f%vpar/f%hph
 
   f%dpth(1:3) = f%dvpar(1:3)*f%hth + f%vpar*f%dhth + f%dAth/f%ro0
@@ -337,7 +337,7 @@ subroutine get_derivatives2(f, pphi)
   f%d2vpar(6) = f%d2vpar(6) - 2d0*f%dhph(3)*f%dvpar(3)
   f%d2vpar(1:6) = f%d2vpar(1:6)/f%hph
 
-  f%d2H(1:6) = f%vpar*f%d2vpar(1:6) + f%mu*f%d2Bmod ! + qi*d2Phie
+        f%d2H(1:6) = f%vpar*f%d2vpar(1:6) + f%mu*f%d2Bmod + f%d2Phie
   f%d2H(1) = f%d2H(1) + f%dvpar(1)**2
   f%d2H(2) = f%d2H(2) + f%dvpar(1)*f%dvpar(2)
   f%d2H(3) = f%d2H(3) + f%dvpar(1)*f%dvpar(3)
