@@ -603,6 +603,18 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
     set_tests_properties(test_fast_class_driver PROPERTIES
         LABELS "integration;system"
         TIMEOUT 120)
+
+    add_test(NAME test_class_scores_driver
+        COMMAND ${CMAKE_COMMAND} -E env
+            CTEST_BINARY_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}
+            ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_class_scores_driver.py
+            $<TARGET_FILE:simple.x>
+            ${WOUT_FILE}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(test_class_scores_driver PROPERTIES
+        LABELS "integration;system"
+        TIMEOUT 120)
 endif()
 
 add_executable (test_coordinates.x test_coordinates.f90)
@@ -630,6 +642,13 @@ endforeach()
 add_executable(test_stencil_utils.x test_stencil_utils.f90)
 target_link_libraries(test_stencil_utils.x simple)
 add_test(NAME test_stencil_utils COMMAND test_stencil_utils.x)
+
+add_executable(test_continuous_classifier_scores.x
+    test_continuous_classifier_scores.f90)
+target_link_libraries(test_continuous_classifier_scores.x simple)
+add_test(NAME test_continuous_classifier_scores
+    COMMAND test_continuous_classifier_scores.x)
+set_tests_properties(test_continuous_classifier_scores PROPERTIES LABELS "unit")
 
     add_executable(test_chartmap_metadata.x test_chartmap_metadata.f90)
     target_link_libraries(test_chartmap_metadata.x simple testing_utils)
