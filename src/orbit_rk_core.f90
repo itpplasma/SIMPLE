@@ -25,6 +25,7 @@ module orbit_rk_core
   integer, parameter, public :: MODEL_GC = 0
 
   public :: rk_gauss_residual, rk_gauss_jacobian, rk_gauss_newton, rk_solve
+  public :: rk_lu_factor, rk_lu_solve
 
 contains
 
@@ -217,6 +218,73 @@ contains
       rhs(i) = tmp/A(i,i)
     end do
   end subroutine rk_solve
+
+  ! rk_solve split into factorisation and solve, for chord iterations that
+  ! reuse one Jacobian: the same partial pivoting and elimination order. A
+  ! holds L (unit diagonal, below) and U on return; ipiv the pivot rows.
+  pure subroutine rk_lu_factor(n, A, ipiv, info)
+    !$acc routine seq
+    integer, intent(in) :: n
+    real(dp), intent(inout) :: A(n,n)
+    integer, intent(out) :: ipiv(n), info
+    integer :: i, j, k, p
+    real(dp) :: amax, factor, tmp
+
+    info = 0
+    do k = 1, n
+      p = k
+      amax = abs(A(k,k))
+      do i = k+1, n
+        if (abs(A(i,k)) > amax) then
+          amax = abs(A(i,k))
+          p = i
+        end if
+      end do
+      ipiv(k) = p
+      if (.not. (amax > 0d0)) then
+        info = k
+        return
+      end if
+      if (p /= k) then
+        do j = 1, n
+          tmp = A(k,j); A(k,j) = A(p,j); A(p,j) = tmp
+        end do
+      end if
+      do i = k+1, n
+        factor = A(i,k)/A(k,k)
+        A(i,k) = factor
+        do j = k+1, n
+          A(i,j) = A(i,j) - factor*A(k,j)
+        end do
+      end do
+    end do
+  end subroutine rk_lu_factor
+
+  pure subroutine rk_lu_solve(n, A, ipiv, rhs)
+    !$acc routine seq
+    integer, intent(in) :: n
+    real(dp), intent(in) :: A(n,n)
+    integer, intent(in) :: ipiv(n)
+    real(dp), intent(inout) :: rhs(n)
+    integer :: i, j, k
+    real(dp) :: tmp
+
+    do k = 1, n
+      if (ipiv(k) /= k) then
+        tmp = rhs(k); rhs(k) = rhs(ipiv(k)); rhs(ipiv(k)) = tmp
+      end if
+      do i = k+1, n
+        rhs(i) = rhs(i) - A(i,k)*rhs(k)
+      end do
+    end do
+    do i = n, 1, -1
+      tmp = rhs(i)
+      do j = i+1, n
+        tmp = tmp - A(i,j)*rhs(j)
+      end do
+      rhs(i) = tmp/A(i,i)
+    end do
+  end subroutine rk_lu_solve
 
   ! Device-callable Newton iteration for the Gauss step. Mirrors the
   ! newton_rk_gauss control flow (atol/rtol/tolref, boundary guards, maxit) with
