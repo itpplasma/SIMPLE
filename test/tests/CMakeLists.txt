@@ -414,6 +414,16 @@ endif()
 add_executable (test_collis.x ../../src/test_collis.f90)
 target_link_libraries(test_collis.x simple)
 
+# Explicit high-order integmodes on the 4D canonical chart: energy drift must
+# respond to the tolerance, and the four adaptive methods must agree. Uses the
+# analytic test field, so it needs no VMEC file.
+add_executable(test_explicit_integmodes.x test_explicit_integmodes.f90)
+target_link_libraries(test_explicit_integmodes.x simple)
+add_test(NAME test_explicit_integmodes COMMAND test_explicit_integmodes.x)
+set_tests_properties(test_explicit_integmodes PROPERTIES
+    LABELS "unit"
+    TIMEOUT 300)
+
 add_executable(test_config_reference.x test_config_reference.f90)
 target_link_libraries(test_config_reference.x simple)
 add_test(NAME test_config_reference
@@ -590,6 +600,23 @@ add_executable (test_coordinates.x test_coordinates.f90)
 target_link_libraries(test_coordinates.x simple)
 add_test(NAME test_coordinates COMMAND test_coordinates.x vmec cyl)
 
+add_executable(test_radial_electric_potential.x test_radial_electric_potential.f90)
+target_link_libraries(test_radial_electric_potential.x simple)
+add_test(NAME test_radial_electric_potential COMMAND test_radial_electric_potential.x)
+set_tests_properties(test_radial_electric_potential PROPERTIES LABELS "unit;physics")
+
+add_executable(test_radial_potential_config.x test_radial_potential_config.f90)
+target_link_libraries(test_radial_potential_config.x simple)
+foreach(case valid zero_slope_rk field rk full_orbit gpu)
+    add_test(NAME test_radial_potential_config_${case}
+        COMMAND test_radial_potential_config.x ${case})
+    set_tests_properties(test_radial_potential_config_${case} PROPERTIES LABELS "unit")
+endforeach()
+foreach(case field rk full_orbit gpu)
+    set_tests_properties(test_radial_potential_config_${case} PROPERTIES
+        PASS_REGULAR_EXPRESSION "radial_electric_potential_slope (requires|is not)")
+endforeach()
+
 # Unit tests for refactored modules
 add_executable(test_stencil_utils.x test_stencil_utils.f90)
 target_link_libraries(test_stencil_utils.x simple)
@@ -709,6 +736,18 @@ set_tests_properties(test_continuous_classifier_scores PROPERTIES LABELS "unit")
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "system;python"
         TIMEOUT 1800)
+
+    # The explicit integmodes must notice a marker leaving the plasma. They
+    # hand a whole substep to an adaptive integrator and see nothing between
+    # its endpoints, so without an explicit radius check a marker that crossed
+    # s = 1 was integrated onwards and reported as confined.
+    add_test(NAME test_explicit_loss_detection
+        COMMAND ${BOOZER_CHARTMAP_PYTHON}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_explicit_loss_detection.py)
+    set_tests_properties(test_explicit_loss_detection PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        LABELS "system;python"
+        TIMEOUT 600)
 
     # E2E test: VMEC-Boozer vs chartmap confined fractions
     add_test(NAME test_e2e_boozer_chartmap
