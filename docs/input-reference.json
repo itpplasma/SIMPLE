@@ -4,7 +4,7 @@
   "namelists": {
     "config": {
       "source": "src/params.f90",
-      "source_line": 214,
+      "source_line": 223,
       "variables": [
         {
           "name": "notrace_passing",
@@ -17,7 +17,7 @@
           "default_value": "0",
           "documentation": "Further configuration parameters",
           "source": "src/params.f90",
-          "source_line": 147,
+          "source_line": 156,
           "validation": {
             "min": 0,
             "max": 1
@@ -50,7 +50,7 @@
           "default_value": "100",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 149,
+          "source_line": 158,
           "validation": {
             "min": 1
           }
@@ -66,7 +66,7 @@
           "default_value": "10000",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 149,
+          "source_line": 158,
           "validation": {
             "min": 2
           }
@@ -98,7 +98,7 @@
           "default_value": "1d-1",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 148,
+          "source_line": 157,
           "validation": {
             "positive": true
           }
@@ -114,7 +114,7 @@
           "default_value": "1",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 162,
+          "source_line": 171,
           "validation": {
             "min": 0,
             "max": 2
@@ -187,7 +187,7 @@
           "default_value": "1d0",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 148,
+          "source_line": 157,
           "validation": {
             "positive": true
           }
@@ -203,7 +203,7 @@
           "default_value": "256",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 149,
+          "source_line": 158,
           "validation": {
             "min": 1
           }
@@ -219,7 +219,7 @@
           "default_value": "2",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 149
+          "source_line": 158
         },
         {
           "name": "n_d",
@@ -232,7 +232,7 @@
           "default_value": "4",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 150,
+          "source_line": 159,
           "validation": {
             "positive": true
           }
@@ -807,7 +807,7 @@
           "default_value": "-1d0",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 129
+          "source_line": 138
         },
         {
           "name": "nturns",
@@ -820,7 +820,7 @@
           "default_value": "8",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 131
+          "source_line": 140
         },
         {
           "name": "debug",
@@ -833,7 +833,7 @@
           "default_value": ".False.",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 154
+          "source_line": 163
         },
         {
           "name": "class_plot",
@@ -846,7 +846,7 @@
           "default_value": ".False.",
           "documentation": "<=AAA",
           "source": "src/params.f90",
-          "source_line": 132
+          "source_line": 141
         },
         {
           "name": "cut_in_per",
@@ -859,7 +859,7 @@
           "default_value": "0d0",
           "documentation": "<=AAA",
           "source": "src/params.f90",
-          "source_line": 133,
+          "source_line": 142,
           "validation": {
             "min": 0,
             "max": 1
@@ -876,7 +876,7 @@
           "default_value": ".False.",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 135
+          "source_line": 144
         },
         {
           "name": "vmec_b_scale",
@@ -915,7 +915,7 @@
           "default_value": ".False.",
           "documentation": "Colliding with D-T reactor plasma. TODO: Make configurable",
           "source": "src/params.f90",
-          "source_line": 139
+          "source_line": 148
         },
         {
           "name": "deterministic",
@@ -928,7 +928,7 @@
           "default_value": ".False.",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 144
+          "source_line": 153
         },
         {
           "name": "old_axis_healing",
@@ -1041,7 +1041,7 @@
           "default_value": "2.0d0",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 140
+          "source_line": 149
         },
         {
           "name": "am2",
@@ -1054,7 +1054,7 @@
           "default_value": "3.0d0",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 140
+          "source_line": 149
         },
         {
           "name": "z1",
@@ -1067,7 +1067,7 @@
           "default_value": "1.0d0",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 140
+          "source_line": 149
         },
         {
           "name": "z2",
@@ -1080,7 +1080,7 @@
           "default_value": "1.0d0",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 140
+          "source_line": 149
         },
         {
           "name": "densi1",
@@ -1093,7 +1093,7 @@
           "default_value": "0.5d14",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 140
+          "source_line": 149
         },
         {
           "name": "densi2",
@@ -1106,7 +1106,7 @@
           "default_value": "0.5d14",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 140
+          "source_line": 149
         },
         {
           "name": "tempi1",
@@ -1119,7 +1119,7 @@
           "default_value": "1.0d4",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 140
+          "source_line": 149
         },
         {
           "name": "tempi2",
@@ -1132,7 +1132,7 @@
           "default_value": "1.0d4",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 140
+          "source_line": 149
         },
         {
           "name": "tempe",
@@ -1145,7 +1145,7 @@
           "default_value": "1.0d4",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 140
+          "source_line": 149
         },
         {
           "name": "batch_size",
@@ -1158,7 +1158,7 @@
           "default_value": "2000000000",
           "documentation": "Initialize large so batch mode is not default",
           "source": "src/params.f90",
-          "source_line": 159,
+          "source_line": 168,
           "validation": {
             "min": 1
           }
@@ -1174,7 +1174,7 @@
           "default_value": "42",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 161
+          "source_line": 170
         },
         {
           "name": "particle_index_offset",
@@ -1187,7 +1187,7 @@
           "default_value": "0",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 160
+          "source_line": 169
         },
         {
           "name": "reuse_batch",
@@ -1200,7 +1200,7 @@
           "default_value": ".False.",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 163
+          "source_line": 172
         },
         {
           "name": "field_input",
@@ -1213,7 +1213,7 @@
           "default_value": "''",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 171
+          "source_line": 180
         },
         {
           "name": "coord_input",
@@ -1226,7 +1226,7 @@
           "default_value": "''",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 172
+          "source_line": 181
         },
         {
           "name": "wall_input",
@@ -1239,7 +1239,7 @@
           "default_value": "''",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 173
+          "source_line": 182
         },
         {
           "name": "wall_units",
@@ -1252,7 +1252,7 @@
           "default_value": "'m'",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 174,
+          "source_line": 183,
           "validation": {
             "choices": [
               "m",
@@ -1271,7 +1271,7 @@
           "default_value": "'auto'",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 178,
+          "source_line": 187,
           "validation": {
             "choices": [
               "auto",
@@ -1292,7 +1292,7 @@
           "default_value": "-1000",
           "documentation": "Sentinel: -1000 means user did not set it",
           "source": "src/params.f90",
-          "source_line": 180
+          "source_line": 189
         },
         {
           "name": "crossing_level",
@@ -1305,7 +1305,7 @@
           "default_value": "3",
           "documentation": "SPECTRE interface treatment: only full orbit (3) is supported.",
           "source": "src/params.f90",
-          "source_line": 182,
+          "source_line": 191,
           "validation": {
             "choices": [
               3
@@ -1323,7 +1323,7 @@
           "default_value": "1.5_dp",
           "documentation": "Full orbit near SPECTRE interfaces: entry distance in radial gyroradii and the relative tolerance of RK45 on the sharp per-volume field. 1.5 keeps the switch's p_zeta invariant as at 3 (entry 1 breaks it) at about half the FO time (concept/spectre_loss_study/results/fo-residence).",
           "source": "src/params.f90",
-          "source_line": 187,
+          "source_line": 196,
           "validation": {
             "positive": true
           }
@@ -1339,7 +1339,7 @@
           "default_value": "1.0e-9_dp",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 188,
+          "source_line": 197,
           "validation": {
             "positive": true
           }
@@ -1359,7 +1359,7 @@
           "default_value": "(/32, 64, 32/)",
           "documentation": "Per-volume FO spline points: rho, theta, zeta per field period.",
           "source": "src/params.f90",
-          "source_line": 190
+          "source_line": 199
         },
         {
           "name": "spectre_sbeg_is_toroidal_flux",
@@ -1372,7 +1372,7 @@
           "default_value": ".false.",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 191
+          "source_line": 200
         },
         {
           "name": "spectre_ncon_r",
@@ -1385,7 +1385,7 @@
           "default_value": "48",
           "documentation": "SPECTRE per-volume Meiss construction grid (n_r, n_th, n_phi). Each volume allocates rank-3 arrays plus batch splines of this size, so the total peak memory scales as Mvol*n_r*n_th*n_phi. spectre_ncon_phi = -1 means automatic: 32 for fields with toroidal harmonics and a minimal phi grid for axisymmetric fields (all n = 0), the dominant memory saver for tokamak cases. A positive value forces that phi count verbatim, bypassing the axisymmetric clamp.",
           "source": "src/params.f90",
-          "source_line": 200,
+          "source_line": 209,
           "validation": {
             "min": 1
           }
@@ -1401,7 +1401,7 @@
           "default_value": "48",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 201,
+          "source_line": 210,
           "validation": {
             "min": 1
           }
@@ -1417,7 +1417,7 @@
           "default_value": "-1",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 202
+          "source_line": 211
         },
         {
           "name": "spectre_ncon_order",
@@ -1430,7 +1430,7 @@
           "default_value": "5",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 203,
+          "source_line": 212,
           "validation": {
             "min": 1
           }
@@ -1446,7 +1446,7 @@
           "default_value": "1000000",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 204,
+          "source_line": 213,
           "validation": {
             "min": 1
           }
@@ -1462,7 +1462,7 @@
           "default_value": "1.0e-2_dp",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 205,
+          "source_line": 214,
           "validation": {
             "positive": true
           }
@@ -1478,7 +1478,7 @@
           "default_value": ".False.",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 155
+          "source_line": 164
         },
         {
           "name": "output_error",
@@ -1549,7 +1549,7 @@
           "default_value": ".False.",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 156
+          "source_line": 165
         },
         {
           "name": "local",
@@ -1562,7 +1562,7 @@
           "default_value": ".true.",
           "documentation": "Removed &config keys. They are still read so that old input files run; a value other than the historical default prints a warning.",
           "source": "src/params.f90",
-          "source_line": 209
+          "source_line": 218
         },
         {
           "name": "loopskip",
@@ -1575,7 +1575,7 @@
           "default_value": "0",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 210
+          "source_line": 219
         },
         {
           "name": "bmod_ref",
@@ -1588,7 +1588,7 @@
           "default_value": "5.0d4",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 211
+          "source_line": 220
         },
         {
           "name": "macrostep_log_ratio",
@@ -1601,7 +1601,7 @@
           "default_value": "1.0d3",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 212
+          "source_line": 221
         }
       ]
     },
