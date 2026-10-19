@@ -2064,74 +2064,45 @@ end subroutine advance_symplectic_with_boundary
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-    pure function hermite_endpoint(s, c, value, rate) result(value_end)
-        ! Extrapolate a smooth function of the Gauss collocation polynomial
-        ! u(tau) to the step end tau = 1 from its values and tau-derivatives at
-        ! the s stages. By collocation u'(c_k) = f(u(c_k)), so the stage rates
-        ! follow from the stage field caches, and the 2s Hermite conditions give
-        ! the endpoint to O(dt**(2s)) per step, the order of the method, with no
-        ! field evaluation.
-        integer, intent(in) :: s
-        real(dp), intent(in) :: c(s), value(s), rate(s)
-        real(dp) :: value_end
+    pure subroutine hermite_endpoint(s, nq, c, value, rate, value_end)
+        ! Extrapolate smooth functions of the Gauss collocation polynomial u(tau)
+        ! to the step end tau = 1 from their values and tau-derivatives at the s
+        ! stages. By collocation u'(c_k) = f(u(c_k)), so the stage rates follow
+        ! from the stage field caches, and the 2s Hermite conditions give the
+        ! endpoint to O(dt**(2s)) per step, the order of the method, with no
+        ! field evaluation. Columns of value and rate are the nq quantities.
+        integer, intent(in) :: s, nq
+        real(dp), intent(in) :: c(s), value(s, nq), rate(s, nq)
+        real(dp), intent(out) :: value_end(nq)
         real(dp) :: node(2*s), table(2*s)
-        integer :: i, j, n
+        integer :: i, j, n, q
 
         n = 2*s
         do i = 1, s
             node(2*i - 1) = c(i)
             node(2*i) = c(i)
-            table(2*i - 1) = value(i)
-            table(2*i) = value(i)
         end do
-        ! Divided differences in place; repeated nodes take the derivative.
-        do j = 1, n - 1
-            do i = n, j + 1, -1
-                if (j == 1 .and. mod(i, 2) == 0) then
-                    table(i) = rate(i/2)
-                else
-                    table(i) = (table(i) - table(i - 1))/(node(i) - node(i - j))
-                end if
+        do q = 1, nq
+            do i = 1, s
+                table(2*i - 1) = value(i, q)
+                table(2*i) = value(i, q)
+            end do
+            ! Divided differences in place; repeated nodes take the derivative.
+            do j = 1, n - 1
+                do i = n, j + 1, -1
+                    if (j == 1 .and. mod(i, 2) == 0) then
+                        table(i) = rate(i/2, q)
+                    else
+                        table(i) = (table(i) - table(i - 1))/(node(i) - node(i - j))
+                    end if
+                end do
+            end do
+            value_end(q) = table(n)
+            do i = n - 1, 1, -1
+                value_end(q) = table(i) + (1d0 - node(i))*value_end(q)
             end do
         end do
-        value_end = table(n)
-        do i = n - 1, 1, -1
-            value_end = table(i) + (1d0 - node(i))*value_end
-        end do
-    end function hermite_endpoint
-
-    subroutine extrapolate_endpoint_field(s, c, fs, radius_rate, angle_rate, f)
-        ! Callers read f%vpar and f%Bmod after every step, and collisions rebuild
-        ! p_theta from the cached potentials. Extrapolate the cached field values
-        ! to the endpoint like the radius; vpar and H then follow from p_phi.
-        ! Derivatives stay those of the last stage, as before; the next step
-        ! evaluates its own.
-        integer, intent(in) :: s
-        real(dp), intent(in) :: c(s), radius_rate(s), angle_rate(2, s)
-        type(field_can_t), intent(in) :: fs(s)
-        type(field_can_t), intent(inout) :: f
-        real(dp) :: rates(s)
-
-        rates = tau_rates(fs%dAth(1), fs%dAth(2), fs%dAth(3))
-        f%Ath = hermite_endpoint(s, c, fs%Ath, rates)
-        rates = tau_rates(fs%dAph(1), fs%dAph(2), fs%dAph(3))
-        f%Aph = hermite_endpoint(s, c, fs%Aph, rates)
-        rates = tau_rates(fs%dhth(1), fs%dhth(2), fs%dhth(3))
-        f%hth = hermite_endpoint(s, c, fs%hth, rates)
-        rates = tau_rates(fs%dhph(1), fs%dhph(2), fs%dhph(3))
-        f%hph = hermite_endpoint(s, c, fs%hph, rates)
-        rates = tau_rates(fs%dBmod(1), fs%dBmod(2), fs%dBmod(3))
-        f%Bmod = hermite_endpoint(s, c, fs%Bmod, rates)
-
-    contains
-
-        pure function tau_rates(dr, dth, dph) result(rate)
-            real(dp), intent(in) :: dr(s), dth(s), dph(s)
-            real(dp) :: rate(s)
-
-            rate = dr*radius_rate + dth*angle_rate(1, :) + dph*angle_rate(2, :)
-        end function tau_rates
-    end subroutine extrapolate_endpoint_field
+    end subroutine hermite_endpoint
 
 recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
   !
@@ -2150,8 +2121,8 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
   type(field_can_t) :: accepted_field
   type(symplectic_integrator_t) :: accepted_integrator
   real(dp) :: a(s,s), b(s), c(s), Hprime(s), dz(4*s)
-        real(dp) :: radius_rate(s), angle_rate(2, s), radius_end, pphi_rate
-        real(dp) :: canonical_pth
+        real(dp) :: stage_value(s, 6), stage_rate(s, 6), endpoint_value(6)
+        real(dp) :: radius_end, r_rate, theta_rate, phi_rate, pphi_rate, canonical_pth
 
   do k = 1,s
     fs(k) = f
@@ -2279,17 +2250,31 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
             ! field cache by Hermite extrapolation of the stages. The error does not
             ! accumulate: each step solves its stage radii from the constraint
             ! again, and the endpoint only seeds the next Newton guess.
-            ! Stage rates in tau = t/dt. dr/dt follows from d/dt p_theta(r, theta,
-            ! phi, p_phi) = dp_theta/dt along the stage; the theta terms cancel
-            ! against p_theta's own rate.
+            ! Stage values and rates in tau = t/dt of r and of the cached field
+            ! values callers read after the step (vpar and H follow from p_phi).
+            ! dr/dt follows from d/dt p_theta(r, theta, phi, p_phi) = dp_theta/dt
+            ! along the stage; the theta terms cancel against p_theta's own rate.
             do k = 1, s
-                angle_rate(1, k) = si%dt*Hprime(k)
-                angle_rate(2, k) = si%dt*(fs(k)%vpar - Hprime(k)*fs(k)%hth)/fs(k)%hph
+                theta_rate = si%dt*Hprime(k)
+                phi_rate = si%dt*(fs(k)%vpar - Hprime(k)*fs(k)%hth)/fs(k)%hph
                 pphi_rate = -si%dt*(fs(k)%dH(3) - Hprime(k)*fs(k)%dpth(3))
-                radius_rate(k) = (-si%dt*fs(k)%dH(2) - fs(k)%dpth(3)*angle_rate(2, k) &
-                                  - fs(k)%hth/fs(k)%hph*pphi_rate)/fs(k)%dpth(1)
+                r_rate = (-si%dt*fs(k)%dH(2) - fs(k)%dpth(3)*phi_rate &
+                          - fs(k)%hth/fs(k)%hph*pphi_rate)/fs(k)%dpth(1)
+                stage_value(k, 1) = x(4*k - 3)
+                stage_value(k, 2) = fs(k)%Ath
+                stage_value(k, 3) = fs(k)%Aph
+                stage_value(k, 4) = fs(k)%hth
+                stage_value(k, 5) = fs(k)%hph
+                stage_value(k, 6) = fs(k)%Bmod
+                stage_rate(k, 1) = r_rate
+                stage_rate(k, 2) = chain_rate(fs(k)%dAth)
+                stage_rate(k, 3) = chain_rate(fs(k)%dAph)
+                stage_rate(k, 4) = chain_rate(fs(k)%dhth)
+                stage_rate(k, 5) = chain_rate(fs(k)%dhph)
+                stage_rate(k, 6) = chain_rate(fs(k)%dBmod)
             end do
-            radius_end = hermite_endpoint(s, c, x(1:4*s:4), radius_rate)
+            call hermite_endpoint(s, 6, c, stage_value, stage_rate, endpoint_value)
+            radius_end = endpoint_value(1)
             if (.not. finite_newton_iterate([radius_end])) then
                 si = accepted_integrator
                 f = accepted_field
@@ -2310,13 +2295,27 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
             if (radius_end >= 0d0) then
                 si%z(1) = radius_end
                 canonical_pth = f%pth
-                call extrapolate_endpoint_field(s, c, fs, radius_rate, angle_rate, f)
+                f%Ath = endpoint_value(2)
+                f%Aph = endpoint_value(3)
+                f%hth = endpoint_value(4)
+                f%hph = endpoint_value(5)
+                f%Bmod = endpoint_value(6)
                 call get_val(f, si%z(4))
                 f%pth = canonical_pth
             end if
 
     ktau = ktau+1
   enddo
+
+    contains
+
+        pure real(dp) function chain_rate(gradient)
+            ! d/dtau of a field value along the stage from its (r, theta, phi) gradient.
+            real(dp), intent(in) :: gradient(3)
+
+            chain_rate = gradient(1)*r_rate + gradient(2)*theta_rate &
+                         + gradient(3)*phi_rate
+        end function chain_rate
 
 end subroutine orbit_timestep_sympl_rk_gauss
 
