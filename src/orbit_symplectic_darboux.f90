@@ -29,8 +29,8 @@ module orbit_symplectic_darboux
     use field_can_test, only: evaluate_test_regular
     use boozer_regular, only: regular_field_t
     use orbit_symplectic_base, only: symplectic_integrator_t, sympl_rmax, &
-        coeff_rk_gauss, SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN, &
-        SYMPLECTIC_STEP_MAXITER, SYMPLECTIC_STEP_LINEAR_SOLVE
+                   coeff_rk_gauss, SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN, &
+                                   SYMPLECTIC_STEP_MAXITER, SYMPLECTIC_STEP_LINEAR_SOLVE
     use orbit_rk_core, only: rk_solve, rk_lu_factor, rk_lu_solve
     use finite_check, only: is_finite
 
@@ -190,7 +190,7 @@ contains
         real(dp), intent(in) :: u(2), phi, pphi, sigma, mu, ro0
         type(regular_field_t), intent(inout) :: rf
         real(dp), intent(out) :: kappa, pth, ham, vpar, chart(2), rhs(4), &
-            gu(2, 2), udot(2)
+                                 gu(2, 2), udot(2)
         real(dp) :: qa(10), qh(10)
 
         call darboux_field_point(u, phi, 1, rf, qa, qh)
@@ -204,7 +204,7 @@ contains
         type(regular_field_t), intent(in) :: rf
         real(dp), intent(in) :: qa(10), qh(10)
         real(dp), intent(out) :: kappa, pth, ham, vpar, chart(2), rhs(4), &
-            gu(2, 2), udot(2)
+                                 gu(2, 2), udot(2)
         real(dp) :: ue(2)
 
         call field_point(u, ue)
@@ -220,7 +220,7 @@ contains
         !> their derivatives with respect to u and (phi, p_phi).
         real(dp), intent(in) :: u(2), phi, pphi, sigma, mu, ro0
         real(dp), intent(out) :: chart(2), rhs(4), fu(4, 2), fw(4, 2), gu(2, 2), &
-            gw(2, 2)
+                                 gw(2, 2)
         type(regular_field_t) :: rf
         real(dp) :: qa(10), qh(10), ue(2)
 
@@ -260,7 +260,7 @@ contains
         integer, intent(out) :: status
         type(regular_field_t) :: rf
         real(dp) :: u(2), rho, kappa, pth, ham, vpar, chart(2), rhs(4), gu(2, 2), &
-            udot(2), qa(10), qh(10)
+                    udot(2), qa(10), qh(10)
 
         status = SYMPLECTIC_STEP_OK
         rho = sqrt(max(s_from_radius(si%z(1)), 0.0_dp))
@@ -302,7 +302,7 @@ contains
         real(dp), intent(in) :: w0(4), u0(2), rhs0(4), udot0(2), sigma, mu, ro0
         real(dp), intent(in) :: h, rtol, xy_ref
         real(dp), intent(out) :: w1(4), u1(2), rhs1(4), udot1(2), kappa1, ham1, &
-            vpar1
+                                 vpar1
         type(regular_field_t), intent(inout) :: rf
         integer, intent(out) :: status
 

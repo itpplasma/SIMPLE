@@ -32,17 +32,17 @@
 program gen_darboux_chart
     use fortsym_arena, only: arena_t
     use fortsym_expr, only: expr_t, sym, func, sqrt, operator(+), operator(-), &
-        operator(*), operator(/), operator(**)
+                            operator(*), operator(/), operator(**)
     use fortsym_diff, only: diff
     use fortsym_kernel, only: kernel_binding_t
     use simple_gen_support, only: leaf_writer_t, fortsym_revision, binding, &
-        output_t, out_scalar, out_array
+                                  output_t, out_scalar, out_array
     implicit none
 
     character(2), parameter :: heads(5) = [character(2) :: 'QA', 'QH', 'AP', &
-        'HP', 'BM']
+                                                                             'HP', 'BM']
     character(2), parameter :: names(5) = [character(2) :: 'qa', 'qh', 'ap', &
-        'hp', 'bm']
+                                                                             'hp', 'bm']
     type(leaf_writer_t) :: w
     type(arena_t), target :: arena
     type(expr_t) :: x, y, p, pp, ro0, mu, sg
@@ -144,7 +144,7 @@ contains
         integer, intent(in) :: n
         type(kernel_binding_t), allocatable :: b(:)
         integer, parameter :: idx(2, 6) = reshape([1, 1, 1, 2, 1, 3, 2, 2, &
-            2, 3, 3, 3], [2, 6])
+                                                   2, 3, 3, 3], [2, 6])
         integer :: j
 
         allocate (b(n))
@@ -209,8 +209,8 @@ contains
 
     subroutine emit_point()
         character(8), parameter :: args(11) = [character(8) :: 'x', 'y', &
-            'pphi', 'ro0', 'mu', 'sigma', 'qa(4)', 'qh(4)', 'ap(4)', 'hp(4)', &
-            'bm(4)']
+                     'pphi', 'ro0', 'mu', 'sigma', 'qa(4)', 'qh(4)', 'ap(4)', 'hp(4)', &
+                                                                                'bm(4)']
         type(expr_t) :: roots(16)
 
         roots = [kap, (x**2 + y**2)*(qh*vpar + qa/ro0), ham, vpar, chart, rhs, &
@@ -223,8 +223,8 @@ contains
 
     subroutine emit_stage()
         character(8), parameter :: args(11) = [character(8) :: 'x', 'y', &
-            'pphi', 'ro0', 'mu', 'sigma', 'qa(10)', 'qh(10)', 'ap(10)', &
-            'hp(10)', 'bm(10)']
+                           'pphi', 'ro0', 'mu', 'sigma', 'qa(10)', 'qh(10)', 'ap(10)', &
+                                                                     'hp(10)', 'bm(10)']
         type(expr_t) :: roots(30)
         integer :: i
 

@@ -546,7 +546,7 @@ contains
         use params, only: canonical_chart
         use field_can_mod, only: set_regular_axis_field
         use orbit_symplectic_darboux, only: darboux_configure, &
-            DARBOUX_FIELD_NONE, DARBOUX_FIELD_TEST, DARBOUX_FIELD_BOOZER
+                            DARBOUX_FIELD_NONE, DARBOUX_FIELD_TEST, DARBOUX_FIELD_BOOZER
 
         character(*), intent(in) :: vmec_file
         type(tracer_t), intent(inout) :: self
