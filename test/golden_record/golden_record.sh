@@ -27,7 +27,7 @@ fi
 RUN_DIR_REF="$GOLDEN_RECORD_BASE_DIR/runs/run_$REF_VER"
 RUN_DIR_CUR="$GOLDEN_RECORD_BASE_DIR/runs/run_$CUR_VER"
 TEST_DATA_DIR="$GOLDEN_RECORD_BASE_DIR/test_data"
-GOLDEN_LIBNEO_REF=${GOLDEN_LIBNEO_REF:-66ef89c2b59420bb8fbd14aa0838d5e88082bef8}
+GOLDEN_LIBNEO_REF=${GOLDEN_LIBNEO_REF:-924ba7735366d95c2c6855bf00bd0e46b8c05cf2}
 
 # Find test cases - they should be copied by CMake to the golden_record directory
 if [ -n "$SINGLE_CASE" ]; then
