@@ -613,7 +613,9 @@ contains
             eye(i, i) = 1.0_dp
         end do
         ! Only f(z0) and H(z0) are used here, so the Hessian is not formed.
-        call start_eval
+        ! Splitting this evaluation over threads costs more than it saves.
+        call gauss2_eval(z0, width, ro0, energy, f(:, 1), df(:, :, 1), &
+                         e0, length, gmin, radial_ref, first_order=.true.)
         if (present(start_energy)) start_energy = energy
         ! Solve for stage increments: subtracting two large absolute momenta
         ! needlessly adds a cancellation floor to the Newton residual.
@@ -658,25 +660,6 @@ contains
         tangent = eye + 0.5_dp*h*(matmul(df(:, :, 1), rhs(1:6, :)) &
             + matmul(df(:, :, 2), rhs(7:12, :)))
     contains
-        subroutine start_eval
-            !> Metric and potential jets are independent; the kernel follows.
-            !> Same team size as stage_evals: libgomp ends surplus threads when a
-            !> team shrinks and must create them again for the next larger team.
-            real(dp) :: aj(3, 10), gj(6, 10)
-            integer :: task
-            !$omp parallel do num_threads(stage_threads())
-            do task = 1, 2
-                if (task == 1) then
-                    call metric_jets(z0(1:3), width, gj, .true.)
-                else
-                    call potential_jets(z0(1:3), width, ro0, aj, .true.)
-                end if
-            end do
-            !$omp end parallel do
-            call jet_eval(z0, aj, gj, energy, f(:, 1), df(:, :, 1), &
-                          e0, length, gmin, radial_ref)
-        end subroutine start_eval
-
         subroutine stage_evals(hessian)
             !> Metric and potential jets of both Gauss stages are four independent
             !> tasks, then the two stage kernels. Each task writes only its own
@@ -710,7 +693,7 @@ contains
                     end do
                 end if
             end do
-            !$omp end do
+            !$omp end do nowait
             !$omp end parallel
             if (.not. hessian) return
             do k = 1, 12
