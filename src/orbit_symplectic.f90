@@ -20,7 +20,7 @@ use orbit_symplectic_euler1, only: sympl_euler1_residual, sympl_euler1_jacobian,
   sympl_euler1_newton_iter, sympl_euler1_extrapolate_field, &
   sympl_euler1_advance_angles
 use orbit_rk_core, only: rk_gauss_residual, rk_gauss_jacobian, MODEL_GC
-use orbit_symplectic_darboux, only: darboux_enabled, orbit_timestep_sympl_darboux
+    use orbit_symplectic_darboux, only: darboux_enabled, orbit_timestep_sympl_darboux
 use vector_potentail_mod, only: torflux
 use lapack_interfaces, only: dgesv
 use diag_counters, only: count_event, EVT_NEWTON1_MAXIT, EVT_NEWTON2_MAXIT, &
@@ -158,10 +158,10 @@ recursive subroutine advance_retry_interval(si, f, stepper, interval, depth, &
   si = initial_integrator
   f = initial_field
   si%dt = interval
-  ! The Cartesian chart has no recovery path: its steps either converge or
-  ! fail.
-  recoverable = (status == SYMPLECTIC_STEP_MAXITER .or. &
-    status == SYMPLECTIC_STEP_LINEAR_SOLVE) .and. .not. darboux_enabled()
+        ! The Cartesian chart has no recovery path: its steps either converge or
+        ! fail.
+        recoverable = (status == SYMPLECTIC_STEP_MAXITER .or. &
+                   status == SYMPLECTIC_STEP_LINEAR_SOLVE) .and. .not. darboux_enabled()
   if (.not. symplectic_newton_warning_mode .or. .not. recoverable .or. &
       depth >= max_retry_depth) then
     if (recoverable .and. depth >= max_retry_depth) &
@@ -280,19 +280,19 @@ recursive subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
       print *, 'invalid mode for orbit_timestep_sympl: ', mode_init
       error stop
   end select
-  si%chart_valid = .false.
-  if (darboux_enabled()) then
-    ! Cartesian canonical chart: midpoint and Gauss1-4 step in the global
-    ! Darboux chart (orbit_symplectic_darboux), configured with its stages.
-    select case (mode_init)
-    case (MIDPOINT, GAUSS1, GAUSS2, GAUSS3, GAUSS4)
-      raw_timestep_sympl => orbit_timestep_sympl_darboux
-    case (RK45)
-      continue
-    case default
-      error stop "canonical_chart = 'cartesian' requires integmode 3-7"
-    end select
-  end if
+        si%chart_valid = .false.
+        if (darboux_enabled()) then
+            ! Cartesian canonical chart: midpoint and Gauss1-4 step in the global
+            ! Darboux chart (orbit_symplectic_darboux), configured with its stages.
+            select case (mode_init)
+            case (MIDPOINT, GAUSS1, GAUSS2, GAUSS3, GAUSS4)
+                raw_timestep_sympl => orbit_timestep_sympl_darboux
+            case (RK45)
+                continue
+            case default
+                error stop "canonical_chart = 'cartesian' requires integmode 3-7"
+            end select
+        end if
   if (mode_init /= RK45 .and. sympl_rmax <= 1d0) then
     orbit_timestep_sympl => orbit_timestep_sympl_with_boundary
   else if (mode_init /= RK45) then

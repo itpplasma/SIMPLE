@@ -14,7 +14,7 @@ module simple_gen_support
     private
     include 'simple_fortsym_revision.inc'
     public :: fortsym_revision, leaf_writer_t, binding, output_t, out_scalar, &
-        out_array
+              out_array
 
     !> One declared output argument: a scalar, or an array whose elements
     !> are filled from consecutive roots in column-major order.
