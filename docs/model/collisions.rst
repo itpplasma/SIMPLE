@@ -87,8 +87,16 @@ background-ion density under the root:
 :math:`E_\alpha/T_a` on 101 equidistant points in :math:`[0,1]`, with floors
 :math:`T_a \ge 1` eV and :math:`n_a \ge 10^6` m\ :sup:`-3` (both ion
 densities zero is vacuum). Each step interpolates linearly at the clamped
-integration radius :math:`r`, which is the normalised toroidal flux
-:math:`s` for ``integ_coords`` 0 and 2 only.
+normalised toroidal flux :math:`s` of the marker, which ``profile_s``
+(``src/profile_radius.f90``) computes from the tracing state:
+:math:`z_1` itself for ``integ_coords`` -1, 0, 1 and 2; for 3 and 4 the
+radius of the source field after ``integ_to_ref``; for 5 the reference
+radius; for 6 the enclosed toroidal flux of the SPECTRE chart
+:math:`\rho_g`, normalised to ``tflux(Mvol)``. A ``rho_tor`` chartmap
+radius gives :math:`s = \rho^2`, and ``vmec_extended``/``vmec_to_wall``
+charts give :math:`s = (\rho/\rho_\mathrm{lcfs})^2`. Radii without
+toroidal-flux meaning (geometric or poloidal chartmaps) are accepted only
+for radially uniform ``&profiles``.
 
 Discrete step
 -------------

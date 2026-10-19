@@ -13,10 +13,11 @@ module simple_api
         times_lost, trap_par, perp_inv, iclass, class_passing, class_lost, &
         ntimstep, bmod00, bmin, bmax, reallocate_arrays, reset_config, &
         finalize_config, isw_field_type, integ_coords, field_input, config
-    use simple_profiles, only: read_profiles, reset_profiles
+    use simple_profiles, only: read_profiles, reset_profiles, set_profile_table
     use magfie_sub, only: TEST, CANFLUX, BOOZER
     use field_boozer_chartmap, only: is_boozer_chartmap
     use field_can_mod, only: integ_to_ref
+    use simple_main, only: validate_gpu_production_config
     use simple_main, only: validate_orbit_model_config, init_run, &
         init_sampling_field, sample_start, init_tracing_field, init_counters, &
         trace_parallel, classify_parallel, trace_orbit, write_output, &
@@ -28,21 +29,129 @@ module simple_api
     private
 
     public :: simple_reset_config, simple_read_config, simple_set_config, &
-        simple_init, &
-        simple_sample, simple_sample_surface, simple_sample_volume, &
-        simple_set_start, simple_trace, simple_classify, simple_get_results, &
-        simple_get_classification, simple_write_output, simple_trace_orbit, &
-        simple_orbit_frequencies, simple_invariants_from_state, &
-        simple_states_from_invariants, simple_potato_invariants, &
-        simple_trace_to_cut
+              simple_init, &
+              simple_sample, simple_sample_surface, simple_sample_volume, &
+              simple_set_start, simple_trace, simple_classify, simple_get_results, &
+              simple_get_classification, simple_write_output, simple_trace_orbit, &
+              simple_orbit_frequencies, simple_invariants_from_state, &
+              simple_states_from_invariants, simple_potato_invariants, &
+              simple_trace_to_cut, simple_reference_info, simple_wall_supported, &
+              simple_cylindrical_to_reference, simple_reference_to_cylindrical, &
+              simple_set_profile_table
 
     integer, parameter :: FIELD_NONE = 0, FIELD_SAMPLING = 1, FIELD_TRACING = 2
 
     type(tracer_t), save :: tracer
     integer, save :: active_field = FIELD_NONE
     real(dp), save :: sampling_surface = -1.0_dp
+    !> reallocate_arrays resets the starting-line arrays (xstart, volstart) that
+    !> init_starting_surf fills, so they must be integrated again before sampling.
+    logical, save :: starting_line_stale = .true.
 
 contains
+
+    logical function simple_wall_supported()
+        use stl_wall_intersection, only: stl_wall_available
+
+        simple_wall_supported = stl_wall_available
+    end function simple_wall_supported
+
+    subroutine simple_set_profile_table(n, table, status)
+        integer, intent(in) :: n
+        real(dp), intent(in) :: table(6, n)
+        integer, intent(out) :: status
+
+        call set_profile_table(n, table, status)
+    end subroutine simple_set_profile_table
+
+    !> Physical reference-coordinate metadata: lengths to metres, radial kind
+    !> 1 = VMEC s, 2 = chart rho. Normalized TEST and SPECTRE are unsupported.
+    subroutine simple_reference_info(length_to_m, radial_kind, status)
+        use reference_coordinates, only: ref_coords
+        use libneo_coordinates, only: chartmap_coordinate_system_t
+        use simple_main, only: chartmap_cart_scale_to_m
+        use magfie_sub, only: SPECTRE
+
+        real(dp), intent(out) :: length_to_m
+        integer, intent(out) :: radial_kind, status
+
+        length_to_m = 0.01_dp
+        radial_kind = 1
+        status = 1
+        if (isw_field_type == TEST .or. isw_field_type == SPECTRE) return
+        if (.not. allocated(ref_coords)) return
+        select type (cs => ref_coords)
+        class is (chartmap_coordinate_system_t)
+            length_to_m = chartmap_cart_scale_to_m
+            if (length_to_m <= 0.0_dp) return
+            radial_kind = 2
+        class default
+            continue
+        end select
+        status = 0
+    end subroutine simple_reference_info
+
+    !> Convert physical (R [m], phi [rad], Z [m]) to native reference coordinates.
+    !> Return one inverse status per point; invalid results are NaN.
+    subroutine simple_cylindrical_to_reference(n, cylindrical, reference, status)
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_value, &
+                                                                          ieee_quiet_nan
+        use reference_coordinates, only: ref_coords
+
+        integer, intent(in) :: n
+        real(dp), intent(in) :: cylindrical(3, n)
+        real(dp), intent(out) :: reference(3, n)
+        integer, intent(out) :: status(n)
+        real(dp) :: scale, point(3), result(3)
+        integer :: i, radial_kind, info_status
+
+        reference = ieee_value(0.0_dp, ieee_quiet_nan)
+        status = -1
+        call simple_reference_info(scale, radial_kind, info_status)
+        if (info_status /= 0) return
+        do i = 1, n
+            if (.not. all(ieee_is_finite(cylindrical(:, i)))) cycle
+            if (cylindrical(1, i) <= 0.0_dp) cycle
+            point = cylindrical(:, i)
+            point(1) = point(1)/scale
+            point(3) = point(3)/scale
+            call ref_coords%from_cyl(point, result, status(i))
+            if (status(i) /= 0) cycle
+            if (.not. all(ieee_is_finite(result))) then
+                status(i) = -1
+                cycle
+            end if
+            reference(:, i) = result
+        end do
+    end subroutine simple_cylindrical_to_reference
+
+    !> Convert native reference coordinates to physical (R [m], phi [rad], Z [m]).
+    subroutine simple_reference_to_cylindrical(n, reference, cylindrical, status)
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_value, &
+                                                                          ieee_quiet_nan
+        use reference_coordinates, only: ref_coords
+
+        integer, intent(in) :: n
+        real(dp), intent(in) :: reference(3, n)
+        real(dp), intent(out) :: cylindrical(3, n)
+        integer, intent(out) :: status(n)
+        real(dp) :: scale, point(3)
+        integer :: i, radial_kind, info_status
+
+        cylindrical = ieee_value(0.0_dp, ieee_quiet_nan)
+        status = -1
+        call simple_reference_info(scale, radial_kind, info_status)
+        if (info_status /= 0) return
+        do i = 1, n
+            if (.not. all(ieee_is_finite(reference(:, i)))) cycle
+            call ref_coords%evaluate_cyl(reference(:, i), point)
+            if (.not. all(ieee_is_finite(point))) cycle
+            point(1) = point(1)*scale
+            point(3) = point(3)*scale
+            cylindrical(:, i) = point
+            status(i) = 0
+        end do
+    end subroutine simple_reference_to_cylindrical
 
     !> Restore all &config and &profiles values to their compiled defaults.
     subroutine simple_reset_config()
@@ -96,8 +205,10 @@ contains
             end if
         end if
         call validate_orbit_model_config
+        call validate_gpu_production_config
         call init_run(tracer)
         call init_sampling_field
+        starting_line_stale = .false.
         active_field = FIELD_SAMPLING
         sampling_surface = sbeg(1)
     end subroutine simple_init
@@ -108,7 +219,7 @@ contains
         real(dp), intent(out) :: z(5, n)
 
         call allocate_particles(n)
-        call use_sampling_field
+        call use_sampling_field(needs_starting_line=.true.)
         call sample_start
         z = zstart(1:5, 1:n)
     end subroutine simple_sample
@@ -294,6 +405,7 @@ contains
 
         ntestpart = n
         call reallocate_arrays
+        starting_line_stale = .true.
     end subroutine allocate_particles
 
     subroutine set_start_surface(s)
@@ -310,14 +422,22 @@ contains
         end if
     end subroutine set_start_surface
 
-    subroutine use_sampling_field
+    subroutine use_sampling_field(needs_starting_line)
         ! The starting field line depends on sbeg(1); integrate it only when the
-        ! sampling field is not active on that surface.
+        ! sampling field is not active on that surface, or when the caller
+        ! samples and the line arrays were reset by reallocate_arrays.
+        logical, intent(in), optional :: needs_starting_line
+        logical :: refill
+
         if (active_field == FIELD_NONE) error stop 'simple_api: call simple_init first'
-        if (active_field == FIELD_SAMPLING) then
+        refill = .false.
+        if (present(needs_starting_line)) refill = needs_starting_line .and. &
+                                                   starting_line_stale
+        if (active_field == FIELD_SAMPLING .and. .not. refill) then
             if (abs(sbeg(1) - sampling_surface) <= 0.0_dp) return
         end if
         call init_sampling_field
+        starting_line_stale = .false.
         active_field = FIELD_SAMPLING
         sampling_surface = sbeg(1)
     end subroutine use_sampling_field

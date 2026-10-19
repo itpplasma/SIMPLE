@@ -73,13 +73,13 @@ if [ ! -f "$COILS_SIMPLE" ]; then
     echo "Downloading NCSX coils file..."
     wget -q https://princetonuniversity.github.io/STELLOPT/examples/coils.c09r00 -O "$COILS_STELLOPT"
 
-    echo "Converting coils to simple format..."
-    if command -v python3 &> /dev/null; then
-        # Try using libneo converter if available
-        python3 -m libneo.convert_coils_to_simple "$COILS_STELLOPT" "$COILS_SIMPLE" 2>/dev/null || {
-            # Fallback: manual conversion
-            echo "Warning: libneo converter not available, using manual conversion"
-            python3 - "$COILS_STELLOPT" "$COILS_SIMPLE" <<'EOF'
+    # Always use this raw in-tree conversion, never an importable libneo
+    # converter: the golden coil field must not depend on the Python
+    # environment (itpplasma/SIMPLE#573). It keeps every STELLOPT point,
+    # including each coil's I=0 closing point, as neo_biotsavart expects
+    # (segment i joins points i and i+1 and carries current(i)).
+    echo "Converting coils to simple format (raw in-tree converter)..."
+    python3 - "$COILS_STELLOPT" "$COILS_SIMPLE" <<'EOF'
 import sys
 with open(sys.argv[1], "r") as f:
     coords = []
@@ -105,8 +105,6 @@ with open(sys.argv[2], "w") as f:
     for (x, y, z), I in zip(coords, currents):
         f.write(f"{x:.14E}   {y:.14E}   {z:.14E}   {I:.14E}\n")
 EOF
-        }
-    fi
 fi
 
 # Run each test case
