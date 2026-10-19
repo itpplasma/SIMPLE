@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import subprocess
 import tempfile
 
 import numpy as np
@@ -34,7 +35,12 @@ from pysimple.engineering import (
 
 
 def create_mock_results_nc(path: Path, n_particles: int = 100, loss_fraction: float = 0.3):
-    """Create a mock results.nc file for testing."""
+    """Create a mock results.nc with the layout of src/netcdf_results_output.f90.
+
+    Arrays are (particle, phase) and (particle, xyz). A normal run flags losses
+    in orbit_exit_code (1 = LCFS, 2 = wall) and leaves class_lost at zero; only
+    classification runs set class_lost.
+    """
     n_lost = int(n_particles * loss_fraction)
 
     with nc.Dataset(path, 'w', format='NETCDF4') as ds:
@@ -45,9 +51,10 @@ def create_mock_results_nc(path: Path, n_particles: int = 100, loss_fraction: fl
         ds.ntestpart = n_particles
         ds.trace_time = 1e-3
 
-        zend = ds.createVariable('zend', 'f8', ('phase', 'particle'))
-        xend_cart = ds.createVariable('xend_cart', 'f8', ('xyz', 'particle'))
+        zend = ds.createVariable('zend', 'f8', ('particle', 'phase'))
+        xend_cart = ds.createVariable('xend_cart', 'f8', ('particle', 'xyz'))
         class_lost = ds.createVariable('class_lost', 'i1', ('particle',))
+        exit_code = ds.createVariable('orbit_exit_code', 'i4', ('particle',))
         times_lost = ds.createVariable('times_lost', 'f8', ('particle',))
 
         np.random.seed(42)
@@ -59,7 +66,7 @@ def create_mock_results_nc(path: Path, n_particles: int = 100, loss_fraction: fl
         zend_data[2, :] = np.random.uniform(0, 20 * np.pi, n_particles)
         zend_data[3, :] = np.random.uniform(0.9, 1.0, n_particles)
         zend_data[4, :] = np.random.uniform(-1, 1, n_particles)
-        zend[:] = zend_data
+        zend[:] = zend_data.T
 
         R0, a = 1000.0, 100.0
         # Map theta to [-pi, pi] for Cartesian calculation (geometric consistency)
@@ -76,12 +83,13 @@ def create_mock_results_nc(path: Path, n_particles: int = 100, loss_fraction: fl
         x_cart[0, :] = R * np.cos(zeta)
         x_cart[1, :] = R * np.sin(zeta)
         x_cart[2, :] = a * np.sin(theta)
-        xend_cart[:] = x_cart
+        xend_cart[:] = x_cart.T
 
         lost_mask = np.zeros(n_particles, dtype=np.int8)
         lost_mask[:n_lost] = 1
         np.random.shuffle(lost_mask)
-        class_lost[:] = lost_mask
+        exit_code[:] = np.where(lost_mask == 1, 1, 0)
+        class_lost[:] = 0
 
         t_lost = np.full(n_particles, -1.0)
         t_lost[lost_mask == 1] = np.random.uniform(0, 1e-3, n_lost)
@@ -115,6 +123,46 @@ class TestWallHeatMap:
         assert heat_map.loss_fraction == pytest.approx(0.3, rel=0.1)
         assert heat_map.trace_time == pytest.approx(1e-3)
         assert heat_map.total_alpha_power == TEST_ALPHA_POWER_MW
+
+    def test_from_netcdf_of_real_simple_run(self, tmp_path: Path, vmec_file: str):
+        """A normal simple.x run flags losses only in orbit_exit_code."""
+        simple_x = Path(__file__).resolve().parents[2] / "build" / "simple.x"
+        if not simple_x.exists():
+            pytest.skip("simple.x is not built")
+        (tmp_path / "simple.in").write_text(f"""&config
+startmode = 1
+ntestpart = 32
+trace_time = 1d-3
+npoiper2 = 64
+notrace_passing = 0
+isw_field_type = 0
+integmode = 3
+netcdffile = '{Path(vmec_file).resolve()}'
+deterministic = .true.
+output_results_netcdf = .true.
+sbeg = 0.97
+/
+""")
+        subprocess.run([str(simple_x), "simple.in"], cwd=tmp_path, check=True,
+                       capture_output=True)
+
+        with nc.Dataset(tmp_path / "results.nc") as ds:
+            lost = np.isin(ds["orbit_exit_code"][:], (1, 2))
+            assert ds["zend"].dimensions == ("particle", "phase")
+            assert not ds["class_lost"][:].any()  # only classification sets it
+            zend = np.asarray(ds["zend"][:])
+        assert lost.any(), "test setup must produce lost particles"
+
+        heat_map = WallHeatMap.from_netcdf(
+            tmp_path / "results.nc", total_alpha_power_MW=TEST_ALPHA_POWER_MW
+        )
+
+        assert heat_map.n_total == 32
+        assert heat_map.n_lost == lost.sum()
+        assert np.sum(heat_map.hit_count) == lost.sum()
+        assert heat_map.energy_loss_fraction == pytest.approx(
+            np.sum(zend[lost, 3] ** 2) / 32
+        )
 
     def test_lost_power_energy_weighted(self, mock_results_file: Path):
         """Test lost power uses energy weighting, not just particle count."""
