@@ -313,6 +313,17 @@ subroutine integ_to_ref_meiss(xinteg, xref)
 end subroutine integ_to_ref_meiss
 
 
+!> Reference radius of integ_to_ref_meiss without the angular splines.
+function integ_to_ref_radius_meiss(xinteg) result(r_ref)
+    real(dp), intent(in) :: xinteg(3)
+    real(dp) :: r_ref
+    real(dp) :: xref(3)
+
+    call coord_scaling%inverse(xinteg, xref)
+    r_ref = xref(1)
+end function integ_to_ref_radius_meiss
+
+
 subroutine ref_to_integ_meiss(xref, xinteg)
     real(dp), intent(in) :: xref(3)
     real(dp), intent(out) :: xinteg(3)

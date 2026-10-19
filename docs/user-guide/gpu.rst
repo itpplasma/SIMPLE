@@ -25,9 +25,12 @@ Needs the CUDA toolkit, a C++17 compiler and GNU or NVIDIA Fortran.
    gpu_method = 'dopri'
    /
 
-Requirements: ``integ_coords = 2``, no collisions, no wall, no orbit output,
-no classification, guiding-centre orbits. Other combinations stop with an
-error message.
+Requirements: ``integ_coords = 2``, ``field_input`` a Boozer chartmap
+carrying the compact RK tables (``rk_Bmod``, ... as written by libneo's
+``booz_xform_to_boozer_chartmap``), no collisions, no wall, no orbit output,
+no classification, guiding-centre orbits. VMEC, coil and SPECTRE fields are
+not supported (`#569 <https://github.com/itpplasma/SIMPLE/issues/569>`_).
+Other combinations stop at input validation, before the field setup.
 
 Keys
 ----

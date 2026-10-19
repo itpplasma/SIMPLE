@@ -1,6 +1,7 @@
 module simple_main
     use, intrinsic :: iso_fortran_env, only: int8
-    use omp_lib
+!$  use omp_lib
+    use timing, only: get_wtime
     use util, only: sqrt2, twopi
     use simple, only: init_vmec, init_sympl, init_fo, orbit_timestep_fo, &
         orbit_timestep_fo_bridge, reseed_sympl, tracer_t, ORBIT_FO_LOSS, &
@@ -19,7 +20,8 @@ module simple_main
                  boundary_event_time_width, integmode, relerr, trace_time, class_plot, &
                    fast_class, generate_start_only, ntcut, iclass, bmin, bmax, zstart, &
                       zend, trap_par, perp_inv, sbeg, ntimstep, should_skip, &
-                      reset_seed_if_deterministic, particle_stream_id, field_input, &
+                      reset_seed_if_deterministic, particle_stream_id, &
+                      classification_enabled, field_input, &
                       isw_field_type, reuse_batch, &
                       max_consecutive_warning_holds, &
                      coord_input, wall_input, wall_units, wall_hit, wall_hit_triangle, &
@@ -330,6 +332,7 @@ contains
 
         call read_config(config_file)
         call validate_orbit_model_config
+        call validate_gpu_production_config
         call print_phase_time('Configuration reading completed')
         call read_profiles_config(config_file)
         call print_phase_time('Profiles configuration reading completed')
@@ -464,6 +467,28 @@ contains
                 '7 = full orbit)'
         end select
     end subroutine validate_orbit_model_config
+
+    !> Reject unsupported gpu_mode='production' runs before any field setup.
+    !> The native CUDA kernel reads compact RK tables that libneo fills only
+    !> from a Boozer chartmap carrying them (#569).
+    subroutine validate_gpu_production_config
+        use field_boozer_chartmap, only: has_boozer_rk_tables
+        use magfie_sub, only: BOOZER
+        use params, only: field_input
+
+        if (trim(gpu_mode) /= 'production') return
+        if (isw_field_type /= BOOZER .or. swcoll .or. &
+            len_trim(wall_input) > 0 .or. class_plot .or. fast_class .or. &
+            ntcut > 0 .or. output_orbits_macrostep .or. orbit_model /= ORBIT_GC) &
+            error stop 'gpu_mode=production requires Boozer GC loss tracing '// &
+            'without collisions, wall, orbit output, or classifiers'
+        if (.not. has_boozer_rk_tables(field_input)) then
+            print *, 'gpu_mode=production: field_input = ', trim(field_input)
+            error stop 'gpu_mode=production needs field_input to be a Boozer '// &
+                'chartmap with RK tables (libneo booz_xform_to_boozer_chartmap); '// &
+                'VMEC, coil, SPECTRE and chartmap-coordinate fields are unsupported'
+        end if
+    end subroutine validate_gpu_production_config
 
     subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
         use spectre_fo_field, only: spectre_fo_field_clear
@@ -845,6 +870,9 @@ contains
         type(tracer_t), intent(inout) :: norb
         integer :: i
         real(dp), allocatable :: traj(:, :), times(:)
+#ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
+        integer :: debug_thread
+#endif
 
         if (output_orbits_macrostep) then
             call init_orbit_netcdf(ntestpart, ntimstep)
@@ -869,8 +897,10 @@ contains
             if (debug) then
                 !$omp critical
                 kpart = kpart + 1
+                debug_thread = 0
+!$              debug_thread = omp_get_thread_num()
                 print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', &
-                    omp_get_thread_num()
+                    debug_thread
                 !$omp end critical
             end if
 #endif
@@ -930,12 +960,7 @@ contains
         real(dp) :: cuda_profile_ms(5)
         logical :: landreman_mode, cuda_native_backend
 
-        if (isw_field_type /= BOOZER .or. swcoll .or. len_trim(wall_input) > 0 .or. &
-            class_plot .or. fast_class .or. ntcut > 0 .or. &
-            output_orbits_macrostep .or. orbit_model /= ORBIT_GC) then
-            error stop 'gpu_mode=production requires Boozer GC loss tracing without '// &
-                'collisions, wall, orbit output, or classifiers'
-        end if
+        call validate_gpu_production_config
 
         backend_name = trim(gpu_backend)
         select case (trim(backend_name))
@@ -1001,7 +1026,7 @@ contains
             trim(start_coordinates) /= 'boozer') &
             error stop 'gpu_start_coordinates must be reference or boozer'
 
-        t0 = omp_get_wtime()
+        t0 = get_wtime()
         do i = 1, ntestpart
             if (trim(start_coordinates) == 'boozer') then
                 z(1:3) = zstart(1:3, i)
@@ -1028,13 +1053,13 @@ contains
         if ((method == CASH_KARP .or. method == DORMAND_PRINCE) .and. &
             .not. boozer_rk_device_supported()) &
             error stop 'GPU RK requires scalar cubic or quintic Boozer splines'
-        t_init = omp_get_wtime() - t0
+        t_init = get_wtime() - t0
 
         landreman_mode = gpu_landreman
         if (cuda_native_backend .and. .not. landreman_mode) &
             error stop 'gpu_landreman must be true for the native CUDA backend'
 
-        t0 = omp_get_wtime()
+        t0 = get_wtime()
         warp_nfev_slots = 0_8
         cuda_profile_ms = 0.0_dp
         if (landreman_mode) then
@@ -1077,14 +1102,14 @@ contains
                 real(sum(ntau_macro(2:ntimstep)), dp)*si_gpu(1)%dt
             energy_loss_fraction = 0.0_dp
         end if
-        t_trace = omp_get_wtime() - t0
+        t_trace = get_wtime() - t0
 
         total_time_normalized = real(sum(ntau_macro(2:ntimstep)), dp)*si_gpu(1)%dt
         confpart_pass = 0.0_dp
         confpart_trap = 0.0_dp
         unresolved_orbits = 0
         nfev_total = 0_8
-        t0 = omp_get_wtime()
+        t0 = get_wtime()
         do i = 1, ntestpart
             nfev_total = nfev_total + int(nfev(i), 8)
             si_gpu(i)%z = zcanonical(:, i)
@@ -1125,7 +1150,7 @@ contains
                     maxval(nfev(i:min(i + 31, ntestpart))), 8)
             end do
         end if
-        t_finish = omp_get_wtime() - t0
+        t_finish = get_wtime() - t0
 
         print *, '==================== GPU production trace ==================='
         print '(a,i0)', ' integrator mode = ', method
@@ -1258,7 +1283,7 @@ contains
         end if
 
         ! CPU reference (OpenMP over particles)
-        t0 = omp_get_wtime()
+        t0 = get_wtime()
         !$omp parallel do private(i, it, ktau, ierr) schedule(dynamic)
         do i = 1, ntestpart
             ierr = 0
@@ -1276,7 +1301,7 @@ contains
             cpu_zend(:, i) = si_cpu(i)%z(1:4)
         end do
         !$omp end parallel do
-        t1 = omp_get_wtime()
+        t1 = get_wtime()
         t_cpu = t1 - t0
 
         if (any(cpu_loss < ntimstep)) then
@@ -1284,10 +1309,10 @@ contains
         end if
 
         ! GPU kernel
-        t0 = omp_get_wtime()
+        t0 = get_wtime()
         call trace_orbits_gpu_method(si_gpu, f_gpu, ntestpart, ntimstep, &
             ntau_macro, integmode, gpu_loss, gpu_loss_time, gpu_zend, gpu_nfev)
-        t1 = omp_get_wtime()
+        t1 = get_wtime()
         t_gpu = t1 - t0
 
         ! Compare
@@ -1332,6 +1357,9 @@ contains
         type(tracer_t), intent(inout) :: norb
         integer :: i
         type(classification_result_t) :: class_result
+#ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
+        integer :: debug_thread
+#endif
 
         !$omp parallel firstprivate(norb) private(class_result, i)
         !$omp do
@@ -1340,8 +1368,10 @@ contains
             if (debug) then
                 !$omp critical
                 kpart = kpart + 1
+                debug_thread = 0
+!$              debug_thread = omp_get_thread_num()
                 print *, kpart, ' / ', ntestpart, 'particle: ', i, 'thread: ', &
-                    omp_get_thread_num()
+                    debug_thread
                 !$omp end critical
             end if
 #endif
@@ -1375,6 +1405,7 @@ contains
     end subroutine read_profiles_config
 
     subroutine init_collisions
+        use profile_radius, only: init_profile_radius
         use params, only: am1, am2, Z1, Z2, facE_al, dchichi, slowrate, &
             dchichi_norm, slowrate_norm, v0
         use simple_profiles, only: Te_scale, Ti1_scale, Ti2_scale, &
@@ -1399,6 +1430,7 @@ contains
         end if
 
         call init_collision_profiles(am1, am2, Z1, Z2, ealpha, v0)
+        call init_profile_radius
     end subroutine init_collisions
 
     subroutine sample_particles(xstart_is_integ_coords)
@@ -1535,9 +1567,8 @@ contains
     end subroutine init_bminmax
 
     logical function needs_bminmax_cache()
-        ! Match the current readers. Classifier semantics are kept unchanged
-        ! here; broad classifier changes belong in the classifier PR.
-        if ((ntcut > 0) .or. class_plot) then
+        ! Match the current readers.
+        if (classification_enabled()) then
             needs_bminmax_cache = num_surf > 1
         else
             needs_bminmax_cache = num_surf /= 1
@@ -1898,7 +1929,7 @@ contains
 
         if (swcoll) call reset_seed_if_deterministic(particle_stream_id(ipart))
 
-        if (ntcut > 0 .or. class_plot) then
+        if (classification_enabled()) then
             call trace_orbit_with_classifiers(anorb, ipart, class_result)
             if (class_plot) then
                 call write_classification_results(ipart, class_result)
@@ -3148,11 +3179,12 @@ contains
     end subroutine update_momentum
 
     subroutine collide(z, dt, ierr_coll)
+        use profile_radius, only: profile_s
         real(dp), intent(inout) :: z(5)
         real(dp), intent(in) :: dt
         integer, intent(out) :: ierr_coll
 
-        call stost(z, dt, 1, ierr_coll)
+        call stost(z, dt, 1, ierr_coll, s_profile=profile_s(z(1:3)))
         if (ierr_coll /= 0) then
             print *, 'Error in stost: ', ierr_coll, 'z = ', z, 'dtaumin = ', dtaumin
         end if
@@ -3276,7 +3308,7 @@ contains
         end do
         close (unit)
 
-        if (ntcut > 0 .or. class_plot) then
+        if (classification_enabled()) then
             open (newunit=unit, file='class_parts.dat', recl=1024)
             do i = 1, ntestpart
                 write (unit, *) i, zstart(1, i), perp_inv(i), iclass(:, i)

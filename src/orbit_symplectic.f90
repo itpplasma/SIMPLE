@@ -23,9 +23,8 @@ use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_expl_impl_euler
 use orbit_symplectic_euler1, only: sympl_euler1_residual, sympl_euler1_jacobian, &
   sympl_euler1_newton_iter, sympl_euler1_extrapolate_field, &
   sympl_euler1_advance_angles
-use orbit_rk_core, only: rk_gauss_residual, rk_gauss_jacobian, MODEL_GC
+use orbit_rk_core, only: rk_gauss_residual, rk_gauss_jacobian, rk_solve, MODEL_GC
 use vector_potentail_mod, only: torflux
-use lapack_interfaces, only: dgesv
 use diag_counters, only: count_event, EVT_NEWTON1_MAXIT, EVT_NEWTON2_MAXIT, &
   EVT_RK_GAUSS_MAXIT, EVT_RK_LOBATTO_MAXIT, EVT_FIXPOINT_MAXIT, EVT_R_NEGATIVE, &
   EVT_MIDPOINT_MAXIT, EVT_WARNING_MAXIT_ACCEPT, &
@@ -817,14 +816,17 @@ pure logical function matrix3_near_singular(matrix, determinant)
     abs(determinant) <= epsilon(1d0)*matrix_scale**3
 end function matrix3_near_singular
 
+! Small dense Newton solve (n = 2 .. 4*s) by in-house LU with partial pivoting.
+! No library call and no allocation: LAPACK/OpenBLAS dgesv per step exhausted
+! OpenBLAS memory regions and scaled badly with thread count.
 subroutine solve_newton_system(matrix, residual, status)
   real(dp), intent(inout) :: matrix(:, :), residual(:)
   integer, intent(out) :: status
 
-  integer :: info, n, pivot(size(residual))
+  integer :: info, n
 
   n = size(residual)
-  call dgesv(n, 1, matrix, n, pivot, residual, n, info)
+  call rk_solve(n, matrix, residual, info)
   if (info == 0) then
     status = SYMPLECTIC_STEP_OK
   else

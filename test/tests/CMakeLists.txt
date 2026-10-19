@@ -66,6 +66,14 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
         LABELS "unit;python" TIMEOUT 30)
 endif()
 
+add_test(
+    NAME test_openmp_optional
+    COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/../python/test_openmp_optional.py
+        ${CMAKE_SOURCE_DIR}
+)
+set_tests_properties(test_openmp_optional PROPERTIES LABELS "unit;regression")
+
 set(BOOZER_CHARTMAP_PYTHON "${Python3_EXECUTABLE}")
 if(EXISTS "${CMAKE_SOURCE_DIR}/.venv/bin/python")
     set(BOOZER_CHARTMAP_PYTHON "${CMAKE_SOURCE_DIR}/.venv/bin/python")
@@ -481,6 +489,14 @@ set_tests_properties(test_fusion_hot_profile PROPERTIES
 set_tests_properties(test_fusion_nonfinite PROPERTIES
     PASS_REGULAR_EXPRESSION "fusion source: nonfinite profiles")
 
+add_executable(test_api_repeated_sampling.x test_api_repeated_sampling.f90)
+target_link_libraries(test_api_repeated_sampling.x simple)
+add_test(NAME test_api_repeated_sampling
+    COMMAND test_api_repeated_sampling.x ${WOUT_FILE})
+set_tests_properties(test_api_repeated_sampling PROPERTIES LABELS "integration"
+    TIMEOUT 120 ENVIRONMENT "OMP_NUM_THREADS=1"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
 add_executable(test_fusion_birth_equilibrium.x test_fusion_birth_equilibrium.f90)
 target_link_libraries(test_fusion_birth_equilibrium.x simple)
 add_dependencies(test_fusion_birth_equilibrium.x generate_test_boozer_chartmap)
@@ -554,6 +570,18 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
     set_tests_properties(test_bminmax_driver PROPERTIES
         LABELS "integration;system"
         TIMEOUT 120)
+
+    add_test(NAME test_fast_class_driver
+        COMMAND ${CMAKE_COMMAND} -E env
+            CTEST_BINARY_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}
+            ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_fast_class_driver.py
+            $<TARGET_FILE:simple.x>
+            ${WOUT_FILE}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(test_fast_class_driver PROPERTIES
+        LABELS "integration;system"
+        TIMEOUT 120)
 endif()
 
 add_executable (test_coordinates.x test_coordinates.f90)
@@ -603,6 +631,18 @@ add_test(NAME test_stencil_utils COMMAND test_stencil_utils.x)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         DEPENDS "generate_test_boozer_chartmap_data"
         LABELS "unit")
+    # Regular near-axis Boozer field (libneo#437) built on request for the
+    # internal VMEC -> Boozer conversion and for Boozer chartmaps.
+    add_executable(test_boozer_regular_axis_field.x
+        field_can/test_boozer_regular_axis_field.f90)
+    target_link_libraries(test_boozer_regular_axis_field.x simple)
+    foreach(_regular_source IN ITEMS vmec chartmap)
+        add_test(NAME test_boozer_regular_axis_field_${_regular_source}
+            COMMAND test_boozer_regular_axis_field.x ${_regular_source})
+        set_tests_properties(test_boozer_regular_axis_field_${_regular_source}
+            PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+            LABELS "unit" TIMEOUT 300)
+    endforeach()
     add_test(NAME test_chartmap_startmode1
         COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/test_chartmap_startmode1.py
@@ -795,6 +835,16 @@ add_test(NAME test_bder_from_splines
 set_tests_properties(test_bder_from_splines PROPERTIES
     LABELS "integration")
 
+add_executable(test_splined_kernel_bench.x test_splined_kernel_bench.f90)
+target_link_libraries(test_splined_kernel_bench.x simple)
+add_dependencies(test_splined_kernel_bench.x ncsx_test_data)
+add_test(NAME test_splined_kernel_bench
+    COMMAND test_splined_kernel_bench.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_splined_kernel_bench PROPERTIES
+    LABELS "unit;performance"
+    TIMEOUT 120)
+
 add_executable(test_refcoords_file_detection.x test_refcoords_file_detection.f90)
 target_link_libraries(test_refcoords_file_detection.x simple)
 add_dependencies(test_refcoords_file_detection.x chartmap_test_data)
@@ -803,6 +853,27 @@ add_test(NAME test_refcoords_file_detection
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_refcoords_file_detection PROPERTIES
     LABELS "unit")
+
+# Collision profile radius for every integ_coords (issue #571)
+add_executable(test_profile_radius.x test_profile_radius.f90)
+target_link_libraries(test_profile_radius.x simple)
+add_dependencies(test_profile_radius.x chartmap_test_data)
+foreach(case IN ITEMS rho_lcfs vmec canflux boozer meiss albert refcoords
+        meiss_chartmap spectre)
+    if(case STREQUAL "spectre")
+        set(case_file ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5)
+    else()
+        set(case_file ${CHARTMAP_FILE})
+    endif()
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/profile_radius_${case})
+    file(CREATE_LINK ${WOUT_FILE}
+        ${CMAKE_CURRENT_BINARY_DIR}/profile_radius_${case}/wout.nc SYMBOLIC)
+    add_test(NAME test_profile_radius_${case}
+        COMMAND test_profile_radius.x ${case} ${case_file}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/profile_radius_${case})
+    set_tests_properties(test_profile_radius_${case} PROPERTIES
+        LABELS "unit;collisions" TIMEOUT 300)
+endforeach()
 
 # Chartmap pipeline unit tests (issue #227)
 add_executable(test_chartmap_pipeline.x test_chartmap_pipeline.f90)
@@ -931,6 +1002,31 @@ set_tests_properties(test_gpu_midpoint_bench PROPERTIES
 # path with an ordinary VMEC file. Native CUDA production requires a compact
 # Boozer RK chartmap, so segmented CUDA accounting is covered by
 # test_cuda_native_bridge instead.
+
+# #569: gpu_mode='production' with a VMEC field must stop at input
+# validation, before the field setup, naming the supported field source.
+set(GPU_VMEC_DIR ${CMAKE_CURRENT_BINARY_DIR}/gpu_production_vmec)
+file(MAKE_DIRECTORY ${GPU_VMEC_DIR})
+file(CREATE_LINK ${WOUT_FILE} ${GPU_VMEC_DIR}/wout.nc SYMBOLIC)
+file(WRITE ${GPU_VMEC_DIR}/simple.in "&config
+trace_time = 1d-3
+sbeg = 0.3d0
+ntestpart = 64
+netcdffile = 'wout.nc'
+isw_field_type = 2
+deterministic = .true.
+gpu_mode = 'production'
+gpu_backend = 'cuda-native'
+/
+")
+add_test(NAME test_gpu_production_rejects_vmec
+    COMMAND $<TARGET_FILE:simple.x> simple.in
+    WORKING_DIRECTORY ${GPU_VMEC_DIR})
+set_tests_properties(test_gpu_production_rejects_vmec PROPERTIES
+    LABELS "unit"
+    PASS_REGULAR_EXPRESSION "Boozer chartmap with RK tables"
+    FAIL_REGULAR_EXPRESSION "Configuration reading completed"
+    TIMEOUT 60)
 
 # Macrostep log grid tests (issue: performance regression with log grid)
 add_executable(test_macrostep_log_grid.x test_macrostep_log_grid.f90)
