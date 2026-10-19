@@ -24,6 +24,18 @@ module profile_radius
     !> No toroidal-flux meaning (geometric or poloidal radius).
     integer, parameter :: RADIUS_NONE = 4
 
+    abstract interface
+        function radius_i(z) result(r)
+            import :: dp
+            real(dp), intent(in) :: z(3)
+            real(dp) :: r
+        end function radius_i
+    end interface
+
+    !> Set by set_profile_radius; called from profile_s only when needed.
+    procedure(radius_i), pointer, save :: reference_radius => null()
+    procedure(radius_i), pointer, save :: spectre_s_of_rho => null()
+
     integer, save :: radius_kind = RADIUS_S
     logical, save :: map_to_reference = .false.
     real(dp), save :: rho_scale = 1.0_dp
@@ -31,6 +43,7 @@ module profile_radius
 contains
 
     subroutine set_profile_radius(kind, use_integ_to_ref, rho_lcfs)
+        use field_can_meiss, only: integ_to_ref_radius_meiss
         integer, intent(in) :: kind
         logical, intent(in) :: use_integ_to_ref
         real(dp), intent(in), optional :: rho_lcfs
@@ -39,6 +52,10 @@ contains
             error stop 'set_profile_radius: unknown radius kind'
         radius_kind = kind
         map_to_reference = use_integ_to_ref
+        reference_radius => null()
+        spectre_s_of_rho => null()
+        if (use_integ_to_ref) reference_radius => integ_to_ref_radius_meiss
+        if (kind == RADIUS_SPECTRE) spectre_s_of_rho => spectre_s
         rho_scale = 1.0_dp
         if (present(rho_lcfs)) then
             if (.not. (rho_lcfs > 0.0_dp .and. rho_lcfs <= 1.0_dp)) &
@@ -51,6 +68,7 @@ contains
     !> the field and canonical coordinates are initialised.
     subroutine init_profile_radius
         use velo_mod, only: isw_field_type
+        use field_can_albert, only: integ_to_ref_radius_albert
         use magfie_sub, only: TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT, &
                               REFCOORDS, SPECTRE, spectre_field
         use field_can_meiss, only: field_noncan
@@ -85,6 +103,8 @@ contains
         case default
             error stop 'init_profile_radius: unknown integ_coords'
         end select
+        if (map_to_reference .and. isw_field_type == ALBERT) &
+            reference_radius => integ_to_ref_radius_albert
 
         if (radius_kind == RADIUS_NONE .and. .not. profiles_uniform()) then
             print *, 'init_profile_radius: the radial coordinate of integ_coords =', &
@@ -150,15 +170,19 @@ contains
     end function profiles_uniform
 
     !> Normalised toroidal flux s at the tracing state z(1:3).
+    !>
+    !> This runs at every collision. It must not use or call procedures of
+    !> modules that pull in IEEE arithmetic: gfortran then wraps the function in
+    !> _gfortran_ieee_procedure_entry/exit (about 0.15 us per call, +11% of a
+    !> collisional run). The expensive branches are therefore reached through
+    !> the procedure pointers set in set_profile_radius.
     function profile_s(z) result(s)
-        use field_can_mod, only: integ_to_ref
         real(dp), intent(in) :: z(3)
         real(dp) :: s
-        real(dp) :: xref(3), r
+        real(dp) :: r
 
         if (map_to_reference) then
-            call integ_to_ref(z, xref)
-            r = xref(1)
+            r = reference_radius(z)
         else
             r = z(1)
         end if
@@ -166,21 +190,23 @@ contains
         case (RADIUS_RHO_TOR)
             s = (r/rho_scale)**2
         case (RADIUS_SPECTRE)
-            s = spectre_s(r)
+            ! SPECTRE integrates in rho_g itself, so r = z(1) here.
+            s = spectre_s_of_rho(z)
         case default
             ! RADIUS_NONE is accepted only for radially uniform profiles.
             s = r
         end select
     end function profile_s
 
-    function spectre_s(rho_g) result(s)
+    function spectre_s(z) result(s)
         use magfie_sub, only: spectre_field
         use spectre_basis, only: eval_spectre_toroidal_flux_fraction
-        real(dp), intent(in) :: rho_g
+        real(dp), intent(in) :: z(3)
         real(dp) :: s
-        real(dp) :: rho, s_local, fraction, derivative, inner
+        real(dp) :: rho_g, rho, s_local, fraction, derivative, inner
         integer :: lvol, mvol, ierr
 
+        rho_g = z(1)
         mvol = spectre_field%data%Mvol
         rho = min(max(rho_g, 0.0_dp), real(mvol, dp))
         lvol = min(int(rho) + 1, mvol)
