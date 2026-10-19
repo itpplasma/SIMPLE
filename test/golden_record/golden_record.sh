@@ -129,6 +129,15 @@ main() {
         echo "Using existing reference build at: $PROJECT_ROOT_REF/build/simple.x"
     fi
 
+    # The CTest fixture golden_record_prepare builds the reference and fetches
+    # the shared test data once, so the per-case tests can run in parallel.
+    if [ "${GOLDEN_RECORD_PREPARE_ONLY:-0}" = "1" ]; then
+        GOLDEN_RECORD_DATA_ONLY=1 "$SCRIPT_DIR/run_golden_tests.sh" \
+            "$PROJECT_ROOT_REF" "$RUN_DIR_REF" "$TEST_DATA_DIR" || handle_failure $?
+        echo "Reference build and test data are ready."
+        exit 0
+    fi
+
     # Check if current version needs building (it should already be built)
     if [ ! -f "$PROJECT_ROOT_CUR/build/simple.x" ]; then
         echo "Current build not found at: $PROJECT_ROOT_CUR/build/simple.x"
@@ -223,7 +232,7 @@ build() {
         return 1
     fi
 
-    local BUILD_PARALLEL="${CMAKE_BUILD_PARALLEL_LEVEL:-2}"
+    local BUILD_PARALLEL="${CMAKE_BUILD_PARALLEL_LEVEL:-$(nproc)}"
     cmake --build build --config Release --parallel "$BUILD_PARALLEL" > $PROJECT_ROOT/build.log 2>&1
     if [ $? -ne 0 ]; then
         echo "Build failed. Check $PROJECT_ROOT/build.log"
