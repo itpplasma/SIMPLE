@@ -660,9 +660,11 @@ contains
     contains
         subroutine start_eval
             !> Metric and potential jets are independent; the kernel follows.
+            !> Same team size as stage_evals: libgomp ends surplus threads when a
+            !> team shrinks and must create them again for the next larger team.
             real(dp) :: aj(3, 10), gj(6, 10)
             integer :: task
-            !$omp parallel do num_threads(stage_threads(2))
+            !$omp parallel do num_threads(stage_threads())
             do task = 1, 2
                 if (task == 1) then
                     call metric_jets(z0(1:3), width, gj, .true.)
@@ -686,7 +688,7 @@ contains
             first = .not. hessian
             y(:, 1) = z0 + dy(:, 1)
             y(:, 2) = z0 + dy(:, 2)
-            !$omp parallel num_threads(stage_threads(4)) private(j, k, stage_energy)
+            !$omp parallel num_threads(stage_threads()) private(j, k, stage_energy)
             !$omp do schedule(static, 1)
             do task = 1, 4
                 j = (task + 1)/2
@@ -717,12 +719,11 @@ contains
         end subroutine stage_evals
     end subroutine gauss2_step
 
-    integer function stage_threads(tasks) result(n)
-        !> Threads for independent field tasks within one step; never nests
-        !> inside a caller's parallel region.
+    integer function stage_threads() result(n)
+        !> Threads for the at most four independent field tasks of one step;
+        !> never nests inside a caller's parallel region.
 !$      use omp_lib, only: omp_get_max_threads, omp_in_parallel
-        integer, intent(in) :: tasks
         n = 1
-!$      if (.not. omp_in_parallel()) n = max(1, min(tasks, omp_get_max_threads()))
+!$      if (.not. omp_in_parallel()) n = max(1, min(4, omp_get_max_threads()))
     end function stage_threads
 end module spectre_fo_gauss2
