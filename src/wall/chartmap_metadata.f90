@@ -12,6 +12,7 @@ module chartmap_metadata
         real(dp) :: rho_lcfs = -1.0_dp
         real(dp) :: cart_scale_to_m = -1.0_dp
         character(len=16) :: cart_units = ""
+        character(len=32) :: rho_convention = ""
     end type chartmap_metadata_t
 
 contains
@@ -31,12 +32,13 @@ contains
         character(len=*), intent(in) :: filename
         type(chartmap_metadata_t), intent(out) :: meta
 
-        integer :: ncid, status
+        integer :: ncid, status, att_type, att_len
         real(dp) :: rho_lcfs
 
         meta%rho_lcfs = -1.0_dp
         meta%cart_scale_to_m = -1.0_dp
         meta%cart_units = ""
+        meta%rho_convention = ""
 
         status = nf90_open(trim(filename), nf90_nowrite, ncid)
         call check_nc(status, "nf90_open(chartmap)")
@@ -46,6 +48,17 @@ contains
         if (status /= nf90_noerr .and. status /= nf90_enotatt) &
             call check_nc(status, "get_att rho_lcfs")
         if (status == nf90_noerr) meta%rho_lcfs = rho_lcfs
+
+        status = nf90_inquire_attribute(ncid, nf90_global, "rho_convention", &
+                                        xtype=att_type, len=att_len)
+        if (status == nf90_noerr .and. att_type == nf90_char .and. &
+            att_len >= 1) then
+            if (att_len <= len(meta%rho_convention)) then
+                status = nf90_get_att(ncid, nf90_global, "rho_convention", &
+                                      meta%rho_convention(1:att_len))
+                call check_nc(status, "get_att rho_convention")
+            end if
+        end if
 
         call read_cart_units(ncid, meta%cart_units, meta%cart_scale_to_m)
 

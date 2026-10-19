@@ -6,6 +6,18 @@ fit together.
 
 Update this file when coordinates or field-loading paths change.
 
+The IMAS actor (`docs/user-guide/imas.rst`) loads an equilibrium IDS as a libneo
+Boozer chartmap. Its Cartesian geometry covers the full toroidal period even for
+an axisymmetric field; its covariant toroidal field is G, not the transform
+normalization G + iota*I; its uniform rho grid and the uniform s abscissa of
+A_phi are distinct grids.
+
+`simple_cylindrical_to_reference` and `simple_reference_to_cylindrical` map
+`(R [m], phi [rad], Z [m])` to and from the loaded reference coordinates (radius
+s for VMEC, rho for chartmaps) with one status per point; TEST and SPECTRE
+references are rejected. Integration coordinates are unchanged, and the
+tabulated collision-profile abscissa is s for VMEC and Boozer integration.
+
 Fusion birth sampling (`startmode = 7`) uses the VMEC volume Jacobian in
 `(s,theta,phi)` for VMEC input, or the field-derived Boozer Jacobian
 `torflux*(iota*B_theta+B_zeta)/B^2` in integration `(s,theta_B,zeta_B)` for
@@ -15,6 +27,14 @@ not checked at load time. It converts chartmap starts to
 reference coordinates only after sampling; profile arguments remain toroidal
 flux `s`, not reference `sqrt(s)`. See [alpha births](https://github.com/itpplasma/SIMPLE/blob/main/docs/alpha-birth.md)
 for source-grid resolution, units, supported inputs and marker normalization.
+
+Collisions evaluate `&profiles` at `profile_s(z)` (`src/profile_radius.f90`),
+which maps the integration radius to toroidal flux `s`: `z(1)` for
+`integ_coords` -1, 0, 1, 2; the source-field radius after `integ_to_ref` for
+3 and 4 (Meiss `r = sqrt(s)` on VMEC, chartmap `rho` on splined fields; the
+Albert radius `psi/Ath_norm` is not `s`); the reference radius for 5; the
+enclosed toroidal flux of `rho_g` for 6. Chartmap radii use `s = rho^2`, or
+`(rho/rho_lcfs)^2` for `vmec_extended`/`vmec_to_wall` charts.
 
 ---
 

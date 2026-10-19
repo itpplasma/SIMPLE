@@ -28,7 +28,7 @@ module field_boozer_chartmap
 
     private
     public :: boozer_chartmap_field_t, create_boozer_chartmap_field, &
-              is_boozer_chartmap
+              is_boozer_chartmap, has_boozer_rk_tables
 
     type, extends(magnetic_field_t) :: boozer_chartmap_field_t
         type(BatchSplineData1D) :: aphi_spline
@@ -65,6 +65,21 @@ contains
 
         status = nf90_close(ncid)
     end function is_boozer_chartmap
+
+    !> True for a Boozer chartmap carrying the compact RK tables (rk_Bmod, ...)
+    !> that native CUDA tracing needs (libneo booz_xform_to_boozer_chartmap).
+    function has_boozer_rk_tables(filename) result(has_tables)
+        character(len=*), intent(in) :: filename
+        logical :: has_tables
+        integer :: ncid, status, varid
+
+        has_tables = .false.
+        if (.not. is_boozer_chartmap(filename)) return
+        status = nf90_open(trim(filename), nf90_nowrite, ncid)
+        if (status /= nf90_noerr) return
+        has_tables = nf90_inq_varid(ncid, "rk_Bmod", varid) == nf90_noerr
+        status = nf90_close(ncid)
+    end function has_boozer_rk_tables
 
     subroutine create_boozer_chartmap_field(filename, field)
         use libneo_coordinates, only: coordinate_system_t, &
