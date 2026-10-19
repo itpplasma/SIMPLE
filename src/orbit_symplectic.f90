@@ -32,9 +32,6 @@ implicit none
 
 procedure(orbit_timestep_sympl_i), pointer :: orbit_timestep_sympl => null()
 procedure(orbit_timestep_sympl_i), pointer, private :: raw_timestep_sympl => null()
-! Gauss steps keep the last collocation stage in the field cache between steps;
-! the endpoint cache is refreshed once per macrostep, where callers read it.
-    logical, private :: refresh_gauss_field = .false.
 
 contains
 
@@ -279,11 +276,8 @@ recursive subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
       print *, 'invalid mode for orbit_timestep_sympl: ', mode_init
       error stop
   end select
-        refresh_gauss_field = any(mode_init == [GAUSS1, GAUSS2, GAUSS3, GAUSS4])
   if (mode_init /= RK45 .and. sympl_rmax <= 1d0) then
     orbit_timestep_sympl => orbit_timestep_sympl_with_boundary
-        else if (refresh_gauss_field) then
-            orbit_timestep_sympl => orbit_timestep_sympl_raw_refreshed
   else if (mode_init /= RK45) then
     orbit_timestep_sympl => raw_timestep_sympl
   end if
@@ -1979,18 +1973,7 @@ recursive subroutine orbit_timestep_sympl_with_boundary(si, f, ierr)
     error stop 'symplectic timestep implementation is not initialized'
   end if
   call advance_symplectic_with_boundary(si, f, raw_timestep_sympl, ierr)
-        if (refresh_gauss_field .and. ierr == SYMPLECTIC_STEP_OK) &
-            call refresh_endpoint_field(si, f)
 end subroutine orbit_timestep_sympl_with_boundary
-
-    recursive subroutine orbit_timestep_sympl_raw_refreshed(si, f, ierr)
-        type(symplectic_integrator_t), intent(inout) :: si
-        type(field_can_t), intent(inout) :: f
-        integer, intent(out) :: ierr
-
-        call raw_timestep_sympl(si, f, ierr)
-        if (ierr == SYMPLECTIC_STEP_OK) call refresh_endpoint_field(si, f)
-    end subroutine orbit_timestep_sympl_raw_refreshed
 
 subroutine advance_symplectic_with_boundary(si, f, raw_step, ierr)
   type(symplectic_integrator_t), intent(inout) :: si
@@ -2081,21 +2064,16 @@ end subroutine advance_symplectic_with_boundary
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-    pure function gauss_endpoint_radius(s, c, radius, radius_rate) &
-        result(radius_end)
-        ! The Gauss update advances (theta, phi, p_theta, p_phi); the radius is
-        ! only defined implicitly by p_theta(r, theta, phi, p_phi). Along the
-        ! collocation polynomial u(tau) the radius R(u(tau)) is known exactly at
-        ! the stages, R(u(c_k)) = r_k, together with its tau-derivative
-        ! dt*dr/dt from the stage rates (u'(c_k) = f(u(c_k)) by collocation).
-        ! Hermite extrapolation of these 2s conditions to tau = 1 gives the
-        ! endpoint radius to O(dt**(2s)) per step, the order of the method,
-        ! without a field evaluation. The error does not accumulate: every step
-        ! solves its stage radii from the constraint again and uses this value
-        ! only as the reported state and as the next Newton guess.
+    pure function hermite_endpoint(s, c, value, rate) result(value_end)
+        ! Extrapolate a smooth function of the Gauss collocation polynomial
+        ! u(tau) to the step end tau = 1 from its values and tau-derivatives at
+        ! the s stages. By collocation u'(c_k) = f(u(c_k)), so the stage rates
+        ! follow from the stage field caches, and the 2s Hermite conditions give
+        ! the endpoint to O(dt**(2s)) per step, the order of the method, with no
+        ! field evaluation.
         integer, intent(in) :: s
-        real(dp), intent(in) :: c(s), radius(s), radius_rate(s)
-        real(dp) :: radius_end
+        real(dp), intent(in) :: c(s), value(s), rate(s)
+        real(dp) :: value_end
         real(dp) :: node(2*s), table(2*s)
         integer :: i, j, n
 
@@ -2103,39 +2081,57 @@ end subroutine advance_symplectic_with_boundary
         do i = 1, s
             node(2*i - 1) = c(i)
             node(2*i) = c(i)
-            table(2*i - 1) = radius(i)
-            table(2*i) = radius(i)
+            table(2*i - 1) = value(i)
+            table(2*i) = value(i)
         end do
         ! Divided differences in place; repeated nodes take the derivative.
         do j = 1, n - 1
             do i = n, j + 1, -1
                 if (j == 1 .and. mod(i, 2) == 0) then
-                    table(i) = radius_rate(i/2)
+                    table(i) = rate(i/2)
                 else
                     table(i) = (table(i) - table(i - 1))/(node(i) - node(i - j))
                 end if
             end do
         end do
-        radius_end = table(n)
+        value_end = table(n)
         do i = n - 1, 1, -1
-            radius_end = table(i) + (1d0 - node(i))*radius_end
+            value_end = table(i) + (1d0 - node(i))*value_end
         end do
-    end function gauss_endpoint_radius
+    end function hermite_endpoint
 
-    subroutine refresh_endpoint_field(si, f)
-        ! A Gauss step leaves the last collocation stage in the field cache,
-        ! while callers read f%vpar and f%Bmod at the endpoint after each
-        ! macrostep. Refresh the cache there once, keeping the canonical p_theta
-        ! of the update rather than the one implied by the extrapolated radius.
-        type(symplectic_integrator_t), intent(in) :: si
+    subroutine extrapolate_endpoint_field(s, c, fs, radius_rate, angle_rate, f)
+        ! Callers read f%vpar and f%Bmod after every step, and collisions rebuild
+        ! p_theta from the cached potentials. Extrapolate the cached field values
+        ! to the endpoint like the radius; vpar and H then follow from p_phi.
+        ! Derivatives stay those of the last stage, as before; the next step
+        ! evaluates its own.
+        integer, intent(in) :: s
+        real(dp), intent(in) :: c(s), radius_rate(s), angle_rate(2, s)
+        type(field_can_t), intent(in) :: fs(s)
         type(field_can_t), intent(inout) :: f
-        real(dp) :: canonical_pth
+        real(dp) :: rates(s)
 
-        canonical_pth = f%pth
-        call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
-        call get_derivatives(f, si%z(4))
-        f%pth = canonical_pth
-    end subroutine refresh_endpoint_field
+        rates = tau_rates(fs%dAth(1), fs%dAth(2), fs%dAth(3))
+        f%Ath = hermite_endpoint(s, c, fs%Ath, rates)
+        rates = tau_rates(fs%dAph(1), fs%dAph(2), fs%dAph(3))
+        f%Aph = hermite_endpoint(s, c, fs%Aph, rates)
+        rates = tau_rates(fs%dhth(1), fs%dhth(2), fs%dhth(3))
+        f%hth = hermite_endpoint(s, c, fs%hth, rates)
+        rates = tau_rates(fs%dhph(1), fs%dhph(2), fs%dhph(3))
+        f%hph = hermite_endpoint(s, c, fs%hph, rates)
+        rates = tau_rates(fs%dBmod(1), fs%dBmod(2), fs%dBmod(3))
+        f%Bmod = hermite_endpoint(s, c, fs%Bmod, rates)
+
+    contains
+
+        pure function tau_rates(dr, dth, dph) result(rate)
+            real(dp), intent(in) :: dr(s), dth(s), dph(s)
+            real(dp) :: rate(s)
+
+            rate = dr*radius_rate + dth*angle_rate(1, :) + dph*angle_rate(2, :)
+        end function tau_rates
+    end subroutine extrapolate_endpoint_field
 
 recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
   !
@@ -2154,7 +2150,8 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
   type(field_can_t) :: accepted_field
   type(symplectic_integrator_t) :: accepted_integrator
   real(dp) :: a(s,s), b(s), c(s), Hprime(s), dz(4*s)
-        real(dp) :: radius_rate(s), radius_end, phi_rate, pphi_rate
+        real(dp) :: radius_rate(s), angle_rate(2, s), radius_end, pphi_rate
+        real(dp) :: canonical_pth
 
   do k = 1,s
     fs(k) = f
@@ -2246,6 +2243,14 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
         fs(k)%hph = fs(k)%hph + fs(k)%dhph(1)*dz(1) &  ! d/dr
                       + fs(k)%dhph(2)*dz(2) &
                       + fs(k)%dhph(3)*dz(3)
+
+                    ! Not used by the update, but extrapolated to the endpoint cache.
+                    fs(k)%Ath = fs(k)%Ath + fs(k)%dAth(1)*dz(1) + fs(k)%dAth(2)*dz(2) &
+                                + fs(k)%dAth(3)*dz(3)
+                    fs(k)%Aph = fs(k)%Aph + fs(k)%dAph(1)*dz(1) + fs(k)%dAph(2)*dz(2) &
+                                + fs(k)%dAph(3)*dz(3)
+                    fs(k)%Bmod = fs(k)%Bmod + fs(k)%dBmod(1)*dz(1) &
+                                 + fs(k)%dBmod(2)*dz(2) + fs(k)%dBmod(3)*dz(3)
       end do
     else
       do k = 1, s
@@ -2269,15 +2274,22 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
       si%z(4) = si%z(4) - si%dt*b(l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))
     end do
 
+            ! The update advances (theta, phi, p_theta, p_phi); the radius is
+            ! defined only implicitly by p_theta. Report the endpoint radius and
+            ! field cache by Hermite extrapolation of the stages. The error does not
+            ! accumulate: each step solves its stage radii from the constraint
+            ! again, and the endpoint only seeds the next Newton guess.
+            ! Stage rates in tau = t/dt. dr/dt follows from d/dt p_theta(r, theta,
+            ! phi, p_phi) = dp_theta/dt along the stage; the theta terms cancel
+            ! against p_theta's own rate.
             do k = 1, s
-                ! dr/dt from d/dt p_theta(r, theta, phi, p_phi) = dp_theta/dt along the
-                ! stage; the theta terms cancel against p_theta's own rate.
-                phi_rate = (fs(k)%vpar - Hprime(k)*fs(k)%hth)/fs(k)%hph
-                pphi_rate = -(fs(k)%dH(3) - Hprime(k)*fs(k)%dpth(3))
-                radius_rate(k) = si%dt*(-fs(k)%dH(2) - fs(k)%dpth(3)*phi_rate &
-                                        - fs(k)%hth/fs(k)%hph*pphi_rate)/fs(k)%dpth(1)
+                angle_rate(1, k) = si%dt*Hprime(k)
+                angle_rate(2, k) = si%dt*(fs(k)%vpar - Hprime(k)*fs(k)%hth)/fs(k)%hph
+                pphi_rate = -si%dt*(fs(k)%dH(3) - Hprime(k)*fs(k)%dpth(3))
+                radius_rate(k) = (-si%dt*fs(k)%dH(2) - fs(k)%dpth(3)*angle_rate(2, k) &
+                                  - fs(k)%hth/fs(k)%hph*pphi_rate)/fs(k)%dpth(1)
             end do
-            radius_end = gauss_endpoint_radius(s, c, x(1:4*s:4), radius_rate)
+            radius_end = hermite_endpoint(s, c, x(1:4*s:4), radius_rate)
             if (.not. finite_newton_iterate([radius_end])) then
                 si = accepted_integrator
                 f = accepted_field
@@ -2293,8 +2305,15 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
                 return
             end if
             ! The polar chart cannot represent a negative radius. Near the axis keep
-            ! the last stage radius, as before; the next step solves its stages anew.
-            if (radius_end >= 0d0) si%z(1) = radius_end
+            ! the last stage radius and cache, as before; the next step solves its
+            ! stages anew.
+            if (radius_end >= 0d0) then
+                si%z(1) = radius_end
+                canonical_pth = f%pth
+                call extrapolate_endpoint_field(s, c, fs, radius_rate, angle_rate, f)
+                call get_val(f, si%z(4))
+                f%pth = canonical_pth
+            end if
 
     ktau = ktau+1
   enddo

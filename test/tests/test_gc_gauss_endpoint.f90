@@ -3,28 +3,29 @@ program test_gc_gauss_endpoint
     ! implicitly by p_theta(r, theta, phi, p_phi). The step reports a Hermite
     ! extrapolation of the stage radii. Check against an independent closed-form
     ! inversion that it converges at the order 2s of the method (the last stage
-    ! radius, reported before, converges only at first order), that the
-    ! macrostep leaves the endpoint field cache, and that rejected steps leave
-    ! the state unchanged.
+    ! radius, reported before, converges only at first order), that the field
+    ! cache converges to the endpoint at the same order, and that rejected steps
+    ! leave the state unchanged.
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use field_can_mod, only: field_can_t, evaluate
     use field_can_test, only: evaluate_test
     use orbit_symplectic_base, only: symplectic_integrator_t, sympl_rmax, &
                                      GAUSS1, SYMPLECTIC_STEP_OK
-    use orbit_symplectic, only: orbit_sympl_init, orbit_timestep_sympl, &
-                                orbit_timestep_sympl_rk_gauss
+    use orbit_symplectic, only: orbit_sympl_init, orbit_timestep_sympl_rk_gauss
     implicit none
     real(dp), parameter :: mu = 0.2_dp, ro0 = 0.01_dp
     real(dp), parameter :: start(4) = [0.2_dp, 0.7_dp, 0.3_dp, &
                                        0.4_dp*(1 + 0.2_dp*cos(0.7_dp)) &
                                        - (0.2_dp**2/2 - 0.2_dp**4)/ro0]
-    integer, parameter :: nlevel = 4
-    real(dp), parameter :: dt0 = 0.4_dp
+    integer, parameter :: nlevel = 5
+    ! First step per method: inside the asymptotic range (Gauss2's cache error
+    ! changes sign near dt = 0.4), and above the roundoff floor at high order.
+    real(dp), parameter :: dt_start(4) = [0.2_dp, 0.2_dp, 0.8_dp, 1.6_dp]
     integer :: stages, level, status, k, rejected
     type(field_can_t) :: f, initial, saved_field
     type(symplectic_integrator_t) :: si, saved
-    real(dp) :: radius_error(nlevel), rate
-    real(dp) :: exact_radius, physical_pth, physical_h
+    real(dp) :: radius_error(nlevel), cache_error(nlevel), rate, cache_rate
+    real(dp) :: exact_radius
 
     evaluate => evaluate_test
     sympl_rmax = 1.0_dp
@@ -34,35 +35,26 @@ program test_gc_gauss_endpoint
     do stages = 1, 4
         do level = 1, nlevel
             f = initial
-            ! Higher orders reach roundoff sooner; start them at longer steps.
-            call orbit_sympl_init(si, f, start, &
-                                  dt0*2**max(0, stages - 2)/2**(level - 1), 1, &
-                                  1e-13_dp, GAUSS1 + stages - 1)
+            call orbit_sympl_init(si, f, start, dt_start(stages)/2**(level - 1), &
+                                  1, 1e-13_dp, GAUSS1 + stages - 1)
             call orbit_timestep_sympl_rk_gauss(si, f, stages, status)
             if (status /= SYMPLECTIC_STEP_OK) error stop 'Gauss interior step'
             exact_radius = inverted_radius(si%z, f%pth)
             radius_error(level) = abs(si%z(1) - exact_radius)
+            ! The field cache must describe the reported endpoint. H is conserved
+            ! along the orbit and would hide a stale cache; vpar does not.
+            cache_error(level) = abs(f%vpar - analytic_vpar(si%z))
         end do
         rate = observed_rate(radius_error)
-        print '(a,i0,a,4es10.2,a,f5.2)', 'Gauss', stages, &
-            ' endpoint radius error', radius_error, '  order', rate
+        cache_rate = observed_rate(cache_error)
+        print '(a,i0,a,f5.2,a,f5.2)', 'Gauss', stages, ' endpoint radius order', &
+            rate, '  cache vpar order', cache_rate
         ! Gauss4's eighth order reaches roundoff before it is asymptotic in
         ! double precision; require at least sixth order there.
         if (rate < min(2*stages, 6) - 0.5_dp) &
             error stop 'endpoint radius below method order'
-    end do
-
-    ! A full macrostep refreshes the field cache at the endpoint.
-    do stages = 1, 4
-        f = initial
-        call orbit_sympl_init(si, f, start, 0.05_dp, 3, 1e-13_dp, &
-                              GAUSS1 + stages - 1)
-        call orbit_timestep_sympl(si, f, status)
-        if (status /= SYMPLECTIC_STEP_OK) error stop 'Gauss macrostep'
-        call analytic_values(si%z, physical_pth, physical_h)
-        ! The cache is evaluated at the reported state itself; how close that
-        ! state is to the canonical p_theta is the order check above.
-        if (abs(physical_h - f%H) > 1e-12_dp) error stop 'stale field cache energy'
+        if (cache_rate < min(2*stages, 6) - 0.5_dp) &
+            error stop 'endpoint field cache below method order'
     end do
 
     ! Rejected steps near the boundary roll back the accepted state.
@@ -125,6 +117,12 @@ contains
         end do
         inverted_radius = 0.5_dp*(low + high)
     end function inverted_radius
+
+    real(dp) function analytic_vpar(z)
+        real(dp), intent(in) :: z(4)
+
+        analytic_vpar = (z(4) + (z(1)**2/2 - z(1)**4)/ro0)/(1 + z(1)*cos(z(2)))
+    end function analytic_vpar
 
     subroutine analytic_values(z, pth, h)
         real(dp), intent(in) :: z(4)
