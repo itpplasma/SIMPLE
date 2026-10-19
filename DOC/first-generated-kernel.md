@@ -120,8 +120,8 @@ max relative error Bmod = ~5.7e-7 vs direct field  (gate: < 1e-3)
 X ulp (max, Bmod)       = ~2.7e9 ulp (diagnostic)
 ```
 
-The two timings are within run-to-run noise of each other on one core; the
-derivative path is not measurably dearer at this workload size.
+These are from a single run. That the derivative path timed faster than the
+value-only path is not explained yet; repeat the run before quoting a ratio.
 
 The ulp figure is spline-interpolation accuracy at the default 62x63x64 grid,
 not a rounding-error bound. It is the accuracy the kernel delivers today; a
