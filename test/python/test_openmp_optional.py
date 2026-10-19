@@ -19,11 +19,25 @@ import sys
 OMP_SYMBOL = re.compile(r"\bomp_(?:get|set|in|init|destroy|test)_\w+\s*\(")
 USE_OMP = re.compile(r"^\s*use\s+omp_lib\b", re.IGNORECASE)
 SENTINEL = re.compile(r"^\s*!\$\s")
+OMP_CONDITIONAL = re.compile(r"^#\s*if(?:n?def\s+_OPENMP\b|.*\bdefined\s*\(?\s*_OPENMP\b)")
 
 
 def offending_lines(path: pathlib.Path) -> list[tuple[int, str]]:
     bad = []
+    # Preprocessed sources may guard with #ifdef/#ifndef _OPENMP instead of the
+    # sentinel; track how many enclosing conditionals test _OPENMP.
+    conditionals: list[bool] = []
     for number, line in enumerate(path.read_text(errors="replace").splitlines(), 1):
+        directive = line.strip()
+        if directive.startswith("#if"):
+            conditionals.append(OMP_CONDITIONAL.match(directive) is not None)
+            continue
+        if directive.startswith("#endif"):
+            if conditionals:
+                conditionals.pop()
+            continue
+        if any(conditionals):
+            continue
         if SENTINEL.match(line):
             continue
         stripped = line.lstrip()
@@ -39,7 +53,8 @@ def main() -> None:
     sources = [
         p
         for directory in ("src", "app", "test")
-        for p in (root / directory).rglob("*.f90")
+        for pattern in ("*.f90", "*.F90")
+        for p in (root / directory).rglob(pattern)
     ]
     if not sources:
         raise SystemExit(f"no Fortran sources found under {root}")
