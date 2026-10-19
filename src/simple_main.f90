@@ -19,7 +19,8 @@ module simple_main
                  boundary_event_time_width, integmode, relerr, trace_time, class_plot, &
                    fast_class, generate_start_only, ntcut, iclass, bmin, bmax, zstart, &
                       zend, trap_par, perp_inv, sbeg, ntimstep, should_skip, &
-                      reset_seed_if_deterministic, particle_stream_id, field_input, &
+                      reset_seed_if_deterministic, particle_stream_id, &
+                      classification_enabled, field_input, &
                       isw_field_type, reuse_batch, &
                       max_consecutive_warning_holds, &
                      coord_input, wall_input, wall_units, wall_hit, wall_hit_triangle, &
@@ -1555,9 +1556,8 @@ contains
     end subroutine init_bminmax
 
     logical function needs_bminmax_cache()
-        ! Match the current readers. Classifier semantics are kept unchanged
-        ! here; broad classifier changes belong in the classifier PR.
-        if ((ntcut > 0) .or. class_plot) then
+        ! Match the current readers.
+        if (classification_enabled()) then
             needs_bminmax_cache = num_surf > 1
         else
             needs_bminmax_cache = num_surf /= 1
@@ -1918,7 +1918,7 @@ contains
 
         if (swcoll) call reset_seed_if_deterministic(particle_stream_id(ipart))
 
-        if (ntcut > 0 .or. class_plot) then
+        if (classification_enabled()) then
             call trace_orbit_with_classifiers(anorb, ipart, class_result)
             if (class_plot) then
                 call write_classification_results(ipart, class_result)
@@ -3281,7 +3281,7 @@ contains
         end do
         close (unit)
 
-        if (ntcut > 0 .or. class_plot) then
+        if (classification_enabled()) then
             open (newunit=unit, file='class_parts.dat', recl=1024)
             do i = 1, ntestpart
                 write (unit, *) i, zstart(1, i), perp_inv(i), iclass(:, i)
