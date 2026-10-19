@@ -1383,22 +1383,31 @@ add_test(NAME test_fo_symplectic COMMAND test_fo_symplectic.x
     ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
     ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000)
 set_tests_properties(test_fo_symplectic PROPERTIES LABELS "integration" TIMEOUT 900)
-add_test(NAME test_fo_symplectic_long COMMAND test_fo_symplectic.x
-    ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
-    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000000)
-set_tests_properties(test_fo_symplectic_long PROPERTIES
-    LABELS "slow;integration" TIMEOUT 14400)
+# The long energy runs are independent orbits; register one CTest case per
+# marker so they run concurrently. Each passes the same field, step count,
+# velocity scale, step size and tolerance as the former single long test.
+# Its derivative and map checks do not depend on the step count and remain
+# in the 1000-step sibling (test_fo_symplectic, _resolved, _second, ...).
+function(add_fo_long_markers name field nsteps velocity)
+    foreach(marker IN LISTS ARGN)
+        add_test(NAME ${name}_marker${marker} COMMAND test_fo_symplectic.x
+            ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+            ${field} ${nsteps} ${velocity} ${marker})
+        set_tests_properties(${name}_marker${marker} PROPERTIES
+            LABELS "slow;integration" TIMEOUT 14400)
+    endforeach()
+endfunction()
+add_fo_long_markers(test_fo_symplectic_long
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000000 1
+    0 1 2 9 20 21 120)
 
 add_test(NAME test_fo_symplectic_resolved COMMAND test_fo_symplectic.x
     ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
     ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000 100)
 set_tests_properties(test_fo_symplectic_resolved PROPERTIES
     LABELS "integration" TIMEOUT 900)
-add_test(NAME test_fo_symplectic_resolved_long COMMAND test_fo_symplectic.x
-    ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
-    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000000 100)
-set_tests_properties(test_fo_symplectic_resolved_long PROPERTIES
-    LABELS "slow;integration" TIMEOUT 14400)
+add_fo_long_markers(test_fo_symplectic_resolved_long
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000000 100 0 1 2)
 
 add_test(NAME test_fo_symplectic_newton_boundary COMMAND test_fo_symplectic.x
     ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
@@ -1419,24 +1428,18 @@ endif()
 # Second 3D stellarator already shipped with the pinned libneo dependency.
 # Its provenance identifies SPECTRE's Nfp=5, Ntor=2 G3V3L3Fi case.
 set(FO_SECOND_FIELD "${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5")
-foreach(fo_suffix IN ITEMS second second_long second_resolved second_resolved_long)
-    set(fo_nsteps 1000)
+foreach(fo_suffix IN ITEMS second second_resolved)
     set(fo_velocity 1)
-    if(fo_suffix MATCHES "long")
-        set(fo_nsteps 1000000)
-    endif()
     if(fo_suffix MATCHES "resolved")
         set(fo_velocity 100)
     endif()
     add_test(NAME test_fo_symplectic_${fo_suffix} COMMAND test_fo_symplectic.x
         ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
-        ${FO_SECOND_FIELD} ${fo_nsteps} ${fo_velocity})
+        ${FO_SECOND_FIELD} 1000 ${fo_velocity})
     set_tests_properties(test_fo_symplectic_${fo_suffix} PROPERTIES
         LABELS "integration" TIMEOUT 900)
-    if(fo_suffix MATCHES "long")
-        set_tests_properties(test_fo_symplectic_${fo_suffix} PROPERTIES
-            LABELS "integration;slow" TIMEOUT 14400)
-    endif()
+    add_fo_long_markers(test_fo_symplectic_${fo_suffix}_long
+        ${FO_SECOND_FIELD} 1000000 ${fo_velocity} 0 1 2)
 endforeach()
 
 # Same fictitious duration at successive resolutions; no hybrid switches.
