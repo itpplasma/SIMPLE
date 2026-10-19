@@ -76,6 +76,7 @@ module simple_main
     integer, parameter :: INPUT_TEST = 1
     integer, parameter :: INPUT_SPECTRE = 2
     integer, parameter :: INPUT_CHARTMAP = 3
+    integer, parameter :: INPUT_VMECPP = 4
 
     integer, parameter :: RK_RECOVERY_GENERIC = 1
     integer, parameter :: RK_RECOVERY_AXIS = 2
@@ -359,15 +360,19 @@ contains
         end if
     end subroutine init_run
 
-    !> Classify the configured input as TEST, SPECTRE, Boozer chartmap or VMEC.
+    !> Classify the configured input as TEST, SPECTRE, Boozer chartmap, VMEC or
+    !> direct VMEC++ (a .json input).
     integer function run_input_kind()
         use magfie_sub, only: TEST
         use field_boozer_chartmap, only: is_boozer_chartmap
         use field, only: is_spectre_file
+        use params, only: netcdffile
 
         run_input_kind = INPUT_VMEC
         if (isw_field_type == TEST) then
             run_input_kind = INPUT_TEST
+        else if (is_vmecpp_input(netcdffile)) then
+            run_input_kind = INPUT_VMECPP
         else if (len_trim(field_input) > 0) then
             if (is_spectre_file(field_input)) then
                 run_input_kind = INPUT_SPECTRE
@@ -380,6 +385,9 @@ contains
     !> Select the field used for sampling and integrate the starting field line.
     subroutine init_sampling_field
         use magfie_sub, only: TEST, VMEC, BOOZER, SPECTRE, init_magfie
+#ifdef SIMPLE_ENABLE_VMECPP
+        use magfie_sub, only: VMECPP
+#endif
         use samplers, only: init_starting_surf
         use timing, only: print_phase_time
 
@@ -402,6 +410,13 @@ contains
                 call init_magfie(isw_field_type)
                 call init_starting_surf
             end if
+        case (INPUT_VMECPP)
+#ifdef SIMPLE_ENABLE_VMECPP
+            call init_magfie(VMECPP)
+#else
+            error stop 'SIMPLE was built without SIMPLE_ENABLE_VMECPP'
+#endif
+            call init_starting_surf
         case default
             call init_magfie(VMEC)
             call init_starting_surf
@@ -443,7 +458,7 @@ contains
                 'multi-volume SPECTRE tracing requires integmode > 0 and crossing_level = 3; '// &
                 'see DOC/spectre-rejected-interface-models.md'
         end if
-        if (run_input_kind() == INPUT_VMEC) then
+        if (run_input_kind() == INPUT_VMEC .or. run_input_kind() == INPUT_VMECPP) then
             call init_magfie(isw_field_type)
             call print_phase_time('Field type initialization completed')
         end if
@@ -503,6 +518,9 @@ contains
         use timing, only: print_phase_time
         use magfie_sub, only: TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT, &
             REFCOORDS, SPECTRE, set_magfie_refcoords_field
+#ifdef SIMPLE_ENABLE_VMECPP
+        use magfie_sub, only: VMECPP
+#endif
         use field_splined, only: splined_field_t, create_splined_field
         use field_vmec, only: vmec_field_t
         use reference_coordinates, only: init_reference_coordinates, ref_coords
@@ -520,7 +538,7 @@ contains
         integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
         class(magnetic_field_t), allocatable :: field_temp
         character(:), allocatable :: vmec_equilibrium_file
-        logical :: use_boozer_chartmap, use_spectre, cartesian_chart
+        logical :: use_boozer_chartmap, use_spectre, use_vmecpp, cartesian_chart
 
         ! Release the previous FO tables when a library run changes fields.
         call spectre_fo_field_clear
@@ -535,7 +553,8 @@ contains
         ! Check if field_input is a Boozer chartmap or SPECTRE file (no VMEC needed)
         use_boozer_chartmap = .false.
         use_spectre = .false.
-        if (len_trim(field_input) > 0) then
+        use_vmecpp = is_vmecpp_input(vmec_file)
+        if (len_trim(field_input) > 0 .and. .not. use_vmecpp) then
             use_spectre = is_spectre_file(field_input)
             if (.not. use_spectre) use_boozer_chartmap = is_boozer_chartmap(field_input)
         end if
@@ -570,6 +589,22 @@ contains
             invariant_edge_radius = 0.5_dp
             self%fper = twopi ! Full torus for analytic tokamak
             call print_phase_time('TEST field mode - no input files required')
+        else if (use_vmecpp) then
+#ifdef SIMPLE_ENABLE_VMECPP
+            block
+                use field_vmecpp, only: get_vmecpp_metadata, open_vmecpp_geometry
+                use new_vmec_stuff_mod, only: rmajor
+                integer :: nper_vmecpp
+                call open_vmecpp_geometry(vmec_file)
+                call get_vmecpp_metadata(nper_vmecpp, rmajor)
+                nper = nper_vmecpp
+                self%fper = twopi/real(nper, dp)
+                isw_field_type = VMECPP
+            end block
+            call print_phase_time('VMEC++ direct geometry initialization completed')
+#else
+            error stop 'SIMPLE was built without SIMPLE_ENABLE_VMECPP'
+#endif
         else if (use_spectre) then
             call init_spectre_field(self)
             call print_phase_time('SPECTRE field loading completed')
@@ -688,6 +723,15 @@ contains
             call print_phase_time('Canonical field initialization completed')
         end if
     end subroutine init_field
+
+    logical function is_vmecpp_input(path)
+        character(*), intent(in) :: path
+        integer :: length
+
+        length = len_trim(path)
+        is_vmecpp_input = length >= 5
+        if (is_vmecpp_input) is_vmecpp_input = path(length - 4:length) == '.json'
+    end function is_vmecpp_input
 
     subroutine init_spectre_field(self)
         !> VMEC-free SPECTRE setup. Mirrors the Boozer-chartmap precedent: no

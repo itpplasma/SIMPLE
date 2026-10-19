@@ -187,6 +187,29 @@ to statA ($\times 2.99792458\times 10^{9}$).
 enter only through this path after conversion with
 `tools/gvec_to_boozer_chartmap.py`; SIMPLE does not link GVEC.
 
+`vmecpp_field` (`src/field/field_vmecpp.f90`) is the direct VMEC++ path. With
+`SIMPLE_ENABLE_VMECPP=ON`, `netcdffile` may name a VMEC++ JSON input
+(`.json`); `init_field` passes it to the ISO C geometry API
+(`src/field/vmecpp_c_api/`), which runs VMEC++ in memory and keeps the
+geometry handle. No `wout` is read or written. The API returns $R$, $Z$,
+$\lambda$ and both flux profiles as ten-entry jets (value, first derivatives
+in $(s,\vartheta,\zeta)$, all second derivatives); `magfie_vmecpp` forms the
+covariant basis, metric, $B$, `bder` and `hcurl` from them without finite
+differences, in VMEC coordinates and units. `isw_field_type` is set to
+`VMECPP`. The handle is created once and destroyed on close.
+
+VMEC++ upstream installs no C++ headers and exports no CMake package, so the
+option fetches the sources with `FetchContent` at `VMECPP_GIT_TAG` and builds
+them with SIMPLE. The option is off by default; an ordinary build never
+fetches VMEC++. `VMECPP_TEST_DATA_DIR` defaults to the test data of the
+fetched sources (matching input and `wout` pair for the parity tests):
+
+```
+cmake -S . -B build -GNinja -DCMAKE_BUILD_TYPE=Fast -DSIMPLE_ENABLE_VMECPP=ON
+cmake --build build
+ctest --test-dir build/test -R test_vmecpp
+```
+
 ### 2.2 Splined field
 
 `splined_field_t` resamples any field on the reference coordinates and then
