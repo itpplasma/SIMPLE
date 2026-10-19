@@ -615,6 +615,22 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
     set_tests_properties(test_class_scores_driver PROPERTIES
         LABELS "integration;system"
         TIMEOUT 120)
+
+    # The script runs simple.x with OMP_NUM_THREADS=1 and 4 and compares.
+    add_test(NAME test_class_plot_threads
+        COMMAND ${CMAKE_COMMAND} -E env
+            CTEST_BINARY_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}
+            OMP_NUM_THREADS=4
+            OMP_DYNAMIC=FALSE
+            ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_class_plot_threads.py
+            $<TARGET_FILE:simple.x>
+            ${WOUT_FILE}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(test_class_plot_threads PROPERTIES
+        LABELS "integration;system"
+        PROCESSORS 4
+        TIMEOUT 120)
 endif()
 
 add_executable (test_coordinates.x test_coordinates.f90)
