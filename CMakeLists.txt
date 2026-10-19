@@ -88,10 +88,10 @@ if(SIMPLE_ENABLE_VMECPP)
     # (src/field/vmecpp_c_api); upstream maintains only the C++ API.
     enable_language(CXX)
     include(FetchContent)
-    set(VMECPP_GIT_REPOSITORY "https://github.com/itpplasma/vmecpp.git"
+    set(VMECPP_GIT_REPOSITORY "https://github.com/proximafusion/vmecpp.git"
         CACHE STRING "VMEC++ source repository")
     # Pinned, not a branch: the geometry layer this adapter calls must match.
-    set(VMECPP_GIT_TAG "d2de4fd046b90bb3c011a25dadeedd47481ec47a"
+    set(VMECPP_GIT_TAG "0bd147f270a43f3fe52d0aac8049dce97d76668f"
         CACHE STRING "VMEC++ commit to build against")
 
     # Building a second x86-64-v3 copy of the whole core doubles build time and

@@ -398,6 +398,61 @@ jobs:
             build/test/Testing/
             build/test/tests/collisional_stl_wall/
 
+  vmecpp:
+    name: VMEC++ Direct Geometry
+    runs-on: ubuntu-24.04
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
+
+    timeout-minutes: 60
+    env:
+      OMP_NUM_THREADS: 1
+      OPENBLAS_NUM_THREADS: 1
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gfortran \
+            g++ \
+            git-lfs \
+            cmake \
+            ninja-build \
+            pkg-config \
+            zlib1g-dev \
+            libgsl-dev \
+            libhdf5-dev \
+            libfftw3-dev \
+            libnetcdf-dev \
+            libnetcdff-dev \
+            libopenblas-dev \
+            liblapack-dev \
+            openmpi-bin \
+            libopenmpi-dev
+
+      - name: Configure SIMPLE with VMEC++
+        run: |
+          cmake -S . -B build -GNinja -DCMAKE_BUILD_TYPE=Release \
+            -DSIMPLE_ENABLE_VMECPP=ON
+
+      - name: Build SIMPLE with VMEC++
+        run: cmake --build build --config Release
+
+      - name: Run VMEC++ tests
+        run: ctest --test-dir build/test -R vmecpp --output-on-failure
+
   build-docs:
     name: Build Documentation
     runs-on: ubuntu-24.04
