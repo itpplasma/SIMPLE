@@ -87,6 +87,14 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
         LABELS "unit;python" TIMEOUT 30)
 endif()
 
+add_test(
+    NAME test_openmp_optional
+    COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/../python/test_openmp_optional.py
+        ${CMAKE_SOURCE_DIR}
+)
+set_tests_properties(test_openmp_optional PROPERTIES LABELS "unit;regression")
+
 set(BOOZER_CHARTMAP_PYTHON "${Python3_EXECUTABLE}")
 if(EXISTS "${CMAKE_SOURCE_DIR}/.venv/bin/python")
     set(BOOZER_CHARTMAP_PYTHON "${CMAKE_SOURCE_DIR}/.venv/bin/python")
@@ -362,6 +370,23 @@ if (ENABLE_OPENMP)
         LABELS "integration"
         RUN_SERIAL TRUE
         TIMEOUT 120)
+    # Field-evaluation cost ratio between mode_secders=0 and mode_secders=2.
+    # Built but deliberately not registered with ctest: it is a timing
+    # measurement, so its result is hardware-dependent and must not gate CI.
+    # Run manually from the project root: ./build/test/tests/bench_secders_cost.x
+    add_executable (bench_secders_cost.x bench_secders_cost.f90)
+    target_link_libraries(bench_secders_cost.x simple)
+
+    add_executable (test_field_eval_counters.x test_field_eval_counters.f90)
+    target_link_libraries(test_field_eval_counters.x simple)
+    add_test(NAME test_field_eval_counters
+        COMMAND test_field_eval_counters.x
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+    set_tests_properties(test_field_eval_counters PROPERTIES
+        LABELS "unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 300)
+
     add_executable (test_sympl_testfield.x test_sympl_testfield.f90)
     target_link_libraries(test_sympl_testfield.x simple)
     add_test(NAME test_sympl_testfield
@@ -556,6 +581,18 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
     set_tests_properties(test_bminmax_driver PROPERTIES
         LABELS "integration;system"
         TIMEOUT 120)
+
+    add_test(NAME test_fast_class_driver
+        COMMAND ${CMAKE_COMMAND} -E env
+            CTEST_BINARY_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}
+            ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_fast_class_driver.py
+            $<TARGET_FILE:simple.x>
+            ${WOUT_FILE}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(test_fast_class_driver PROPERTIES
+        LABELS "integration;system"
+        TIMEOUT 120)
 endif()
 
 add_executable (test_coordinates.x test_coordinates.f90)
@@ -605,6 +642,18 @@ add_test(NAME test_stencil_utils COMMAND test_stencil_utils.x)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         DEPENDS "generate_test_boozer_chartmap_data"
         LABELS "unit")
+    # Regular near-axis Boozer field (libneo#437) built on request for the
+    # internal VMEC -> Boozer conversion and for Boozer chartmaps.
+    add_executable(test_boozer_regular_axis_field.x
+        field_can/test_boozer_regular_axis_field.f90)
+    target_link_libraries(test_boozer_regular_axis_field.x simple)
+    foreach(_regular_source IN ITEMS vmec chartmap)
+        add_test(NAME test_boozer_regular_axis_field_${_regular_source}
+            COMMAND test_boozer_regular_axis_field.x ${_regular_source})
+        set_tests_properties(test_boozer_regular_axis_field_${_regular_source}
+            PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+            LABELS "unit" TIMEOUT 300)
+    endforeach()
     add_test(NAME test_chartmap_startmode1
         COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/test_chartmap_startmode1.py
@@ -784,6 +833,16 @@ add_test(NAME test_bder_from_splines
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_bder_from_splines PROPERTIES
     LABELS "integration")
+
+add_executable(test_splined_kernel_bench.x test_splined_kernel_bench.f90)
+target_link_libraries(test_splined_kernel_bench.x simple)
+add_dependencies(test_splined_kernel_bench.x ncsx_test_data)
+add_test(NAME test_splined_kernel_bench
+    COMMAND test_splined_kernel_bench.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_splined_kernel_bench PROPERTIES
+    LABELS "unit;performance"
+    TIMEOUT 120)
 
 add_executable(test_refcoords_file_detection.x test_refcoords_file_detection.f90)
 target_link_libraries(test_refcoords_file_detection.x simple)
