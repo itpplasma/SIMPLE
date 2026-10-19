@@ -50,6 +50,9 @@ integmode = 1                    ! integrator: 0 = RK45 (adaptive, non-canonical
 !                                  24 = TDRK (fixed step), 25 = TDRK (adaptive),
 !                                  -1 = RK45 without loading the field_input field object.
 !                                  Values > 0 require a canonical integ_coords (not 1 or 5)
+canonical_chart = 'polar'        ! symplectic chart: 'polar' (r, theta, phi, p_phi) or
+!                                  'cartesian' (Darboux chart X, Y, phi, p_phi, regular at
+!                                  the axis; integmode 3-7, Boozer or test field, CPU only)
 relerr = 1d-13                   ! relative tolerance of the implicit (Newton) and RK solves
 orbit_model = 0                  ! 0 = guiding center, 7 = full orbit (Boris pusher)
 orbit_coord = 0                  ! chart for orbit_model = 7; must then be 1 (Boozer/chartmap)
