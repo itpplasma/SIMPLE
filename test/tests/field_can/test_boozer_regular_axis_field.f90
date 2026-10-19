@@ -11,10 +11,10 @@ program test_boozer_regular_axis_field
     use magfie_sub, only: BOOZER
     use field_can_base, only: field_can_t, n_field_evaluations
     use field_can_mod, only: init_field_can, set_regular_axis_field, &
-        eval_field => evaluate
+                             eval_field => evaluate
     use field_can_boozer, only: evaluate_boozer_regular
     use field_boozer_chartmap, only: boozer_chartmap_field_t, &
-        create_boozer_chartmap_field
+                                     create_boozer_chartmap_field
     use boozer_chartmap, only: export_boozer_chartmap
     use boozer_regular, only: regular_field_t, boozer_regular_field
     use new_vmec_stuff_mod, only: nper
@@ -98,7 +98,7 @@ contains
         real(dp) :: s, th, ph, x, y, err_value, err_derivative
         real(dp) :: reg_value(5), polar_value(5), reg_ds(5), polar_ds(5)
         real(dp) :: reg_dth(5), polar_dth(5), reg_dph(5), polar_dph(5)
-        real(dp) :: dscale(5)
+        real(dp) :: dscale(5), vscale(5)
         integer :: i_s, i_th, i_ph
 
         err_value = 0.0_dp
@@ -129,8 +129,9 @@ contains
                     reg_dph = [reg%dAth(3), reg%dAph(3), reg%dhth(3), &
                                reg%dhph(3), reg%dBmod(3)]
 
-                    err_value = max(err_value, maxval(abs(reg_value - polar_value) &
-                        /max(abs(polar_value), 1.0e-3_dp*maxval(abs(polar_value)))))
+                    vscale = max(abs(polar_value), 1.0e-3_dp*maxval(abs(polar_value)))
+                    err_value = max(err_value, &
+                                    maxval(abs(reg_value - polar_value)/vscale))
                     dscale = max(abs(polar_ds), abs(polar_dth), abs(polar_dph), &
                                  1.0e-3_dp*abs(polar_value))
                     ! h_theta = I/B is a small, noisy flux function on the
@@ -139,9 +140,9 @@ contains
                     ! vector.
                     dscale(3:4) = maxval(dscale(3:4))
                     err_derivative = max(err_derivative, &
-                        maxval(abs(reg_ds - polar_ds)/dscale), &
-                        maxval(abs(reg_dth - polar_dth)/dscale), &
-                        maxval(abs(reg_dph - polar_dph)/dscale))
+                                         maxval(abs(reg_ds - polar_ds)/dscale), &
+                                         maxval(abs(reg_dth - polar_dth)/dscale), &
+                                         maxval(abs(reg_dph - polar_dph)/dscale))
                 end do
             end do
         end do
