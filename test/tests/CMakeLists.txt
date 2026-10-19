@@ -621,6 +621,7 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
         COMMAND ${CMAKE_COMMAND} -E env
             CTEST_BINARY_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}
             OMP_NUM_THREADS=4
+            OMP_DYNAMIC=FALSE
             ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/test_class_plot_threads.py
             $<TARGET_FILE:simple.x>
