@@ -66,6 +66,7 @@ program test_fo_symplectic
             call energy_run(nlong,only_marker)
             cycle
         end if
+        call check_first_order
         call check_derivatives
         call check_monitor_derivatives
         efixed=0; lfixed=1; gfixed=1; mfixed=0
@@ -101,6 +102,33 @@ contains
         call gauss2_potential(z(1:3),width,ro0,av,da,ha)
         z(4:6)=av+matmul(transpose(e),vscale*[0.001_dp,0.002_dp,0.001_dp])
     end subroutine initial
+
+    subroutine check_first_order
+        ! The low-order path must retain the value and RHS through interfaces,
+        ! with and without the radial metric monitor.
+        real(dp) :: z(6), en, en1, f(6), f1(6), df(6, 6), df1(6, 6)
+        real(dp) :: ke, ke1, mon, mon1, grad(6), grad1(6), error
+        real(dp), parameter :: rhos(5) = [0.65_dp, 0.98_dp, 1.0_dp, 1.02_dp, 1.35_dp]
+        integer :: r, mode
+        do r = 1, size(rhos)
+            call initial(z, rhos(r))
+            do mode = 0, 1
+                call generated_eval(z, width, ro0, en, f, df, 0.01_dp, &
+                    0.12_dp, 0.1_dp, real(mode, dp), ke, mon, grad)
+                call generated_eval(z, width, ro0, en1, f1, df1, 0.01_dp, &
+                    0.12_dp, 0.1_dp, real(mode, dp), ke1, mon1, grad1, &
+                    first_order=.true.)
+                error = max( &
+                    abs(en1 - en)/max(abs(en), tiny(1.0_dp)), &
+                    abs(ke1 - ke)/max(abs(ke), tiny(1.0_dp)), &
+                    abs(mon1 - mon)/max(abs(mon), tiny(1.0_dp)), &
+                    maxval(abs(f1 - f))/max(maxval(abs(f)), tiny(1.0_dp)), &
+                    maxval(abs(grad1 - grad))/max(maxval(abs(grad)), tiny(1.0_dp)))
+                if (error > 64*epsilon(1.0_dp)) &
+                    error stop 'first-order value/RHS differs from full evaluation'
+            end do
+        end do
+    end subroutine check_first_order
 
     subroutine check_derivatives
         real(dp)::z(6),zp(6),zm(6),fp(6),fm(6),f(6),df(6,6),dfr(6,6)
