@@ -269,7 +269,8 @@ foreach(_dependency IN ITEMS fortnum fortplot)
     endif()
 endforeach()
 
-# fortnum provides the root finder and allocation-free GPU RK5(4) device
+# fortnum provides the root finder, the ODE integrators behind the explicit
+# integmodes, and the allocation-free GPU RK5(4) device
 # integrator used by SIMPLE. libneo declares fortnum as well, so this must be
 # declared first: FetchContent keeps the first declaration and silently ignores
 # later pins. Without this ordering, a clean clone can resolve an older

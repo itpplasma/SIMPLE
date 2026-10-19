@@ -129,6 +129,24 @@ non-finite or negative coefficient, :math:`p \le 0`, a substep that no longer
 advances time, or more than 100,000 substeps restores the initial state and
 returns an error. In vacuum neither the state nor the generator changes.
 
+Monoenergetic Lorentz mode
+--------------------------
+
+``collision_model = 'lorentz_nustar'`` (with ``swcoll = .true.``) replaces the
+Coulomb operator by pitch-angle scattering at fixed :math:`p`. The collision
+frequency is :math:`\nu = \nu_* |\iota| v_0 / R_0`, with ``nu_star_standard``
+:math:`= \nu_*`, ``lorentz_iota`` :math:`= \iota` and
+``lorentz_major_radius_cm`` :math:`= R_0`; all three must be set (:math:`\nu_*
+\ge 0`, :math:`R_0 > 0`, :math:`\iota \ne 0`). With path length
+:math:`\tau = v_0 t`, one call to ``stost_lorentz`` applies the Euler kick
+:math:`\Delta\lambda = \sqrt{2 D (1-\lambda^2)\Delta\tau}\,\xi - 2\lambda D \Delta\tau`,
+:math:`D = \nu/(2 v_0)`, :math:`\xi = \pm 1`, reflected at :math:`|\lambda| = 1`.
+It has no substep control: keep :math:`\nu \Delta t` small. ``p_abs`` is
+unchanged. The particle energy can be set directly with ``particle_energy_eV``
+(default ``-1``: use :math:`3.5\,\mathrm{MeV}/` ``facE_al``); a nondefault
+``facE_al`` that disagrees with an explicit energy is rejected. Mode and energy
+are written to ``orbits.nc`` and ``results.nc`` as global attributes.
+
 Random streams
 --------------
 

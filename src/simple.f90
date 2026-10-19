@@ -26,19 +26,22 @@ public
   integer, parameter :: ORBIT_FO_LOSS = 2
   integer, parameter :: ORBIT_FO_NUMERICAL = 3
 
-  type :: tracer_t
-    real(dp) :: fper
-    real(dp) :: dtau, dtaumin, v0
-    integer          :: n_e, n_d
+    type :: tracer_t
+        real(dp) :: fper
+        real(dp) :: dtau, dtaumin, v0
+        integer          :: n_e, n_d
 
-    integer :: integmode = 0 ! 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Midpoint, 4-7 = Gauss1-4, 15 = Lobatto3
-    real(dp) :: relerr
+        ! integmode: 0 = RK, 1 = Euler1, 2 = Euler2, 3 = Midpoint, 4-7 = Gauss1-4,
+        ! 15 = Lobatto3, 20 = Gauss-Radau, 21 = Bulirsch-Stoer, 22 = Cash-Karp,
+        ! 24 = TDRK (fixed step), 25 = TDRK (adaptive)
+        integer :: integmode = 0
+        real(dp) :: relerr
 
-    type(field_can_t) :: f
-    type(symplectic_integrator_t) :: si
-    type(multistage_integrator_t) :: mi
-    type(fo_state_t) :: fo   ! full-orbit Boris state (orbit_model=ORBIT_FULL_ORBIT)
-  end type tracer_t
+        type(field_can_t) :: f
+        type(symplectic_integrator_t) :: si
+        type(multistage_integrator_t) :: mi
+        type(fo_state_t) :: fo   ! full-orbit Boris state (orbit_model=ORBIT_FULL_ORBIT)
+    end type tracer_t
 
   interface tstep
       module procedure timestep
@@ -235,51 +238,52 @@ contains
   ! fo_to_gc (FO_LOSS -> ierr=2, counted fo_loss). A field-locate non-convergence
   ! (FO_LOCATE_FAIL -> ierr=3, counted fo_fault) is a numerical fault, reported
   ! but NEVER counted as a physical loss.
-  subroutine orbit_timestep_fo(fo, z, ierr)
-    use diag_counters, only: count_event, EVT_FO_LOSS, EVT_FO_FAULT
-    use orbit_fo_boris, only: FO_OK, FO_LOSS
-    type(fo_state_t), intent(inout) :: fo
-    real(dp), intent(inout) :: z(:)
-    integer, intent(out) :: ierr
-    type(fo_state_t) :: fo_start
-    real(dp) :: s, th, ph, vpar, z_start(size(z))
-    integer :: status
+    subroutine orbit_timestep_fo(fo, z, ierr)
+        use diag_counters, only: count_event, EVT_FO_LOSS, EVT_FO_FAULT
+        use orbit_fo_boris, only: FO_OK, FO_LOSS
+        type(fo_state_t), intent(inout) :: fo
+        real(dp), intent(inout) :: z(:)
+        integer, intent(out) :: ierr
+        type(fo_state_t) :: fo_start
+        real(dp) :: s, th, ph, vpar, z_start(size(z))
+        integer :: status
 
-    fo_start = fo
-    z_start = z
-    call fo_step(fo, status)
-    if (status /= FO_OK) then
-      ! Inversion unresolved (near-axis below chartmap resolution, or a field-period
-      ! seam). NOT a physical loss; fo_step left the state at the last resolved
-      ! position. Roll back both public and hidden pusher state so warning mode
-      ! can consume a true held interval and retry from a meaningful position.
-      fo = fo_start
-      z = z_start
-      ierr = ORBIT_FO_NUMERICAL
-      call count_event(EVT_FO_FAULT)
-      return
-    end if
-    call fo_to_gc(fo, s, th, ph, vpar, status)
-    if (status == FO_LOSS) then
-      z(1) = s
-      z(2) = th
-      z(3) = ph
-      z(4) = fo%pabs
-      z(5) = vpar/(z(4)*dsqrt(2d0))
-      ierr = ORBIT_FO_LOSS
-      call count_event(EVT_FO_LOSS)
-      return
-    else if (status /= FO_OK) then
-      fo = fo_start
-      z = z_start
-      ierr = ORBIT_FO_NUMERICAL
-      call count_event(EVT_FO_FAULT)
-      return
-    end if
-    z(1) = s; z(2) = th; z(3) = ph
-    z(4) = fo%pabs
-    z(5) = vpar/(z(4)*dsqrt(2d0))
-  end subroutine orbit_timestep_fo
+        fo_start = fo
+        z_start = z
+        call fo_step(fo, status)
+        if (status /= FO_OK) then
+            ! Inversion unresolved (near-axis below chartmap resolution, or a field-period
+            ! seam). NOT a physical loss; fo_step left the state at the last resolved
+            ! position. Roll back both public and hidden pusher state so warning mode
+            ! can consume a true held interval and retry from a meaningful position.
+            fo = fo_start
+            z = z_start
+            ierr = ORBIT_FO_NUMERICAL
+            call count_event(EVT_FO_FAULT)
+            return
+        end if
+        call fo_to_gc(fo, s, th, ph, vpar, status)
+        if (status == FO_LOSS) then
+            z(1) = s
+            z(2) = th
+            z(3) = ph
+            z(4) = fo%pabs
+            z(5) = vpar/(z(4)*dsqrt(2d0))
+            ierr = ORBIT_FO_LOSS
+            call count_event(EVT_FO_LOSS)
+            return
+        else if (status /= FO_OK) then
+            fo = fo_start
+            z = z_start
+            ierr = ORBIT_FO_NUMERICAL
+            call count_event(EVT_FO_FAULT)
+            return
+        end if
+        z(1) = s; z(2) = th; z(3) = ph
+        z(4) = fo%pabs
+        z(5) = vpar/(z(4)*dsqrt(2d0))
+        ierr = 0
+    end subroutine orbit_timestep_fo
 
   subroutine orbit_timestep_fo_bridge(fo, z, interval, ierr, continue_state)
     !> Advance one failed guiding-centre interval with the physical Cartesian

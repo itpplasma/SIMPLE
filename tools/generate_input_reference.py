@@ -23,6 +23,7 @@ RULES = {
     "gpu_method": {"choices": ["auto", "euler", "midpoint", "cash-karp", "dopri"]},
     "gpu_start_coordinates": {"choices": ["reference", "boozer"]},
     "wall_units": {"choices": ["m", "mm"]},
+    "collision_model": {"choices": ["full", "lorentz_nustar"]},
     "chart_boundary_kind": {"choices": ["auto", "lcfs", "wall", "domain"]},
     "macrostep_time_grid": {"choices": ["linear", "log"]},
     "axis_healing": {

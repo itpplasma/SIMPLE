@@ -66,6 +66,14 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
         LABELS "unit;python" TIMEOUT 30)
 endif()
 
+add_test(
+    NAME test_openmp_optional
+    COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/../python/test_openmp_optional.py
+        ${CMAKE_SOURCE_DIR}
+)
+set_tests_properties(test_openmp_optional PROPERTIES LABELS "unit;regression")
+
 set(BOOZER_CHARTMAP_PYTHON "${Python3_EXECUTABLE}")
 if(EXISTS "${CMAKE_SOURCE_DIR}/.venv/bin/python")
     set(BOOZER_CHARTMAP_PYTHON "${CMAKE_SOURCE_DIR}/.venv/bin/python")
@@ -341,6 +349,23 @@ if (ENABLE_OPENMP)
         LABELS "integration"
         RUN_SERIAL TRUE
         TIMEOUT 120)
+    # Field-evaluation cost ratio between mode_secders=0 and mode_secders=2.
+    # Built but deliberately not registered with ctest: it is a timing
+    # measurement, so its result is hardware-dependent and must not gate CI.
+    # Run manually from the project root: ./build/test/tests/bench_secders_cost.x
+    add_executable (bench_secders_cost.x bench_secders_cost.f90)
+    target_link_libraries(bench_secders_cost.x simple)
+
+    add_executable (test_field_eval_counters.x test_field_eval_counters.f90)
+    target_link_libraries(test_field_eval_counters.x simple)
+    add_test(NAME test_field_eval_counters
+        COMMAND test_field_eval_counters.x
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+    set_tests_properties(test_field_eval_counters PROPERTIES
+        LABELS "unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 300)
+
     add_executable (test_sympl_testfield.x test_sympl_testfield.f90)
     target_link_libraries(test_sympl_testfield.x simple)
     add_test(NAME test_sympl_testfield
@@ -388,6 +413,16 @@ endif()
 
 add_executable (test_collis.x ../../src/test_collis.f90)
 target_link_libraries(test_collis.x simple)
+
+# Explicit high-order integmodes on the 4D canonical chart: energy drift must
+# respond to the tolerance, and the four adaptive methods must agree. Uses the
+# analytic test field, so it needs no VMEC file.
+add_executable(test_explicit_integmodes.x test_explicit_integmodes.f90)
+target_link_libraries(test_explicit_integmodes.x simple)
+add_test(NAME test_explicit_integmodes COMMAND test_explicit_integmodes.x)
+set_tests_properties(test_explicit_integmodes PROPERTIES
+    LABELS "unit"
+    TIMEOUT 300)
 
 add_executable(test_config_reference.x test_config_reference.f90)
 target_link_libraries(test_config_reference.x simple)
@@ -535,11 +570,40 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
     set_tests_properties(test_bminmax_driver PROPERTIES
         LABELS "integration;system"
         TIMEOUT 120)
+
+    add_test(NAME test_fast_class_driver
+        COMMAND ${CMAKE_COMMAND} -E env
+            CTEST_BINARY_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}
+            ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_fast_class_driver.py
+            $<TARGET_FILE:simple.x>
+            ${WOUT_FILE}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(test_fast_class_driver PROPERTIES
+        LABELS "integration;system"
+        TIMEOUT 120)
 endif()
 
 add_executable (test_coordinates.x test_coordinates.f90)
 target_link_libraries(test_coordinates.x simple)
 add_test(NAME test_coordinates COMMAND test_coordinates.x vmec cyl)
+
+add_executable(test_radial_electric_potential.x test_radial_electric_potential.f90)
+target_link_libraries(test_radial_electric_potential.x simple)
+add_test(NAME test_radial_electric_potential COMMAND test_radial_electric_potential.x)
+set_tests_properties(test_radial_electric_potential PROPERTIES LABELS "unit;physics")
+
+add_executable(test_radial_potential_config.x test_radial_potential_config.f90)
+target_link_libraries(test_radial_potential_config.x simple)
+foreach(case valid zero_slope_rk field rk full_orbit gpu)
+    add_test(NAME test_radial_potential_config_${case}
+        COMMAND test_radial_potential_config.x ${case})
+    set_tests_properties(test_radial_potential_config_${case} PROPERTIES LABELS "unit")
+endforeach()
+foreach(case field rk full_orbit gpu)
+    set_tests_properties(test_radial_potential_config_${case} PROPERTIES
+        PASS_REGULAR_EXPRESSION "radial_electric_potential_slope (requires|is not)")
+endforeach()
 
 # Unit tests for refactored modules
 add_executable(test_stencil_utils.x test_stencil_utils.f90)
@@ -653,6 +717,18 @@ add_test(NAME test_stencil_utils COMMAND test_stencil_utils.x)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "system;python"
         TIMEOUT 1800)
+
+    # The explicit integmodes must notice a marker leaving the plasma. They
+    # hand a whole substep to an adaptive integrator and see nothing between
+    # its endpoints, so without an explicit radius check a marker that crossed
+    # s = 1 was integrated onwards and reported as confined.
+    add_test(NAME test_explicit_loss_detection
+        COMMAND ${BOOZER_CHARTMAP_PYTHON}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_explicit_loss_detection.py)
+    set_tests_properties(test_explicit_loss_detection PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        LABELS "system;python"
+        TIMEOUT 600)
 
     # E2E test: VMEC-Boozer vs chartmap confined fractions
     add_test(NAME test_e2e_boozer_chartmap
@@ -821,6 +897,16 @@ add_test(NAME test_bder_from_splines
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_bder_from_splines PROPERTIES
     LABELS "integration")
+
+add_executable(test_splined_kernel_bench.x test_splined_kernel_bench.f90)
+target_link_libraries(test_splined_kernel_bench.x simple)
+add_dependencies(test_splined_kernel_bench.x ncsx_test_data)
+add_test(NAME test_splined_kernel_bench
+    COMMAND test_splined_kernel_bench.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_splined_kernel_bench PROPERTIES
+    LABELS "unit;performance"
+    TIMEOUT 120)
 
 add_executable(test_refcoords_file_detection.x test_refcoords_file_detection.f90)
 target_link_libraries(test_refcoords_file_detection.x simple)
