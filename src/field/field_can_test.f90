@@ -19,6 +19,43 @@ subroutine evaluate_test(f, r, th_c, ph_c, mode_secders)
 end subroutine evaluate_test
 
 
+subroutine evaluate_test_regular(x, y, mode, rf)
+    !> The analytic test tokamak of eval_field_test in the Cartesian chart
+    !> (x, y) = r (cos, sin) theta, where every component is a polynomial.
+    !> mode 0, 1, 2 fills values, first and second derivatives in
+    !> (x, y, phi); the field is axisymmetric.
+    use boozer_regular, only: regular_field_t
+    real(dp), intent(in) :: x, y
+    integer, intent(in) :: mode
+    type(regular_field_t), intent(inout) :: rf
+
+    real(dp) :: ath(10), aph(10), hth(10), hph(10), bmod(10)
+
+    call test_field_regular(x, y, ath, aph, hth, hph, bmod)
+    rf%Ath = ath(1)
+    rf%Aph = aph(1)
+    rf%hth = hth(1)
+    rf%hph = hph(1)
+    rf%Bmod = bmod(1)
+    if (mode >= 1) then
+        rf%dAth = ath(2:4)
+        rf%dAph = aph(2:4)
+        rf%dhth = hth(2:4)
+        rf%dhph = hph(2:4)
+        rf%dBmod = bmod(2:4)
+    end if
+    if (mode >= 2) then
+        rf%d2Ath = ath(5:10)
+        rf%d2Aph = aph(5:10)
+        rf%d2hth = hth(5:10)
+        rf%d2hph = hph(5:10)
+        rf%d2Bmod = bmod(5:10)
+    end if
+
+    n_field_evaluations = n_field_evaluations + 1
+end subroutine evaluate_test_regular
+
+
 ! for testing -> circular tokamak
 subroutine eval_field_test(f, r, th, ph, mode_secders)
     type(field_can_t), intent(inout) :: f
@@ -95,5 +132,7 @@ subroutine eval_field_test(f, r, th, ph, mode_secders)
     f%d2Bmod(6) = 0d0
 
 end subroutine eval_field_test
+
+include '../generated/test_field_regular_leaves.inc'
 
 end module field_can_test

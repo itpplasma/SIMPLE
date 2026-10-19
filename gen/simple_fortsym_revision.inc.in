@@ -1,0 +1,2 @@
+! Configured from CMakeLists.txt SIMPLE_FORTSYM_REVISION; do not edit.
+character(*), parameter :: fortsym_revision = '@SIMPLE_FORTSYM_REVISION@'
