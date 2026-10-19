@@ -25,7 +25,11 @@ and ``DOC/config.md`` for additional usage, units and option interactions.
 &config
 -------
 
+<<<<<<< HEAD
 Source: ``src/params.f90:243``.
+=======
+Source: ``src/params.f90:247``.
+>>>>>>> 4e3d79be (Cartesian chart: regular start states, boundary events, validation, docs)
 
 .. list-table::
    :header-rows: 1
@@ -199,6 +203,12 @@ Source: ``src/params.f90:243``.
      - ``scalar``
      - ``EXPL_IMPL_EULER``
      -
+   * - ``canonical_chart``
+     - ``character(len=16)``
+     - ``default``
+     - ``scalar``
+     - ``'polar'``
+     - Canonical chart of the symplectic guiding-centre step. 'polar' steps in (r, theta, phi, p_phi). 'cartesian' steps in the global Darboux chart X, Y = sqrt(2 \|p_theta\|) (cos theta, sigma sin theta), phi, p_phi, which is regular at the magnetic axis; it needs integmode 3-7 (midpoint, Gauss1-4) and a Boozer (VMEC or Boozer chartmap) or test field.
    * - ``orbit_model``
      - ``integer``
      - ``default``
