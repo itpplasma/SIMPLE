@@ -439,7 +439,7 @@ contains
         real(dp)::emin,emax,eblock_min,eblock_max,rhomin,rhomax
         real(dp)::xx,yy,mx,my,sxx,sxy,syy,dx,dy,slope,se
         real(dp)::maxres
-        integer::s
+        integer::s, k
         logical::ok
         width=0.06_dp;ro0=1.0e5_dp;h=0.02_dp;lfixed=1;gfixed=1
         select case(marker)
@@ -475,10 +475,34 @@ contains
             width,ro0,h,lfixed,gfixed,mfixed
         emin=e0; emax=e0; eblock_min=e0; eblock_max=e0
         rhomin=z(1);rhomax=z(1);mx=0;my=0;sxx=0;sxy=0;syy=0;maxres=0
-        do s=1,n
-            diagnostic_step=s
-            call shipped_step(z,width,ro0,efixed,lfixed,gfixed,h,out,xx,ok, &
-                radial_scale=mfixed,tolerance=energy_tol,residual=res)
+        ! H after step k is the start energy of step k+1, so record step k's
+        ! diagnostics one step late instead of evaluating the field again.
+        do s = 1, n + 1
+            if (s <= n) then
+                diagnostic_step = s
+                call shipped_step(z, width, ro0, efixed, lfixed, gfixed, h, out, &
+                                  xx, ok, radial_scale=mfixed, tolerance=energy_tol, &
+                                  residual=res, start_energy=en)
+            else
+                call generated_eval(z, width, ro0, en, f, df, first_order=.true.)
+            end if
+            if (s > 1) then
+                k = s - 1
+                emin = min(emin, en); emax = max(emax, en)
+                rhomin = min(rhomin, z(1)); rhomax = max(rhomax, z(1))
+                eblock_min = min(eblock_min, en); eblock_max = max(eblock_max, en)
+                xx = real(k, dp)/real(n, dp); yy = en/e0 - 1
+                dx = xx - mx; dy = yy - my
+                mx = mx + dx/k; my = my + dy/k
+                sxx = sxx + dx*(xx - mx); sxy = sxy + dx*(yy - my); syy = syy + dy*(yy - my)
+                if (mod(k, max(1, n/10)) == 0) then
+                    print '(a,i0,a,i0,3(a,es12.4),a,f8.4)', 'ENERGY marker=', &
+                        marker, ' steps=', k, ' min/E0-1=', eblock_min/e0 - 1, &
+                        ' max/E0-1=', eblock_max/e0 - 1, ' end/E0-1=', yy, ' rho=', z(1)
+                    eblock_min = en; eblock_max = en
+                end if
+            end if
+            if (s > n) exit
             if(.not.ok) then
                 print '(a,i0,a,i0,2(a,es16.8))', 'ENERGY_FAILURE marker=',marker, &
                     ' step=',s,' rho=',z(1),' residual=',res
@@ -488,21 +512,6 @@ contains
                 return
             end if
             maxres=max(maxres,res);z=out
-            call generated_eval(z,width,ro0,en,f,df)
-            emin=min(emin,en); emax=max(emax,en)
-            rhomin=min(rhomin,z(1));rhomax=max(rhomax,z(1))
-            eblock_min=min(eblock_min,en); eblock_max=max(eblock_max,en)
-            xx=real(s,dp)/real(n,dp);yy=en/e0-1
-            dx=xx-mx;dy=yy-my
-            mx=mx+dx/s;my=my+dy/s
-            sxx=sxx+dx*(xx-mx);sxy=sxy+dx*(yy-my);syy=syy+dy*(yy-my)
-            if(mod(s,max(1,n/10))==0) then
-                print '(a,i0,a,i0,3(a,es12.4),a,f8.4)', &
-                    'ENERGY marker=',marker,' steps=',s, &
-                    ' min/E0-1=',eblock_min/e0-1,' max/E0-1=',eblock_max/e0-1, &
-                    ' end/E0-1=',yy,' rho=',z(1)
-                eblock_min=en; eblock_max=en
-            end if
         end do
         slope=0;se=0
         if(n>2) then

@@ -771,21 +771,21 @@ contains
         type(expr_t) :: rz(2), metric, dg, d2g, ev(3)
         integer :: i, j, k, l, c
         character(40) :: lab
-        call expect(fprov, 321, 'x = [rz(1)*cz, rz(1)*sz, rz(2)]')
-        call expect(fprov, 323, 'e(:, i) = [d(1, i)*cz, d(1, i)*sz, d(2, i)]')
-        call expect(fprov, 325, 'e(:, 3) = e(:, 3) + [-rz(1)*sz, rz(1)*cz, 0.0_dp]')
-        call expect(fprov, 326, 'metric = matmul(transpose(d), d)')
-        call expect(fprov, 327, 'metric(3, 3) = metric(3, 3) + rz(1)**2')
-        call expect(fprov, 331, 'dg(i, j, k) = dot_product(d2(:, i, k), d(:, j)) &')
-        call expect(fprov, 332, '+ dot_product(d(:, i), d2(:, j, k))')
-        call expect(fprov, 334, &
+        call expect(fprov, 358, 'x = [rz(1)*cz, rz(1)*sz, rz(2)]')
+        call expect(fprov, 360, 'e(:, i) = [d(1, i)*cz, d(1, i)*sz, d(2, i)]')
+        call expect(fprov, 362, 'e(:, 3) = e(:, 3) + [-rz(1)*sz, rz(1)*cz, 0.0_dp]')
+        call expect(fprov, 363, 'metric = matmul(transpose(d), d)')
+        call expect(fprov, 364, 'metric(3, 3) = metric(3, 3) + rz(1)**2')
+        call expect(fprov, 369, 'dg(i, j, k) = dot_product(d2(:, i, k), d(:, j)) &')
+        call expect(fprov, 370, '+ dot_product(d(:, i), d2(:, j, k))')
+        call expect(fprov, 373, &
             'd2g(i, j, k, l) = dot_product(d3(:, i, k, l), d(:, j)) &')
-        call expect(fprov, 335, '+ dot_product(d2(:, i, k), d2(:, j, l)) &')
-        call expect(fprov, 336, '+ dot_product(d2(:, i, l), d2(:, j, k)) &')
-        call expect(fprov, 337, '+ dot_product(d(:, i), d3(:, j, k, l))')
-        call expect(fprov, 341, 'dg(3, 3, k) = dg(3, 3, k) + 2.0_dp*rz(1)*d(1, k)')
-        call expect(fprov, 343, 'd2g(3, 3, k, l) = d2g(3, 3, k, l) + &')
-        call expect(fprov, 344, '2.0_dp*(d(1, k)*d(1, l) + rz(1)*d2(1, k, l))')
+        call expect(fprov, 374, '+ dot_product(d2(:, i, k), d2(:, j, l)) &')
+        call expect(fprov, 375, '+ dot_product(d2(:, i, l), d2(:, j, k)) &')
+        call expect(fprov, 376, '+ dot_product(d(:, i), d3(:, j, k, l))')
+        call expect(fprov, 380, 'dg(3, 3, k) = dg(3, 3, k) + 2.0_dp*rz(1)*d(1, k)')
+        call expect(fprov, 383, 'd2g(3, 3, k, l) = d2g(3, 3, k, l) + &')
+        call expect(fprov, 384, '2.0_dp*(d(1, k)*d(1, l) + rz(1)*d2(1, k, l))')
         q = [s('rho'), s('theta'), s('zeta')]
         rf = func('R', q); zf = func('Z', q)
         xc = [rf*cos(q(3)), rf*sin(q(3)), zf]
@@ -893,15 +893,15 @@ contains
         type(expr_t) :: da(3), d2a(3, 3), tv
         integer :: i, j
         character(32) :: lab
-        call expect(fprov, 139, 'a = al + s(0)*(ar - al)')
-        call expect(fprov, 140, 'da = dl + s(0)*(dr - dl)')
-        call expect(fprov, 141, 'da(:, 1) = da(:, 1) + s(1)*(ar - al)')
-        call expect(fprov, 142, 'd2a = hl + s(0)*(hr - hl)')
-        call expect(fprov, 145, 'if (i == 1) d2a(:, i, j) = d2a(:, i, j) &')
-        call expect(fprov, 146, '+ s(1)*(dr(:, j) - dl(:, j))')
-        call expect(fprov, 147, 'if (j == 1) d2a(:, i, j) = d2a(:, i, j) &')
-        call expect(fprov, 148, '+ s(1)*(dr(:, i) - dl(:, i))')
-        call expect(fprov, 151, 'd2a(:, 1, 1) = d2a(:, 1, 1) + s(2)*(ar - al)')
+        call expect(fprov, 145, 'a = al + s(0)*(ar - al)')
+        call expect(fprov, 146, 'da = dl + s(0)*(dr - dl)')
+        call expect(fprov, 147, 'da(:, 1) = da(:, 1) + s(1)*(ar - al)')
+        call expect(fprov, 154, 'd2a = hl + s(0)*(hr - hl)')
+        call expect(fprov, 157, 'if (i == 1) d2a(:, i, j) = d2a(:, i, j) &')
+        call expect(fprov, 158, '+ s(1)*(dr(:, j) - dl(:, j))')
+        call expect(fprov, 159, 'if (j == 1) d2a(:, i, j) = d2a(:, i, j) &')
+        call expect(fprov, 160, '+ s(1)*(dr(:, i) - dl(:, i))')
+        call expect(fprov, 163, 'd2a(:, 1, 1) = d2a(:, 1, 1) + s(2)*(ar - al)')
         q = [s('rho'), s('theta'), s('zeta')]
         al = func('AL', q); arr = func('AR', q); w = func('W', [q(1)])
         a = al + w*(arr - al)
@@ -954,9 +954,10 @@ contains
             1, 0, 0, 0, 1, 1, 0, 0, 1, 2, 1, 0, 1, 3, 3, 1], [4, 4])
         character(LN) :: o(4), wn(4)
         character(32) :: lab
-        call expect(fprov, 260, &
+        call expect(fprov, 285, &
             'integer, parameter :: binom(0:3, 0:3) = reshape([ &')
-        call expect(fprov, 261, '1, 0, 0, 0, 1, 1, 0, 0, 1, 2, 1, 0, 1, 3, 3, 1], [4, 4])')
+        call expect(fprov, 286, &
+                    '1, 0, 0, 0, 1, 1, 0, 0, 1, 2, 1, 0, 1, 3, 3, 1], [4, 4])')
         o = [character(LN) :: 'coeff(:, r)', 'real(binom(l, r), dp)', 'sw(l)', &
             '(cr(:, r - l) - cl(:, r - l))']
         wn = [character(LN) :: 'OLD', 'BIN', 'SW', 'DIFF']
@@ -968,7 +969,7 @@ contains
             jl(r) = diff(jl(r - 1), rho); jr(r) = diff(jr(r - 1), rho)
             sw(r) = diff(sw(r - 1), rho)
         end do
-        t = src(fprov, 285, o, wn)
+        t = src(fprov, 322, o, wn)
         do r = 0, 3
             cf = jl(r)
             do l = 0, r
@@ -1258,14 +1259,14 @@ contains
         type(expr_t) :: rho, th, ze, ow, sarg, g, q(3), u(3), gg, e
         integer :: i, j, slot(3, 3), nr
         character(32) :: lab
-        call expect(fprov, 171, &
+        call expect(fprov, 184, &
             'integer, parameter :: slot(3, 3) = reshape([1, 2, 3, 2, 4, 5, 3, 5, 6], [3, 3])')
-        call expect(fprov, 179, 'da(:, 1) = 2.0_dp*da(:, 1)')
-        call expect(fprov, 186, 'real(2**(merge(1, 0, i == 1) + merge(1, 0, j == 1)), dp)')
+        call expect(fprov, 192, 'da(:, 1) = 2.0_dp*da(:, 1)')
+     call expect(fprov, 200, 'real(2**(merge(1, 0, i == 1) + merge(1, 0, j == 1)), dp)')
         slot = reshape([1, 2, 3, 2, 4, 5, 3, 5, 6], [3, 3])
         rho = s('rho'); th = s('theta'); ze = s('zeta'); ow = s('owner')
         sarg = parse_rhs(ar, '2.0_dp*(q(1) - owner + 1) - 1.0_dp', ['q(1)'], ['rho '])
-        call expect(fprov, 174, '2.0_dp*(q(1) - owner + 1) - 1.0_dp, q(2), q(3), av)')
+  call expect(fprov, 187, '2.0_dp*(q(1) - owner + 1) - 1.0_dp, q(2), q(3), av, second)')
         q = [rho, th, ze]
         u = [s('u'), s('v'), s('w')]
         g = func('G', [sarg, th, ze])
@@ -1301,12 +1302,13 @@ contains
         type(expr_t) :: k1(0:3), k2(0:3)
         integer :: r, t, z, i
         character(32) :: lab
-        call expect(fprov, 273, 'wave = [real(m, dp), -real(n, dp)]')
-        call expect(fprov, 275, 'c = [cos(arg), -sin(arg), -cos(arg), sin(arg)]')
-        call expect(fprov, 293, 'factor = wave(1)**t*wave(2)**z')
-        call expect(fprov, 294, 'jets(r, t, z, comp) = jets(r, t, z, comp) + factor* &')
-        call expect(fprov, 295, '(coeff(1, r)*c(mod(t + z, 4)) &')
-        call expect(fprov, 296, '- coeff(2, r)*c(mod(t + z + 1, 4)))')
+        call expect(fprov, 302, 'wave = [real(m, dp), -real(n, dp)]')
+        call expect(fprov, 304, 'c = [cos(arg), -sin(arg), -cos(arg), sin(arg)]')
+        call expect(fprov, 308, 'fac(t, z) = wave(1)**t*wave(2)**z')
+        call expect(fprov, 330, 'factor = fac(t, z)')
+        call expect(fprov, 331, 'jets(r, t, z, comp) = jets(r, t, z, comp) + factor* &')
+        call expect(fprov, 332, '(coeff(1, r)*c(mod(t + z, 4)) &')
+        call expect(fprov, 333, '- coeff(2, r)*c(mod(t + z + 1, 4)))')
         rho = s('rho'); th = s('theta'); ze = s('zeta'); m = s('m'); nn = s('n')
         wave = [m, -nn]
         arg = wave(1)*th + wave(2)*ze

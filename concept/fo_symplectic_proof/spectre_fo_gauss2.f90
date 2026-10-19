@@ -122,23 +122,35 @@ contains
             + 3.0_dp*(1.0_dp - 2.0_dp*s(0))*ph1*ph2 + ph3)/width**3
     end subroutine switch_der
 
-    subroutine gauss2_potential(q, width, ro0, a, da, d2a)
+    subroutine gauss2_potential(q, width, ro0, a, da, d2a, first_order)
+        !> first_order skips the second derivatives: a and da are bitwise
+        !> unchanged, d2a is incomplete and must not be used.
         real(dp), intent(in) :: q(3), width, ro0
         real(dp), intent(out) :: a(3), da(3, 3), d2a(3, 3, 3)
+        logical, intent(in), optional :: first_order
         real(dp) :: al(3), dl(3, 3), hl(3, 3, 3)
         real(dp) :: ar(3), dr(3, 3), hr(3, 3, 3), s(0:3)
         integer :: k, owner, i, j
+        logical :: second
 
+        second = .true.
+        if (present(first_order)) second = .not. first_order
         owner = min(max(int(q(1)) + 1, 1), spectre_field%data%Mvol)
         k = nint(q(1))
         if (k > 0 .and. k < spectre_field%data%Mvol) then
             if (abs(q(1) - k) < width/2.0_dp) then
-                call volume_potential(q, k, al, dl, hl)
-                call volume_potential(q, k + 1, ar, dr, hr)
+                call volume_potential(q, k, al, dl, hl, second)
+                call volume_potential(q, k + 1, ar, dr, hr, second)
                 call switch_der(q(1), k, width, s)
                 a = al + s(0)*(ar - al)
                 da = dl + s(0)*(dr - dl)
                 da(:, 1) = da(:, 1) + s(1)*(ar - al)
+                a = a*A_SCALE/ro0
+                da = da*A_SCALE/ro0
+                if (.not. second) then
+                    d2a = 0.0_dp
+                    return
+                end if
                 d2a = hl + s(0)*(hr - hl)
                 do j = 1, 3
                     do i = 1, 3
@@ -149,29 +161,30 @@ contains
                     end do
                 end do
                 d2a(:, 1, 1) = d2a(:, 1, 1) + s(2)*(ar - al)
-                a = a*A_SCALE/ro0
-                da = da*A_SCALE/ro0
                 d2a = d2a*A_SCALE/ro0
                 return
             end if
         end if
-        call volume_potential(q, owner, a, da, d2a)
+        call volume_potential(q, owner, a, da, d2a, second)
         a = a*A_SCALE/ro0
         da = da*A_SCALE/ro0
         d2a = d2a*A_SCALE/ro0
     end subroutine gauss2_potential
 
-    subroutine volume_potential(q, owner, a, da, d2a)
+    subroutine volume_potential(q, owner, a, da, d2a, second)
         real(dp), intent(in) :: q(3)
         integer, intent(in) :: owner
         real(dp), intent(out) :: a(3), da(3, 3), d2a(3, 3, 3)
+        logical, intent(in) :: second
+        ! Keep the gauge loop below unchanged: gfortran vectorizes it with
+        ! libmvec sin/cos, and a different loop body changes the last bits.
         type(spectre_vecpot_t) :: av
         real(dp) :: arg, c, s, wave(3), value(2), deriv(2), h(6, 2)
         integer :: i, j, ii
         integer, parameter :: slot(3, 3) = reshape([1, 2, 3, 2, 4, 5, 3, 5, 6], [3, 3])
 
         call eval_spectre_vector_potential(spectre_field%data, owner, &
-            2.0_dp*(q(1) - owner + 1) - 1.0_dp, q(2), q(3), av)
+                             2.0_dp*(q(1) - owner + 1) - 1.0_dp, q(2), q(3), av, second)
         a = [0.0_dp, av%Ath, av%Azt]
         da = 0.0_dp
         da(2, :) = av%dAth
@@ -181,6 +194,7 @@ contains
         h(:, 2) = av%d2Azt
         d2a = 0.0_dp
         do j = 1, 3
+            if (.not. second) exit
             do i = 1, 3
                 d2a(2:3, i, j) = h(slot(i, j), :)* &
                     real(2**(merge(1, 0, i == 1) + merge(1, 0, j == 1)), dp)
@@ -219,11 +233,11 @@ contains
         shift = shift*A_SCALE/ro0
     end function gauss2_gauge_zeta
 
-    subroutine radial_geometry(rho, owner, m, inner, outer, coeff)
-        real(dp), intent(in) :: rho, inner(2), outer(2)
+    subroutine radial_profile(rho, owner, m, f)
+        !> Radial interpolation profile of one Fourier mode and its derivatives.
+        real(dp), intent(in) :: rho
         integer, intent(in) :: owner, m
-        real(dp), intent(out) :: coeff(2, 0:3)
-        real(dp) :: f(0:3)
+        real(dp), intent(out) :: f(0:3)
         integer :: p, r, l
 
         f = 0.0_dp
@@ -239,28 +253,43 @@ contains
             f(0) = rho - real(owner - 1, dp)
             f(1) = 1.0_dp
         end if
+    end subroutine radial_profile
+
+    subroutine radial_geometry(f, inner, outer, coeff)
+        real(dp), intent(in) :: f(0:3), inner(2), outer(2)
+        real(dp), intent(out) :: coeff(2, 0:3)
+        integer :: r
+
         do r = 0, 3
             coeff(:, r) = (outer - inner)*f(r)
         end do
         coeff(:, 0) = coeff(:, 0) + inner
     end subroutine radial_geometry
 
-    subroutine gauss2_geometry(q, width, x, e, metric, dg, d2g)
+    subroutine gauss2_geometry(q, width, x, e, metric, dg, d2g, first_order)
         !> Smooth the embedding, not just A: the native stacked chart is C0.
         !> SPEC interface Fourier coefficients and axis power law are unchanged
         !> outside the layer. Analytic geometry derivatives extend through order 3.
+        !> first_order stops the embedding jets at order 2 and returns d2g = 0;
+        !> x, e, metric and dg are bitwise unchanged.
         real(dp), intent(in) :: q(3), width
         real(dp), intent(out) :: x(3), e(3, 3), metric(3, 3)
         real(dp), intent(out) :: dg(3, 3, 3), d2g(3, 3, 3, 3)
+        logical, intent(in), optional :: first_order
         real(dp) :: jets(0:3, 0:3, 0:3, 2), coeff(2, 0:3), cl(2, 0:3)
         real(dp) :: cr(2, 0:3), sw(0:3), arg, c(0:3), factor, wave(2)
+        real(dp) :: fac(0:3, 0:3), fl(0:3), fr(0:3)
         real(dp) :: d(2, 3), d2(2, 3, 3), d3(2, 3, 3, 3), rz(2), cz, sz
         integer :: owner, iface, ii, m, n, r, t, z, l, comp, v, i, j, k
-        integer :: idx(3)
+        integer :: idx(3), nord
         integer, parameter :: binom(0:3, 0:3) = reshape([ &
             1, 0, 0, 0, 1, 1, 0, 0, 1, 2, 1, 0, 1, 3, 3, 1], [4, 4])
         logical :: blend
 
+        nord = 3
+        if (present(first_order)) then
+            if (first_order) nord = 2
+        end if
         owner = min(max(int(q(1)) + 1, 1), spectre_field%data%Mvol)
         iface = nint(q(1))
         blend = iface > 0 .and. iface < spectre_field%data%Mvol
@@ -273,13 +302,21 @@ contains
             wave = [real(m, dp), -real(n, dp)]
             arg = wave(1)*q(2) + wave(2)*q(3)
             c = [cos(arg), -sin(arg), -cos(arg), sin(arg)]
+            ! Angular factors and radial profiles are shared by R and Z.
+            do z = 0, nord
+                do t = 0, nord - z
+                    fac(t, z) = wave(1)**t*wave(2)**z
+                end do
+            end do
+            v = owner
+            if (blend) v = iface
+            call radial_profile(q(1), v, m, fl)
+            if (blend) call radial_profile(q(1), iface + 1, m, fr)
             do comp = 1, 2
-                v = owner
-                if (blend) v = iface
-                call geometry_coeff(v, comp, cl)
+                call geometry_coeff(v, comp, fl, cl)
                 coeff = cl
                 if (blend) then
-                    call geometry_coeff(iface + 1, comp, cr)
+                    call geometry_coeff(iface + 1, comp, fr, cr)
                     do r = 0, 3
                         do l = 0, r
                             coeff(:, r) = coeff(:, r) + real(binom(l, r), dp)* &
@@ -287,10 +324,10 @@ contains
                         end do
                     end do
                 end if
-                do z = 0, 3
-                    do t = 0, 3 - z
-                        do r = 0, 3 - z - t
-                            factor = wave(1)**t*wave(2)**z
+                do z = 0, nord
+                    do t = 0, nord - z
+                        do r = 0, nord - z - t
+                            factor = fac(t, z)
                             jets(r, t, z, comp) = jets(r, t, z, comp) + factor* &
                                 (coeff(1, r)*c(mod(t + z, 4)) &
                                 - coeff(2, r)*c(mod(t + z + 1, 4)))
@@ -325,11 +362,13 @@ contains
         e(:, 3) = e(:, 3) + [-rz(1)*sz, rz(1)*cz, 0.0_dp]
         metric = matmul(transpose(d), d)
         metric(3, 3) = metric(3, 3) + rz(1)**2
+        if (nord < 3) d2g = 0.0_dp
         do k = 1, 3
             do j = 1, 3
                 do i = 1, 3
                     dg(i, j, k) = dot_product(d2(:, i, k), d(:, j)) &
                         + dot_product(d(:, i), d2(:, j, k))
+                    if (nord < 3) cycle
                     do l = 1, 3
                         d2g(i, j, k, l) = dot_product(d3(:, i, k, l), d(:, j)) &
                             + dot_product(d2(:, i, k), d2(:, j, l)) &
@@ -339,14 +378,16 @@ contains
                 end do
             end do
             dg(3, 3, k) = dg(3, 3, k) + 2.0_dp*rz(1)*d(1, k)
+            if (nord < 3) cycle
             do l = 1, 3
                 d2g(3, 3, k, l) = d2g(3, 3, k, l) + &
                     2.0_dp*(d(1, k)*d(1, l) + rz(1)*d2(1, k, l))
             end do
         end do
     contains
-        subroutine geometry_coeff(vol, component, cf)
+        subroutine geometry_coeff(vol, component, f, cf)
             integer, intent(in) :: vol, component
+            real(dp), intent(in) :: f(0:3)
             real(dp), intent(out) :: cf(2, 0:3)
             real(dp) :: inner(2), outer(2)
             if (component == 1) then
@@ -360,7 +401,7 @@ contains
                 outer = [spectre_field%data%Zbc(ii, vol), &
                     spectre_field%data%Zbs(ii, vol)]
             end if
-            call radial_geometry(q(1), vol, m, inner, outer, cf)
+            call radial_geometry(f, inner, outer, cf)
         end subroutine geometry_coeff
     end subroutine gauss2_geometry
 
@@ -423,24 +464,35 @@ contains
     end subroutine gauss2_hamiltonian
 
     subroutine gauss2_eval(z, width, ro0, energy, f, df, e0, length, gmin, &
-            radial_scale, kenergy, monitor, grad, hess, radial_jet)
+                    radial_scale, kenergy, monitor, grad, hess, radial_jet, first_order)
+        !> first_order skips the second-order field jets. energy, kenergy,
+        !> monitor, f and grad depend only on value and first-order jets in the
+        !> generated kernel, so they are bitwise unchanged; df, hess and the
+        !> second-order radial_jet entries are then meaningless.
         real(dp), intent(in) :: z(6), width, ro0
         real(dp), intent(out) :: energy, f(6), df(6, 6)
         real(dp), intent(in), optional :: e0, length, gmin, radial_scale
         real(dp), intent(out), optional :: kenergy, monitor, grad(6), hess(6, 6)
         real(dp), intent(out), optional :: radial_jet(10)
+        logical, intent(in), optional :: first_order
+        real(dp) :: aj(3, 10), gj(6, 10)
+
+        call metric_jets(z(1:3), width, gj, first_order)
+        call potential_jets(z(1:3), width, ro0, aj, first_order)
+        call jet_eval(z, aj, gj, energy, f, df, e0, length, gmin, &
+                      radial_scale, kenergy, monitor, grad, hess, radial_jet)
+    end subroutine gauss2_eval
+
+    subroutine metric_jets(q, width, gj, first_order)
+        !> Metric jets: value, rho, theta, zeta, rr, rt, tt, rz, tz, zz.
+        real(dp), intent(in) :: q(3), width
+        real(dp), intent(out) :: gj(6, 10)
+        logical, intent(in), optional :: first_order
         real(dp) :: x(3), basis(3, 3), g(3, 3), dg(3, 3, 3), d2g(3, 3, 3, 3)
-        real(dp) :: av(3), da(3, 3), d2a(3, 3, 3), aj(3, 10), gj(6, 10)
-        real(dp) :: ke, gh(6), hh(6, 6), tj(10), rhoj(3), rj(10)
-        real(dp) :: factor(3), product(3), energy0
         integer :: i, j, k, l
         integer, parameter :: si(6) = [1, 1, 1, 2, 2, 3], sj(6) = [1, 2, 3, 2, 3, 3]
 
-        call gauss2_geometry(z(1:3), width, x, basis, g, dg, d2g)
-        call gauss2_potential(z(1:3), width, ro0, av, da, d2a)
-        ! Jets: value, rho, theta, zeta, rr, rt, tt, rz, tz, zz.
-        aj(:, 1) = av
-        aj(:, 2:4) = da
+        call gauss2_geometry(q, width, x, basis, g, dg, d2g, first_order)
         do l = 1, 6
             gj(l, 1) = g(si(l), sj(l))
             gj(l, 2:4) = dg(si(l), sj(l), :)
@@ -449,12 +501,44 @@ contains
         do j = 1, 3
             do i = 1, j
                 k = k + 1
-                aj(:, k) = d2a(:, i, j)
                 do l = 1, 6
                     gj(l, k) = d2g(si(l), sj(l), i, j)
                 end do
             end do
         end do
+    end subroutine metric_jets
+
+    subroutine potential_jets(q, width, ro0, aj, first_order)
+        !> Potential jets in the order of metric_jets.
+        real(dp), intent(in) :: q(3), width, ro0
+        real(dp), intent(out) :: aj(3, 10)
+        logical, intent(in), optional :: first_order
+        real(dp) :: av(3), da(3, 3), d2a(3, 3, 3)
+        integer :: i, j, k
+
+        call gauss2_potential(q, width, ro0, av, da, d2a, first_order)
+        aj(:, 1) = av
+        aj(:, 2:4) = da
+        k = 4
+        do j = 1, 3
+            do i = 1, j
+                k = k + 1
+                aj(:, k) = d2a(:, i, j)
+            end do
+        end do
+    end subroutine potential_jets
+
+    subroutine jet_eval(z, aj, gj, energy, f, df, e0, length, gmin, &
+                        radial_scale, kenergy, monitor, grad, hess, radial_jet)
+        real(dp), intent(in) :: z(6), aj(3, 10), gj(6, 10)
+        real(dp), intent(out) :: energy, f(6), df(6, 6)
+        real(dp), intent(in), optional :: e0, length, gmin, radial_scale
+        real(dp), intent(out), optional :: kenergy, monitor, grad(6), hess(6, 6)
+        real(dp), intent(out), optional :: radial_jet(10)
+        real(dp) :: ke, gh(6), hh(6, 6), tj(10), rhoj(3), rj(10)
+        real(dp) :: factor(3), product(3), energy0
+        integer :: k
+
         ! Normalized P=e_i.v+A/ro0 has unit mass and charge.
         energy0 = 0.0_dp
         if (present(e0)) energy0 = e0
@@ -489,7 +573,7 @@ contains
         if (present(monitor)) monitor = tj(1)
         if (present(grad)) grad = gh
         if (present(hess)) hess = hh
-    end subroutine gauss2_eval
+    end subroutine jet_eval
 
     pure real(dp) function gauss2_entry_step(h_entry, width, length, gmin) result(h)
         real(dp), intent(in) :: h_entry, width, length, gmin
@@ -502,16 +586,18 @@ contains
     end function gauss2_entry_step
 
     subroutine gauss2_step(z0, width, ro0, e0, length, gmin, h, z1, dt, ok, &
-            tangent, radial_scale, tolerance, residual)
+                           tangent, radial_scale, tolerance, residual, start_energy)
+        !> start_energy returns H(z0), also when the Newton solve fails.
         real(dp), intent(in) :: z0(6), width, ro0, e0, length, gmin, h
         real(dp), intent(out) :: z1(6), dt
         logical, intent(out) :: ok
-        real(dp), intent(out), optional :: tangent(6, 6), residual
+        real(dp), intent(out), optional :: tangent(6, 6), residual, start_energy
         real(dp), intent(in), optional :: radial_scale, tolerance
-        real(dp) :: dy(6, 2), y(6), f(6, 2), df(6, 6, 2), monitor(2)
+        real(dp) :: dy(6, 2), f(6, 2), df(6, 6, 2), monitor(2)
         real(dp) :: jac(12, 12), rhs(12, 6), r(6, 2), delta(12)
         real(dp) :: eye(6, 6), energy, radial_ref, tol, res
-        integer :: i, j, it, piv(12), info
+        integer :: i, it, piv(12), info
+        logical :: full
 
         ok = .false.
         z1 = z0
@@ -526,24 +612,20 @@ contains
         do i = 1, 6
             eye(i, i) = 1.0_dp
         end do
-        call gauss2_eval(z0, width, ro0, energy, f(:, 1), df(:, :, 1), &
-            e0, length, gmin, radial_ref)
+        ! Only f(z0) and H(z0) are used here, so the Hessian is not formed.
+        call start_eval
+        if (present(start_energy)) start_energy = energy
         ! Solve for stage increments: subtracting two large absolute momenta
         ! needlessly adds a cancellation floor to the Newton residual.
         dy(:, 1) = h*(0.5_dp - sqrt(3.0_dp)/6.0_dp)*f(:, 1)
         dy(:, 2) = h*(0.5_dp + sqrt(3.0_dp)/6.0_dp)*f(:, 1)
         do it = 1, 20
-            do j = 1, 2
-                y = z0 + dy(:, j)
-                call gauss2_eval(y, width, ro0, energy, f(:, j), df(:, :, j), &
-                    e0, length, gmin, radial_ref, monitor=monitor(j))
-                do i = 1, 2
-                    jac(6*i - 5:6*i, 6*j - 5:6*j) = -h*GL_A(i, j)*df(:, :, j)
-                end do
-            end do
-            do i = 1, 12
-                jac(i, i) = jac(i, i) + 1.0_dp
-            end do
+            ! The Jacobian is needed only if this iterate is not accepted. A
+            ! later iterate usually is, so evaluate it to first order first and
+            ! add the Hessian at the same point only when the solve continues.
+            ! Stage values and the accepted step are bitwise unchanged.
+            full = it == 1 .or. present(tangent)
+            call stage_evals(full)
             do i = 1, 2
                 r(:, i) = dy(:, i) - h*(GL_A(i, 1)*f(:, 1) + GL_A(i, 2)*f(:, 2))
             end do
@@ -554,6 +636,7 @@ contains
                 ok = .true.
                 exit
             end if
+            if (.not. full) call stage_evals(.true.)
             delta = -reshape(r, [12])
             call dgesv(12, 1, jac, 12, piv, delta, 12, info)
             if (info /= 0) return
@@ -574,5 +657,72 @@ contains
         end if
         tangent = eye + 0.5_dp*h*(matmul(df(:, :, 1), rhs(1:6, :)) &
             + matmul(df(:, :, 2), rhs(7:12, :)))
+    contains
+        subroutine start_eval
+            !> Metric and potential jets are independent; the kernel follows.
+            real(dp) :: aj(3, 10), gj(6, 10)
+            integer :: task
+            !$omp parallel do num_threads(stage_threads(2))
+            do task = 1, 2
+                if (task == 1) then
+                    call metric_jets(z0(1:3), width, gj, .true.)
+                else
+                    call potential_jets(z0(1:3), width, ro0, aj, .true.)
+                end if
+            end do
+            !$omp end parallel do
+            call jet_eval(z0, aj, gj, energy, f(:, 1), df(:, :, 1), &
+                          e0, length, gmin, radial_ref)
+        end subroutine start_eval
+
+        subroutine stage_evals(hessian)
+            !> Metric and potential jets of both Gauss stages are four independent
+            !> tasks, then the two stage kernels. Each task writes only its own
+            !> output, so the results do not depend on the thread count.
+            logical, intent(in) :: hessian
+            real(dp) :: y(6, 2), aj(3, 10, 2), gj(6, 10, 2), stage_energy
+            integer :: j, k, task
+            logical :: first
+            first = .not. hessian
+            y(:, 1) = z0 + dy(:, 1)
+            y(:, 2) = z0 + dy(:, 2)
+            !$omp parallel num_threads(stage_threads(4)) private(j, k, stage_energy)
+            !$omp do schedule(static, 1)
+            do task = 1, 4
+                j = (task + 1)/2
+                if (mod(task, 2) == 1) then
+                    call metric_jets(y(1:3, j), width, gj(:, :, j), first)
+                else
+                    call potential_jets(y(1:3, j), width, ro0, aj(:, :, j), first)
+                end if
+            end do
+            !$omp end do
+            !$omp do schedule(static, 1)
+            do j = 1, 2
+                call jet_eval(y(:, j), aj(:, :, j), gj(:, :, j), stage_energy, &
+                              f(:, j), df(:, :, j), e0, length, gmin, radial_ref, &
+                              monitor=monitor(j))
+                if (hessian) then
+                    do k = 1, 2
+                        jac(6*k - 5:6*k, 6*j - 5:6*j) = -h*GL_A(k, j)*df(:, :, j)
+                    end do
+                end if
+            end do
+            !$omp end do
+            !$omp end parallel
+            if (.not. hessian) return
+            do k = 1, 12
+                jac(k, k) = jac(k, k) + 1.0_dp
+            end do
+        end subroutine stage_evals
     end subroutine gauss2_step
+
+    integer function stage_threads(tasks) result(n)
+        !> Threads for independent field tasks within one step; never nests
+        !> inside a caller's parallel region.
+!$      use omp_lib, only: omp_get_max_threads, omp_in_parallel
+        integer, intent(in) :: tasks
+        n = 1
+!$      if (.not. omp_in_parallel()) n = max(1, min(tasks, omp_get_max_threads()))
+    end function stage_threads
 end module spectre_fo_gauss2
