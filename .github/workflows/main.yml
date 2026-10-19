@@ -32,9 +32,13 @@ on:
         default: itp-slurm
 
 # A new push to a pull request cancels its running checks (and Slurm jobs).
+# A label event never cancels a run: full-ci gets its own group, and other
+# labels do not start Build and Test (see its if:).
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: >-
+    ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}-${{
+    github.event.action == 'labeled' && github.event.label.name == 'full-ci' && 'full' || 'std' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action != 'labeled' }}
 
 permissions:
   contents: write
@@ -85,7 +89,8 @@ jobs:
     if: >-
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false &&
+      (github.event.action != 'labeled' || github.event.label.name == 'full-ci'))
     env:
       CI_HOSTED: >-
         ${{ ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) ||
