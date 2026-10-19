@@ -773,6 +773,27 @@ add_test(NAME test_refcoords_file_detection
 set_tests_properties(test_refcoords_file_detection PROPERTIES
     LABELS "unit")
 
+# Collision profile radius for every integ_coords (issue #571)
+add_executable(test_profile_radius.x test_profile_radius.f90)
+target_link_libraries(test_profile_radius.x simple)
+add_dependencies(test_profile_radius.x chartmap_test_data)
+foreach(case IN ITEMS rho_lcfs vmec canflux boozer meiss albert refcoords
+        meiss_chartmap spectre)
+    if(case STREQUAL "spectre")
+        set(case_file ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5)
+    else()
+        set(case_file ${CHARTMAP_FILE})
+    endif()
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/profile_radius_${case})
+    file(CREATE_LINK ${WOUT_FILE}
+        ${CMAKE_CURRENT_BINARY_DIR}/profile_radius_${case}/wout.nc SYMBOLIC)
+    add_test(NAME test_profile_radius_${case}
+        COMMAND test_profile_radius.x ${case} ${case_file}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/profile_radius_${case})
+    set_tests_properties(test_profile_radius_${case} PROPERTIES
+        LABELS "unit;collisions" TIMEOUT 300)
+endforeach()
+
 # Chartmap pipeline unit tests (issue #227)
 add_executable(test_chartmap_pipeline.x test_chartmap_pipeline.f90)
 target_link_libraries(test_chartmap_pipeline.x simple)

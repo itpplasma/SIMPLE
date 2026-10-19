@@ -206,7 +206,7 @@ contains
                     + weight*(enrat_grid(:, idx_hi) - enrat_grid(:, idx_lo))
     end subroutine get_local_coeffs
 
-    subroutine stost(z, dtauc, iswmode, ierr, max_substep_fraction)
+    subroutine stost(z, dtauc, iswmode, ierr, max_substep_fraction, s_profile)
         use finite_check, only: is_finite
 
         integer, intent(in) :: iswmode
@@ -214,6 +214,10 @@ contains
         real(wp), intent(inout) :: z(5)
         integer, intent(out) :: ierr
         real(wp), intent(in), optional :: max_substep_fraction
+        !> Normalised toroidal flux of the profiles at z. Defaults to z(1),
+        !> which is s only for integ_coords TEST, CANFLUX, VMEC and BOOZER;
+        !> tracers pass profile_radius%profile_s(z(1:3)).
+        real(wp), intent(in), optional :: s_profile
 
         real(wp), parameter :: default_fraction = 0.1_wp
         real(wp), parameter :: twopi = 8.0_wp*atan(1.0_wp)
@@ -241,7 +245,15 @@ contains
             return
         end if
         if (dtauc == 0.0_wp) return
-        call get_local_coeffs(z(1), efcolf_loc, velrat_loc, enrat_loc)
+        if (present(s_profile)) then
+            if (.not. is_finite(s_profile)) then
+                ierr = 1
+                return
+            end if
+            call get_local_coeffs(s_profile, efcolf_loc, velrat_loc, enrat_loc)
+        else
+            call get_local_coeffs(z(1), efcolf_loc, velrat_loc, enrat_loc)
+        end if
         ! A vacuum neither advances the state nor consumes random numbers.
         if (all(efcolf_loc == 0.0_wp)) return
         pitch = iswmode == 1 .or. iswmode == 4
