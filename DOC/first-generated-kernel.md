@@ -84,13 +84,15 @@ the two numbers SIMPLE can measure itself:
 
 - **`T`**: wall-clock time per evaluation of `splined_evaluate` (value only) and
   `splined_evaluate_with_der` (value + derivative), best-of-N over repeated
-  loops of `n_timing` evaluations.
+  loops of `n_timing` evaluations over precomputed points (point generation is
+  outside the timed region).
 - **`X` ulp**: maximum ulp deviation of the splined-field `Bmod` from the direct
   Biot-Savart coils field at the same physical point, across a sweep of points.
   The direct coils field is the high-precision reference for this kernel. The
   reported figure is dominated by spline interpolation error (the spline is an
   approximation of the reference field), which is exactly the accuracy the
-  kernel delivers as a physics producer.
+  kernel delivers as a physics producer. The test gates on the maximum relative
+  error (`< 1e-3`); the ulp figure is a printed diagnostic.
 
 The other two counts come from the toolchain, not from SIMPLE:
 

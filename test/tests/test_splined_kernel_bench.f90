@@ -43,7 +43,8 @@ program test_splined_kernel_bench
     integer, parameter :: n_acc = 400           ! points for the accuracy sweep
 
     real(dp) :: t_eval, t_eval_der
-    real(dp) :: max_ulp
+    real(dp) :: max_ulp, max_rel
+    real(dp), parameter :: rel_tol = 1.0e-3_dp
 
     call init_vmec('wout_ncsx.nc', 5, 5, 5, dummy)
     call init_reference_coordinates('wout_ncsx.nc')
@@ -57,7 +58,7 @@ program test_splined_kernel_bench
     call time_kernel(splined, phi_period, n_timing, n_rep, t_eval, t_eval_der)
 
     ! --- X ulp: accuracy of the spline path vs the direct coils field ---
-    call measure_accuracy(raw_coils, splined, phi_period, n_acc, max_ulp)
+    call measure_accuracy(raw_coils, splined, phi_period, n_acc, max_ulp, max_rel)
 
     print *, ''
     print *, '=================================================================='
@@ -69,6 +70,7 @@ program test_splined_kernel_bench
     print '(a,es12.4,a)', ' T (value only)          = ', t_eval, ' s/eval'
     print '(a,es12.4,a)', ' T (value + derivative)  = ', t_eval_der, ' s/eval'
     print '(a,es12.4,a)', ' X ulp (max, Bmod)       = ', max_ulp, ' ulp vs direct field'
+    print '(a,es12.4)', ' max relative error (Bmod) = ', max_rel
     print *, '------------------------------------------------------------------'
     print *, 'statement: for this kernel the arithmetic the mathematics'
     print *, 'requires is N_sym (fortsym), the generated code emits N_emit'
@@ -79,13 +81,14 @@ program test_splined_kernel_bench
 
     ! Sanity gate: finite, positive timing and finite spline accuracy. The
     ! spline is an approximation of the reference field, so the ulp figure is
-    ! the spline-interpolation accuracy, not a rounding-error bound; we only
-    ! require it to be finite and reasonable (< 1e-3 relative).
+    ! the spline-interpolation accuracy, not a rounding-error bound; the gate is
+    ! the relative error against the independent direct Biot-Savart field. The
+    ! ulp figure is a printed diagnostic only.
     if (.not. (t_eval > 0.0_dp .and. t_eval_der > 0.0_dp)) then
         print *, 'FAILED: non-positive kernel timing'
         error stop 1
     end if
-    if (.not. (max_ulp >= 0.0_dp .and. max_ulp < 1.0e13_dp)) then
+    if (.not. (max_rel >= 0.0_dp .and. max_rel < rel_tol)) then
         print *, 'FAILED: spline accuracy out of expected range'
         error stop 1
     end if
@@ -106,6 +109,7 @@ subroutine time_kernel(f, phi_period, n_timing, n_rep, t_eval, t_eval_der)
     real(dp), intent(out) :: t_eval, t_eval_der
 
     real(dp) :: x(3), Acov(3), hcov(3), Bmod
+    real(dp) :: pts(3, n_timing)
     real(dp) :: dAcov(3, 3), dhcov(3, 3), dBmod(3)
     real(dp) :: checksum, dt
     integer(selected_int_kind(18)) :: t0, t1, cr
@@ -113,6 +117,13 @@ subroutine time_kernel(f, phi_period, n_timing, n_rep, t_eval, t_eval_der)
 
     t_eval = huge(1.0_dp)
     t_eval_der = huge(1.0_dp)
+
+    ! Precompute the evaluation points so only the kernel is timed.
+    do i = 1, n_timing
+        pts(1, i) = 0.02_dp + 0.96_dp*real(mod(i*7, 1000), dp)/1000.0_dp
+        pts(2, i) = phi_period*real(mod(i*13, 1000), dp)/1000.0_dp
+        pts(3, i) = phi_period*real(mod(i*29, 1000), dp)/1000.0_dp
+    end do
 
     ! Warm up
     x = [0.5_dp, 1.0_dp, 1.0_dp]
@@ -123,9 +134,7 @@ subroutine time_kernel(f, phi_period, n_timing, n_rep, t_eval, t_eval_der)
         checksum = 0.0_dp
         call system_clock(count=t0)
         do i = 1, n_timing
-            x(1) = 0.02_dp + 0.96_dp*real(mod(i*7, 1000), dp)/1000.0_dp
-            x(2) = phi_period*real(mod(i*13, 1000), dp)/1000.0_dp
-            x(3) = phi_period*real(mod(i*29, 1000), dp)/1000.0_dp
+            x = pts(:, i)
             call f%evaluate(x, Acov, hcov, Bmod)
             checksum = checksum + Bmod
         end do
@@ -136,9 +145,7 @@ subroutine time_kernel(f, phi_period, n_timing, n_rep, t_eval, t_eval_der)
         checksum = 0.0_dp
         call system_clock(count=t0)
         do i = 1, n_timing
-            x(1) = 0.02_dp + 0.96_dp*real(mod(i*7, 1000), dp)/1000.0_dp
-            x(2) = phi_period*real(mod(i*13, 1000), dp)/1000.0_dp
-            x(3) = phi_period*real(mod(i*29, 1000), dp)/1000.0_dp
+            x = pts(:, i)
             call f%evaluate_with_der(x, Acov, hcov, Bmod, dAcov, dhcov, dBmod)
             checksum = checksum + Bmod
         end do
@@ -152,7 +159,7 @@ subroutine time_kernel(f, phi_period, n_timing, n_rep, t_eval, t_eval_der)
 
 end subroutine time_kernel
 
-subroutine measure_accuracy(raw, splined, phi_period, n_acc, max_ulp)
+subroutine measure_accuracy(raw, splined, phi_period, n_acc, max_ulp, max_rel)
     !> Max ulp deviation of splined Bmod from the direct coils Bmod at the
     !> same physical point. Splined coordinates are (r=sqrt(s), theta, zeta);
     !> the physical point is obtained by s = r^2 and ref_coords%evaluate_cart.
@@ -166,15 +173,16 @@ subroutine measure_accuracy(raw, splined, phi_period, n_acc, max_ulp)
     type(splined_field_t), intent(in) :: splined
     real(dp), intent(in) :: phi_period
     integer, intent(in) :: n_acc
-    real(dp), intent(out) :: max_ulp
+    real(dp), intent(out) :: max_ulp, max_rel
 
     real(dp) :: x(3), u(3), xcart(3)
     real(dp) :: Acov(3), hcov(3), Bmod
     real(dp) :: Acov_ref(3), hcov_ref(3), Bmod_ref
-    real(dp) :: ulp
+    real(dp) :: ulp, rel
     integer :: i
 
     max_ulp = 0.0_dp
+    max_rel = 0.0_dp
     do i = 1, n_acc
         x(1) = 0.05_dp + 0.9_dp*real(mod(13*i, 997), dp)/997.0_dp
         x(2) = 0.1_dp + (twopi - 0.2_dp)*real(mod(29*i, 991), dp)/991.0_dp
@@ -190,5 +198,7 @@ subroutine measure_accuracy(raw, splined, phi_period, n_acc, max_ulp)
 
         ulp = abs(Bmod - Bmod_ref)/max(spacing(Bmod_ref), tiny(1.0_dp))
         max_ulp = max(max_ulp, ulp)
+        rel = abs(Bmod - Bmod_ref)/abs(Bmod_ref)
+        max_rel = max(max_rel, rel)
     end do
 end subroutine measure_accuracy
