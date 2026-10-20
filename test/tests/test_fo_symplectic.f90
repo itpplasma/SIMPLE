@@ -6,6 +6,7 @@ program test_fo_symplectic
         gauss2_potential, gauss2_encode, shipped_step => gauss2_step, &
         gauss2_entry_step
     use reference_fo_gauss2, only: reference_prepare => gauss2_prepare, &
+       reference_geometry => gauss2_geometry, reference_potential => gauss2_potential, &
         gauss2_hamiltonian, gauss2_step
     use util, only: c, p_mass, e_charge, ev
     use generated_fo_stepper, only: generated_eval, generated_step
@@ -66,6 +67,7 @@ program test_fo_symplectic
             call energy_run(nlong,only_marker)
             cycle
         end if
+        call check_field_jets
         call check_first_order
         call check_derivatives
         call check_monitor_derivatives
@@ -102,6 +104,34 @@ contains
         call gauss2_potential(z(1:3),width,ro0,av,da,ha)
         z(4:6)=av+matmul(transpose(e),vscale*[0.001_dp,0.002_dp,0.001_dp])
     end subroutine initial
+
+    subroutine check_field_jets
+        ! Independent frozen provider, including the axis, every volume and layers.
+        real(dp) :: q(3), x(3), xr(3), e(3, 3), er(3, 3), g(3, 3), gr(3, 3)
+        real(dp) :: dg(3, 3, 3), dgr(3, 3, 3), hg(3, 3, 3, 3), hgr(3, 3, 3, 3)
+        real(dp) :: a(3), ar(3), da(3, 3), dar(3, 3), ha(3, 3, 3), har(3, 3, 3)
+        real(dp), parameter :: offset(5) = [-0.2_dp, -0.01_dp, 0.0_dp, 0.01_dp, 0.2_dp]
+        integer :: volume, sample
+
+        do volume = 1, spectre_field%data%Mvol
+            do sample = 1, size(offset)
+                q = [real(volume - 1, dp) + offset(sample), &
+                     0.37_dp*sample, -0.21_dp*sample]
+                call gauss2_geometry(q, width, x, e, g, dg, hg)
+                call reference_geometry(q, width, xr, er, gr, dgr, hgr)
+                if (maxval(abs(x - xr)) > 0.0_dp .or. &
+                    maxval(abs(e - er)) > 0.0_dp .or. &
+                    maxval(abs(g - gr)) > 0.0_dp .or. &
+                    maxval(abs(dg - dgr)) > 0.0_dp .or. &
+                    maxval(abs(hg - hgr)) > 0.0_dp) error stop 'prepared geometry jets'
+                call gauss2_potential(q, width, ro0, a, da, ha)
+                call reference_potential(q, width, ro0, ar, dar, har)
+                if (maxval(abs(a - ar)) > 0.0_dp .or. &
+                    maxval(abs(da - dar)) > 0.0_dp .or. &
+                    maxval(abs(ha - har)) > 0.0_dp) error stop 'prepared potential jets'
+            end do
+        end do
+    end subroutine check_field_jets
 
     subroutine check_first_order
         ! The low-order path must retain the value and RHS through interfaces,

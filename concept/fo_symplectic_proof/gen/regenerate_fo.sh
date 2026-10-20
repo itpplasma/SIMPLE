@@ -11,15 +11,29 @@ mkdir -p build/fo_generator
 ${FC:-gfortran} -I "$fortsym_build/include" $proof/gen/gen_fo_hamiltonian.f90 \
     -L "$fortsym_build/lib" -Wl,-rpath,"$fortsym_build/lib" -lfortsym \
     -o build/fo_generator/gen_fo_hamiltonian
+for generator in geometry hessian; do
+    ${FC:-gfortran} -I "$fortsym_build/include" "$proof/gen/gen_fo_${generator}.f90" \
+        -L "$fortsym_build/lib" -Wl,-rpath,"$fortsym_build/lib" -lfortsym \
+        -o "build/fo_generator/gen_fo_${generator}"
+done
+finish_leaves() {
+    local directory=$1
+    FO_GENERATOR_OUTPUT="$directory" build/fo_generator/gen_fo_geometry
+    FO_GENERATOR_OUTPUT="$directory" build/fo_generator/gen_fo_hessian
+    python3 "$proof/gen/array_facades.py" "$directory"
+    fprettify -c .fprettify "$directory/fo_kernel.f90"
+}
 if [ -n "${FO_GENERATOR_OUTPUT:-}" ]; then
     build/fo_generator/gen_fo_hamiltonian
     python3 "$proof/gen/format_first_facade.py" \
         "$FO_GENERATOR_OUTPUT/src/generated/fo_kernel.f90"
+    finish_leaves "$FO_GENERATOR_OUTPUT/src/generated"
     exit 0
 fi
 out=build/fo_generator/out
 mkdir -p "$out/src/generated" "$out/$proof"
 FO_GENERATOR_OUTPUT="$out" build/fo_generator/gen_fo_hamiltonian
 python3 "$proof/gen/format_first_facade.py" "$out/src/generated/fo_kernel.f90"
+finish_leaves "$out/src/generated"
 cp "$out"/src/generated/* "$proof/generated/"
 cp "$out/$proof/symbolic.json" "$out/$proof/monitor.json" "$proof/"
