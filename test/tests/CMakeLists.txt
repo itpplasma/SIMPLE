@@ -386,13 +386,23 @@ if (ENABLE_OPENMP)
     # branch is the only code path that exercises the root solver behind the
     # quasi steps (fortnum multiroot_hybrids on this branch, MINPACK hybrd1 on
     # main); registering it gives that path real golden coverage.
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/sympl_stell)
+    file(CREATE_LINK ${WOUT_FILE}
+        ${CMAKE_CURRENT_BINARY_DIR}/sympl_stell/wout.nc SYMBOLIC)
     add_test(NAME test_sympl_stell
         COMMAND test_sympl.x
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/sympl_stell)
     set_tests_properties(test_sympl_stell PROPERTIES
         LABELS "integration"
-        RUN_SERIAL TRUE
         TIMEOUT 120)
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/sympl_stell_full)
+    file(CREATE_LINK ${WOUT_FILE}
+        ${CMAKE_CURRENT_BINARY_DIR}/sympl_stell_full/wout.nc SYMBOLIC)
+    add_test(NAME test_sympl_stell_full COMMAND test_sympl.x --full
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/sympl_stell_full)
+    set_tests_properties(test_sympl_stell_full PROPERTIES
+        LABELS "integration;slow" TIMEOUT 120
+        PROCESSORS 1 ENVIRONMENT "OMP_NUM_THREADS=1")
     # Field-evaluation cost ratio between mode_secders=0 and mode_secders=2.
     # Built but deliberately not registered with ctest: it is a timing
     # measurement, so its result is hardware-dependent and must not gate CI.
@@ -718,6 +728,7 @@ set_tests_properties(test_continuous_classifier_scores PROPERTIES LABELS "unit")
         COMMAND $<TARGET_FILE:generate_test_boozer_chartmap.x> ${CMAKE_CURRENT_BINARY_DIR}/test_boozer_chartmap.nc)
     set_tests_properties(generate_test_boozer_chartmap_data PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        FIXTURES_SETUP boozer_chartmap_test_data
         LABELS "unit")
     add_executable(test_boozer_chartmap.x test_boozer_chartmap.f90)
     target_link_libraries(test_boozer_chartmap.x simple)
@@ -725,7 +736,7 @@ set_tests_properties(test_continuous_classifier_scores PROPERTIES LABELS "unit")
     add_test(NAME test_boozer_chartmap COMMAND test_boozer_chartmap.x)
     set_tests_properties(test_boozer_chartmap PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        DEPENDS "generate_test_boozer_chartmap_data"
+        FIXTURES_REQUIRED boozer_chartmap_test_data
         LABELS "unit")
     # Regular near-axis Boozer field (libneo#437) built on request for the
     # internal VMEC -> Boozer conversion and for Boozer chartmaps.
@@ -747,7 +758,7 @@ set_tests_properties(test_continuous_classifier_scores PROPERTIES LABELS "unit")
     set_tests_properties(test_chartmap_startmode1 PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "integration;python"
-        DEPENDS "generate_test_boozer_chartmap_data")
+        FIXTURES_REQUIRED boozer_chartmap_test_data)
 
     add_executable(test_chartmap_scaling.x test_chartmap_scaling.f90)
     target_link_libraries(test_chartmap_scaling.x simple)
@@ -755,7 +766,7 @@ set_tests_properties(test_continuous_classifier_scores PROPERTIES LABELS "unit")
     add_test(NAME test_chartmap_scaling COMMAND test_chartmap_scaling.x)
     set_tests_properties(test_chartmap_scaling PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        DEPENDS "generate_test_boozer_chartmap_data"
+        FIXTURES_REQUIRED boozer_chartmap_test_data
         LABELS "unit")
 
     # Boozer chartmap roundtrip test: requires wout.nc
@@ -795,6 +806,8 @@ set_tests_properties(test_continuous_classifier_scores PROPERTIES LABELS "unit")
     set_tests_properties(test_axis_loss_consistency PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "system;python"
+        PROCESSORS 2
+        ENVIRONMENT "OMP_NUM_THREADS=2;OPENBLAS_NUM_THREADS=1"
         TIMEOUT 1800)
 
     # The explicit integmodes must notice a marker leaving the plasma. They
@@ -807,6 +820,8 @@ set_tests_properties(test_continuous_classifier_scores PROPERTIES LABELS "unit")
     set_tests_properties(test_explicit_loss_detection PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "system;python"
+        PROCESSORS 2
+        ENVIRONMENT "OMP_NUM_THREADS=2;OPENBLAS_NUM_THREADS=1"
         TIMEOUT 600)
 
     # E2E test: VMEC-Boozer vs chartmap confined fractions
@@ -991,7 +1006,7 @@ add_test(NAME test_chartmap_pipeline
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_chartmap_pipeline PROPERTIES
     LABELS "unit"
-    RESOURCE_GROUPS "mem_gb:10"
+    RESOURCE_GROUPS "mem_gb:2"
     TIMEOUT 120)
 
 # Chartmap R,Z consistency tests
@@ -1004,7 +1019,7 @@ add_test(NAME test_chartmap_rz_consistency
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_chartmap_rz_consistency PROPERTIES
     LABELS "unit"
-    RESOURCE_GROUPS "mem_gb:10"
+    RESOURCE_GROUPS "mem_gb:8"
     TIMEOUT 120)
 
 # Batch spline optimization test
@@ -1222,7 +1237,8 @@ add_test(NAME test_spectre_sympl_volume
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_spectre_sympl_volume PROPERTIES
     LABELS "integration;python"
-    RUN_SERIAL TRUE
+    PROCESSORS 2
+    ENVIRONMENT "OMP_NUM_THREADS=2;OPENBLAS_NUM_THREADS=1"
     TIMEOUT 300)
 
 # SPECTRE construction-grid memory knob and axisymmetric phi auto-clamp (#442):
@@ -1249,7 +1265,6 @@ add_test(NAME test_spectre_validation
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_spectre_validation PROPERTIES
     LABELS "integration;python"
-    RUN_SERIAL TRUE
     TIMEOUT 300)
 
 add_subdirectory(field_can)
@@ -1274,6 +1289,7 @@ add_test(
         $<TARGET_FILE:simple.x>
 )
 set_tests_properties(orbit_netcdf_output PROPERTIES
+    FIXTURES_SETUP orbit_netcdf_data
     TIMEOUT 120
     LABELS "system;integration"
 )
@@ -1285,7 +1301,7 @@ add_test(
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 set_tests_properties(orbit_netcdf_verify PROPERTIES
-    DEPENDS orbit_netcdf_output
+    FIXTURES_REQUIRED orbit_netcdf_data
     TIMEOUT 30
     LABELS "system;integration"
 )
@@ -1451,7 +1467,7 @@ set_target_properties(test_fo_symplectic.x PROPERTIES
     Fortran_MODULE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/fo_proof_modules)
 add_test(NAME test_fo_symplectic COMMAND test_fo_symplectic.x
     ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
-    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000)
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000 1 -1 0 1e-12 64)
 set_tests_properties(test_fo_symplectic PROPERTIES LABELS "integration" TIMEOUT 900)
 add_test(NAME test_fo_symplectic_long COMMAND test_fo_symplectic.x
     ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
@@ -1461,7 +1477,7 @@ set_tests_properties(test_fo_symplectic_long PROPERTIES
 
 add_test(NAME test_fo_symplectic_resolved COMMAND test_fo_symplectic.x
     ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
-    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000 100)
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000 100 -1 0 1e-12 64)
 set_tests_properties(test_fo_symplectic_resolved PROPERTIES
     LABELS "integration" TIMEOUT 900)
 add_test(NAME test_fo_symplectic_resolved_long COMMAND test_fo_symplectic.x
@@ -1498,9 +1514,13 @@ foreach(fo_suffix IN ITEMS second second_long second_resolved second_resolved_lo
     if(fo_suffix MATCHES "resolved")
         set(fo_velocity 100)
     endif()
+    set(fo_map_args -1 0 1e-12 64)
+    if(fo_suffix MATCHES "long")
+        set(fo_map_args)
+    endif()
     add_test(NAME test_fo_symplectic_${fo_suffix} COMMAND test_fo_symplectic.x
         ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
-        ${FO_SECOND_FIELD} ${fo_nsteps} ${fo_velocity})
+        ${FO_SECOND_FIELD} ${fo_nsteps} ${fo_velocity} ${fo_map_args})
     set_tests_properties(test_fo_symplectic_${fo_suffix} PROPERTIES
         LABELS "integration" TIMEOUT 900)
     if(fo_suffix MATCHES "long")
@@ -1541,9 +1561,37 @@ endforeach()
 # Also retain the original proof's larger-velocity map oracle at base h.
 add_test(NAME test_fo_gauss2_original_oracle COMMAND test_fo_symplectic.x
     ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
-    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000 100 -1 1)
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000 100 -1 1 1e-12 64)
 set_tests_properties(test_fo_gauss2_original_oracle PROPERTIES
     LABELS "integration" TIMEOUT 900)
+
+# Fast checks compose 64 steps with the same strict defect/correspondence bounds.
+# Retain every original 1000-step composition (and its energy checks) in slow.
+foreach(fo_case IN ITEMS base resolved second second_resolved original_oracle)
+    set(fo_name test_fo_symplectic)
+    set(fo_field ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5)
+    set(fo_velocity 1)
+    set(fo_factor 0)
+    if(NOT fo_case STREQUAL "base")
+        set(fo_name test_fo_symplectic_${fo_case})
+    endif()
+    if(fo_case MATCHES "second")
+        set(fo_field ${FO_SECOND_FIELD})
+    endif()
+    if(fo_case MATCHES "resolved|original_oracle")
+        set(fo_velocity 100)
+    endif()
+    if(fo_case STREQUAL "original_oracle")
+        set(fo_name test_fo_gauss2_original_oracle)
+        set(fo_factor 1)
+    endif()
+    add_test(NAME ${fo_name}_full COMMAND test_fo_symplectic.x
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+        ${fo_field} 1000 ${fo_velocity} -1 ${fo_factor})
+    set_tests_properties(${fo_name}_full PROPERTIES
+        LABELS "integration;slow" TIMEOUT 900
+        PROCESSORS 1 ENVIRONMENT "OMP_NUM_THREADS=1")
+endforeach()
 
 # Same fictitious duration as the original P2 million-step larger-velocity run.
 add_test(NAME test_fo_gauss2_resolution_large_matched_policy COMMAND test_fo_symplectic.x
@@ -1566,6 +1614,34 @@ foreach(fo_probe IN ITEMS base half quarter tight base_short captured)
 endforeach()
 set_tests_properties(${FO_STEPPER_TESTS} PROPERTIES
     PROCESSORS 1 ENVIRONMENT "OMP_NUM_THREADS=1")
+
+# Reduced particle sets keep the per-marker invariants and non-vacuity checks.
+# Full variants preserve every original particle, trace length and setup grid.
+function(add_full_python_driver name timeout)
+    if(TEST ${name})
+        add_test(NAME ${name}_full COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/${name}.py ${ARGN} --full)
+        set_tests_properties(${name}_full PROPERTIES
+            LABELS "slow;integration;python" TIMEOUT ${timeout} PROCESSORS 2
+            ENVIRONMENT "OMP_NUM_THREADS=2;OPENBLAS_NUM_THREADS=1"
+            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    endif()
+endfunction()
+# Cold CI checkouts have no CTest cost history. Start the measured long drivers
+# early instead of leaving their two-core reservations in an idle serial tail.
+foreach(driver IN ITEMS test_class_scores_driver test_explicit_loss_detection
+        test_axis_loss_consistency test_spectre_sympl_volume)
+    if(TEST ${driver})
+        set_tests_properties(${driver} PROPERTIES COST 100 PROCESSORS 2)
+        set_property(TEST ${driver} APPEND PROPERTY ENVIRONMENT
+            "OMP_NUM_THREADS=2" "OPENBLAS_NUM_THREADS=1")
+    endif()
+endforeach()
+
+add_full_python_driver(test_axis_loss_consistency 1800)
+add_full_python_driver(test_explicit_loss_detection 600)
+add_full_python_driver(test_spectre_sympl_volume 300
+    $<TARGET_FILE:simple.x> ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5)
 
 add_subdirectory(
     "${CMAKE_SOURCE_DIR}/concept/fo_gc_derivations/D_canonical_switch"

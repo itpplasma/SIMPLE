@@ -1,5 +1,6 @@
 program test_sympl
 
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use orbit_symplectic
 use orbit_symplectic_quasi, only: f_quasi => f, si_quasi => si, &
     orbit_timestep_quasi, orbit_timestep_multi_quasi
@@ -27,6 +28,15 @@ integer :: npoiper2
 real(8) :: rbig, dtau, dtaumax
 
 integer :: nt
+    logical :: full_test = .false.
+    character(16) :: arg
+
+    if (command_argument_count() > 0) then
+        call get_command_argument(1, arg)
+        if (command_argument_count() /= 1 .or. trim(arg) /= "--full") &
+            error stop "usage: test_sympl.x [--full]"
+        full_test = .true.
+    end if
 
 field_input = 'wout.nc'
 coord_input = 'wout.nc'
@@ -57,7 +67,12 @@ z0(4) = vpar0*f%hph + f%Aph/f%ro0  ! p_phi
 npoiper2 = 48
 dt = twopi*rbig/npoiper2
 
-nt = 10000*npoiper2/64
+    if (full_test) then
+        nt = 10000*npoiper2/64
+    else
+        ! Two periods exercise every stepper; retain the long plotting trace in slow.
+        nt = 2*npoiper2
+    end if
 
 call orbit_sympl_init(integ_euler1, f, z0, dt, 1, 1d-12, 1)
 call test_single(integ_euler1, 'euler1.out')
@@ -124,6 +139,16 @@ print *, ''
 
 contains
 
+    subroutine check_fast_step(z, energy, status)
+        use, intrinsic :: iso_fortran_env, only: dp => real64
+        real(dp), intent(in) :: z(4), energy
+        integer, intent(in) :: status
+        if (full_test) return
+        if (status /= 0) error stop 'stellarator stepper failed'
+        if (.not. all(ieee_is_finite(z)) .or. .not. ieee_is_finite(energy)) &
+            error stop 'nonfinite stellarator state'
+    end subroutine check_fast_step
+
 subroutine test_single(si, outname)
     type(symplectic_integrator_t) :: si
     character(*) :: outname
@@ -142,6 +167,7 @@ subroutine test_single(si, outname)
     do kt = 2, nt
         ierr = 0
         call orbit_timestep_sympl(si, f, ierr)
+            call check_fast_step(si%z, f%H, ierr)
         if (.not. ierr==0) then
             print *, si%z
             exit
@@ -182,6 +208,7 @@ subroutine test_quasi(si, outname)
     do kt = 2, nt
         ierr = 0
         call orbit_timestep_quasi(ierr)
+            call check_fast_step(si_quasi%z, f_quasi%H, ierr)
         if (.not. ierr==0) then
             print *, si%z
             exit
@@ -219,6 +246,7 @@ subroutine test_multi(mi, outname)
     do kt = 2, nt
         ierr = 0
         call orbit_timestep_sympl_multi(mi, f, ierr)
+            call check_fast_step(mi%stages(1)%z, f%H, ierr)
         if (.not. ierr==0) stop 'Error'
         out(1:4,kt) = mi%stages(1)%z
         out(5,kt) = f%H
@@ -255,6 +283,7 @@ subroutine test_multi_quasi(mi, outname)
     do kt = 2, nt
         ierr = 0
         call orbit_timestep_multi_quasi(mi, ierr)
+            call check_fast_step(mi%stages(1)%z, f_quasi%H, ierr)
         if (.not. ierr==0) stop 'Error'
         out(1:4,kt) = mi%stages(1)%z
         out(5,kt) = f_quasi%H

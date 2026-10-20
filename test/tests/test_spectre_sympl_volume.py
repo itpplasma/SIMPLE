@@ -9,7 +9,7 @@ import numpy as np
 from spectre_test_utils import axis_volume
 from netCDF4 import Dataset
 
-NTESTPART = 24
+NTESTPART = 24 if "--full" in sys.argv[3:] else 4
 NTIMSTEP = 200
 NPOIPER2 = 6000000        # fine steps -> ~1e5 microsteps within the confined window
 TRACE_TIME = 8.0e-8       # short trace within the unchanged axis volume
