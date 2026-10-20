@@ -25,7 +25,7 @@ and ``DOC/config.md`` for additional usage, units and option interactions.
 &config
 -------
 
-Source: ``src/params.f90:214``.
+Source: ``src/params.f90:240``.
 
 .. list-table::
    :header-rows: 1
@@ -109,6 +109,12 @@ Source: ``src/params.f90:214``.
      - ``scalar``
      - ``1d0``
      -
+   * - ``particle_energy_ev``
+     - ``real``
+     - ``dp``
+     - ``scalar``
+     - ``-1.0_dp``
+     - particle energy in eV; <= 0 selects 3.5 MeV/facE_al
    * - ``npoiper2``
      - ``integer``
      - ``default``
@@ -391,6 +397,36 @@ Source: ``src/params.f90:214``.
      - ``scalar``
      - ``.False.``
      - Colliding with D-T reactor plasma. TODO: Make configurable
+   * - ``collision_model``
+     - ``character(len=24)``
+     - ``default``
+     - ``scalar``
+     - ``'full'``
+     - 'full' (Coulomb operator) or 'lorentz_nustar' (monoenergetic pitch scattering)
+   * - ``nu_star_standard``
+     - ``real``
+     - ``dp``
+     - ``scalar``
+     - ``-1.0_dp``
+     - Lorentz mode: nu\* = R0\*nu/(abs(iota)\*v0), must be >= 0
+   * - ``lorentz_major_radius_cm``
+     - ``real``
+     - ``dp``
+     - ``scalar``
+     - ``-1.0_dp``
+     - Lorentz mode: local major radius R0 in cm, must be > 0
+   * - ``lorentz_iota``
+     - ``real``
+     - ``dp``
+     - ``scalar``
+     - ``0.0_dp``
+     - Lorentz mode: local rotational transform, must be nonzero
+   * - ``radial_electric_potential_slope``
+     - ``real``
+     - ``dp``
+     - ``scalar``
+     - ``0.0_dp``
+     - slope of Phi(s) = slope\*s, added to the Boozer Hamiltonian H (normalized units)
    * - ``deterministic``
      - ``logical``
      - ``default``
@@ -683,7 +719,7 @@ Source: ``src/params.f90:214``.
 &profiles
 ---------
 
-Source: ``src/profiles.f90:36``.
+Source: ``src/profiles.f90:37``.
 
 .. list-table::
    :header-rows: 1

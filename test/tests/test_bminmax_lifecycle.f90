@@ -40,7 +40,7 @@ program test_bminmax_lifecycle
     use find_bminmax_sub, only: get_bminmax, init_bminmax_arrays
     use magfie_sub, only: dp, magfie
     use new_vmec_stuff_mod, only: nper
-    use params, only: class_plot, ntcut, num_surf
+    use params, only: class_plot, fast_class, ntcut, num_surf
     use simple_main, only: needs_bminmax_cache
     use test_bminmax_backend, only: test_magfie_backend
     use test_utils, only: check, check_close
@@ -65,7 +65,7 @@ contains
     subroutine test_cache_gate_cases(errors)
         integer, intent(inout) :: errors
         character(len=256) :: cases_path
-        character(len=1) :: class_plot_token, expected_token
+        character(len=1) :: class_plot_token, fast_class_token, expected_token
         integer :: unit_id, ios, case_num
         logical :: expected, actual
 
@@ -77,7 +77,7 @@ contains
 
         do
             read(unit_id, *, iostat=ios) num_surf, ntcut, class_plot_token, &
-                expected_token
+                fast_class_token, expected_token
             if (ios < 0) exit
             if (ios > 0) then
                 print *, "ERROR: failed to read bminmax cache case", case_num + 1
@@ -87,6 +87,7 @@ contains
 
             case_num = case_num + 1
             class_plot = class_plot_token == "T"
+            fast_class = fast_class_token == "T"
             expected = expected_token == "T"
             actual = needs_bminmax_cache()
             call check(actual .eqv. expected, "bminmax cache predicate case failed", &
@@ -99,6 +100,7 @@ contains
 
         ntcut = 0
         class_plot = .false.
+        fast_class = .false.
         num_surf = 1
     end subroutine test_cache_gate_cases
 

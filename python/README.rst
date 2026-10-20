@@ -89,6 +89,12 @@ low-field side (POTATO's ``R_c``). ``states_from_potato_invariants`` first
 converts POTATO's ``psi_star`` with the given ``psi_axis``, ``psi_edge`` and
 ``v0_ratio = v0_POTATO / v0_SIMPLE``.
 
+IMAS IDS workflow
+-----------------
+
+``pysimple.imas`` (install ``pysimple[imas]``) reads and writes IMAS IDS; see
+the user-guide page *IMAS workflow* (``docs/user-guide/imas.rst``).
+
 Fortran
 -------
 

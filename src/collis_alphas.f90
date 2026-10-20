@@ -7,8 +7,57 @@ module collis_alp
 
     real(wp), dimension(nsorts) :: efcolf, velrat, enrat
     real(wp), dimension(nsorts, N_S_GRID) :: efcolf_grid, velrat_grid, enrat_grid
+    real(wp) :: lorentz_nu = 0.0_wp
+    real(wp) :: lorentz_dhh = 0.0_wp
 
 contains
+
+    subroutine configure_lorentz_nustar(nu_star, major_radius_cm, iota, vref)
+        real(wp), intent(in) :: nu_star, major_radius_cm, iota, vref
+
+        if (nu_star < 0.0_wp) error stop 'nu_star_standard must be nonnegative'
+        if (major_radius_cm <= 0.0_wp) &
+            error stop 'lorentz_major_radius_cm must be positive'
+        if (abs(iota) <= tiny(1.0_wp)) error stop 'lorentz_iota must be nonzero'
+        if (vref <= 0.0_wp) error stop 'Lorentz reference velocity must be positive'
+
+        lorentz_nu = nu_star*abs(iota)*vref/major_radius_cm
+        ! stost advances in path length d tau = vref dt.  This coefficient gives
+        ! the Lorentz generator (nu/2) d/dlambda[(1-lambda^2)d/dlambda].
+        lorentz_dhh = lorentz_nu/(2.0_wp*vref)
+    end subroutine configure_lorentz_nustar
+
+    subroutine stost_lorentz(z, dtauc, ierr)
+        real(wp), intent(inout) :: z(5)
+        real(wp), intent(in) :: dtauc
+        integer, intent(out) :: ierr
+
+        real(wp) :: alam, coala, dalam
+        real :: ur
+
+        ierr = 0
+        alam = z(5)
+        coala = 1.0_wp - alam**2
+        if (coala < 0.0_wp) then
+            ierr = 1
+            return
+        end if
+
+        call getran(1, ur)
+        dalam = sqrt(2.0_wp*lorentz_dhh*coala*dtauc)*real(ur, wp) &
+                - 2.0_wp*alam*lorentz_dhh*dtauc
+        alam = alam + dalam
+        if (alam > 1.0_wp) then
+            alam = 2.0_wp - alam
+        else if (alam < -1.0_wp) then
+            alam = -2.0_wp - alam
+        end if
+        if (abs(alam) > 1.0_wp) then
+            ierr = 2
+            return
+        end if
+        z(5) = alam
+    end subroutine stost_lorentz
 
     subroutine coleff(p, dpp, dhh, fpeff)
         real(wp), intent(in) :: p
@@ -206,7 +255,7 @@ contains
                     + weight*(enrat_grid(:, idx_hi) - enrat_grid(:, idx_lo))
     end subroutine get_local_coeffs
 
-    subroutine stost(z, dtauc, iswmode, ierr, max_substep_fraction)
+    subroutine stost(z, dtauc, iswmode, ierr, max_substep_fraction, s_profile)
         use finite_check, only: is_finite
 
         integer, intent(in) :: iswmode
@@ -214,6 +263,10 @@ contains
         real(wp), intent(inout) :: z(5)
         integer, intent(out) :: ierr
         real(wp), intent(in), optional :: max_substep_fraction
+        !> Normalised toroidal flux of the profiles at z. Defaults to z(1),
+        !> which is s only for integ_coords TEST, CANFLUX, VMEC and BOOZER;
+        !> tracers pass profile_radius%profile_s(z(1:3)).
+        real(wp), intent(in), optional :: s_profile
 
         real(wp), parameter :: default_fraction = 0.1_wp
         real(wp), parameter :: twopi = 8.0_wp*atan(1.0_wp)
@@ -241,7 +294,15 @@ contains
             return
         end if
         if (dtauc == 0.0_wp) return
-        call get_local_coeffs(z(1), efcolf_loc, velrat_loc, enrat_loc)
+        if (present(s_profile)) then
+            if (.not. is_finite(s_profile)) then
+                ierr = 1
+                return
+            end if
+            call get_local_coeffs(s_profile, efcolf_loc, velrat_loc, enrat_loc)
+        else
+            call get_local_coeffs(z(1), efcolf_loc, velrat_loc, enrat_loc)
+        end if
         ! A vacuum neither advances the state nor consumes random numbers.
         if (all(efcolf_loc == 0.0_wp)) return
         pitch = iswmode == 1 .or. iswmode == 4

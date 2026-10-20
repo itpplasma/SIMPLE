@@ -101,6 +101,13 @@ Both take ``--nrho``, ``--ntheta`` and ``--nphi`` (GVEC) or ``--nzeta``
 or ``pol``) for SIMPLE's left-handed convention; its tested workflow is
 ``test/tests/run_gvec_qa_roundtrip.py``.
 
+IMAS equilibrium IDS
+--------------------
+
+``pysimple.imas`` converts an axisymmetric equilibrium IDS through libneo into
+a Boozer chartmap and traces IDS markers in it; positions and outputs use the
+chartmap radius :math:`\rho`. Setup and conventions: :doc:`imas`.
+
 Coil fields
 -----------
 
