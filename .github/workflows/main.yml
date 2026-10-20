@@ -289,7 +289,8 @@ jobs:
         run: |
           # CTest's generated resource spec limits concurrent memory use.
           # Ignore OpenMP's thread count when counting runner cores.
-          export CTEST_PARALLEL_LEVEL=$(env -u OMP_NUM_THREADS -u OMP_THREAD_LIMIT nproc)
+          CTEST_PARALLEL_LEVEL=$(env -u OMP_NUM_THREADS -u OMP_THREAD_LIMIT nproc)
+          export CTEST_PARALLEL_LEVEL
           make "$TEST_TARGET" CONFIG=Fast \
             LIBNEO_REF="$LIBNEO_INPUT_REF"
 
