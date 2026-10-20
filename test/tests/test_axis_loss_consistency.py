@@ -28,6 +28,7 @@ ntimstep = 200
 ntestpart = 32
 sbeg = 0.05d0
 contr_pp = -1e10
+multharm = 1
 netcdffile = 'wout.nc'
 isw_field_type = 2
 deterministic = .True.

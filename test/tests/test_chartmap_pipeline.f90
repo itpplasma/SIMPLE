@@ -38,6 +38,9 @@ program test_chartmap_pipeline
     nerrors = 0
     call init_timer()
 
+    ! Every stage reads the same VMEC splines; construct them only once.
+    call init_vmec(VMEC_FILE, 5, 5, 5, dummy)
+
     call test_A_evaluate_roundtrip(nerrors)
     call test_B_covariant_basis_fd(nerrors)
     call test_C_basis_transform_identity(nerrors)
@@ -63,12 +66,10 @@ contains
         inquire (file=CHARTMAP_FILE, exist=chartmap_exists)
     end subroutine check_test_files
 
-    subroutine init_coordinate_systems(vmec_cs, chart_cs, dummy_out)
+    subroutine init_coordinate_systems(vmec_cs, chart_cs)
         !> Initialize VMEC and chartmap coordinate systems.
         class(coordinate_system_t), allocatable, intent(out) :: vmec_cs, chart_cs
-        real(dp), intent(out) :: dummy_out
 
-        call init_vmec(VMEC_FILE, 5, 5, 5, dummy_out)
         call make_vmec_coordinate_system(vmec_cs)
         call make_chartmap_coordinate_system(chart_cs, CHARTMAP_FILE)
     end subroutine init_coordinate_systems
@@ -101,7 +102,6 @@ contains
         logical :: vmec_exists, chartmap_exists
         integer :: ierr, i, j
         real(dp) :: r, theta, phi
-        real(dp) :: dummy_local
 
         real(dp), allocatable :: err_vmec_grid(:, :), err_chart_grid(:, :)
         real(dp), allocatable :: r_grid(:), theta_grid(:)
@@ -121,7 +121,7 @@ contains
             return
         end if
 
-        call init_coordinate_systems(vmec_cs, chart_cs, dummy_local)
+        call init_coordinate_systems(vmec_cs, chart_cs)
         call init_test_grids(r_grid, theta_grid)
 
         allocate (err_vmec_grid(N_TH_GRID, N_R_GRID), &
@@ -209,7 +209,6 @@ contains
         logical :: vmec_exists, chartmap_exists
         integer :: i, j, k
         real(dp) :: r, theta, phi
-        real(dp) :: dummy_local
 
         real(dp), allocatable :: err_vmec_grid(:, :), err_chart_grid(:, :)
         real(dp), allocatable :: r_grid(:), theta_grid(:)
@@ -228,7 +227,7 @@ contains
             return
         end if
 
-        call init_coordinate_systems(vmec_cs, chart_cs, dummy_local)
+        call init_coordinate_systems(vmec_cs, chart_cs)
         call init_test_grids(r_grid, theta_grid)
 
         allocate (err_vmec_grid(N_TH_GRID, N_R_GRID), &
@@ -307,7 +306,6 @@ contains
         logical :: vmec_exists, chartmap_exists
         integer :: i, j
         real(dp) :: r, theta, phi
-        real(dp) :: dummy_local
 
         real(dp), allocatable :: err_vmec_grid(:, :), err_chart_grid(:, :)
         real(dp), allocatable :: r_grid(:), theta_grid(:)
@@ -326,7 +324,7 @@ contains
             return
         end if
 
-        call init_coordinate_systems(vmec_cs, chart_cs, dummy_local)
+        call init_coordinate_systems(vmec_cs, chart_cs)
         call init_test_grids(r_grid, theta_grid)
 
         allocate (err_vmec_grid(N_TH_GRID, N_R_GRID), &

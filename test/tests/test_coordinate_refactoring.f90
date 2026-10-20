@@ -132,9 +132,7 @@ contains
 
         coord_input = 'wout.nc'
         field_input = 'wout.nc'
-        call init_vmec('wout.nc', 5, 5, 5, dummy)
-        call init_reference_coordinates(coord_input)
-
+        ! Reuse the VMEC/reference coordinates built by the roundtrip check.
         call create_coils_field('coils.simple', raw_coils)
     call create_splined_field(raw_coils, ref_coords, splined_coils, n_r=32, n_th=33, n_phi=32)
 
