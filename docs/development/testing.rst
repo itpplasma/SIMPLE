@@ -30,7 +30,7 @@ Tests labelled ``python`` and some unlabelled wrappers need the packages from
 ``./setup-venv.sh``.
 
 Memory allocation on workstations and CI
----------------------------------------
+----------------------------------------
 
 Configure on the machine that will run the tests. CMake writes
 ``build/ctest-resources.json`` with one ``mem_gb`` resource whose slots each
@@ -77,11 +77,14 @@ invocation, not OS memory limits or separate CTest invocations. Keep OpenMP
 thread counts appropriate to the CPU allocation as well.
 
 Reservations are peak RSS rounded up to whole GiB, measured one registered
-test at a time with GNU ``/usr/bin/time -v`` inside
+test at a time with GNU ``/usr/bin/time -v``. Except for the updated wall test,
+these measurements ran inside
 ``systemd-run --user --scope -p MemoryMax=16G``. The workstation measurements
 use GNU Fortran 16.2.1, the deterministic ``Fast`` build, four OpenMP threads
 and one OpenBLAS thread; golden-record scripts retain their fixed two threads
 and the wall test retains its fixed single thread.
+The wall test uses VMEC angular multiplier 1 for initialization; its coil
+field, chartmap, explicit starts and numerical assertions are unchanged.
 
 ==============================================  ==========  =====
 Test                                            RSS (GiB)   Slots
@@ -97,7 +100,7 @@ gc_ck_ncsx_vmec_vs_meiss                        11.9712     12
 golden_record_albert_coils                      14.0856     15
 golden_record_boozer_ncsx                       7.2261      8
 golden_record_meiss_coils                       12.0610     13
-test_collisional_stl_wall                       10.3197     11
+test_collisional_stl_wall                       0.9169      1
 generate_chartmap_ncsx_map2disc                 0.3585      1
 generate_chartmap_ncsx_map2disc_wall            0.3940      1
 test_chartmap_ncsx_map2disc_wall_offset         0.3940      1

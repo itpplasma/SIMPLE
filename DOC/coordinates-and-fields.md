@@ -93,7 +93,7 @@ the field sampling grids and all finite-difference checks and tolerances.
 This bounds the three VMEC coordinate spline arrays to 0.43 GiB per process.
 CTest reserves memory for these and the full-resolution NCSX consumers with
 `RESOURCE_GROUPS` (`mem_gb`, one slot per GiB of measured peak RSS rounded up).
-See [Testing](../docs/development/testing.rst) for the generated resource spec
+See {doc}`/development/testing` for the generated resource spec
 and the memory budget used by local tests and CI.
 
 ### 1.3 Chartmap coordinates
