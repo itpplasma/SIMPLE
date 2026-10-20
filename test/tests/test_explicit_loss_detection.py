@@ -89,6 +89,7 @@ ntimstep = 100
 ntestpart = {npart}
 sbeg = {sbeg}d0
 contr_pp = -1d10
+multharm = {multharm}
 netcdffile = 'wout.nc'
 isw_field_type = 2
 deterministic = .True.
@@ -121,15 +122,15 @@ EXPLICIT = [
 
 
 def run(case, integmode, relerr, startmode, start_src, sbeg, npart, trace,
-        threads=None):
-    d = WORKDIR / case
+        threads=None, full=False):
+    d = WORKDIR / ("full" if full else "fast") / case
     if d.exists():
         shutil.rmtree(d)
     d.mkdir(parents=True)
     (d / "wout.nc").symlink_to(WOUT)
     (d / "simple.in").write_text(SIMPLE_IN.format(
         trace=trace, npart=npart, integmode=integmode, relerr=relerr,
-        startmode=startmode, sbeg=sbeg))
+        startmode=startmode, sbeg=sbeg, multharm=5 if full else 1))
     if start_src is not None:
         shutil.copy2(start_src, d / "start.dat")
     env = dict(os.environ)
@@ -148,7 +149,7 @@ def run(case, integmode, relerr, startmode, start_src, sbeg, npart, trace,
 
 def read(d):
     """(loss time, final normalised flux) per marker."""
-    data = np.loadtxt(d / "times_lost.dat")
+    data = np.atleast_2d(np.loadtxt(d / "times_lost.dat"))
     return data[:, 1], data[:, 5]
 
 
@@ -165,12 +166,12 @@ def classify(tlost, trace):
     return confined, lost, int(np.sum(~finite))
 
 
-def check_surface(sbeg, npart, trace, failures):
+def check_surface(sbeg, npart, trace, failures, full=False):
     """Run the reference and every explicit mode from one launch surface."""
     tag = f"s{sbeg:g}".replace(".", "")
     name, mode, relerr = REFERENCE
     d_ref = run(f"{tag}_{name}", mode, relerr, startmode=1, start_src=None,
-                sbeg=sbeg, npart=npart, trace=trace)
+                sbeg=sbeg, npart=npart, trace=trace, full=full)
     tl_ref, s_ref = read(d_ref)
     _, lost_ref, _ = classify(tl_ref, trace)
     n_lost_ref = int(np.sum(lost_ref))
@@ -184,12 +185,12 @@ def check_surface(sbeg, npart, trace, failures):
 
     # The runs are independent once the reference has written start.dat, and
     # a few seconds of start-up dominate each one, so run them side by side
-    # on one thread apiece.
-    with ThreadPoolExecutor(max_workers=len(EXPLICIT)) as pool:
+    # on one thread apiece, bounded by the CTest CPU reservation.
+    with ThreadPoolExecutor(max_workers=int(os.environ.get("OMP_NUM_THREADS", "1"))) as pool:
         futures = [
             pool.submit(run, f"{tag}_{name}", mode, relerr, startmode=2,
                         start_src=d_ref / "start.dat", sbeg=sbeg, npart=npart,
-                        trace=trace, threads=1)
+                        trace=trace, threads=1, full=full)
             for name, mode, relerr in EXPLICIT]
         dirs = [f.result() for f in futures]
 
@@ -225,8 +226,13 @@ def main():
     if not SIMPLE_X.exists() or not WOUT.exists():
         sys.exit("missing simple.x or wout.nc")
 
+    if sys.argv[1:] not in ([], ["--full"]):
+        sys.exit("usage: test_explicit_loss_detection.py [--full]")
+    full = bool(sys.argv[1:])
+    surfaces = LAUNCH_SURFACES if full else [(0.75, 16, 1e-4), (0.05, 1, 3e-4)]
     failures = []
-    losses = [check_surface(sbeg, npart, trace, failures) for sbeg, npart, trace in LAUNCH_SURFACES]
+    losses = [check_surface(sbeg, npart, trace, failures, full)
+              for sbeg, npart, trace in surfaces]
 
     # The outer surface must actually lose markers, or the boundary check has
     # nothing to detect and a pass would mean nothing. The near-axis surface is

@@ -39,11 +39,13 @@ program test_magfie_coils
         error stop 1
     end if
 
-    call init_vmec('wout.nc', 5, 5, 5, dummy)
+    call init_vmec('wout.nc', 5, 5, 1, dummy)
     call init_reference_coordinates('wout.nc')
 
     call create_coils_field('coils.simple', raw_coils)
-    call create_splined_field(raw_coils, ref_coords, splined_coils)
+    ! Keep the raw Biot-Savart oracle and its 1% bound on the smaller grid.
+    call create_splined_field(raw_coils, ref_coords, splined_coils, &
+                              n_r=32, n_th=33, n_phi=32)
 
     x = [0.5d0, 0.3d0, 0.2d0]
 

@@ -30,9 +30,8 @@ on:
         required: false
         default: itp-slurm
 
-# A new push to a pull request cancels its running checks (and Slurm jobs).
-# A label event never cancels a run: full-ci gets its own group, and other
-# labels do not start Build and Test (see its if:).
+# A new push cancels superseded PR checks. Label-triggered full-ci compiler
+# checks keep their own group and do not cancel an ordinary PR run.
 concurrency:
   group: >-
     ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}-${{
@@ -76,23 +75,24 @@ jobs:
           python tools/check_changed_lines.py
           --base "${{ github.event.pull_request.base.sha }}"
 
-  # Pushes and same-repository PRs run on the itp-slurm runners, which pack an
-  # offline bundle and run ci/run.sh in a Slurm job on sCluster. Fork PRs (and
-  # workflow_dispatch with runner=hosted) use the GitHub-hosted steps below.
+  # Every PR uses the hosted fast tier, including drafts and forks. The merge
+  # queue runs the full suite on sCluster; dispatch retains its runner choice.
+  # full-ci adds compiler/VMEC++ checks but never moves PR tests onto sCluster.
   test:
     name: Build and Test
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(github.event_name == 'pull_request' && '[1,2]' || '[1]') }}
     runs-on: >-
-      ${{ ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) ||
+      ${{ (github.event_name == 'pull_request' ||
       inputs.runner == 'hosted') && 'ubuntu-24.04' || fromJSON('["self-hosted","itp-slurm"]') }}
     timeout-minutes: 150
-    if: >-
-      github.event_name == 'merge_group' ||
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' && github.event.pull_request.draft == false &&
-      (github.event.action != 'labeled' || github.event.label.name == 'full-ci'))
     env:
+      OMP_NUM_THREADS: 2
+      OPENBLAS_NUM_THREADS: 1
       CI_HOSTED: >-
-        ${{ ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) ||
+        ${{ (github.event_name == 'pull_request' ||
         inputs.runner == 'hosted') && 'true' || 'false' }}
 
     steps:
@@ -105,26 +105,11 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           FULL_INPUT: ${{ inputs.full }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          FULL_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
           SCI_HEAD_REF: ${{ github.head_ref || github.ref_name }}
           SCI_LIBNEO_REF: ${{ inputs.libneo_ref }}
         run: |
           case $EVENT in
           workflow_dispatch) [ "$FULL_INPUT" = true ] && tier=full || tier=smoke ;;
-          pull_request)
-            # Full tier on PRs only with full-ci; the merge queue runs it (*).
-            if [ "$FULL_LABEL" = true ]; then
-              tier=full
-            else
-              tier=fast
-            fi
-            changed=$(git diff --name-only "$BASE_SHA" HEAD)
-            if ! grep -qvE '^(DOC|docs)/|\.(md|rst)$' <<< "$changed"; then
-              echo "Documentation-only change; nothing to build."
-              exit 0
-            fi
-            ;;
           *) tier=full ;;
           esac
           echo "tier: $tier"
@@ -143,7 +128,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            gfortran \
+            gfortran gfortran-14 gcc-14 g++-14 \
             git-lfs \
             cmake \
             ninja-build \
@@ -161,11 +146,16 @@ jobs:
       - name: Install Python dependencies
         if: env.CI_HOSTED == 'true'
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            # Match the GCC fast tier; frontend/Python-package checks run in full CI.
+            python -m pip install numpy netCDF4
+          else
+            python -m pip install --upgrade pip
+            python -m pip install -r requirements.txt
+          fi
 
       - name: Fetch Cached GVEC QA Data
-        if: env.CI_HOSTED == 'true'
+        if: env.CI_HOSTED == 'true' && inputs.full == 'true'
         env:
           GITLAB_ACCESS_TOKEN: ${{ secrets.GITLAB_ACCESS_TOKEN }}
           SIMPLE_GVEC_QA_CACHE_ROOT: ${{ github.workspace }}/.ci-data/gvec_qa_roundtrip
@@ -180,52 +170,65 @@ jobs:
         if: env.CI_HOSTED == 'true'
         run: |
           make clean
+          CMAKE_BUILD_PARALLEL_LEVEL=$(env -u OMP_NUM_THREADS -u OMP_THREAD_LIMIT nproc)
+          export CMAKE_BUILD_PARALLEL_LEVEL
+          build_options=()
+          config=Release
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            # The existing GCC 14 Fast coverage job validates this toolchain.
+            export CC=gcc-14 CXX=g++-14 FC=gfortran-14
+            config=Fast
+            build_options+=("FLAGS=-DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF")
+          fi
           REF="${{ inputs.libneo_ref }}"
           if [ -n "$REF" ]; then
-            make build-deterministic LIBNEO_REF="$REF"
+            make build-deterministic CONFIG="$config" "${build_options[@]}" LIBNEO_REF="$REF"
           else
-            make build-deterministic
+            make build-deterministic CONFIG="$config" "${build_options[@]}"
           fi
 
       # libneo-gate dispatch (no full) runs only the sub-minute smoke set;
       # PRs, the merge queue and full=true run the suites below.
       - name: Run Smoke Tests (libneo gate)
         if: env.CI_HOSTED == 'true' && (github.event_name == 'workflow_dispatch' && inputs.full != 'true')
-        run: make test-smoke
+        run: make test-smoke CONFIG=Release
 
       - name: Run Fast Tests (Fortran only)
         if: env.CI_HOSTED == 'true' && (github.event_name != 'workflow_dispatch' || inputs.full == 'true')
-        run: make test-fast
+        env:
+          TEST_SHARD: ${{ matrix.shard }}
+        run: |
+          CTEST_PARALLEL_LEVEL=$(env -u OMP_NUM_THREADS -u OMP_THREAD_LIMIT nproc)
+          export CTEST_PARALLEL_LEVEL
+          config=Release
+          [ "$GITHUB_EVENT_NAME" != pull_request ] || config=Fast
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            /usr/bin/time -v make test-fast CONFIG="$config" \
+              CTEST_CMD="cd build && ctest --test-dir test --output-on-failure -I $TEST_SHARD,,2"
+          else
+            /usr/bin/time -v make test-fast CONFIG="$config"
+          fi
 
       - name: Install Python package
-        if: env.CI_HOSTED == 'true' && (github.event_name != 'workflow_dispatch' || inputs.full == 'true')
+        if: env.CI_HOSTED == 'true' && inputs.full == 'true'
         run: python -m pip install -e '.[imas]' --no-build-isolation -Ccmake.define.SIMPLE_DETERMINISTIC_FP=ON
 
-      # Full tier: runs in the merge queue and on PRs labeled full-ci;
-      # pull requests (including stacked layers) run the fast tier only.
+      # Full hosted dispatch is opt-in; the merge queue runs full on sCluster.
       - name: Run Slow Tests (Python)
-        if: >-
-          env.CI_HOSTED == 'true' &&
-          ((github.event_name != 'workflow_dispatch' || inputs.full == 'true') &&
-          (github.event_name != 'pull_request' ||
-          contains(github.event.pull_request.labels.*.name, 'full-ci')))
+        if: env.CI_HOSTED == 'true' && inputs.full == 'true'
         env:
           SIMPLE_GVEC_QA_CACHE_ROOT: ${{ github.workspace }}/.ci-data/gvec_qa_roundtrip
-        run: make test-slow
+        run: make test-slow CONFIG=Release
 
       - name: Run Regression Tests (Golden Record)
-        if: >-
-          env.CI_HOSTED == 'true' &&
-          ((github.event_name != 'workflow_dispatch' || inputs.full == 'true') &&
-          (github.event_name != 'pull_request' ||
-          contains(github.event.pull_request.labels.*.name, 'full-ci')))
-        run: make test-regression
+        if: env.CI_HOSTED == 'true' && inputs.full == 'true'
+        run: make test-regression CONFIG=Release
 
       - name: Upload test results
         if: always() && env.CI_HOSTED == 'true'
         uses: actions/upload-artifact@v6
         with:
-          name: test-results
+          name: ${{ github.event_name == 'pull_request' && format('test-results-{0}', matrix.shard) || 'test-results' }}
           path: |
             build/test/Testing/
             build/test/tests/golden_record/runs/**/simple.in
@@ -608,13 +611,27 @@ jobs:
           name: verification-report
           path: build/output/verification-report/
 
+  # Matrix job names gain a shard suffix. Preserve the branch rule's exact
+  # Build and Test context and require every shard to succeed.
+  build-and-test-result:
+    permissions: {}
+    name: Build and Test
+    if: always()
+    needs: [test]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require successful test shards
+        env:
+          TEST_RESULT: ${{ needs.test.result }}
+        run: test "$TEST_RESULT" = success
+
   # Single required check for the merge queue: fails if any gating job failed
   # or was cancelled; full-tier jobs skipped on pull requests count as passed.
   ci-result:
     permissions: {}
     name: CI result
     if: always()
-    needs: [test, gcc-matrix, cgal-wall, vmecpp]
+    needs: [build-and-test-result, gcc-matrix, cgal-wall, vmecpp]
     runs-on: ubuntu-24.04
     steps:
       - name: Check gating jobs
