@@ -10,6 +10,7 @@
 # Environment:
 #   SCI_HEAD_REF    branch name to check out on (default: current branch)
 #   SCI_LIBNEO_REF  libneo ref for the build (default: branch matching)
+#   SCI_TIER        full bundles include the CGAL headers (default: full)
 #   SCI_CACHE       mirror and data cache (default: ~/.cache/sci-bundle)
 set -euo pipefail
 
@@ -21,6 +22,9 @@ head_ref=${SCI_HEAD_REF:-$(git -C "$src" rev-parse --abbrev-ref HEAD)}
 git check-ref-format --branch "$head_ref" > /dev/null
 
 deps="itpplasma/libneo itpplasma/map2disc lazy-fortran/fortnum lazy-fortran/fortplot lazy-fortran/fortio"
+if [ "${SCI_TIER:-full}" = full ]; then
+    deps="$deps dbstein/pybie2d dbstein/function_generator"
+fi
 
 # url<TAB>file name in test/test_data (shared with the golden-record runner).
 data_urls="https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc	wout.nc
@@ -43,7 +47,11 @@ update_mirror() {
         git -C "$dir" config --add remote.origin.fetch '+refs/tags/*:refs/tags/*'
     fi
     git -C "$dir" fetch -q --prune origin
-    git -C "$dir" symbolic-ref HEAD refs/heads/main
+    # map2disc's two Git dependencies use master; our libraries use main.
+    case $slug in
+        dbstein/*) git -C "$dir" symbolic-ref HEAD refs/heads/master ;;
+        *) git -C "$dir" symbolic-ref HEAD refs/heads/main ;;
+    esac
 }
 
 for slug in $deps; do
@@ -72,6 +80,17 @@ while IFS=$'\t' read -r url name; do
     ln "$stage/data/$name" "$stage/src/test/test_data/$name"
     printf '%s\t%s\n' "$url" "$name" >> "$stage/data/urls.tsv"
 done <<< "$data_urls"
+
+# Compute nodes cannot fetch release archives. Keep CGAL out of fast bundles.
+if [ "${SCI_TIER:-full}" = full ]; then
+    cgal=CGAL-6.0.1.tar.xz
+    if [ ! -s "$cache/data/$cgal" ]; then
+        curl -fsSL --retry 3 -o "$cache/data/$cgal.part" \
+            "https://github.com/CGAL/cgal/releases/download/v6.0.1/$cgal"
+        mv "$cache/data/$cgal.part" "$cache/data/$cgal"
+    fi
+    cp "$cache/data/$cgal" "$stage/data/$cgal"
+fi
 
 {
     printf 'SCI_COMMIT=%s\n' "$(git -C "$src" rev-parse HEAD)"
