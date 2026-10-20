@@ -6,14 +6,20 @@ module spectre_fo_gauss2
     use magfie_sub, only: spectre_field, TESLA_TO_GAUSS, M_TO_CM
     use lapack_interfaces, only: dgesv
     use fortnum_linalg, only: inv3
-    use spectre_basis, only: spectre_vecpot_t, eval_spectre_vector_potential, &
+    use spectre_basis, only: spectre_vecpot_t, &
         get_cheby_d2, get_zernike_d2
-    use fo_kernel, only: fo_eval, fo_eval_first, fo_monitor_factor, fo_jet_product, &
+    use fo_kernel, only: fo_eval_factored, fo_eval_first, fo_monitor_factor, fo_jet_product, &
         fo_radial, fo_metric_monitor
     implicit none
     private
     real(dp), parameter :: A_SCALE = TESLA_TO_GAUSS*M_TO_CM**2
     real(dp), allocatable :: gauge(:, :, :, :)
+    type :: potential_terms_t
+        integer, allocatable :: offset(:), degree(:)
+        real(dp), allocatable :: coeff(:, :, :)
+    end type potential_terms_t
+    type(potential_terms_t), allocatable :: potential_terms(:)
+    logical, allocatable :: gauge_active(:)
     real(dp), allocatable :: angular_factor(:, :, :)
     real(dp), parameter :: GL_A(2, 2) = reshape([0.25_dp, &
         0.25_dp + sqrt(3.0_dp)/6.0_dp, 0.25_dp - sqrt(3.0_dp)/6.0_dp, &
@@ -28,7 +34,7 @@ contains
         !> gradients of linear functions on the unwrapped angular cover.
         real(dp), allocatable :: radial(:, :), cheby(:, :), zernike(:, :, :)
         real(dp) :: delta(2, 2), wave(2), c, defect, scale
-        integer :: k, l, j, r, m, n, t, z
+        integer :: k, l, j, r, m, n, t, z, term
 
         if (.not. allocated(spectre_field)) &
             error stop "gauss2: initialize SPECTRE field before configuring"
@@ -98,6 +104,36 @@ contains
             end do
             deallocate(radial)
         end do
+        if (allocated(gauge_active)) deallocate (gauge_active)
+        allocate (gauge_active(spectre_field%data%Mvol))
+        if (allocated(potential_terms)) deallocate (potential_terms)
+        allocate (potential_terms(spectre_field%data%Mvol))
+        do k = 1, spectre_field%data%Mvol
+            gauge_active(k) = any(abs(gauge(:, :, :, k)) > 0.0_dp)
+            l = spectre_field%data%Lrad(k)
+            allocate (potential_terms(k)%offset(spectre_field%data%mn + 1))
+            allocate (potential_terms(k)%degree((l + 1)*spectre_field%data%mn))
+            allocate (potential_terms(k)%coeff(2, 2, (l + 1)*spectre_field%data%mn))
+            term = 1
+            do j = 1, spectre_field%data%mn
+                potential_terms(k)%offset(j) = term
+                do r = 0, l
+                    if (max(abs(spectre_field%data%vol(k)%Ate(r, j)), &
+                            abs(spectre_field%data%vol(k)%Ato(r, j)), &
+                            abs(spectre_field%data%vol(k)%Aze(r, j)), &
+                            abs(spectre_field%data%vol(k)%Azo(r, j))) <= 0.0_dp) cycle
+                    potential_terms(k)%degree(term) = r
+                    potential_terms(k)%coeff(:, 1, term) = &
+                        [spectre_field%data%vol(k)%Ate(r, j), &
+                         spectre_field%data%vol(k)%Aze(r, j)]
+                    potential_terms(k)%coeff(:, 2, term) = &
+                        [spectre_field%data%vol(k)%Ato(r, j), &
+                         spectre_field%data%vol(k)%Azo(r, j)]
+                    term = term + 1
+                end do
+            end do
+            potential_terms(k)%offset(spectre_field%data%mn + 1) = term
+        end do
     end subroutine gauss2_prepare
 
     pure subroutine switch_der(rho, k, width, s)
@@ -134,11 +170,12 @@ contains
             + 3.0_dp*(1.0_dp - 2.0_dp*s(0))*ph1*ph2 + ph3)/width**3
     end subroutine switch_der
 
-    subroutine gauss2_potential(q, width, ro0, a, da, d2a, first_order)
+    subroutine gauss2_potential(q, width, ro0, a, da, d2a, first_order, phase)
         !> first_order skips the second derivatives: a and da are bitwise
         !> unchanged, d2a is incomplete and must not be used.
         real(dp), intent(in) :: q(3), width, ro0
         real(dp), intent(out) :: a(3), da(3, 3), d2a(3, 3, 3)
+        real(dp), intent(in), optional :: phase(2, spectre_field%data%mn)
         logical, intent(in), optional :: first_order
         real(dp) :: al(3), dl(3, 3), hl(3, 3, 3)
         real(dp) :: ar(3), dr(3, 3), hr(3, 3, 3), s(0:3)
@@ -151,8 +188,8 @@ contains
         k = nint(q(1))
         if (k > 0 .and. k < spectre_field%data%Mvol) then
             if (abs(q(1) - k) < width/2.0_dp) then
-                call volume_potential(q, k, al, dl, hl, second)
-                call volume_potential(q, k + 1, ar, dr, hr, second)
+                call volume_potential(q, k, al, dl, hl, second, phase)
+                call volume_potential(q, k + 1, ar, dr, hr, second, phase)
                 call switch_der(q(1), k, width, s)
                 a = al + s(0)*(ar - al)
                 da = dl + s(0)*(dr - dl)
@@ -177,16 +214,17 @@ contains
                 return
             end if
         end if
-        call volume_potential(q, owner, a, da, d2a, second)
+        call volume_potential(q, owner, a, da, d2a, second, phase)
         a = a*A_SCALE/ro0
         da = da*A_SCALE/ro0
         d2a = d2a*A_SCALE/ro0
     end subroutine gauss2_potential
 
-    subroutine volume_potential(q, owner, a, da, d2a, second)
+    subroutine volume_potential(q, owner, a, da, d2a, second, phase)
         real(dp), intent(in) :: q(3)
         integer, intent(in) :: owner
         real(dp), intent(out) :: a(3), da(3, 3), d2a(3, 3, 3)
+        real(dp), intent(in), optional :: phase(2, spectre_field%data%mn)
         logical, intent(in) :: second
         ! Keep the gauge loop below unchanged: gfortran vectorizes it with
         ! libmvec sin/cos, and a different loop body changes the last bits.
@@ -195,8 +233,8 @@ contains
         integer :: i, j, ii
         integer, parameter :: slot(3, 3) = reshape([1, 2, 3, 2, 4, 5, 3, 5, 6], [3, 3])
 
-        call eval_spectre_vector_potential(spectre_field%data, owner, &
-                             2.0_dp*(q(1) - owner + 1) - 1.0_dp, q(2), q(3), av, second)
+        call prepared_potential(owner, &
+                      2.0_dp*(q(1) - owner + 1) - 1.0_dp, q(2), q(3), av, second, phase)
         a = [0.0_dp, av%Ath, av%Azt]
         da = 0.0_dp
         da(2, :) = av%dAth
@@ -212,6 +250,7 @@ contains
                     real(2**(merge(1, 0, i == 1) + merge(1, 0, j == 1)), dp)
             end do
         end do
+        if (.not. gauge_active(owner)) return
         do ii = 1, spectre_field%data%mn
             wave = [0.0_dp, real(spectre_field%data%im(ii), dp), &
                 -real(spectre_field%data%in(ii), dp)]
@@ -229,6 +268,67 @@ contains
             end do
         end do
     end subroutine volume_potential
+
+    subroutine prepared_potential(owner, s, theta, zeta, av, second, phase)
+        ! The radial basis and mode/degree summation order match libneo.
+        ! Only exactly zero coefficient tuples are omitted; no spectral cutoff.
+        integer, intent(in) :: owner
+        real(dp), intent(in) :: s, theta, zeta
+        type(spectre_vecpot_t), intent(out) :: av
+        real(dp), intent(in), optional :: phase(2, spectre_field%data%mn)
+        logical, intent(in) :: second
+        real(dp) :: cheby(0:spectre_field%data%Lrad(owner), 0:2)
+        real(dp) :: zernike(0:spectre_field%data%Lrad(owner), &
+                            0:spectre_field%data%Mpol, 0:2)
+        real(dp) :: tt(0:2), arg, carg, sarg, rmi, rni
+        real(dp) :: values(2, 10), ce(2), co(2), pv(2), qv(2)
+        real(dp) :: pe(2), po(2), increment(2)
+        integer :: ii, term, ll, mi
+
+        if (owner == 1) then
+            call get_zernike_d2(0.5_dp*(s + 1.0_dp), &
+               spectre_field%data%Lrad(owner), spectre_field%data%Mpol, zernike, second)
+        else
+            call get_cheby_d2(s, spectre_field%data%Lrad(owner), cheby, second)
+        end if
+        values = 0.0_dp
+        do ii = 1, spectre_field%data%mn
+            mi = spectre_field%data%im(ii)
+            rmi = real(mi, dp)
+            rni = real(spectre_field%data%in(ii), dp)
+            if (present(phase)) then
+                carg = phase(1, ii)
+                sarg = phase(2, ii)
+            else
+                arg = rmi*theta - rni*zeta
+                carg = cos(arg)
+                sarg = sin(arg)
+            end if
+            do term = potential_terms(owner)%offset(ii), &
+                potential_terms(owner)%offset(ii + 1) - 1
+                ll = potential_terms(owner)%degree(term)
+                if (owner == 1) then
+                    tt = [zernike(ll, mi, 0), 0.5_dp*zernike(ll, mi, 1), &
+                          0.25_dp*zernike(ll, mi, 2)]
+                else
+                    tt = cheby(ll, :)
+                end if
+                ce = potential_terms(owner)%coeff(:, 1, term)
+                co = potential_terms(owner)%coeff(:, 2, term)
+                if (second) then
+                    include 'fo_potential_2.inc'
+                else
+                    include 'fo_potential_1.inc'
+                end if
+            end do
+        end do
+        av%Ath = values(1, 1)
+        av%Azt = values(2, 1)
+        av%dAth = values(1, 2:4)
+        av%dAzt = values(2, 2:4)
+        av%d2Ath = values(1, 5:10)
+        av%d2Azt = values(2, 5:10)
+    end subroutine prepared_potential
 
     real(dp) function gauss2_gauge_zeta(q, owner, ro0) result(shift)
         real(dp), intent(in) :: q(3), ro0
@@ -278,7 +378,7 @@ contains
         coeff(:, 0) = coeff(:, 0) + inner
     end subroutine radial_geometry
 
-    subroutine gauss2_geometry(q, width, x, e, metric, dg, d2g, first_order)
+    subroutine gauss2_geometry(q, width, x, e, metric, dg, d2g, first_order, phase)
         !> Smooth the embedding, not just A: the native stacked chart is C0.
         !> SPEC interface Fourier coefficients and axis power law are unchanged
         !> outside the layer. Analytic geometry derivatives extend through order 3.
@@ -287,13 +387,14 @@ contains
         real(dp), intent(in) :: q(3), width
         real(dp), intent(out) :: x(3), e(3, 3), metric(3, 3)
         real(dp), intent(out) :: dg(3, 3, 3), d2g(3, 3, 3, 3)
+        real(dp), intent(out), optional :: phase(2, spectre_field%data%mn)
         logical, intent(in), optional :: first_order
         real(dp) :: jets(0:3, 0:3, 0:3, 2), coeff(2, 0:3), cl(2, 0:3)
-        real(dp) :: cr(2, 0:3), sw(0:3), arg, c(0:3), factor, wave(2)
+        real(dp) :: cr(2, 0:3), sw(0:3), arg, c(0:3), jet_c, jet_s, wave(2)
         real(dp) :: fl(0:3), fr(0:3)
         real(dp) :: profiles(0:3, 0:spectre_field%data%Mpol, 2)
         real(dp) :: d(2, 3), d2(2, 3, 3), d3(2, 3, 3, 3), rz(2), cz, sz
-        integer :: owner, iface, ii, m, n, r, t, z, l, comp, v, i, j, k
+        integer :: owner, iface, ii, m, n, r, l, comp, v, i, j, k
         integer :: idx(3), nord
         integer, parameter :: binom(0:3, 0:3) = reshape([ &
             1, 0, 0, 0, 1, 1, 0, 0, 1, 2, 1, 0, 1, 3, 3, 1], [4, 4])
@@ -321,6 +422,7 @@ contains
             wave = [real(m, dp), -real(n, dp)]
             arg = wave(1)*q(2) + wave(2)*q(3)
             c = [cos(arg), -sin(arg), -cos(arg), sin(arg)]
+            if (present(phase)) phase(:, ii) = c(0:3:3)
             fl = profiles(:, m, 1)
             if (blend) fr = profiles(:, m, 2)
             do comp = 1, 2
@@ -335,16 +437,11 @@ contains
                         end do
                     end do
                 end if
-                do z = 0, nord
-                    do t = 0, nord - z
-                        do r = 0, nord - z - t
-                            factor = angular_factor(t, z, ii)
-                            jets(r, t, z, comp) = jets(r, t, z, comp) + factor* &
-                                (coeff(1, r)*c(mod(t + z, 4)) &
-                                - coeff(2, r)*c(mod(t + z + 1, 4)))
-                        end do
-                    end do
-                end do
+                if (nord == 2) then
+                    include 'fo_geometry_2.inc'
+                else
+                    include 'fo_geometry_3.inc'
+                end if
             end do
         end do
         jets = jets*M_TO_CM
@@ -490,24 +587,25 @@ contains
         real(dp), intent(out), optional :: kenergy, monitor, grad(6), hess(6, 6)
         real(dp), intent(out), optional :: radial_jet(10)
         logical, intent(in), optional :: first_order
-        real(dp) :: aj(3, 10), gj(6, 10)
+        real(dp) :: aj(3, 10), gj(6, 10), phase(2, spectre_field%data%mn)
 
-        call metric_jets(z(1:3), width, gj, first_order)
-        call potential_jets(z(1:3), width, ro0, aj, first_order)
+        call metric_jets(z(1:3), width, gj, first_order, phase)
+        call potential_jets(z(1:3), width, ro0, aj, first_order, phase)
         call jet_eval(z, aj, gj, energy, f, df, e0, length, gmin, &
                     radial_scale, kenergy, monitor, grad, hess, radial_jet, first_order)
     end subroutine gauss2_eval
 
-    subroutine metric_jets(q, width, gj, first_order)
+    subroutine metric_jets(q, width, gj, first_order, phase)
         !> Metric jets: value, rho, theta, zeta, rr, rt, tt, rz, tz, zz.
         real(dp), intent(in) :: q(3), width
         real(dp), intent(out) :: gj(6, 10)
+        real(dp), intent(out), optional :: phase(2, spectre_field%data%mn)
         logical, intent(in), optional :: first_order
         real(dp) :: x(3), basis(3, 3), g(3, 3), dg(3, 3, 3), d2g(3, 3, 3, 3)
         integer :: i, j, k, l
         integer, parameter :: si(6) = [1, 1, 1, 2, 2, 3], sj(6) = [1, 2, 3, 2, 3, 3]
 
-        call gauss2_geometry(q, width, x, basis, g, dg, d2g, first_order)
+        call gauss2_geometry(q, width, x, basis, g, dg, d2g, first_order, phase)
         do l = 1, 6
             gj(l, 1) = g(si(l), sj(l))
             gj(l, 2:4) = dg(si(l), sj(l), :)
@@ -523,15 +621,16 @@ contains
         end do
     end subroutine metric_jets
 
-    subroutine potential_jets(q, width, ro0, aj, first_order)
+    subroutine potential_jets(q, width, ro0, aj, first_order, phase)
         !> Potential jets in the order of metric_jets.
         real(dp), intent(in) :: q(3), width, ro0
         real(dp), intent(out) :: aj(3, 10)
+        real(dp), intent(in), optional :: phase(2, spectre_field%data%mn)
         logical, intent(in), optional :: first_order
         real(dp) :: av(3), da(3, 3), d2a(3, 3, 3)
         integer :: i, j, k
 
-        call gauss2_potential(q, width, ro0, av, da, d2a, first_order)
+        call gauss2_potential(q, width, ro0, av, da, d2a, first_order, phase)
         aj(:, 1) = av
         aj(:, 2:4) = da
         k = 4
@@ -590,8 +689,8 @@ contains
             call fo_eval_first(z(4:6), aj, gj, 1.0_dp, 1.0_dp, energy0, &
                                tj, energy, ke, gh, hh, f, df)
         else
-            call fo_eval(z(4:6), aj, gj, 1.0_dp, 1.0_dp, energy0, &
-                         tj, energy, ke, gh, hh, f, df)
+            call fo_eval_factored(z(4:6), aj, gj, 1.0_dp, 1.0_dp, energy0, &
+                                  tj, energy, ke, gh, hh, f, df)
         end if
         if (present(kenergy)) kenergy = ke
         if (present(monitor)) monitor = tj(1)
@@ -689,14 +788,15 @@ contains
             !> already distributes markers over an OpenMP team.
             logical, intent(in) :: hessian
             real(dp) :: y(6, 2), aj(3, 10, 2), gj(6, 10, 2), stage_energy
+            real(dp) :: phase(2, spectre_field%data%mn)
             integer :: j, k
             logical :: first
             first = .not. hessian
             y(:, 1) = z0 + dy(:, 1)
             y(:, 2) = z0 + dy(:, 2)
             do j = 1, 2
-                call metric_jets(y(1:3, j), width, gj(:, :, j), first)
-                call potential_jets(y(1:3, j), width, ro0, aj(:, :, j), first)
+                call metric_jets(y(1:3, j), width, gj(:, :, j), first, phase)
+                call potential_jets(y(1:3, j), width, ro0, aj(:, :, j), first, phase)
                 call jet_eval(y(:, j), aj(:, :, j), gj(:, :, j), stage_energy, &
                               f(:, j), df(:, :, j), e0, length, gmin, radial_ref, &
                               monitor=monitor(j), first_order=first)

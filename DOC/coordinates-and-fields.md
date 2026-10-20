@@ -371,10 +371,18 @@ $\Delta\tau$ as for VMEC.
 The canonical Gauss-2 full-orbit evaluator in
 `concept/fo_symplectic_proof/spectre_fo_gauss2.f90` retains the same smooth
 embedding and vector potential. It caches field-constant angular factors and
-shares radial profiles between Fourier modes. Predictor and residual-only
+shares radial profiles between Fourier modes. Preparation packs the nonzero
+potential coefficient tuples without changing their mode/degree order; an
+identically zero interface gauge is skipped as a whole. FortSym emits the fixed
+geometry contractions and the two-component potential accumulation. The field-jet
+call passes geometry's Fourier phases to the potential at the same point,
+avoiding a second trigonometric evaluation. Predictor and residual-only
 stage evaluations request first-order field jets and a FortSym-generated
 Hamiltonian leaf without Hessian outputs; Newton corrections and tangent maps
-use the complete jets. Small stage evaluations run serially. Energy tests reuse
+use the complete jets. The full Hessian uses the factored inverse-metric
+identity generated and checked by FortSym; energy and force retain the original
+first-order expressions. The generated array interface binds the scalar DAG
+directly to arrays. Small stage evaluations run serially. Energy tests reuse
 H at the next step's start and evaluate the final endpoint explicitly, retaining
 the energy envelope and drift diagnostics at every accepted step.
 
