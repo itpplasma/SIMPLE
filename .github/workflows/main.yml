@@ -85,7 +85,7 @@ jobs:
       inputs.runner == 'hosted') && 'ubuntu-24.04' || fromJSON('["self-hosted","itp-slurm"]') }}
     timeout-minutes: 150
     env:
-      OMP_NUM_THREADS: 1
+      OMP_NUM_THREADS: 2
       OPENBLAS_NUM_THREADS: 1
       CI_HOSTED: >-
         ${{ (github.event_name == 'pull_request' ||
@@ -172,7 +172,7 @@ jobs:
       # PRs, the merge queue and full=true run the suites below.
       - name: Run Smoke Tests (libneo gate)
         if: env.CI_HOSTED == 'true' && (github.event_name == 'workflow_dispatch' && inputs.full != 'true')
-        run: make test-smoke
+        run: make test-smoke CONFIG=Fast
 
       - name: Run Fast Tests (Fortran only)
         if: env.CI_HOSTED == 'true' && (github.event_name != 'workflow_dispatch' || inputs.full == 'true')
@@ -190,11 +190,11 @@ jobs:
         if: env.CI_HOSTED == 'true' && inputs.full == 'true'
         env:
           SIMPLE_GVEC_QA_CACHE_ROOT: ${{ github.workspace }}/.ci-data/gvec_qa_roundtrip
-        run: make test-slow
+        run: make test-slow CONFIG=Fast
 
       - name: Run Regression Tests (Golden Record)
         if: env.CI_HOSTED == 'true' && inputs.full == 'true'
-        run: make test-regression
+        run: make test-regression CONFIG=Fast
 
       - name: Upload test results
         if: always() && env.CI_HOSTED == 'true'

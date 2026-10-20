@@ -795,14 +795,16 @@ contains
         if (present(e0)) energy0 = e0
         rhoj = [1.0_dp, 0.0_dp, 0.0_dp]
         if (present(gmin) .and. present(length)) then
-            do k = 1, spectre_field%data%Mvol - 1
-                call fo_monitor_factor(z(1) - real(k, dp), length, gmin, &
-                    factor(1), factor(2), factor(3))
-                call fo_jet_product(rhoj(1), rhoj(2), rhoj(3), &
-                    factor(1), factor(2), factor(3), &
-                    product(1), product(2), product(3))
-                rhoj = product
-            end do
+            if (gmin /= 1.0_dp) then
+                do k = 1, spectre_field%data%Mvol - 1
+                    call fo_monitor_factor(z(1) - real(k, dp), length, gmin, &
+                                           factor(1), factor(2), factor(3))
+                    call fo_jet_product(rhoj(1), rhoj(2), rhoj(3), &
+                                        factor(1), factor(2), factor(3), &
+                                        product(1), product(2), product(3))
+                    rhoj = product
+                end do
+            end if
         end if
         tj = 0.0_dp
         tj(1) = rhoj(1)
@@ -883,10 +885,10 @@ contains
         dy(:, 2) = h*(0.5_dp + sqrt(3.0_dp)/6.0_dp)*f(:, 1)
         do it = 1, 20
             ! The Jacobian is needed only if this iterate is not accepted. A
-            ! small-step predictor may already be, so evaluate to first order and
+            ! later iterate usually is, so evaluate it to first order first and
             ! add the Hessian at the same point only when the solve continues.
             ! The first/full oracle bounds CSE rounding in the retained values.
-            full = present(tangent)
+            full = it == 1 .or. present(tangent)
             call stage_evals(full)
             do i = 1, 2
                 r(:, i) = dy(:, i) - h*(GL_A(i, 1)*f(:, 1) + GL_A(i, 2)*f(:, 2))
