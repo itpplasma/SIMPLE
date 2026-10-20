@@ -2669,9 +2669,9 @@ contains
                     ! Resolve truncation error within the same momentum sanity
                     ! bound as recovery, before accepting an endpoint or hit.
                     ! Kinetic momentum is invariant only without electric work.
-                    momentum_reference = z_step_end(4)
-                    if (radial_electric_potential_slope == 0.0_dp) &
-                        momentum_reference = si_step_start%pabs
+                    momentum_reference = si_step_start%pabs
+                    if (abs(radial_electric_potential_slope) > 0.0_dp) &
+                        momentum_reference = z_step_end(4)
                     call validate_rk_step_or_reference_boundary(z_step_start, &
                                         z_step_end, anorb%fper, momentum_reference, z, &
                                           loss_fraction, ierr_orbit, reference_boundary)
@@ -3017,9 +3017,9 @@ contains
                     ! Resolve truncation error within the same momentum sanity
                     ! bound as recovery, before accepting an endpoint or hit.
                     ! Kinetic momentum is invariant only without electric work.
-                    momentum_reference = z_step_end(4)
-                    if (radial_electric_potential_slope == 0.0_dp) &
-                        momentum_reference = si_step_start%pabs
+                    momentum_reference = si_step_start%pabs
+                    if (abs(radial_electric_potential_slope) > 0.0_dp) &
+                        momentum_reference = z_step_end(4)
                     call validate_rk_step_or_reference_boundary(z_step_start, &
                                         z_step_end, anorb%fper, momentum_reference, z, &
                                       boundary_fraction, ierr_orbit, reference_boundary)
