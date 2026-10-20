@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Reduced ensembles; the unchanged 192-marker test remains the full-tier oracle."""
 
-from concurrent.futures import ProcessPoolExecutor
 from math import comb
 from pathlib import Path
+import os
+import subprocess
 import sys
 from time import perf_counter
 
@@ -35,21 +36,52 @@ def check_hits(result, name):
     return hit
 
 
-def run(args):
-    base, simple, case = args
+def write_case(base, case):
     name, ensemble, collisions, intervals = case
-    start = perf_counter()
-    result = full.run_case(
-        base,
-        name,
-        simple,
-        ensemble,
-        collisions=collisions,
-        density=0.0 if name == "dilute" else 2.5e20,
-        npoiper2=intervals,
+    work = base / name
+    work.mkdir(exist_ok=True)
+    (work / "results.nc").unlink(missing_ok=True)
+    for filename in ("wall.stl", "chartmap.nc", "coils.simple", "wout.nc"):
+        link = work / filename
+        if not link.exists():
+            link.symlink_to(base / filename)
+    np.savetxt(work / "start.dat", ensemble, fmt="%.17e")
+    density = 0.0 if name == "dilute" else 2.5e20
+    (work / "simple.in").write_text(
+        f"""&config
+field_input = 'coils.simple'
+coord_input = 'chartmap.nc'
+netcdffile = 'wout.nc'
+wall_input = 'wall.stl'
+wall_units = 'm'
+isw_field_type = 5
+integmode = 0
+startmode = 2
+ntestpart = {len(ensemble)}
+trace_time = {full.TRACE_TIME:.17e}
+ntimstep = 101
+npoiper2 = {intervals}
+multharm = 1
+contr_pp = -1d10
+relerr = 1d-9
+facE_al = 1d2
+deterministic = .true.
+ran_seed = 541
+swcoll = {".true." if collisions else ".false."}
+output_results_netcdf = .true.
+/
+&profiles
+profile_type = 'power_series'
+Te_scale = 1d3
+Ti1_scale = 1d3
+Ti2_scale = 1d3
+ni1_scale = {density:.17e}
+ni2_scale = {density:.17e}
+/
+""",
+        encoding="ascii",
     )
-    print(f"{name}: executable {perf_counter() - start:.3f} s", flush=True)
-    return result
+    return work
 
 
 def main():
@@ -84,8 +116,8 @@ def main():
     )
     ref_indices = np.linspace(0, full.NMARKERS - 1, 32, dtype=int)
     coll_indices = np.linspace(0, full.NMARKERS - 1, 64, dtype=int)
-    # Stored collisionless impacts in the 32-marker subset. Running their fine
-    # replay independently avoids a second wave of expensive field setup.
+    # Stored collisionless impacts in the 32-marker subset; replay all five
+    # at doubled segment resolution.
     fine_indices = np.array([43, 98, 117, 166, 172])
     cases = (
         ("collisionless", starts[ref_indices], False, 64),
@@ -95,12 +127,35 @@ def main():
         ("collisionless_fine", starts[fine_indices], False, 128),
     )
 
-    # Each subprocess uses one thread. CTest reserves four CPUs and 5 GiB for
-    # the five independent cases (including their overlapping initialization).
-    with ProcessPoolExecutor(max_workers=5) as pool:
-        reference, dilute, collisional, repeat, fine = list(
-            pool.map(run, ((base, simple, case) for case in cases))
+    workdirs = [write_case(base, case) for case in cases]
+    (base / "simple.in").write_text((workdirs[0] / "simple.in").read_text())
+    # One production-library driver initializes the field once. OpenMP uses
+    # four threads for both field construction and per-marker integration.
+    env = dict(
+        os.environ,
+        OMP_NUM_THREADS="4",
+        OMP_DYNAMIC="FALSE",
+        GFORTRAN_UNBUFFERED_ALL="1",
+    )
+    with (base / "run.log").open("w") as log:
+        process = subprocess.run(
+            [str(simple), *map(str, workdirs)],
+            cwd=base,
+            env=env,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            timeout=120,
         )
+    assert process.returncode == 0, f"see {base / 'run.log'}"
+    assert "Error in stost" not in (base / "run.log").read_text()
+    results = []
+    for work in workdirs:
+        with Dataset(work / "results.nc") as ds:
+            result = {key: np.asarray(ds[key][:]) for key in full.RESULT_VARS}
+        assert not np.any(result["orbit_exit_code"] == 3), str(work)
+        assert np.all(result["orbit_exit_code"] < 100), str(work)
+        results.append(result)
+    reference, dilute, collisional, repeat, fine = results
     hit_ref = check_hits(reference, "collisionless")
     hit_coll = check_hits(collisional, "collisional")
     # Numerical drift budgets are unchanged; the stored mean is recomputed for
