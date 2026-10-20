@@ -82,7 +82,9 @@ corrections below ``relerr`` times a reference scale (Euler 1: 1 for
 :math:`p_\varphi`), after at most 32 iterations. An outward correction past
 the loss boundary :math:`r_\text{max}` is cut to 0.8 of the remaining
 distance; a step ending at :math:`r < 0` is mapped through the axis,
-:math:`(r,\vartheta)\to(-r,\vartheta+\pi)`. The schemes conserve the
+:math:`(r,\vartheta)\to(-r,\vartheta+\pi)`; Euler and midpoint then
+re-evaluate the field at the new endpoint, because the old-chart increments
+are not a first-order extrapolation across the flip. The schemes conserve the
 canonical two-form to the Newton tolerance, so backward-error analysis
 bounds the long-time energy error for small steps in smooth regions (Hairer,
 Lubich and Wanner 2006); with early classification, loss computations cost
