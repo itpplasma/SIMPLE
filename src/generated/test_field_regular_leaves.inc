@@ -75,4 +75,3 @@ pure subroutine test_field_regular(x, y, ath, aph, hth, hph, bmod)
     bmod(10) = 0
 
 end subroutine test_field_regular
-

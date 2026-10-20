@@ -3,7 +3,7 @@
 !>
 !> Field point u = (x, y) = sqrt(s) (cos theta, sin theta), toroidal angle
 !> phi = p and canonical momentum p_phi = pp. With
-!>     v_par = (p_phi - A_phi/ro0)/h_phi,   H = v_par**2/2 + mu B,
+!>     v_par = (p_phi - A_phi/ro0)/h_phi,   H = v_par**2/2 + mu B + electric_slope*s,
 !>     p_theta = h_theta v_par + A_theta/ro0 = s (q_h v_par + q_A/ro0),
 !> where q_A = A_theta/s and q_h = h_theta/s are regular, the chart
 !>     kappa = sigma (q_h v_par + q_A/ro0) = J/s > 0,   J = sigma p_theta,
@@ -45,7 +45,7 @@ program gen_darboux_chart
                                                                              'hp', 'bm']
     type(leaf_writer_t) :: w
     type(arena_t), target :: arena
-    type(expr_t) :: x, y, p, pp, ro0, mu, sg
+    type(expr_t) :: x, y, p, pp, ro0, mu, sg, electric_slope
     type(expr_t) :: qa, qh, ap, hp, bm, vpar, ham, kap, rt, chart(2)
     type(expr_t) :: g(2, 2), det, ginv(2, 2), cphi(2), cpp(2)
     type(expr_t) :: du(2, 4), dh(4), dk(4), rhs(4), udot(2)
@@ -66,6 +66,7 @@ program gen_darboux_chart
     ro0 = sym(arena, 'ro0')
     mu = sym(arena, 'mu')
     sg = sym(arena, 'sigma')
+    electric_slope = sym(arena, 'electric_slope')
 
     allocate (bind1(0), bind2(0))
     do k = 1, size(heads)
@@ -79,7 +80,7 @@ program gen_darboux_chart
     bm = func(heads(5), [x, y, p])
 
     vpar = (pp - ap/ro0)/hp
-    ham = vpar**2/2 + mu*bm
+    ham = vpar**2/2 + mu*bm + electric_slope*(x**2 + y**2)
     kap = sg*(qh*vpar + qa/ro0)
     rt = sqrt(2*kap)
     chart = [rt*x, sg*rt*y]
@@ -208,9 +209,9 @@ contains
     end subroutine emit_quotients
 
     subroutine emit_point()
-        character(8), parameter :: args(11) = [character(8) :: 'x', 'y', &
-                     'pphi', 'ro0', 'mu', 'sigma', 'qa(4)', 'qh(4)', 'ap(4)', 'hp(4)', &
-                                                                                'bm(4)']
+        character(16), parameter :: args(12) = [character(16) :: &
+                             'x', 'y', 'pphi', 'ro0', 'mu', 'sigma', 'electric_slope', &
+                                            'qa(4)', 'qh(4)', 'ap(4)', 'hp(4)', 'bm(4)']
         type(expr_t) :: roots(16)
 
         roots = [kap, (x**2 + y**2)*(qh*vpar + qa/ro0), ham, vpar, chart, rhs, &
@@ -222,9 +223,9 @@ contains
     end subroutine emit_point
 
     subroutine emit_stage()
-        character(8), parameter :: args(11) = [character(8) :: 'x', 'y', &
-                           'pphi', 'ro0', 'mu', 'sigma', 'qa(10)', 'qh(10)', 'ap(10)', &
-                                                                     'hp(10)', 'bm(10)']
+        character(16), parameter :: args(12) = [character(16) :: &
+                             'x', 'y', 'pphi', 'ro0', 'mu', 'sigma', 'electric_slope', &
+                                       'qa(10)', 'qh(10)', 'ap(10)', 'hp(10)', 'bm(10)']
         type(expr_t) :: roots(30)
         integer :: i
 

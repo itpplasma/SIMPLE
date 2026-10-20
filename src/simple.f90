@@ -64,9 +64,11 @@ contains
 
     real(dp) :: jperp_local, psi_star_local
 
-    call eval_field(f, z0(1), z0(2), z0(3), 0)
-        ! The Cartesian canonical chart integrates the regular field.
-        if (darboux_enabled()) call darboux_field_values(z0(1), z0(2), z0(3), f)
+        if (darboux_enabled()) then
+            call darboux_field_values(z0(1), z0(2), z0(3), f)
+        else
+            call eval_field(f, z0(1), z0(2), z0(3), 0)
+        end if
     jperp_local = z0(4)**2*(1.0_dp - z0(5)**2)/f%Bmod
     psi_star_local = f%Aph + ro0*z0(4)*z0(5)*f%hph
 

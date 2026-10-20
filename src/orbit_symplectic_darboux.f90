@@ -24,7 +24,8 @@ module orbit_symplectic_darboux
     !> LU of orbit_rk_core.
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use util, only: pi, twopi
-    use field_can_base, only: field_can_t
+    use field_can_base, only: field_can_t, radial_electric_potential_slope, &
+                              apply_radial_electric_potential
     use field_can_boozer, only: evaluate_boozer_regular
     use field_can_test, only: evaluate_test_regular
     use boozer_regular, only: regular_field_t
@@ -38,7 +39,7 @@ module orbit_symplectic_darboux
     private
 
     public :: DARBOUX_FIELD_NONE, DARBOUX_FIELD_TEST, DARBOUX_FIELD_BOOZER
-    public :: darboux_configure, darboux_enabled, darboux_stages
+    public :: darboux_configure, darboux_enabled, darboux_stages, darboux_set_stages
     public :: orbit_timestep_sympl_darboux, darboux_encode, darboux_advance
     public :: darboux_point_eval, darboux_stage_eval, darboux_field_point
     public :: darboux_field_values
@@ -106,6 +107,13 @@ contains
         if (info /= 0) error stop 'darboux_configure: singular Gauss matrix'
     end subroutine darboux_configure
 
+    subroutine darboux_set_stages(stages)
+        ! Like the stepper selection in orbit_sympl_init, call before tracing.
+        integer, intent(in) :: stages
+
+        if (stages /= darboux_stages) call darboux_configure(darboux_field, stages)
+    end subroutine darboux_set_stages
+
     logical function darboux_enabled()
         darboux_enabled = darboux_field /= DARBOUX_FIELD_NONE
     end function darboux_enabled
@@ -133,6 +141,13 @@ contains
             radius_from_s = s
         end if
     end function radius_from_s
+
+    real(dp) function electric_slope()
+        ! The radial potential is defined for Boozer's s coordinate.
+        electric_slope = 0.0_dp
+        if (darboux_field == DARBOUX_FIELD_BOOZER) &
+            electric_slope = radial_electric_potential_slope
+    end function electric_slope
 
     subroutine regular_eval(x, y, phi, mode, rf)
         real(dp), intent(in) :: x, y, phi
@@ -208,7 +223,8 @@ contains
         real(dp) :: ue(2)
 
         call field_point(u, ue)
-        call darboux_point(ue(1), ue(2), pphi, ro0, mu, sigma, qa(1:4), qh(1:4), &
+        call darboux_point(ue(1), ue(2), pphi, ro0, mu, sigma, electric_slope(), &
+                           qa(1:4), qh(1:4), &
                            [rf%Aph, rf%dAph], [rf%hph, rf%dhph], &
                            [rf%Bmod, rf%dBmod], kappa, pth, ham, vpar, chart, &
                            rhs, gu, udot)
@@ -226,7 +242,7 @@ contains
 
         call darboux_field_point(u, phi, 2, rf, qa, qh)
         call field_point(u, ue)
-        call darboux_stage(ue(1), ue(2), pphi, ro0, mu, sigma, qa, qh, &
+      call darboux_stage(ue(1), ue(2), pphi, ro0, mu, sigma, electric_slope(), qa, qh, &
                            [rf%Aph, rf%dAph, rf%d2Aph], &
                            [rf%hph, rf%dhph, rf%d2hph], &
                            [rf%Bmod, rf%dBmod, rf%d2Bmod], chart, rhs, fu, fw, &
@@ -250,6 +266,8 @@ contains
         f%hth = rf%hth
         f%hph = rf%hph
         f%Bmod = rf%Bmod
+        if (darboux_field == DARBOUX_FIELD_BOOZER) &
+            call apply_radial_electric_potential(f, s_from_radius(r))
     end subroutine darboux_field_values
 
     subroutine darboux_encode(si, f, status)
@@ -266,16 +284,16 @@ contains
         rho = sqrt(max(s_from_radius(si%z(1)), 0.0_dp))
         u = rho*[cos(si%z(2)), sin(si%z(2))]
         call darboux_field_point(u, si%z(3), 1, rf, qa, qh)
-        call point_from_jets(u, si%z(4), 1.0_dp, f%mu, f%ro0, rf, qa, qh, kappa, &
-                             pth, ham, vpar, chart, rhs, gu, udot)
+        ! Select the orientation before evaluating sqrt(2*kappa).
+        vpar = (si%z(4) - rf%Aph/f%ro0)/rf%hph
+        kappa = qh(1)*vpar + qa(1)/f%ro0
         if (.not. (abs(kappa) > 0.0_dp)) then
             status = SYMPLECTIC_STEP_LINEAR_SOLVE
             return
         end if
         si%chart_sigma = sign(1.0_dp, kappa)
-        if (si%chart_sigma < 0.0_dp) &
-            call point_from_jets(u, si%z(4), si%chart_sigma, f%mu, f%ro0, rf, qa, &
-                                 qh, kappa, pth, ham, vpar, chart, rhs, gu, udot)
+        call point_from_jets(u, si%z(4), si%chart_sigma, f%mu, f%ro0, rf, qa, &
+                             qh, kappa, pth, ham, vpar, chart, rhs, gu, udot)
         if (.not. all(is_finite([chart, rhs, udot]))) then
             status = SYMPLECTIC_STEP_LINEAR_SOLVE
             return
@@ -490,6 +508,8 @@ contains
         f%hth = rf%hth
         f%hph = rf%hph
         f%Bmod = rf%Bmod
+        if (darboux_field == DARBOUX_FIELD_BOOZER) &
+            call apply_radial_electric_potential(f, s_from_radius(r1))
         f%vpar = vpar1
         f%H = ham1
         f%pth = si%chart_sigma*0.5_dp*(w1(1)**2 + w1(2)**2)

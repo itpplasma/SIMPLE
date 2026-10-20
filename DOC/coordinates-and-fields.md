@@ -352,7 +352,10 @@ integrator radius (`s` for Boozer, `r = sqrt(s)` for the test field) and
 `theta`, and fills the values in `field_can_t` (A, h, B, v_par, H, p_theta)
 from the regular field; derivative components of `field_can_t` are not
 updated on that path. `encode_symplectic_state` also takes the start values
-from the regular field.
+from the regular field, including during `orbit_sympl_init`. The Boozer
+Hamiltonian and its generated derivatives include the configured radial
+electric potential `Phi(s) = radial_electric_potential_slope*s`; endpoint
+values of `Phie` are kept consistent for collision kicks.
 
 **Meiss.** The construction needs only a toroidal covariant field component
 that does not vanish, not flux surfaces, so VMEC, chartmap and coil fields on

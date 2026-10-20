@@ -894,7 +894,10 @@ set_tests_properties(test_continuous_classifier_scores PROPERTIES LABELS "unit")
 # independent oracles, step properties, axis-grazing markers.
 add_executable(test_darboux_chart.x test_darboux_chart.f90)
 target_link_libraries(test_darboux_chart.x simple)
-foreach(_darboux_part IN ITEMS leaves step axis)
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(test_darboux_chart.x PRIVATE -ffpe-trap=invalid,zero,overflow)
+endif()
+foreach(_darboux_part IN ITEMS leaves step axis lu electric negative boundary boozer mode)
     add_test(NAME test_darboux_chart_${_darboux_part}
         COMMAND test_darboux_chart.x ${_darboux_part})
     set_tests_properties(test_darboux_chart_${_darboux_part} PROPERTIES
