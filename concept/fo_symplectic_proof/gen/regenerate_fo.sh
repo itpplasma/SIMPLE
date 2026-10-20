@@ -11,7 +11,7 @@ mkdir -p build/fo_generator
 ${FC:-gfortran} -I "$fortsym_build/include" $proof/gen/gen_fo_hamiltonian.f90 \
     -L "$fortsym_build/lib" -Wl,-rpath,"$fortsym_build/lib" -lfortsym \
     -o build/fo_generator/gen_fo_hamiltonian
-for generator in geometry hessian; do
+for generator in geometry hessian phases; do
     ${FC:-gfortran} -I "$fortsym_build/include" "$proof/gen/gen_fo_${generator}.f90" \
         -L "$fortsym_build/lib" -Wl,-rpath,"$fortsym_build/lib" -lfortsym \
         -o "build/fo_generator/gen_fo_${generator}"
@@ -20,6 +20,7 @@ finish_leaves() {
     local directory=$1
     FO_GENERATOR_OUTPUT="$directory" build/fo_generator/gen_fo_geometry
     FO_GENERATOR_OUTPUT="$directory" build/fo_generator/gen_fo_hessian
+    FO_GENERATOR_OUTPUT="$directory" build/fo_generator/gen_fo_phases
     python3 "$proof/gen/array_facades.py" "$directory"
     fprettify -c .fprettify "$directory/fo_kernel.f90"
 }

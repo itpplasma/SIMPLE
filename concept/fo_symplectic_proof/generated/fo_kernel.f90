@@ -535,4 +535,58 @@ contains
 
         end block
     end subroutine fo_eval_factored
+    subroutine fo_radial_first(gj, out)
+        real(dp), intent(in)::gj(6, 10)
+        real(dp), intent(out)::out(10)
+        real(dp) :: work1, work2, work3, work4, work5
+
+        out = 0
+
+        work1 = gj(5, 1)**2
+        work2 = gj(3, 1)**2
+        work3 = gj(2, 1)**2
+        work4 = gj(1, 1)*gj(4, 1)*gj(6, 1) - gj(1, 1)*work1 + &
+                gj(2, 1)*gj(3, 1)*gj(5, 1)*2 - gj(4, 1)*work2 - gj(6, 1)*work3
+        work5 = gj(4, 1)*gj(6, 1) - work1
+        out(1) = work5/work4
+        out(2) = -(gj(1, 1)*gj(4, 1)*gj(6, 2) + gj(1, 1)*gj(4, 2)*gj(6, 1) - &
+            gj(1, 1)*gj(5, 1)*gj(5, 2)*2 + gj(1, 2)*gj(4, 1)*gj(6, 1) - gj(1, 2)*work1 &
+                   - gj(2, 1)*gj(2, 2)*gj(6, 1)*2 + gj(2, 1)*gj(3, 1)*gj(5, 2)*2 + &
+                   gj(2, 1)*gj(3, 2)*gj(5, 1)*2 + gj(2, 2)*gj(3, 1)*gj(5, 1)*2 - &
+                   gj(3, 1)*gj(3, 2)*gj(4, 1)*2 - gj(4, 2)*work2 - &
+             gj(6, 2)*work3)*work5/work4**2 + (gj(4, 1)*gj(6, 2) + gj(4, 2)*gj(6, 1) - &
+                                                     gj(5, 1)*gj(5, 2)*2)/work4
+        out(3) = -(gj(1, 1)*gj(4, 1)*gj(6, 3) + gj(1, 1)*gj(4, 3)*gj(6, 1) - &
+            gj(1, 1)*gj(5, 1)*gj(5, 3)*2 + gj(1, 3)*gj(4, 1)*gj(6, 1) - gj(1, 3)*work1 &
+                   - gj(2, 1)*gj(2, 3)*gj(6, 1)*2 + gj(2, 1)*gj(3, 1)*gj(5, 3)*2 + &
+                   gj(2, 1)*gj(3, 3)*gj(5, 1)*2 + gj(2, 3)*gj(3, 1)*gj(5, 1)*2 - &
+                   gj(3, 1)*gj(3, 3)*gj(4, 1)*2 - gj(4, 3)*work2 - &
+             gj(6, 3)*work3)*work5/work4**2 + (gj(4, 1)*gj(6, 3) + gj(4, 3)*gj(6, 1) - &
+                                                     gj(5, 1)*gj(5, 3)*2)/work4
+        out(4) = -(gj(1, 1)*gj(4, 1)*gj(6, 4) + gj(1, 1)*gj(4, 4)*gj(6, 1) - &
+            gj(1, 1)*gj(5, 1)*gj(5, 4)*2 + gj(1, 4)*gj(4, 1)*gj(6, 1) - gj(1, 4)*work1 &
+                   - gj(2, 1)*gj(2, 4)*gj(6, 1)*2 + gj(2, 1)*gj(3, 1)*gj(5, 4)*2 + &
+                   gj(2, 1)*gj(3, 4)*gj(5, 1)*2 + gj(2, 4)*gj(3, 1)*gj(5, 1)*2 - &
+                   gj(3, 1)*gj(3, 4)*gj(4, 1)*2 - gj(4, 4)*work2 - &
+             gj(6, 4)*work3)*work5/work4**2 + (gj(4, 1)*gj(6, 4) + gj(4, 4)*gj(6, 1) - &
+                                                     gj(5, 1)*gj(5, 4)*2)/work4
+
+    end subroutine fo_radial_first
+    subroutine fo_metric_monitor_first(rj, tj, mref, out)
+        real(dp), intent(in)::rj(10), tj(3), mref
+        real(dp), intent(out)::out(10)
+        real(dp) :: work1, work2, work3
+
+        out = 0
+
+        work1 = mref + rj(1)
+        work2 = sqrt(mref/work1)
+        work3 = sqrt(mref)
+        out(1) = tj(1)*work2
+        out(2) = -mref*tj(1)*rj(2)*1.0_dp/2.0_dp/(work2*work1**2) + &
+                 tj(2)*work2
+        out(3) = -tj(1)*rj(3)*work3*1.0_dp/2.0_dp/work1**(3.0_dp/2.0_dp)
+        out(4) = -tj(1)*rj(4)*work3*1.0_dp/2.0_dp/work1**(3.0_dp/2.0_dp)
+
+    end subroutine fo_metric_monitor_first
 end module fo_kernel

@@ -331,6 +331,8 @@ contains
             leaves(k)=subs_many(leaves(k),old(:90),replacement(:90))
         end do
         call checked_leaf(leaves,args(37:96),'fo_radial_scalar','fo_radial.inc')
+        call checked_leaf(leaves(:4), args(37:96), 'fo_radial_first', &
+                          'fo_radial_first.inc')
         rfield=func('radial',q); tfield=func('rhomonitor',q(1:1))
         rold(1:10)=jet(rfield)
         rold(11)=tfield
@@ -348,6 +350,8 @@ contains
         end do
         call checked_leaf(leaves,rargs,'fo_metric_monitor_scalar', &
             'fo_metric_monitor.inc')
+        call checked_leaf(leaves(:4), rargs, 'fo_metric_monitor_first', &
+                          'fo_metric_monitor_first.inc')
     end subroutine emit_radial
 
     function jet(scalar) result(leaves)
@@ -376,6 +380,7 @@ contains
         type(expr_t),allocatable::lsymbols(:),lvalues(:)
         type(str_t),allocatable::loutputs(:)
         type(expr_t)::parsed
+        character(:), allocatable :: code
         integer::lu,lk
         allocate(loutputs(size(leaves)))
         do lk=1,size(leaves)
@@ -391,7 +396,11 @@ contains
         lspec%generator=str('gen/gen_fo_hamiltonian.f90')
         lspec%regenerate_command=str('bash gen/regenerate_fo.sh')
         open(newunit=lu,file=trim(outroot)//'/src/generated/'//filename,status='replace')
-        write(lu,'(a)') chars(emit_kernel(leaves,lspec))
+        code = chars(emit_kernel(leaves, lspec))
+        if (index(leafname, '_first') > 0) then
+            if (code(len(code):) == achar(10)) code = code(:len(code) - 1)
+        end if
+        write (lu, '(a)') code
         close(lu)
         lcse=cse_analyse(leaves,'work')
         allocate(lsymbols(lcse%n),lvalues(lcse%n))

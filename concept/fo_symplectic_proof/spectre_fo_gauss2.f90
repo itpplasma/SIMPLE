@@ -9,7 +9,8 @@ module spectre_fo_gauss2
     use spectre_basis, only: spectre_vecpot_t, &
         get_cheby_d2, get_zernike_d2
     use fo_kernel, only: fo_eval_factored, fo_eval_first, fo_monitor_factor, fo_jet_product, &
-        fo_radial, fo_metric_monitor
+                         fo_radial, fo_metric_monitor, fo_radial_first, &
+                         fo_metric_monitor_first
     implicit none
     private
     real(dp), parameter :: A_SCALE = TESLA_TO_GAUSS*M_TO_CM**2
@@ -21,11 +22,13 @@ module spectre_fo_gauss2
     type(potential_terms_t), allocatable :: potential_terms(:)
     logical, allocatable :: gauge_active(:)
     real(dp), allocatable :: angular_factor(:, :, :)
+    integer :: harmonic_m = 0, harmonic_n = 0, harmonic_stride = 1
+    integer, allocatable :: harmonic_order(:, :)
     real(dp), parameter :: GL_A(2, 2) = reshape([0.25_dp, &
         0.25_dp + sqrt(3.0_dp)/6.0_dp, 0.25_dp - sqrt(3.0_dp)/6.0_dp, &
         0.25_dp], [2, 2])
     public :: gauss2_prepare, gauss2_geometry, gauss2_potential, gauss2_hamiltonian
-    public :: gauss2_entry_step, gauss2_eval, gauss2_step
+    public :: gauss2_entry_step, gauss2_eval, gauss2_step, gauss2_phases
     public :: gauss2_encode, gauss2_decode, gauss2_gauge_zeta
 contains
     subroutine gauss2_prepare
@@ -34,15 +37,31 @@ contains
         !> gradients of linear functions on the unwrapped angular cover.
         real(dp), allocatable :: radial(:, :), cheby(:, :), zernike(:, :, :)
         real(dp) :: delta(2, 2), wave(2), c, defect, scale
-        integer :: k, l, j, r, m, n, t, z, term
+        integer :: k, l, j, r, m, n, t, z, term, divisor, remainder
 
         if (.not. allocated(spectre_field)) &
             error stop "gauss2: initialize SPECTRE field before configuring"
-        if (allocated(gauge)) deallocate(gauge)
-        allocate(gauge(2, 2, spectre_field%data%mn, spectre_field%data%Mvol))
+        if (allocated(gauge)) deallocate (gauge)
+        allocate (gauge(2, 2, spectre_field%data%mn, spectre_field%data%Mvol))
         gauge = 0.0_dp
         if (allocated(angular_factor)) deallocate (angular_factor)
         allocate (angular_factor(0:3, 0:3, spectre_field%data%mn))
+        harmonic_m = maxval(abs(spectre_field%data%im))
+        harmonic_stride = 0
+        do j = 1, spectre_field%data%mn
+            divisor = abs(spectre_field%data%in(j))
+            do while (divisor /= 0)
+                remainder = mod(harmonic_stride, divisor)
+                harmonic_stride = divisor
+                divisor = remainder
+            end do
+        end do
+        harmonic_stride = max(1, harmonic_stride)
+        harmonic_n = maxval(abs(spectre_field%data%in))/harmonic_stride
+        if (allocated(harmonic_order)) deallocate (harmonic_order)
+        allocate (harmonic_order(2, spectre_field%data%mn))
+        harmonic_order(1, :) = spectre_field%data%im
+        harmonic_order(2, :) = spectre_field%data%in/harmonic_stride
         angular_factor = 0.0_dp
         do j = 1, spectre_field%data%mn
             do z = 0, 3
@@ -54,21 +73,21 @@ contains
         end do
         do k = 1, spectre_field%data%Mvol - 1
             l = spectre_field%data%Lrad(k)
-            allocate(radial(0:l, spectre_field%data%mn))
+            allocate (radial(0:l, spectre_field%data%mn))
             if (k == 1) then
-                allocate(zernike(0:l, 0:spectre_field%data%Mpol, 0:2))
+                allocate (zernike(0:l, 0:spectre_field%data%Mpol, 0:2))
                 call get_zernike_d2(1.0_dp, l, spectre_field%data%Mpol, zernike)
                 do j = 1, spectre_field%data%mn
                     radial(:, j) = zernike(:, spectre_field%data%im(j), 0)
                 end do
-                deallocate(zernike)
+                deallocate (zernike)
             else
-                allocate(cheby(0:l, 0:2))
+                allocate (cheby(0:l, 0:2))
                 call get_cheby_d2(1.0_dp, l, cheby)
                 do j = 1, spectre_field%data%mn
                     radial(:, j) = cheby(:, 0)
                 end do
-                deallocate(cheby)
+                deallocate (cheby)
             end if
             scale = max(maxval(abs(spectre_field%data%vol(k)%Ate)), &
                 maxval(abs(spectre_field%data%vol(k)%Aze)), tiny(1.0_dp))
@@ -102,7 +121,7 @@ contains
                 ! The inner Chebyshev boundary has only its degree-zero mode.
                 gauge(:, :, j, k + 1) = gauge(:, :, j, k) + delta
             end do
-            deallocate(radial)
+            deallocate (radial)
         end do
         if (allocated(gauge_active)) deallocate (gauge_active)
         allocate (gauge_active(spectre_field%data%Mvol))
@@ -378,7 +397,50 @@ contains
         coeff(:, 0) = coeff(:, 0) + inner
     end subroutine radial_geometry
 
-    subroutine gauss2_geometry(q, width, x, e, metric, dg, d2g, first_order, phase)
+    subroutine gauss2_phases(q, phase)
+        ! Harmonics are exact complex products; no truncation or interpolation.
+        ! Addition/subtraction and emitted readback identities are proved by FortSym.
+        real(dp), intent(in) :: q(3)
+        real(dp), intent(out) :: phase(2, spectre_field%data%mn)
+        real(dp) :: poloidal(2, 0:harmonic_m), toroidal(2, 0:harmonic_n)
+        real(dp) :: left(2), right(2), next(2), arg
+        integer :: j, m, n
+
+        if (harmonic_m + harmonic_n > spectre_field%data%mn) then
+            ! Sparse high harmonics do not repay constructing the whole basis.
+            do j = 1, spectre_field%data%mn
+                arg = real(spectre_field%data%im(j), dp)*q(2) &
+                      + real(-spectre_field%data%in(j), dp)*q(3)
+                phase(:, j) = [cos(arg), sin(arg)]
+            end do
+            return
+        end if
+        include 'fo_phase_seed.inc'
+        do j = 2, harmonic_m
+            left = poloidal(:, j - 1)
+            right = poloidal(:, 1)
+            include 'fo_phase_sum.inc'
+            poloidal(:, j) = next
+        end do
+        do j = 2, harmonic_n
+            left = toroidal(:, j - 1)
+            right = toroidal(:, 1)
+            include 'fo_phase_sum.inc'
+            toroidal(:, j) = next
+        end do
+        do j = 1, spectre_field%data%mn
+            m = harmonic_order(1, j)
+            n = harmonic_order(2, j)
+            left = poloidal(:, abs(m))
+            right = toroidal(:, abs(n))
+            include 'fo_phase_orders.inc'
+            include 'fo_phase_difference.inc'
+            phase(:, j) = next
+        end do
+    end subroutine gauss2_phases
+
+    subroutine gauss2_geometry(q, width, x, e, metric, dg, d2g, &
+                               first_order, phase, basis_phase)
         !> Smooth the embedding, not just A: the native stacked chart is C0.
         !> SPEC interface Fourier coefficients and axis power law are unchanged
         !> outside the layer. Analytic geometry derivatives extend through order 3.
@@ -388,13 +450,14 @@ contains
         real(dp), intent(out) :: x(3), e(3, 3), metric(3, 3)
         real(dp), intent(out) :: dg(3, 3, 3), d2g(3, 3, 3, 3)
         real(dp), intent(out), optional :: phase(2, spectre_field%data%mn)
+        real(dp), intent(in), optional :: basis_phase(2, spectre_field%data%mn)
         logical, intent(in), optional :: first_order
         real(dp) :: jets(0:3, 0:3, 0:3, 2), coeff(2, 0:3), cl(2, 0:3)
-        real(dp) :: cr(2, 0:3), sw(0:3), arg, c(0:3), jet_c, jet_s, wave(2)
+        real(dp) :: cr(2, 0:3), sw(0:3), arg, c(0:3), jet_c, jet_s
         real(dp) :: fl(0:3), fr(0:3)
         real(dp) :: profiles(0:3, 0:spectre_field%data%Mpol, 2)
         real(dp) :: d(2, 3), d2(2, 3, 3), d3(2, 3, 3, 3), rz(2), cz, sz
-        integer :: owner, iface, ii, m, n, r, l, comp, v, i, j, k
+        integer :: owner, iface, ii, m, r, l, comp, v, i, j, k
         integer :: idx(3), nord
         integer, parameter :: binom(0:3, 0:3) = reshape([ &
             1, 0, 0, 0, 1, 1, 0, 0, 1, 2, 1, 0, 1, 3, 3, 1], [4, 4])
@@ -418,10 +481,13 @@ contains
         jets = 0.0_dp
         do ii = 1, spectre_field%data%mn
             m = spectre_field%data%im(ii)
-            n = spectre_field%data%in(ii)
-            wave = [real(m, dp), -real(n, dp)]
-            arg = wave(1)*q(2) + wave(2)*q(3)
+            if (present(basis_phase)) then
+                c = [basis_phase(1, ii), -basis_phase(2, ii), &
+                     -basis_phase(1, ii), basis_phase(2, ii)]
+            else
+                arg = real(m, dp)*q(2) + real(-spectre_field%data%in(ii), dp)*q(3)
             c = [cos(arg), -sin(arg), -cos(arg), sin(arg)]
+            end if
             if (present(phase)) phase(:, ii) = c(0:3:3)
             fl = profiles(:, m, 1)
             if (blend) fr = profiles(:, m, 2)
@@ -602,10 +668,13 @@ contains
         real(dp), intent(out), optional :: phase(2, spectre_field%data%mn)
         logical, intent(in), optional :: first_order
         real(dp) :: x(3), basis(3, 3), g(3, 3), dg(3, 3, 3), d2g(3, 3, 3, 3)
+        real(dp) :: fourier(2, spectre_field%data%mn)
         integer :: i, j, k, l
         integer, parameter :: si(6) = [1, 1, 1, 2, 2, 3], sj(6) = [1, 2, 3, 2, 3, 3]
 
-        call gauss2_geometry(q, width, x, basis, g, dg, d2g, first_order, phase)
+        call gauss2_phases(q, fourier)
+        call gauss2_geometry(q, width, x, basis, g, dg, d2g, &
+                             first_order, phase, fourier)
         do l = 1, 6
             gj(l, 1) = g(si(l), sj(l))
             gj(l, 2:4) = dg(si(l), sj(l), :)
@@ -673,18 +742,23 @@ contains
         tj(1) = rhoj(1)
         tj(2) = rhoj(2)
         tj(5) = rhoj(3)
+        first = .false.
+        if (present(first_order)) first = first_order
         if (present(radial_jet)) then
             call fo_radial(gj, rj)
             radial_jet = rj
         end if
         if (present(radial_scale)) then
             if (radial_scale > 0.0_dp) then
+                if (first) then
+                    call fo_radial_first(gj, rj)
+                    call fo_metric_monitor_first(rj, rhoj, radial_scale, tj)
+                else
                 call fo_radial(gj, rj)
                 call fo_metric_monitor(rj, rhoj, radial_scale, tj)
             end if
         end if
-        first = .false.
-        if (present(first_order)) first = first_order
+        end if
         if (first) then
             call fo_eval_first(z(4:6), aj, gj, 1.0_dp, 1.0_dp, energy0, &
                                tj, energy, ke, gh, hh, f, df)

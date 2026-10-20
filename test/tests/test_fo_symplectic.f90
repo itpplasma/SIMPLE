@@ -4,7 +4,7 @@ program test_fo_symplectic
     use magfie_sub, only: set_magfie_spectre_field, spectre_field
     use spectre_fo_gauss2, only: gauss2_prepare, gauss2_geometry, &
         gauss2_potential, gauss2_encode, shipped_step => gauss2_step, &
-        gauss2_entry_step
+                                 gauss2_entry_step, gauss2_phases
     use reference_fo_gauss2, only: reference_prepare => gauss2_prepare, &
        reference_geometry => gauss2_geometry, reference_potential => gauss2_potential, &
         gauss2_hamiltonian, gauss2_step
@@ -111,12 +111,26 @@ contains
         real(dp) :: dg(3, 3, 3), dgr(3, 3, 3), hg(3, 3, 3, 3), hgr(3, 3, 3, 3)
         real(dp) :: a(3), ar(3), da(3, 3), dar(3, 3), ha(3, 3, 3), har(3, 3, 3)
         real(dp), parameter :: offset(5) = [-0.2_dp, -0.01_dp, 0.0_dp, 0.01_dp, 0.2_dp]
-        integer :: volume, sample
+        integer :: volume, sample, mode, order
+        real(dp), allocatable :: phase(:, :)
+        real(dp) :: angle, phase_error, phase_bound
+
+        allocate (phase(2, spectre_field%data%mn))
 
         do volume = 1, spectre_field%data%Mvol
             do sample = 1, size(offset)
                 q = [real(volume - 1, dp) + offset(sample), &
                      0.37_dp*sample, -0.21_dp*sample]
+                call gauss2_phases(q, phase)
+                do mode = 1, spectre_field%data%mn
+                    angle = real(spectre_field%data%im(mode), dp)*q(2) &
+                            - real(spectre_field%data%in(mode), dp)*q(3)
+                    phase_error = maxval(abs(phase(:, mode) - [cos(angle), sin(angle)]))
+                    order = 1 + abs(spectre_field%data%im(mode)) &
+                            + abs(spectre_field%data%in(mode))
+                    phase_bound = 64*epsilon(1.0_dp)*real(order, dp)*(1 + abs(angle))
+                    if (phase_error > phase_bound) error stop 'harmonic phase roundoff'
+                end do
                 call gauss2_geometry(q, width, x, e, g, dg, hg)
                 call reference_geometry(q, width, xr, er, gr, dgr, hgr)
                 if (maxval(abs(x - xr)) > 0.0_dp .or. &
