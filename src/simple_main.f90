@@ -41,6 +41,7 @@ module simple_main
                       ORBIT_EXIT_NUMERICAL_DOMAIN, &
                       ORBIT_EXIT_NUMERICAL_MAXITER, ORBIT_EXIT_NUMERICAL_LINEAR, &
                       ORBIT_EXIT_NUMERICAL_EVENT, ORBIT_EXIT_NUMERICAL_FULL_ORBIT
+    use params, only: radial_electric_potential_slope
     use params, only: canonical_grid_nr, canonical_grid_ntheta, &
         canonical_grid_nphi, canonical_ode_relerr
     use diag_counters, only: diag_counters_init, count_event, &
@@ -2549,7 +2550,7 @@ contains
         integer :: hold_streak_local, ktau, recovery_method, symplectic_status
         integer :: ierr_coll, collision_hold_start
         real(dp) :: z_step_start(5), z_step_end(5), loss_fraction
-        real(dp) :: u_event(3)
+        real(dp) :: u_event(3), momentum_reference
         logical :: numerical_hold, numerical_hold_any_local
         logical :: reference_boundary
         type(rk_recovery_state_t) :: rk_recovery_local
@@ -2667,11 +2668,13 @@ contains
                     z_step_end = z
                     ! Resolve truncation error within the same momentum sanity
                     ! bound as recovery, before accepting an endpoint or hit.
-                    ! pabs stays fixed between physical collision kicks.
+                    ! Kinetic momentum is invariant only without electric work.
+                    momentum_reference = z_step_end(4)
+                    if (radial_electric_potential_slope == 0.0_dp) &
+                        momentum_reference = si_step_start%pabs
                     call validate_rk_step_or_reference_boundary(z_step_start, &
-                                      z_step_end, anorb%fper, si_step_start%pabs, z=z, &
-                                        event_fraction=loss_fraction, ierr=ierr_orbit, &
-                                                  reference_boundary=reference_boundary)
+                                        z_step_end, anorb%fper, momentum_reference, z, &
+                                          loss_fraction, ierr_orbit, reference_boundary)
                     if (reference_boundary .and. ierr_orbit == 1) then
                         call integ_to_ref(z(1:3), u_event)
                         anorb%si%last_step_fraction = loss_fraction
@@ -2913,7 +2916,7 @@ contains
         integer :: ierr_coll, collision_hold_start
         real(dp) :: u_ref_prev(3), u_ref_cur(3), x_cur(3), x_cur_m(3)
         real(dp) :: z_step_start(5), z_step_end(5), segment_duration
-        real(dp) :: boundary_fraction
+        real(dp) :: boundary_fraction, momentum_reference
         real(dp) :: wall_exit_step
         logical :: hit, numerical_hold, numerical_hold_any_local
         logical :: reference_boundary
@@ -3013,11 +3016,13 @@ contains
                     z_step_end = z
                     ! Resolve truncation error within the same momentum sanity
                     ! bound as recovery, before accepting an endpoint or hit.
-                    ! pabs stays fixed between physical collision kicks.
+                    ! Kinetic momentum is invariant only without electric work.
+                    momentum_reference = z_step_end(4)
+                    if (radial_electric_potential_slope == 0.0_dp) &
+                        momentum_reference = si_step_start%pabs
                     call validate_rk_step_or_reference_boundary(z_step_start, &
-                                      z_step_end, anorb%fper, si_step_start%pabs, z=z, &
-                                    event_fraction=boundary_fraction, ierr=ierr_orbit, &
-                                                  reference_boundary=reference_boundary)
+                                        z_step_end, anorb%fper, momentum_reference, z, &
+                                      boundary_fraction, ierr_orbit, reference_boundary)
                     if (reference_boundary .and. ierr_orbit == 1) then
                         anorb%si%last_step_fraction = boundary_fraction
                         anorb%si%last_event_fraction_width = 1.d0

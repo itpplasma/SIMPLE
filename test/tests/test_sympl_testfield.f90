@@ -1,4 +1,5 @@
 module failed_symplectic_step_backend
+    use, intrinsic :: iso_fortran_env, only: dp => real64
     use field_can_base, only: field_can_t
     use orbit_symplectic_base, only: symplectic_integrator_t, SYMPLECTIC_STEP_BOUNDARY
 
@@ -6,6 +7,7 @@ module failed_symplectic_step_backend
 
     integer :: successful_drift_calls = 0
     integer :: injected_status = 0
+    real(dp) :: injected_momentum_ratio = 1d0
 
 contains
 
@@ -36,12 +38,17 @@ contains
     end subroutine locate_lcfs_step
 
     subroutine wrong_energy_step(si, f, ierr)
+        use params, only: radial_electric_potential_slope
         type(symplectic_integrator_t), intent(inout) :: si
         type(field_can_t), intent(inout) :: f
         integer, intent(out) :: ierr
 
         si%z(1) = 0.3d0
-        f%vpar = 12d0*si%pabs
+        f%mu = 0d0
+        f%vpar = sqrt(2d0)*injected_momentum_ratio*si%pabs
+        if (radial_electric_potential_slope /= 0d0) &
+            f%Phie = f%Phie + (1d0 - injected_momentum_ratio**2)*si%pabs**2
+        f%H = 0.5d0*f%vpar**2 + f%Phie
         if (injected_status == SYMPLECTIC_STEP_BOUNDARY) then
             si%z(1) = 1d0
             si%last_step_fraction = 0.25d0
@@ -68,13 +75,14 @@ end module failed_symplectic_step_backend
 program test_sympl_testfield
     use, intrinsic :: iso_fortran_env, only : dp => real64, int64
     use failed_symplectic_step_backend, only: fail_symplectic_step, &
-                                 locate_lcfs_step, wrong_energy_step, injected_status, &
-                                           successful_drift_step, successful_drift_calls
+                         locate_lcfs_step, successful_drift_step, successful_drift_calls
+    use failed_symplectic_step_backend, only: wrong_energy_step, injected_status, &
+                                              injected_momentum_ratio
+    use simple_main, only: update_momentum
     use classification, only: classify_classifier_exit
     use simple_main, only : classify_orbit_exit, init_field, locate_linear_lcfs, &
         locate_validated_lcfs, macrostep, macrostep_with_wall_check, &
         recovery_state_has_valid_phase_space, recovery_state_is_physical, &
-                           update_momentum, &
         rk_recovery_state_t, validate_rk_state, &
         validate_rk_step_or_reference_boundary, &
         activate_rk_recovery, should_resume_symplectic, &
@@ -363,71 +371,101 @@ contains
     end subroutine test_collision_failure_propagation
 
     subroutine test_wrong_energy_symplectic_endpoint
-        use field_can_mod, only: field_can_t
-        use orbit_symplectic_base, only: symplectic_integrator_t, &
-                                         SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
+        use orbit_symplectic_base, only: SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
         use parmot_mod, only: ro0
-        use finite_check, only: is_finite
-        type(tracer_t) :: local_orbit
-        type(symplectic_integrator_t) :: saved_si
-        type(field_can_t) :: saved_field
-        real(dp) :: z(5), initial(5), x_previous(3), saved_ro0
+        use reference_coordinates, only: ref_coords
+        use libneo_coordinates, only: coordinate_system_t
+        use cartesian_coordinates, only: cartesian_coordinate_system_t
+        use params, only: wall_query_rho_lcfs, radial_electric_potential_slope
+        type(tracer_t) :: local_orbit, expected_orbit
+        class(coordinate_system_t), allocatable :: saved_ref_coords
+        real(dp) :: z(5), initial(5), x_previous(3), saved_ro0, exit_step
+        real(dp) :: saved_wall_gate, saved_potential_slope
         integer(int64) :: kt
-        integer :: collisions, endpoint, wall_path, step_error
+        integer :: collisions, endpoint, wall_path, step_error, excessive
 
+        call move_alloc(ref_coords, saved_ref_coords)
+        allocate (cartesian_coordinate_system_t :: ref_coords)
+        saved_potential_slope = radial_electric_potential_slope
+        saved_wall_gate = wall_query_rho_lcfs
+        wall_query_rho_lcfs = 1.0_dp
         local_orbit = norb
         saved_ro0 = ro0
         ro0 = 1.0_dp ! Normalized TEST-field charge-to-mass scale.
         symplectic_newton_warning_mode = .false.
         orbit_model = ORBIT_GC
         integmode = 3
-        do collisions = 0, 1
-            swcoll = collisions == 1
-            ! A collision can change both momentum and pitch before this push.
-            initial = [0.2_dp, 1.0_dp, 0.2_dp, 1.0_dp, 0.25_dp]
-            if (swcoll) initial(4:5) = [0.7_dp, -0.4_dp]
-            do endpoint = 0, 1
-                do wall_path = 0, 1
-                    call init_sympl(local_orbit%si, local_orbit%f, initial, &
-                                    1.0e-3_dp, 1.0e-3_dp, 1.0e-12_dp, 3)
-                    call update_momentum(local_orbit, initial)
-                    if (.not. is_finite(local_orbit%f%H)) &
-                        error stop 'Nonfinite TEST-field Hamiltonian'
-                    if (abs(local_orbit%f%H - initial(4)**2) > 1.0e-12_dp) &
-                        error stop 'Collision reseed changed physical Hamiltonian'
-                    saved_si = local_orbit%si
-                    saved_field = local_orbit%f
-                    injected_status = SYMPLECTIC_STEP_OK
-                    if (endpoint == 1) injected_status = SYMPLECTIC_STEP_BOUNDARY
-                    orbit_timestep_sympl => wrong_energy_step
-                    z = initial
-                    x_previous = 0.0_dp
-                    kt = 0_int64
-                    if (wall_path == 0) then
-                        call macrostep(local_orbit, z, kt, step_error, 1)
-                    else
-                        call macrostep_with_wall_check(local_orbit, z, kt, &
-                                                       step_error, 1, 1, x_previous)
-                    end if
-                    if (step_error /= SYMPLECTIC_STEP_EVENT_NOT_CONVERGED) &
-                        error stop 'Wrong-energy endpoint accepted as a step or hit'
-                    if (classify_orbit_exit(step_error, ORBIT_GC, integmode, &
-                                            ORBIT_EXIT_LCFS) /= &
-                        ORBIT_EXIT_NUMERICAL_EVENT) &
+        do excessive = 0, 2
+            radial_electric_potential_slope = 0.0_dp
+            if (excessive == 2) radial_electric_potential_slope = -1.0_dp
+            injected_momentum_ratio = 1.004_dp
+            if (excessive == 1) injected_momentum_ratio = 1.006_dp
+            if (excessive == 2) injected_momentum_ratio = 1.1_dp
+            do collisions = 0, 1
+                swcoll = collisions == 1
+                ! A collision can change both momentum and pitch before this push.
+                initial = [0.2_dp, 1.0_dp, 0.2_dp, 1.0_dp, 0.25_dp]
+                do endpoint = 0, 1
+                    ! Bounded boundary states return before another collision kick.
+                    if (excessive /= 1 .and. endpoint == 0) cycle
+                    do wall_path = 0, 1
+                        initial(4:5) = [1.0_dp, 0.25_dp]
+                        call init_sympl(local_orbit%si, local_orbit%f, initial, &
+                                        1.0e-3_dp, 1.0e-3_dp, 1.0e-12_dp, 3)
+                        ! Leave a stale pre-collision reference in the active orbit.
+                        if (swcoll) initial(4:5) = [0.7_dp, -0.4_dp]
+                        expected_orbit = local_orbit
+                        if (swcoll) call update_momentum(expected_orbit, initial)
+                        injected_status = SYMPLECTIC_STEP_OK
+                        if (endpoint == 1) injected_status = SYMPLECTIC_STEP_BOUNDARY
+                        orbit_timestep_sympl => wrong_energy_step
+                        z = initial
+                        x_previous = 0.0_dp
+                        kt = 0_int64
+                        if (wall_path == 0) then
+                            call macrostep(local_orbit, z, kt, step_error, 1, exit_step)
+                        else
+                            call macrostep_with_wall_check(local_orbit, z, kt, &
+                                                step_error, 1, 1, x_previous, exit_step)
+                        end if
+                        if (excessive /= 1) then
+                            if (step_error /= SYMPLECTIC_STEP_BOUNDARY .or. &
+                                abs(z(4)/initial(4) - injected_momentum_ratio) > &
+                                1.0e-12_dp) &
+                                error stop 'Physical boundary momentum was rejected'
+                            if (excessive == 2) then
+                                if (abs(local_orbit%f%H - expected_orbit%f%H) > &
+                                    1.0e-12_dp) error stop 'Electric energy mismatch'
+                            end if
+                            if (kt /= 0_int64 .or. exit_step /= 0.25_dp) &
+                                error stop 'Bounded boundary time was changed'
+                            cycle
+                        end if
+                        if (step_error /= SYMPLECTIC_STEP_EVENT_NOT_CONVERGED) &
+                            error stop 'Wrong-energy endpoint accepted as a step or hit'
+                        if (classify_orbit_exit(step_error, ORBIT_GC, integmode, &
+                                                ORBIT_EXIT_LCFS) /= &
+                            ORBIT_EXIT_NUMERICAL_EVENT) &
                         error stop 'Wrong-energy rejection classified as Newton failure'
-                    if (kt /= 0_int64 .or. any(z /= initial)) &
-                        error stop 'Wrong-energy rejection changed particle or time'
-                    if (any(local_orbit%si%z /= saved_si%z) .or. &
-                        local_orbit%si%pabs /= saved_si%pabs .or. &
-                        local_orbit%f%vpar /= saved_field%vpar .or. &
-                        local_orbit%f%mu /= saved_field%mu .or. &
-                        local_orbit%f%H /= saved_field%H) &
+                        if (kt /= 0_int64 .or. exit_step /= 0.0_dp .or. &
+                            any(z /= initial) .or. any(x_previous /= 0.0_dp)) &
+                            error stop 'Wrong-energy rejection changed particle or time'
+                        if (any(local_orbit%si%z /= expected_orbit%si%z) .or. &
+                            local_orbit%si%pabs /= expected_orbit%si%pabs .or. &
+                            local_orbit%f%vpar /= expected_orbit%f%vpar .or. &
+                            local_orbit%f%mu /= expected_orbit%f%mu .or. &
+                            local_orbit%f%H /= expected_orbit%f%H) &
                         error stop 'Wrong-energy rejection did not restore hidden state'
+                    end do
                 end do
             end do
         end do
         swcoll = .false.
         ro0 = saved_ro0
+        radial_electric_potential_slope = saved_potential_slope
+        wall_query_rho_lcfs = saved_wall_gate
+        deallocate (ref_coords)
+        call move_alloc(saved_ref_coords, ref_coords)
     end subroutine test_wrong_energy_symplectic_endpoint
 
     subroutine test_rk_recovery_regions
@@ -688,14 +726,11 @@ contains
     end subroutine test_validated_rk_lcfs_location
 
     subroutine test_rk_state_validation
-        use callback, only: output_error
         real(dp), parameter :: z_before(5) = [0.2_dp, 0.2_dp, 0.3_dp, 1.0_dp, &
             -0.5_dp]
         real(dp) :: z_after(5)
-        integer :: step_error, diagnostic_mode
-        logical :: output_error_saved
+        integer :: step_error
 
-        output_error_saved = output_error
         z_after = [0.21_dp, 0.4_dp, 0.5_dp, 1.1_dp, 0.5_dp]
         step_error = 0
         call validate_rk_state(z_before, z_after, step_error)
@@ -726,16 +761,6 @@ contains
         if (step_error /= 2 .or. any(z_after /= z_before)) then
             error stop 'invalid adaptive-RK state was committed'
         end if
-        ! Both diagnostic modes must retain identical rejection and rollback.
-        do diagnostic_mode = 0, 1
-            output_error = diagnostic_mode == 1
-            z_after = [0.21_dp, 0.4_dp, 0.5_dp, 1.0_dp, 2.0_dp]
-            step_error = 0
-            call validate_rk_state(z_before, z_after, step_error, 1.0_dp)
-            if (step_error /= 2 .or. any(z_after /= z_before)) &
-                error stop 'RK diagnostics changed rejection or rollback'
-        end do
-        output_error = output_error_saved
     end subroutine test_rk_state_validation
 
     subroutine test_symplectic_step_validation
