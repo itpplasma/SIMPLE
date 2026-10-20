@@ -55,7 +55,9 @@ program test_magfie_refcoords_splines
 
     n_failed = 0
 
-    call init_vmec('wout_ncsx.nc', 5, 5, 5, dummy)
+    ! Derivative consistency needs only a coarse VMEC coordinate fixture.
+    ! Keep quintic splines; multiplier 1 bounds the coordinate arrays to 0.43 GiB.
+    call init_vmec('wout_ncsx.nc', 5, 5, 1, dummy)
     call init_reference_coordinates('wout_ncsx.nc')
 
     call create_coils_field('coils.simple', raw_coils)

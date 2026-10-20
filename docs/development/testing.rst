@@ -29,6 +29,88 @@ quote it and write ``$`` as ``$$``, e.g. ``TEST='^test_finite_check$$'``.
 Tests labelled ``python`` and some unlabelled wrappers need the packages from
 ``./setup-venv.sh``.
 
+Memory allocation on workstations and CI
+----------------------------------------
+
+Configure on the machine that will run the tests. CMake writes
+``build/ctest-resources.json`` with one ``mem_gb`` resource whose slots each
+represent one GiB. Usable memory is the minimum of Linux ``MemAvailable``,
+cgroup memory headroom, and any positive Slurm memory allocation
+(``SLURM_MEM_PER_NODE`` or ``SLURM_MEM_PER_CPU * SLURM_CPUS_ON_NODE``, in MiB).
+For cgroup v2, CMake locates the job via ``/proc/self/cgroup``, takes the
+smallest finite ``memory.max`` from that cgroup up to the mount root, and
+subtracts the job cgroup's ``memory.current``. The v1 fallback uses
+``memory.limit_in_bytes`` and ``memory.usage_in_bytes`` under the memory
+controller, ignoring huge unlimited sentinels. Negative headroom becomes zero.
+Missing cgroup files impose no constraint; missing ``MemAvailable`` falls back
+to CMake's available physical memory query.
+The automatic budget is this usable memory, rounded down to GiB, less a
+reserve of 25%, rounded up, or 4 GiB, whichever is larger. This leaves room
+for the OS, other jobs and tests without reservations. Cap this snapshot on
+a shared machine, and reconfigure when its available memory changes::
+
+    cmake -S . -B build -DSIMPLE_TEST_MEMORY_GB=24
+    ctest --test-dir build/test -j8 --output-on-failure
+
+CMake records ``CTEST_RESOURCE_SPEC_FILE`` in every generated
+``CTestTestfile.cmake``. Both ``ctest`` from ``build`` and
+``ctest --test-dir build/test`` therefore load the generated spec automatically.
+Thus CI's existing ``ctest -j16`` also uses memory allocation without another
+command-line option. A site-specific spec can override the default::
+
+    ctest --test-dir build/test -j16 --resource-spec-file /path/to/resources.json
+
+For example, a 24 GiB budget has this format::
+
+    {"version": {"major": 1, "minor": 0},
+     "local": [{"mem_gb": [{"id": "ram", "slots": 24}]}]}
+
+CTest's ``RESOURCE_GROUPS`` alone does **not** limit parallelism without a
+resource spec; tests still run. This is documented in the
+`CTest resource allocation manual
+<https://cmake.org/cmake/help/latest/manual/ctest.1.html#resource-allocation>`_
+and verified with CTest 4.4.4. The automatic default above prevents that
+unbounded fallback. A test requiring more slots than the budget is reported
+as ``Not Run`` with insufficient resources; the budget is never raised to
+force it to run. Memory reservations govern scheduling within one CTest
+invocation, not OS memory limits or separate CTest invocations. Keep OpenMP
+thread counts appropriate to the CPU allocation as well.
+
+Reservations are peak RSS rounded up to whole GiB, measured one registered
+test at a time with GNU ``/usr/bin/time -v``. Except for the updated wall test,
+these measurements ran inside
+``systemd-run --user --scope -p MemoryMax=16G``. The workstation measurements
+use GNU Fortran 16.2.1, the deterministic ``Fast`` build, four OpenMP threads
+and one OpenBLAS thread; golden-record scripts retain their fixed two threads
+and the wall test retains its fixed single thread.
+The wall test uses VMEC angular multiplier 1 for initialization; its coil
+field, chartmap, explicit starts and numerical assertions are unchanged.
+
+==============================================  ==========  =====
+Test                                            RSS (GiB)   Slots
+==============================================  ==========  =====
+test_splined_field_derivatives                  0.8202      1
+test_bder_from_splines                          0.8191      1
+test_magfie_refcoords_splines                   1.1990      2
+test_hcurl_from_dhcov_splines                   0.8194      1
+test_splined_kernel_bench                       12.6803     13
+test_chartmap_pipeline                          9.8633      10
+test_chartmap_rz_consistency                    9.8601      10
+gc_ck_ncsx_vmec_vs_meiss                        11.9712     12
+golden_record_albert_coils                      14.0856     15
+golden_record_boozer_ncsx                       7.2261      8
+golden_record_meiss_coils                       12.0610     13
+test_collisional_stl_wall                       0.9169      1
+generate_chartmap_ncsx_map2disc                 0.3585      1
+generate_chartmap_ncsx_map2disc_wall            0.3940      1
+test_chartmap_ncsx_map2disc_wall_offset         0.3940      1
+test_chartmap_boundary_param                    0.3988      1
+==============================================  ==========  =====
+
+Re-measure when adding NCSX consumers or increasing fixture sizes.
+Golden cases use ``flock`` (util-linux) only while preparing their shared
+reference build and input files; their numerical runs share the memory budget.
+
 Kinds of tests and labels
 -------------------------
 

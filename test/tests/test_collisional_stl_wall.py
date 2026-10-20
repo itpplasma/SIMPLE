@@ -116,6 +116,8 @@ ntestpart = {len(starts)}
 trace_time = {TRACE_TIME:.17e}
 ntimstep = 101
 npoiper2 = {npoiper2}
+! Orbits use the coil field and chartmap; VMEC supplies equilibrium metadata.
+multharm = 1
 contr_pp = -1d10
 relerr = 1d-9
 facE_al = 1d2
