@@ -96,7 +96,7 @@ regression_suite() {
         'golden_record_albert_coils 1 420' 'golden_record_meiss_coils 1 210' \
         > build/test/Testing/Temporary/CTestCostData.txt
     stamp "regression (ctest -j$jobs, golden $threads threads)"
-    (cd build && ctest --test-dir test --resource-spec-file ctest-resources.json --output-on-failure -L regression)
+    (cd build && ctest --test-dir test --resource-spec-file "$PWD/ctest-resources.json" --output-on-failure -L regression)
 }
 
 coverage_report() {
@@ -104,11 +104,14 @@ coverage_report() {
     local search_paths
     mkdir -p "$src/ci-out" || return
     # Normalize each tree's filenames against its own root before combining.
+    # The concept-only target is outside src/app; GCC 12 records its generated
+    # includes without paths, which gcov cannot resolve before source filtering.
     for tree in "$src" "$root/src-reg"; do
         search_paths=(build)
         [ ! -d "$tree/_skbuild" ] || search_paths+=(_skbuild)
         (cd "$tree" && gcovr --root . --filter 'src/|app/' --include-internal-functions \
             --gcov-executable /usr/bin/gcov -j "$cpus" \
+            --gcov-exclude-directory '.*/CMakeFiles/fo_gauss2_concept.dir$' \
             --json "$tree/coverage.json" "${search_paths[@]}") || return
     done
     gcovr --root "$src" --filter 'src/|app/' --include-internal-functions \
@@ -165,9 +168,12 @@ full)
     # Second tree for the regression build (it needs its own build/ and a
     # different libneo); started first because it holds the critical path.
     cp -a "$src" "$root/src-reg"
-    ja=$(clamp $((cpus / 4)) 2 16)
-    jb=$(clamp $((cpus / 12)) 2 8)
-    tb=$(clamp $(((cpus / 2) / jb)) 2 16)
+    # Parallelize across tests: atomic coverage counters contend heavily when
+    # multiple OpenMP threads execute the same instrumented hot loop.
+    export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
+    ja=$((cpus / 2))
+    jb=$((cpus - ja))
+    tb=1
     (cd "$root/src-reg" && regression_suite "$jb" "$tb") > "$root/regression.log" 2>&1 &
     reg_pid=$!
     stamp "regression started in background (log follows at the end)"
