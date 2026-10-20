@@ -124,20 +124,33 @@ jobs:
           SCI_TIER=$tier ci/bundle.sh "$RUNNER_TEMP/bundle.tar.zst"
           sci-dispatch "$tier" "$RUNNER_TEMP/bundle.tar.zst"
 
-      - name: Summarize sCluster coverage
+      - name: Summarize sCluster gate and coverage
+        id: cluster-results
         if: always() && env.CI_HOSTED != 'true'
         run: |
-          if [ -f "$RUNNER_TEMP/sci-out/coverage-summary.txt" ]; then
+          result=$RUNNER_TEMP/sci-out
+          if [ -f "$result/full-status.txt" ]; then
             {
-              echo '## Full-tier coverage (sCluster GCC 12.2)'
+              echo '## sCluster correctness gate and fast-tier coverage (GCC 12.2)'
+              echo 'The uninstrumented full gate decides this check. Coverage is reporting only.'
               echo '```text'
-              cat "$RUNNER_TEMP/sci-out/coverage-summary.txt"
+              cat "$result/full-status.txt"
+              for status in gate-status coverage-status coverage-summary; do
+                if [ -f "$result/$status.txt" ]; then cat "$result/$status.txt"; fi
+              done
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
+            if ! grep -q '^Coverage worker: exit 0 ' "$result/full-status.txt"; then
+              echo '::warning::Fast-tier coverage failed; see the coverage log and job summary. The correctness gate remains authoritative.'
+            fi
+          fi
+          if [ -s "$result/coverage.xml" ] && [ -s "$result/coverage.html" ]; then
+            echo 'coverage=true' >> "$GITHUB_OUTPUT"
           fi
 
       - name: Upload sCluster coverage
-        if: always() && env.CI_HOSTED != 'true'
+        if: always() && env.CI_HOSTED != 'true' && steps.cluster-results.outputs.coverage == 'true'
+        continue-on-error: true
         uses: actions/upload-artifact@v6
         with:
           name: fast-suite-coverage
@@ -202,7 +215,7 @@ jobs:
           build_options=()
           config=Release
           if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
-            # The existing GCC 14 Fast coverage job validates this toolchain.
+            # The hosted PR tier uses deterministic Fast with GCC 14.
             export CC=gcc-14 CXX=g++-14 FC=gfortran-14
             config=Fast
             build_options+=("FLAGS=-DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF")
