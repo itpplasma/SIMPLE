@@ -56,7 +56,7 @@ contains
         ! All cases read the same equilibrium without changing it. Share the
         ! expensive spline construction while retaining every coordinate check.
         if (vmec_initialized) return
-        call init_vmec(VMEC_FILE, 5, 5, 1, dummy)
+        call init_vmec(VMEC_FILE, 5, 5, 2, dummy)
         vmec_initialized = .true.
     end subroutine ensure_vmec_initialized
 

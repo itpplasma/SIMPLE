@@ -163,23 +163,23 @@ jobs:
           make clean
           REF="${{ inputs.libneo_ref }}"
           if [ -n "$REF" ]; then
-            make build-deterministic CONFIG=Fast LIBNEO_REF="$REF"
+            make build-deterministic CONFIG=Release LIBNEO_REF="$REF"
           else
-            make build-deterministic CONFIG=Fast
+            make build-deterministic CONFIG=Release
           fi
 
       # libneo-gate dispatch (no full) runs only the sub-minute smoke set;
       # PRs, the merge queue and full=true run the suites below.
       - name: Run Smoke Tests (libneo gate)
         if: env.CI_HOSTED == 'true' && (github.event_name == 'workflow_dispatch' && inputs.full != 'true')
-        run: make test-smoke CONFIG=Fast
+        run: make test-smoke CONFIG=Release
 
       - name: Run Fast Tests (Fortran only)
         if: env.CI_HOSTED == 'true' && (github.event_name != 'workflow_dispatch' || inputs.full == 'true')
         run: |
           CTEST_PARALLEL_LEVEL=$(env -u OMP_NUM_THREADS -u OMP_THREAD_LIMIT nproc)
           export CTEST_PARALLEL_LEVEL
-          make test-fast CONFIG=Fast
+          make test-fast CONFIG=Release
 
       - name: Install Python package
         if: env.CI_HOSTED == 'true' && inputs.full == 'true'
@@ -190,11 +190,11 @@ jobs:
         if: env.CI_HOSTED == 'true' && inputs.full == 'true'
         env:
           SIMPLE_GVEC_QA_CACHE_ROOT: ${{ github.workspace }}/.ci-data/gvec_qa_roundtrip
-        run: make test-slow CONFIG=Fast
+        run: make test-slow CONFIG=Release
 
       - name: Run Regression Tests (Golden Record)
         if: env.CI_HOSTED == 'true' && inputs.full == 'true'
-        run: make test-regression CONFIG=Fast
+        run: make test-regression CONFIG=Release
 
       - name: Upload test results
         if: always() && env.CI_HOSTED == 'true'

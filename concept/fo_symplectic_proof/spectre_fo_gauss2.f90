@@ -848,18 +848,21 @@ contains
     end function gauss2_entry_step
 
     subroutine gauss2_step(z0, width, ro0, e0, length, gmin, h, z1, dt, ok, &
-                           tangent, radial_scale, tolerance, residual, start_energy)
+                           tangent, radial_scale, tolerance, residual, start_energy, &
+                           fixed_point)
         !> start_energy returns H(z0), also when the Newton solve fails.
         real(dp), intent(in) :: z0(6), width, ro0, e0, length, gmin, h
         real(dp), intent(out) :: z1(6), dt
         logical, intent(out) :: ok
         real(dp), intent(out), optional :: tangent(6, 6), residual, start_energy
         real(dp), intent(in), optional :: radial_scale, tolerance
+        ! Caller-owned segment hint: disable trials after the first fallback.
+        logical, intent(inout), optional :: fixed_point
         real(dp) :: dy(6, 2), f(6, 2), df(6, 6, 2), monitor(2)
         real(dp) :: jac(12, 12), rhs(12, 6), r(6, 2), delta(12)
         real(dp) :: eye(6, 6), energy, radial_ref, tol, res, predictor(6, 2)
         integer :: i, it, piv(12), info
-        logical :: full
+        logical :: full, trial
 
         ok = .false.
         z1 = z0
@@ -883,7 +886,9 @@ contains
         ! needlessly adds a cancellation floor to the Newton residual.
         dy(:, 1) = h*(0.5_dp - sqrt(3.0_dp)/6.0_dp)*f(:, 1)
         dy(:, 2) = h*(0.5_dp + sqrt(3.0_dp)/6.0_dp)*f(:, 1)
-        if (.not. present(tangent)) then
+        trial = .not. present(tangent)
+        if (present(fixed_point)) trial = trial .and. fixed_point
+        if (trial) then
             ! A bounded fixed-point trial avoids a Hessian/factorization when
             ! small fixed steps are already contractive. Acceptance uses the
             ! identical stage residual. On failure, restore the original
@@ -907,7 +912,10 @@ contains
                     end do
                 end if
             end do
-            if (.not. ok) dy = predictor
+            if (.not. ok) then
+                dy = predictor
+                if (present(fixed_point)) fixed_point = .false.
+            end if
         end if
         do it = 1, 20
             if (ok) exit
