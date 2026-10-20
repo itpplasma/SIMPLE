@@ -83,6 +83,7 @@ contains
         integer :: ierr
         real(dp), dimension(5) :: z, z_step_start
         real(dp) :: bmod,sqrtg
+        real(dp) :: surf_bmin, surf_bmax
         real(dp), dimension(3) :: bder, hcovar, hctrvr, hcurl
         integer :: first_unresolved_it, hold_streak, it, ktau, it_f
         integer(8) :: kt
@@ -161,12 +162,17 @@ contains
 
         call magfie(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
 
+        ! Keep surface extrema per particle; the boundary plot reads shared bmax.
         !$omp critical
         if(num_surf > 1) then
-            call get_bminmax(z(1),bmin,bmax)
+            call get_bminmax(z(1), surf_bmin, surf_bmax)
+        else
+            surf_bmin = bmin
+            surf_bmax = bmax
         endif
-        passing = z(5)**2.gt.1.d0-bmod/bmax
-        trap_par(ipart) = ((1.d0-z(5)**2)*bmax/bmod-1.d0)*bmin/(bmax-bmin)
+        passing = z(5)**2 .gt. 1.d0 - bmod/surf_bmax
+        trap_par(ipart) = ((1.d0 - z(5)**2)*surf_bmax/bmod - 1.d0)*surf_bmin &
+                          /(surf_bmax - surf_bmin)
         perp_inv(ipart) = z(4)**2*(1.d0-z(5)**2)/bmod
         iclass(:,ipart) = 0
         !$omp end critical

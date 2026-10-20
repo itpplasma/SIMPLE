@@ -12,15 +12,18 @@ program test_magfie_refcoords_splines
     !>   against the curl definition
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use simple, only: init_vmec
+    use simple, only: init_vmec, tracer_t, init_params
     use util, only: twopi
     use new_vmec_stuff_mod, only: nper
     use field_coils, only: coils_field_t, create_coils_field
     use field_vmec, only: vmec_field_t, create_vmec_field
     use field_splined, only: splined_field_t, create_splined_field
     use reference_coordinates, only: init_reference_coordinates, ref_coords
-    use magfie_sub, only: init_magfie, magfie, REFCOORDS, set_magfie_refcoords_field
+    use magfie_sub, only: init_magfie, magfie, REFCOORDS, BOOZER, &
+                          set_magfie_refcoords_field, axis_radial_coordinate
     use libneo_coordinates, only: coordinate_system_t
+    use alpha_lifetime_sub, only: velo_can, velo_axis_regularized, orbit_timestep_axis
+    use finite_check, only: is_finite
 
     implicit none
 
@@ -47,11 +50,14 @@ program test_magfie_refcoords_splines
     real(dp), parameter :: tol_hcurl_abs = 1.0e-12_dp
 
     real(dp) :: phi_period
-    integer :: n_failed, i
+    integer :: n_failed, i, axis_error
+    logical :: radial_is_rho
 
     n_failed = 0
 
-    call init_vmec('wout_ncsx.nc', 5, 5, 5, dummy)
+    ! Derivative consistency needs only a coarse VMEC coordinate fixture.
+    ! Keep quintic splines; multiplier 1 bounds the coordinate arrays to 0.43 GiB.
+    call init_vmec('wout_ncsx.nc', 5, 5, 1, dummy)
     call init_reference_coordinates('wout_ncsx.nc')
 
     call create_coils_field('coils.simple', raw_coils)
@@ -59,6 +65,16 @@ program test_magfie_refcoords_splines
 
     call set_magfie_refcoords_field(f)
     call init_magfie(REFCOORDS)
+    call axis_radial_coordinate(radial_is_rho, axis_error)
+    if (axis_error /= 0 .or. .not. radial_is_rho) &
+        error stop 'splined VMEC RK chart must use rho'
+    ! Retained reference storage must not select the chart of another backend.
+    call init_magfie(BOOZER)
+    call axis_radial_coordinate(radial_is_rho, axis_error)
+    if (axis_error /= 0 .or. radial_is_rho) &
+        error stop 'inactive reference field changed the RK axis chart'
+    call init_magfie(REFCOORDS)
+    call check_active_rho_rhs(n_failed)
 
     phi_period = twopi/real(nper, dp)
 
@@ -68,6 +84,9 @@ program test_magfie_refcoords_splines
 
     call create_vmec_field(vmec_field)
     call set_magfie_refcoords_field(vmec_field)
+    call axis_radial_coordinate(radial_is_rho, axis_error)
+    if (axis_error /= 0 .or. radial_is_rho) &
+        error stop 'unsplined VMEC RK chart must use flux'
     do i = 1, 20
         call check_unsplined_hcurl(i, phi_period, vmec_field, n_failed)
     end do
@@ -84,6 +103,93 @@ program test_magfie_refcoords_splines
     print *, '================================'
 
 contains
+
+    subroutine check_active_rho_rhs(n_failed)
+        integer, intent(inout) :: n_failed
+        type(tracer_t) :: orbit
+        real(dp), parameter :: native_floor = 1.0e-6_dp, theta = 0.7_dp
+        real(dp) :: zpolar(5), zaxis(5), vpolar(5), expected(5), actual(5)
+        real(dp) :: axis_value(5), probe(5), after(5), after_cart(2)
+        real(dp) :: rho, angle, scale, spread, step
+        integer :: ray, status
+
+        ! Reuse the active splined coil field and existing VMEC normalization.
+        ! No new field initialization is needed for this physical RHS oracle.
+        call init_params(orbit, 2, 4, 3.5e6_dp, 256, 1, 1.0e-12_dp)
+        rho = 0.005_dp
+        zpolar = [rho, theta, 0.1_dp, 1.0_dp, -0.3_dp]
+        zaxis = [rho*cos(theta), rho*sin(theta), zpolar(3:5)]
+        call velo_can(0.0_dp, zpolar, vpolar)
+        ! Independent native-rho chain rule, not the production map helper.
+        expected(1) = vpolar(1)*cos(theta) - rho*sin(theta)*vpolar(2)
+        expected(2) = vpolar(1)*sin(theta) + rho*cos(theta)*vpolar(2)
+        expected(3:5) = vpolar(3:5)
+        call velo_axis_regularized(0.0_dp, zaxis, actual, native_floor)
+        if (.not. all(is_finite([expected, actual]))) &
+            error stop 'Active REF rho RHS produced nonfinite phase velocity'
+        scale = max(maxval(abs(expected)), tiny(1.0_dp))
+        if (maxval(abs(actual - expected)) > 1.0e-11_dp*scale) then
+            print *, 'FAIL: active REF rho regularization changed outer polar RHS'
+            n_failed = n_failed + 1
+        end if
+
+        ! A short near-axis push must return native rho and reproduce the
+        ! independently evaluated Cartesian tangent to first order. Choose a
+        ! small physical displacement rather than a device-dependent time.
+        scale = max(maxval(abs(expected(1:2))), tiny(1.0_dp))
+        step = min(1.0e-5_dp*rho/scale, &
+                   1.0e-5_dp/max(maxval(abs(vpolar(2:5))), tiny(1.0_dp)))
+        after = zpolar
+        call orbit_timestep_axis(after, step, step, 1.0e-12_dp, status, &
+                                 axis_floor=native_floor, near_axis_limit=0.01_dp)
+        if (status /= 0 .or. .not. all(is_finite(after))) &
+            error stop 'Active REF rho near-axis push failed'
+        after_cart = [after(1)*cos(after(2)), after(1)*sin(after(2))]
+        if (maxval(abs((after_cart - zaxis(1:2))/step - expected(1:2))) > &
+            5.0e-3_dp*scale) then
+            print *, 'FAIL: active REF near-axis push lost native rho tangent'
+            n_failed = n_failed + 1
+        end if
+
+        ! Immediately inside the native-rho handoff, recover the polar field
+        ! rather than a second chart's radial units.
+        rho = (1.0_dp - 1.0e-6_dp)*native_floor
+        zpolar(1) = rho
+        zaxis(1:2) = [rho*cos(theta), rho*sin(theta)]
+        call velo_can(0.0_dp, zpolar, vpolar)
+        expected(1) = vpolar(1)*cos(theta) - rho*sin(theta)*vpolar(2)
+        expected(2) = vpolar(1)*sin(theta) + rho*cos(theta)*vpolar(2)
+        expected(3:5) = vpolar(3:5)
+        call velo_axis_regularized(0.0_dp, zaxis, actual, native_floor)
+        if (.not. all(is_finite([expected, actual]))) &
+            error stop 'Active REF rho handoff produced nonfinite velocity'
+        scale = max(maxval(abs(expected)), tiny(1.0_dp))
+        if (maxval(abs(actual - expected)) > 1.0e-6_dp*scale) then
+            print *, 'FAIL: active REF rho reconstruction has a handoff seam'
+            n_failed = n_failed + 1
+        end if
+
+        ! Check the actual reconstruction's axis limit using the same active
+        ! rho field. Toroidal position and particle state remain fixed.
+        probe = [0.0_dp, 0.0_dp, zpolar(3:5)]
+        call velo_axis_regularized(0.0_dp, probe, axis_value, native_floor)
+        if (.not. all(is_finite(axis_value))) &
+            error stop 'Active REF rho reconstruction has no finite axis value'
+        spread = 0.0_dp
+        do ray = 0, 7
+            angle = twopi*real(ray, dp)/8.0_dp
+            probe(1:2) = 1.0e-14_dp*[cos(angle), sin(angle)]
+            call velo_axis_regularized(0.0_dp, probe, actual, native_floor)
+            if (.not. all(is_finite(actual))) &
+                error stop 'Active REF rho axis limit depends on a singular ray'
+            spread = max(spread, maxval(abs(actual - axis_value)))
+        end do
+        scale = max(maxval(abs(axis_value)), 1.0e-10_dp)
+        if (spread > 1.0e-6_dp*scale) then
+            print *, 'FAIL: active REF rho axis limit depends on approach ray'
+            n_failed = n_failed + 1
+        end if
+    end subroutine check_active_rho_rhs
 
     subroutine check_point(i, phi_period, f, n_failed)
         integer, intent(in) :: i
@@ -121,7 +227,6 @@ contains
                        n_failed)
     end subroutine check_point
 
-
     subroutine oracle_field_fd(f, x, phi_period, B0, h0, bder, dh)
         type(splined_field_t), intent(in) :: f
         real(dp), intent(in) :: x(3), phi_period
@@ -152,7 +257,6 @@ contains
             dh(k, :) = (-hp2 + 8.0_dp*hp1 - 8.0_dp*hm1 + hm2)/(12.0_dp*step)
         end do
     end subroutine oracle_field_fd
-
 
     subroutine check_unsplined_hcurl(i, phi_period, fld, n_failed)
         !> hcurl^i = eps^ijk d_j h_k / sqrt(g) spelled out with central
@@ -191,7 +295,6 @@ contains
                        1.0e-4_dp, n_failed)
     end subroutine check_unsplined_hcurl
 
-
     subroutine eval_shift(f, x, k, m, phi_period, Bmod, hcov)
         type(splined_field_t), intent(in) :: f
         real(dp), intent(in) :: x(3)
@@ -217,7 +320,6 @@ contains
         call f%evaluate(x_shift, Acov, hcov, Bmod)
     end subroutine eval_shift
 
-
     subroutine metric_from_cart_fd(cs, x, phi_period, ginv, sqrtg)
         class(*), intent(in) :: cs
         real(dp), intent(in) :: x(3), phi_period
@@ -230,30 +332,30 @@ contains
 
         u0 = [x(1)**2, x(2), x(3)]
 
-        u_p1 = [ (x(1) + h_rho)**2, x(2), x(3) ]
-        u_m1 = [ (x(1) - h_rho)**2, x(2), x(3) ]
-        u_p2 = [ (x(1) + 2.0_dp*h_rho)**2, x(2), x(3) ]
-        u_m2 = [ (x(1) - 2.0_dp*h_rho)**2, x(2), x(3) ]
+        u_p1 = [(x(1) + h_rho)**2, x(2), x(3)]
+        u_m1 = [(x(1) - h_rho)**2, x(2), x(3)]
+        u_p2 = [(x(1) + 2.0_dp*h_rho)**2, x(2), x(3)]
+        u_m2 = [(x(1) - 2.0_dp*h_rho)**2, x(2), x(3)]
         call eval_cart(cs, u_p1, xc_p1)
         call eval_cart(cs, u_m1, xc_m1)
         call eval_cart(cs, u_p2, xc_p2)
         call eval_cart(cs, u_m2, xc_m2)
         e1 = (-xc_p2 + 8.0_dp*xc_p1 - 8.0_dp*xc_m1 + xc_m2)/(12.0_dp*h_rho)
 
-        u_p1 = [ x(1)**2, wrap_angle(x(2) + h_ang, twopi), x(3) ]
-        u_m1 = [ x(1)**2, wrap_angle(x(2) - h_ang, twopi), x(3) ]
-        u_p2 = [ x(1)**2, wrap_angle(x(2) + 2.0_dp*h_ang, twopi), x(3) ]
-        u_m2 = [ x(1)**2, wrap_angle(x(2) - 2.0_dp*h_ang, twopi), x(3) ]
+        u_p1 = [x(1)**2, wrap_angle(x(2) + h_ang, twopi), x(3)]
+        u_m1 = [x(1)**2, wrap_angle(x(2) - h_ang, twopi), x(3)]
+        u_p2 = [x(1)**2, wrap_angle(x(2) + 2.0_dp*h_ang, twopi), x(3)]
+        u_m2 = [x(1)**2, wrap_angle(x(2) - 2.0_dp*h_ang, twopi), x(3)]
         call eval_cart(cs, u_p1, xc_p1)
         call eval_cart(cs, u_m1, xc_m1)
         call eval_cart(cs, u_p2, xc_p2)
         call eval_cart(cs, u_m2, xc_m2)
         e2 = (-xc_p2 + 8.0_dp*xc_p1 - 8.0_dp*xc_m1 + xc_m2)/(12.0_dp*h_ang)
 
-        u_p1 = [ x(1)**2, x(2), wrap_angle(x(3) + h_ang, phi_period) ]
-        u_m1 = [ x(1)**2, x(2), wrap_angle(x(3) - h_ang, phi_period) ]
-        u_p2 = [ x(1)**2, x(2), wrap_angle(x(3) + 2.0_dp*h_ang, phi_period) ]
-        u_m2 = [ x(1)**2, x(2), wrap_angle(x(3) - 2.0_dp*h_ang, phi_period) ]
+        u_p1 = [x(1)**2, x(2), wrap_angle(x(3) + h_ang, phi_period)]
+        u_m1 = [x(1)**2, x(2), wrap_angle(x(3) - h_ang, phi_period)]
+        u_p2 = [x(1)**2, x(2), wrap_angle(x(3) + 2.0_dp*h_ang, phi_period)]
+        u_m2 = [x(1)**2, x(2), wrap_angle(x(3) - 2.0_dp*h_ang, phi_period)]
         call eval_cart(cs, u_p1, xc_p1)
         call eval_cart(cs, u_m1, xc_m1)
         call eval_cart(cs, u_p2, xc_p2)
@@ -272,21 +374,20 @@ contains
         g(3, 2) = g(2, 3)
         g(3, 3) = dot_product(e3, e3)
 
-        det = g(1,1)*(g(2,2)*g(3,3) - g(2,3)*g(3,2)) &
-            - g(1,2)*(g(2,1)*g(3,3) - g(2,3)*g(3,1)) &
-            + g(1,3)*(g(2,1)*g(3,2) - g(2,2)*g(3,1))
+        det = g(1, 1)*(g(2, 2)*g(3, 3) - g(2, 3)*g(3, 2)) &
+              - g(1, 2)*(g(2, 1)*g(3, 3) - g(2, 3)*g(3, 1)) &
+              + g(1, 3)*(g(2, 1)*g(3, 2) - g(2, 2)*g(3, 1))
 
-        ginv(1,1) = (g(2,2)*g(3,3) - g(2,3)*g(3,2))/det
-        ginv(1,2) = (g(1,3)*g(3,2) - g(1,2)*g(3,3))/det
-        ginv(1,3) = (g(1,2)*g(2,3) - g(1,3)*g(2,2))/det
-        ginv(2,1) = (g(2,3)*g(3,1) - g(2,1)*g(3,3))/det
-        ginv(2,2) = (g(1,1)*g(3,3) - g(1,3)*g(3,1))/det
-        ginv(2,3) = (g(1,3)*g(2,1) - g(1,1)*g(2,3))/det
-        ginv(3,1) = (g(2,1)*g(3,2) - g(2,2)*g(3,1))/det
-        ginv(3,2) = (g(1,2)*g(3,1) - g(1,1)*g(3,2))/det
-        ginv(3,3) = (g(1,1)*g(2,2) - g(1,2)*g(2,1))/det
+        ginv(1, 1) = (g(2, 2)*g(3, 3) - g(2, 3)*g(3, 2))/det
+        ginv(1, 2) = (g(1, 3)*g(3, 2) - g(1, 2)*g(3, 3))/det
+        ginv(1, 3) = (g(1, 2)*g(2, 3) - g(1, 3)*g(2, 2))/det
+        ginv(2, 1) = (g(2, 3)*g(3, 1) - g(2, 1)*g(3, 3))/det
+        ginv(2, 2) = (g(1, 1)*g(3, 3) - g(1, 3)*g(3, 1))/det
+        ginv(2, 3) = (g(1, 3)*g(2, 1) - g(1, 1)*g(2, 3))/det
+        ginv(3, 1) = (g(2, 1)*g(3, 2) - g(2, 2)*g(3, 1))/det
+        ginv(3, 2) = (g(1, 2)*g(3, 1) - g(1, 1)*g(3, 2))/det
+        ginv(3, 3) = (g(1, 1)*g(2, 2) - g(1, 2)*g(2, 1))/det
     end subroutine metric_from_cart_fd
-
 
     subroutine eval_cart(cs, u, xcart)
         class(*), intent(in) :: cs
@@ -301,7 +402,6 @@ contains
         end select
     end subroutine eval_cart
 
-
     subroutine compute_hcurl(sqrtg, dh, hcurl)
         real(dp), intent(in) :: sqrtg
         real(dp), intent(in) :: dh(3, 3)
@@ -313,7 +413,6 @@ contains
         hcurl(2) = (dh(3, 1) - dh(1, 3))/sqrtg
         hcurl(3) = (dh(1, 2) - dh(2, 1))/sqrtg
     end subroutine compute_hcurl
-
 
     subroutine check_scalar(name, x, a, b, tol_abs, tol_rel, n_failed)
         character(*), intent(in) :: name
@@ -328,7 +427,6 @@ contains
             n_failed = n_failed + 1
         end if
     end subroutine check_scalar
-
 
     subroutine check_vec(name, x, a, b, tol_abs, tol_rel, n_failed)
         character(*), intent(in) :: name
@@ -347,7 +445,6 @@ contains
         end do
     end subroutine check_vec
 
-
     pure function cross_product(a, b) result(c)
         real(dp), intent(in) :: a(3), b(3)
         real(dp) :: c(3)
@@ -356,7 +453,6 @@ contains
         c(2) = a(3)*b(1) - a(1)*b(3)
         c(3) = a(1)*b(2) - a(2)*b(1)
     end function cross_product
-
 
     pure real(dp) function wrap_angle(angle, period) result(wrapped)
         real(dp), intent(in) :: angle, period
