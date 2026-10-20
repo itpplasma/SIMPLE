@@ -9,8 +9,9 @@ module params
                                   netcdffile, ns_s, ns_tp, multharm, vmec_B_scale, &
                                   vmec_RZ_scale
     use velo_mod, only: isw_field_type
-    use magfie_sub, only: TEST
+    use magfie_sub, only: TEST, BOOZER
     use field_can_mod, only: eval_field => evaluate, field_can_t
+    use field_can_base, only: set_radial_electric_potential_slope
     use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
                                      EXPL_IMPL_EULER, &
                                      CASH_KARP, DORMAND_PRINCE, &
@@ -117,6 +118,15 @@ module params
     real(dp) :: canonical_ode_relerr = 1d-11
 
     real(dp), allocatable :: trap_par(:), perp_inv(:)
+    !> Continuous classifier values, one row per particle:
+    !> 1 = normalized J_parallel RMS drift rate per precession turn,
+    !> 2 = first-half/second-half rotation-number drift,
+    !> 3 = achieved precession turns, 4 = J_parallel samples,
+    !> 5 = rotation samples per half, 6 = number of tips.
+    !> Columns 7:10 retain the legacy spread, reference, topology margin and
+    !> status for published-classifier validation; objectives use columns 1:2.
+    real(dp), allocatable :: class_scores(:, :)
+    integer, parameter :: n_class_scores = 10
     integer, allocatable :: iclass(:, :)
     logical, allocatable :: class_passing(:), class_lost(:)
 
@@ -145,11 +155,27 @@ module params
 
     ! Further configuration parameters
     integer          :: notrace_passing = 0
-    real(dp) :: facE_al = 1d0, trace_time = 1d-1
+    real(dp) :: facE_al = 1d0
+    ! > particle energy in eV; <= 0 selects 3.5 MeV/facE_al
+    real(dp) :: particle_energy_eV = -1.0_dp
+    real(dp) :: particle_energy_eV_effective = 3.5d6
+    real(dp) :: trace_time = 1d-1
     integer :: ntimstep = 10000, npoiper = 100, npoiper2 = 256, n_e = 2
     real(dp) :: n_d = 4
 
     real(dp) :: v0
+
+    ! > 'full' (Coulomb operator) or 'lorentz_nustar' (monoenergetic pitch scattering)
+    character(24) :: collision_model = 'full'
+    ! > Lorentz mode: nu* = R0*nu/(abs(iota)*v0), must be >= 0
+    real(dp) :: nu_star_standard = -1.0_dp
+    ! > Lorentz mode: local major radius R0 in cm, must be > 0
+    real(dp) :: lorentz_major_radius_cm = -1.0_dp
+    ! > Lorentz mode: local rotational transform, must be nonzero
+    real(dp) :: lorentz_iota = 0.0_dp
+    real(dp) :: lorentz_nu = 0.0_dp
+    ! > slope of Phi(s) = slope*s, added to the Boozer Hamiltonian H (normalized units)
+    real(dp) :: radial_electric_potential_slope = 0.0_dp
 
     logical :: debug = .False.
     logical :: output_results_netcdf = .False.
@@ -213,7 +239,8 @@ module params
 
     namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
         trace_time, num_surf, sbeg, phibeg, thetabeg, contr_pp, &
-        facE_al, npoiper2, n_e, n_d, netcdffile, ns_s, ns_tp, multharm, &
+        facE_al, particle_energy_eV, npoiper2, n_e, n_d, netcdffile, &
+        ns_s, ns_tp, multharm, &
         isw_field_type, generate_start_only, startmode, fusion_grid, grid_density, &
         special_ants_file, integmode, orbit_model, orbit_coord, relerr, &
         gpu_mode, gpu_backend, gpu_method, gpu_start_coordinates, &
@@ -226,7 +253,9 @@ module params
         canonical_ode_relerr, &
         tcut, nturns, debug, &
         class_plot, cut_in_per, fast_class, vmec_B_scale, &
-        vmec_RZ_scale, swcoll, deterministic, old_axis_healing, &
+        vmec_RZ_scale, swcoll, collision_model, nu_star_standard, &
+        lorentz_major_radius_cm, lorentz_iota, radial_electric_potential_slope, &
+        deterministic, old_axis_healing, &
         old_axis_healing_boundary, axis_healing_power_law, rho_axis_heal, &
         axis_healing, s_axis_heal, axis_healing_polyfit_degree, &
         am1, am2, Z1, Z2, &
@@ -293,6 +322,7 @@ contains
         gpu_backend = to_lower(trim(gpu_backend))
         gpu_method = to_lower(trim(gpu_method))
         gpu_start_coordinates = to_lower(trim(gpu_start_coordinates))
+        collision_model = to_lower(trim(collision_model))
 
         call reset_seed_if_deterministic
 
@@ -332,6 +362,9 @@ contains
             error stop 'spectre_fo_entry_larmor must be positive'
         if (spectre_fo_tolerance <= 0.0_dp) &
             error stop 'spectre_fo_tolerance must be positive'
+        call validate_collision_config
+        call validate_radial_electric_potential
+        call set_radial_electric_potential_slope(radial_electric_potential_slope)
 
         call validate_gpu_config
     end subroutine finalize_config
@@ -345,6 +378,71 @@ contains
         if (macrostep_log_ratio /= 1.0d3) print *, 'WARNING: removed &config key ', &
             'macrostep_log_ratio is ignored'
     end subroutine warn_removed_config_keys
+
+    subroutine validate_radial_electric_potential
+        ! Only field_can_boozer sets Phie; every other field, the RK path, full
+        ! orbits and the GPU kernels would silently ignore the potential.
+        if (.not. config_value_is_finite(radial_electric_potential_slope)) &
+            error stop 'radial_electric_potential_slope must be finite'
+        if (radial_electric_potential_slope == 0.0_dp) return
+        if (isw_field_type /= BOOZER) error stop &
+            'radial_electric_potential_slope requires Boozer integ_coords'
+        if (integmode <= 0) error stop &
+            'radial_electric_potential_slope requires a symplectic integmode'
+        if (orbit_model /= ORBIT_GC) error stop &
+            'radial_electric_potential_slope requires the guiding-center model'
+        if (trim(gpu_mode) /= 'off') error stop &
+            'radial_electric_potential_slope is not supported with gpu_mode'
+    end subroutine validate_radial_electric_potential
+
+    subroutine validate_collision_config
+        real(dp) :: energy
+        integer :: energy_status
+
+        call resolve_particle_energy(energy, energy_status)
+        if (energy_status /= 0) &
+            error stop 'particle_energy_eV and facE_al specify inconsistent energies'
+
+        select case (trim(collision_model))
+        case ('full')
+        case ('lorentz_nustar')
+            if (nu_star_standard < 0.0_dp) &
+                error stop 'nu_star_standard must be nonnegative in Lorentz mode'
+            if (lorentz_major_radius_cm <= 0.0_dp) &
+                error stop 'lorentz_major_radius_cm must be positive in Lorentz mode'
+            if (abs(lorentz_iota) <= tiny(1.0_dp)) &
+                error stop 'lorentz_iota must be nonzero in Lorentz mode'
+        case default
+            error stop 'collision_model must be full or lorentz_nustar'
+        end select
+    end subroutine validate_collision_config
+
+    subroutine resolve_particle_energy(energy_eV, status)
+        real(dp), intent(out) :: energy_eV
+        integer, intent(out) :: status
+
+        real(dp) :: legacy_energy
+
+        status = 0
+        if (facE_al <= 0.0_dp) then
+            status = 1
+            energy_eV = 0.0_dp
+            return
+        end if
+        legacy_energy = 3.5d6/facE_al
+        if (particle_energy_eV <= 0.0_dp) then
+            energy_eV = legacy_energy
+            return
+        end if
+
+        energy_eV = particle_energy_eV
+        ! facE_al=1 is the historical default and is treated as unspecified when
+        ! the explicit input is present.  Any nondefault value must agree.
+        if (abs(facE_al - 1.0_dp) > epsilon(1.0_dp)) then
+            if (abs(legacy_energy - energy_eV) > &
+                1.0e-12_dp*max(legacy_energy, energy_eV)) status = 2
+        end if
+    end subroutine resolve_particle_energy
 
     subroutine validate_gpu_config
         select case (trim(gpu_mode))
@@ -414,11 +512,15 @@ contains
 
 	    subroutine params_init
 	        real(dp) :: E_alpha
+        integer :: energy_status
 	        integer :: L1i
 	        real(dp) :: weight_sum, cumul_weight, w
 	        integer :: i, nintv
 	        integer(8) :: kt_target, kt_prev
 	        character(16) :: grid_kind
+        call resolve_particle_energy(E_alpha, energy_status)
+        if (energy_status /= 0) error stop 'Invalid particle energy configuration'
+        particle_energy_eV_effective = E_alpha
 
 	        if (isw_field_type == TEST) then
             ! TEST field uses normalized units: B0=1, R0=1, a=0.5
@@ -437,7 +539,6 @@ contains
 	            dtaumin = dtau/ntau
 	            fper = 2d0*pi       ! Full torus
 	        else
-            E_alpha = 3.5d6/facE_al
             ! set alpha energy, velocity, and Larmor radius
             v0 = sqrt(2.d0*E_alpha*ev/(n_d*p_mass))
             rlarm = v0*n_d*p_mass*c/(n_e*e_charge)
@@ -637,6 +738,7 @@ contains
         if (allocated(trap_par)) deallocate (trap_par)
         if (allocated(perp_inv)) deallocate (perp_inv)
         if (allocated(iclass)) deallocate (iclass)
+        if (allocated(class_scores)) deallocate (class_scores)
         if (allocated(class_passing)) deallocate (class_passing)
         if (allocated(class_lost)) deallocate (class_lost)
         if (allocated(xstart)) deallocate (xstart)
@@ -661,6 +763,7 @@ contains
         allocate (confpart_trap(ntimstep), confpart_pass(ntimstep))
         allocate (unresolved_orbits(ntimstep))
         allocate (iclass(3, ntestpart))
+        allocate (class_scores(n_class_scores, ntestpart))
         allocate (class_passing(ntestpart), class_lost(ntestpart))
         allocate (wall_hit_triangle(ntestpart))
         allocate (wall_hit(ntestpart))
@@ -676,6 +779,7 @@ contains
         trap_par = 0.0d0
         perp_inv = 0.0d0
         iclass = 0
+        class_scores = 0d0
         class_passing = .false.
         class_lost = .false.
         wall_hit_triangle = -1
@@ -779,6 +883,21 @@ contains
             isw_field_type = integ_coords
         end if
     end subroutine apply_config_aliases
+
+    pure logical function classification_enabled()
+        !> Whether a run collects orbit classifications at all. Three call sites
+        !> must agree: the bmin/bmax cache the classifier needs to separate
+        !> trapped from passing, the dispatch to trace_orbit_with_classifiers,
+        !> and the class_parts.dat writer.
+        !>
+        !> fast_class belongs here. Without it, fast_class alone (tcut <= 0 and
+        !> class_plot = .False.) silently traced ordinary orbits and wrote no
+        !> classification output, even though the flag documents the opposite.
+        !> That combination is the only one giving fast classification without
+        !> the Minkowski fractal cut, since the cut fires at kt == ntcut and the
+        !> early exit in classification.f90 requires .not. class_plot.
+        classification_enabled = (ntcut > 0) .or. class_plot .or. fast_class
+    end function classification_enabled
 
     subroutine reset_seed_if_deterministic(stream_id)
         ! for run with fixed random seed

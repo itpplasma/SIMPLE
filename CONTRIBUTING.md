@@ -87,6 +87,18 @@ names the affected cases, the expected sign and magnitude, the physical or
 numerical reason and whether the old behaviour was a bug. Do not regenerate
 reference output without that explanation.
 
+## Merging
+
+- Pull requests, including every layer of a stacked PR, run the fast CI tier.
+  Label a PR `full-ci` to run the full tier on it before queueing.
+- Review a stack layer by layer. When it is ready, collapse it into one PR into
+  `main` (retarget the top layer to `main`); the lower PRs then show as merged.
+- Click "Merge when ready" (or `gh pr merge --merge --auto`). The PR enters the
+  merge queue, the full CI tier runs on the exact merge result, and on success
+  it lands on `main` as a merge commit. `main` itself is not re-tested on push.
+- A branch need not be up to date with `main`. Merge `main` into a PR only
+  when it conflicts.
+
 ## Commit messages
 
 Use a lower-case type prefix and an imperative summary of at most about 72

@@ -27,9 +27,9 @@ program gen_fo_hamiltonian
     type(str_t) :: args(106), outputs(86)
     character(1024)::outroot
     character(32) :: name
-    character(:),allocatable::message
+    character(:), allocatable::message, first_code
     logical::ok
-    integer :: i,j,k,l,n,u,ii,jj,idx,nrep
+    integer :: i, j, k, l, n, u, ii, jj, idx, nrep, order
     integer, parameter :: si(6)=[1,1,1,2,2,3], sj(6)=[1,2,3,2,3,3]
     outroot='.'
     call get_environment_variable('FO_GENERATOR_OUTPUT',outroot,status=i)
@@ -150,6 +150,17 @@ program gen_fo_hamiltonian
     open(newunit=u,file=trim(outroot)//'/src/generated/fo_scalar.inc',status='replace')
     write(u,'(a)') chars(emit_kernel(roots,spec))
     close(u)
+    ! The same Hamiltonian and differentiated expressions, with unused Hessian
+    ! outputs omitted. FortSym eliminates their dependencies in this leaf.
+    spec%name = str('fo_scalar_first')
+    spec%outputs = [outputs(1:8), outputs(45:50)]
+    open (newunit=u, file=trim(outroot)//'/src/generated/fo_scalar_first.inc', &
+          status='replace')
+    first_code = chars(emit_kernel([roots(1:8), roots(45:50)], spec))
+    if (first_code(len(first_code):) == new_line('a')) &
+        first_code = first_code(:len(first_code) - 1)
+    write (u, '(a)') first_code
+    close (u)
     ! Parse the actual emitted assignments back through FortSym. Expand their
     ! straight-line temporaries in order; no copied expression transcription.
     cse=cse_analyse(roots,'work')
@@ -176,54 +187,79 @@ program gen_fo_hamiltonian
         tmp=subs_many(tmp,temp_symbols,temp_values)
         call check_identity(suite,eng,'emitted '//chars(outputs(i)),tmp-roots(i))
     end do
+    call check_first_order_leaf
     ! Array facade is generated from the same ordered interface, never edited.
     open(newunit=u,file=trim(outroot)//'/src/generated/fo_kernel.f90',status='replace')
     write(u,'(a)') 'module fo_kernel', &
         'use, intrinsic :: iso_fortran_env, only: dp => real64', &
-        'implicit none','contains', &
-        'subroutine fo_eval(p,aj,gj,mass,charge,e0,tj,energy,kenergy,gh,hh,f,df)', &
-        'real(dp),intent(in)::p(3),aj(3,10),gj(6,10),mass,charge,e0,tj(10)', &
-        'real(dp),intent(out)::energy,kenergy,gh(6),hh(6,6),f(6),df(6,6)', &
-        'call fo_scalar( &'
-    do i=1,3
-        write(u,'(a,i0,a)') 'p(',i,'), &'
-    end do
-    write(u,'(a)') 'mass, charge, e0, &'
-    do i=1,3
+        'implicit none', 'contains'
+    do order = 1, 2
+        if (order == 1) then
+            write (u, '(a)') &
+               'subroutine fo_eval(p,aj,gj,mass,charge,e0,tj,energy,kenergy,gh,hh,f,df)'
+        else
+            write (u, '(a)') &
+         'subroutine fo_eval_first(p,aj,gj,mass,charge,e0,tj,energy,kenergy,gh,hh,f,df)'
+        end if
+        write (u, '(a)') &
+            'real(dp),intent(in)::p(3),aj(3,10),gj(6,10),mass,charge,e0,tj(10)', &
+            'real(dp),intent(out)::energy,kenergy,gh(6),hh(6,6),f(6),df(6,6)'
+        if (order == 1) then
+            write (u, '(a)') 'call fo_scalar( &'
+        else
+            write (u, '(a)') 'hh=0; df=0', 'call fo_scalar_first( &'
+        end if
+        do i = 1, 3
+            write (u, '(a,i0,a)') 'p(', i, '), &'
+        end do
+        write (u, '(a)') 'mass, charge, e0, &'
+        do i = 1, 3
+            do k = 1, 10
+                write (u, '(a,i0,a,i0,a)') 'aj(', i, ',', k, '), &'
+            end do
+        end do
+        do i = 1, 6
+            do k = 1, 10
+                write (u, '(a,i0,a,i0,a)') 'gj(', i, ',', k, '), &'
+            end do
+        end do
         do k=1,10
-            write(u,'(a,i0,a,i0,a)') 'aj(',i,',',k,'), &'
+            write (u, '(a,i0,a)') 'tj(', k, '), &'
         end do
-    end do
-    do i=1,6
-        do k=1,10
-            write(u,'(a,i0,a,i0,a)') 'gj(',i,',',k,'), &'
-        end do
-    end do
-    do k=1,10
-        write(u,'(a,i0,a)') 'tj(',k,'), &'
-    end do
-    write(u,'(a)') 'energy,kenergy, &'
-    do i=1,6
-        write(u,'(a,i0,a)') 'gh(',i,'), &'
-    end do
-    do j=1,6
+        write (u, '(a)') 'energy,kenergy, &'
         do i=1,6
-            write(u,'(a,i0,a,i0,a)') 'hh(',i,',',j,'), &'
+            write (u, '(a,i0,a)') 'gh(', i, '), &'
         end do
-    end do
-    do i=1,6
-        write(u,'(a,i0,a)') 'f(',i,'), &'
-    end do
-    do j=1,6
+        if (order == 1) then
+        do j = 1, 6
+            do i = 1, 6
+                write (u, '(a,i0,a,i0,a)') 'hh(', i, ',', j, '), &'
+            end do
+        end do
+        end if
         do i=1,6
-            if(i==6.and.j==6) then
-                write(u,'(a)') 'df(6,6))'
+            if (order == 2 .and. i == 6) then
+                write (u, '(a)') 'f(6))'
             else
-                write(u,'(a,i0,a,i0,a)') 'df(',i,',',j,'), &'
+                write (u, '(a,i0,a)') 'f(', i, '), &'
             end if
         end do
+        if (order == 1) then
+        do j = 1, 6
+            do i = 1, 6
+                if (i == 6 .and. j == 6) then
+                    write (u, '(a)') 'df(6,6))'
+                else
+                    write (u, '(a,i0,a,i0,a)') 'df(', i, ',', j, '), &'
+                end if
+            end do
+        end do
+        write (u, '(a)') 'end subroutine fo_eval'
+        else
+        write (u, '(a)') 'end subroutine fo_eval_first'
+        end if
     end do
-    write(u,'(a)') 'end subroutine fo_eval', &
+    write (u, '(a)') &
         'subroutine fo_radial(gj,rj)', &
         'real(dp),intent(in)::gj(6,10)', 'real(dp),intent(out)::rj(10)', &
         'call fo_radial_scalar( &'
@@ -247,13 +283,44 @@ program gen_fo_hamiltonian
         write(u,'(a,i0,a)') 'out(',k,'), &'
     end do
     write(u,'(a)') 'out(10))','end subroutine fo_metric_monitor', &
-        "include 'fo_scalar.inc'", &
+        "include 'fo_scalar.inc'", "include 'fo_scalar_first.inc'", &
         "include 'fo_monitor.inc'","include 'fo_product.inc'", &
         "include 'fo_radial.inc'", "include 'fo_metric_monitor.inc'", &
         'end module fo_kernel'
     close(u)
     call suite_end(suite,trim(outroot)//'/concept/fo_symplectic_proof/symbolic.json')
 contains
+    subroutine check_first_order_leaf
+        type(cse_result_t) :: first_cse
+        type(expr_t), allocatable :: names(:), values(:)
+        type(expr_t) :: leaves(14), parsed
+        type(str_t) :: labels(14)
+        integer :: j
+
+        leaves = [roots(1:8), roots(45:50)]
+        labels = [outputs(1:8), outputs(45:50)]
+        first_cse = cse_analyse(leaves, 'work')
+        allocate (names(first_cse%n), values(first_cse%n))
+        do j = 1, first_cse%n
+            names(j) = sym(arena, chars(first_cse%names(j)))
+            parsed = parse_fortran_expr(arena, &
+                                  trim(outroot)//'/src/generated/fo_scalar_first.inc', &
+                                        chars(first_cse%names(j)), ok, message)
+            if (.not. ok) error stop 'first-order temporary readback refused'
+            if (j > 1) parsed = subs_many(parsed, names(:j - 1), values(:j - 1))
+            values(j) = parsed
+        end do
+        do j = 1, size(leaves)
+            parsed = parse_fortran_expr(arena, &
+                                  trim(outroot)//'/src/generated/fo_scalar_first.inc', &
+                                        chars(labels(j)), ok, message)
+            if (.not. ok) error stop 'first-order output readback refused'
+            parsed = subs_many(parsed, names, values)
+            call check_identity(suite, eng, 'first-order '//chars(labels(j)), &
+                                parsed - leaves(j))
+        end do
+    end subroutine check_first_order_leaf
+
     subroutine emit_radial
         type(expr_t)::leaves(10),rfield,tfield,mref,scalar
         type(expr_t)::rold(13),rnew(13)
@@ -264,6 +331,8 @@ contains
             leaves(k)=subs_many(leaves(k),old(:90),replacement(:90))
         end do
         call checked_leaf(leaves,args(37:96),'fo_radial_scalar','fo_radial.inc')
+        call checked_leaf(leaves(:4), args(37:96), 'fo_radial_first', &
+                          'fo_radial_first.inc')
         rfield=func('radial',q); tfield=func('rhomonitor',q(1:1))
         rold(1:10)=jet(rfield)
         rold(11)=tfield
@@ -281,6 +350,8 @@ contains
         end do
         call checked_leaf(leaves,rargs,'fo_metric_monitor_scalar', &
             'fo_metric_monitor.inc')
+        call checked_leaf(leaves(:4), rargs, 'fo_metric_monitor_first', &
+                          'fo_metric_monitor_first.inc')
     end subroutine emit_radial
 
     function jet(scalar) result(leaves)
@@ -309,6 +380,7 @@ contains
         type(expr_t),allocatable::lsymbols(:),lvalues(:)
         type(str_t),allocatable::loutputs(:)
         type(expr_t)::parsed
+        character(:), allocatable :: code
         integer::lu,lk
         allocate(loutputs(size(leaves)))
         do lk=1,size(leaves)
@@ -324,7 +396,11 @@ contains
         lspec%generator=str('gen/gen_fo_hamiltonian.f90')
         lspec%regenerate_command=str('bash gen/regenerate_fo.sh')
         open(newunit=lu,file=trim(outroot)//'/src/generated/'//filename,status='replace')
-        write(lu,'(a)') chars(emit_kernel(leaves,lspec))
+        code = chars(emit_kernel(leaves, lspec))
+        if (index(leafname, '_first') > 0) then
+            if (code(len(code):) == achar(10)) code = code(:len(code) - 1)
+        end if
+        write (lu, '(a)') code
         close(lu)
         lcse=cse_analyse(leaves,'work')
         allocate(lsymbols(lcse%n),lvalues(lcse%n))

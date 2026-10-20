@@ -165,6 +165,7 @@ def init(
     field: str | Path | None = None,
     *,
     config: str | Path | None = None,
+    plasma_profiles: np.ndarray | None = None,
     **settings: Any,
 ) -> None:
     """Configure SIMPLE and load the field.
@@ -178,6 +179,11 @@ def init(
 
     Raises ``ValueError`` for an unreadable file or an unknown ``&config``
     name.
+
+    ``plasma_profiles`` is an optional ``(6, n)`` table with collision radius,
+    electron/ion-1/ion-2 temperatures [eV] and ion-1/ion-2 densities [m^-3].
+    Radius must increase from 0 to 1: toroidal flux ``s`` for VMEC/Boozer.
+    The table is linearly interpolated, without a polynomial fit.
     """
     global _initialized
 
@@ -188,11 +194,65 @@ def init(
         _check(_api.simple_read_config(str(path)), str(path))
     if field is not None:
         path = str(Path(field).expanduser().resolve())
-        settings = {"netcdffile": path, "field_input": path, "coord_input": path,
-                    **settings}
+        settings = {
+            "netcdffile": path,
+            "field_input": path,
+            "coord_input": path,
+            **settings,
+        }
     _set_config(**settings)
+    if plasma_profiles is not None:
+        table = np.asfortranarray(plasma_profiles, dtype=np.float64)
+        if table.ndim != 2 or table.shape[0] != 6:
+            raise ValueError("plasma_profiles must have shape (6, n)")
+        if _api.simple_set_profile_table(table.shape[1], table) != 0:
+            raise ValueError(
+                "Invalid plasma_profiles: require finite nonnegative "
+                "values and strictly increasing radius from 0 to 1"
+            )
     _api.simple_init()
     _initialized = True
+
+
+def _coordinate_array(points: np.ndarray) -> tuple[np.ndarray, bool]:
+    values = np.asarray(points, dtype=float)
+    single = values.shape == (3,)
+    if single:
+        values = values[:, None]
+    if values.ndim != 2 or values.shape[0] != 3:
+        raise ValueError("coordinates must have shape (3,) or (3, n)")
+    return np.asfortranarray(values), single
+
+
+def cylindrical_to_reference(points: np.ndarray) -> np.ndarray:
+    """Convert ``(R [m], phi [rad], Z [m])`` to loaded reference coordinates.
+
+    Raise ValueError if an inverse fails or a physical VMEC/chartmap
+    reference is unavailable (normalized TEST and SPECTRE fields).
+    """
+    _require_init()
+    values, single = _coordinate_array(points)
+    result = np.empty_like(values, order="F")
+    status = np.empty(values.shape[1], dtype=np.int32)
+    _api.simple_cylindrical_to_reference(values.shape[1], values, result, status)
+    if np.any(status != 0):
+        raise ValueError(
+            f"Cylindrical inverse failed for markers "
+            f"{np.flatnonzero(status != 0).tolist()}"
+        )
+    return result[:, 0].copy() if single else np.ascontiguousarray(result)
+
+
+def reference_to_cylindrical(points: np.ndarray) -> np.ndarray:
+    """Convert loaded reference coordinates to ``(R [m], phi [rad], Z [m])``."""
+    _require_init()
+    values, single = _coordinate_array(points)
+    result = np.empty_like(values, order="F")
+    status = np.empty(values.shape[1], dtype=np.int32)
+    _api.simple_reference_to_cylindrical(values.shape[1], values, result, status)
+    if np.any(status != 0):
+        raise ValueError("Physical reference coordinates are unavailable or invalid")
+    return result[:, 0].copy() if single else np.ascontiguousarray(result)
 
 
 def sample(n_particles: int | None = None) -> np.ndarray:
@@ -510,3 +570,5 @@ __all__ = [
     "SECTION_EXTREMUM_UNKNOWN", "SECTION_B_MINIMUM", "SECTION_B_MAXIMUM",
     "CUT_ANY", "CUT_TIP", "CUT_TOROIDAL",
 ]
+
+__all__ += ["cylindrical_to_reference", "reference_to_cylindrical"]

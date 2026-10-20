@@ -443,14 +443,19 @@ class WallHeatMap:
             raise FileNotFoundError(f"Results file not found: {results_file}")
 
         with nc.Dataset(results_file, 'r') as ds:
+            # Arrays are (particle, phase) and (particle, xyz), as written by
+            # src/netcdf_results_output.f90.
             zend = ds.variables['zend'][:]
             xend_cart = ds.variables['xend_cart'][:]
-            class_lost = ds.variables['class_lost'][:].astype(bool)
             times_lost = ds.variables['times_lost'][:]
             trace_time = float(ds.trace_time)
             n_total = int(ds.ntestpart)
-
-        lost_mask = class_lost
+            # Every normal run writes orbit_exit_code; class_lost is set only by
+            # classification runs. Exit codes 1 (LCFS) and 2 (wall) are losses.
+            if "orbit_exit_code" in ds.variables:
+                lost_mask = np.isin(ds.variables["orbit_exit_code"][:], (1, 2))
+            else:
+                lost_mask = ds.variables["class_lost"][:].astype(bool)
         n_lost = int(np.sum(lost_mask))
 
         theta_edges = np.linspace(-np.pi, np.pi, n_theta + 1)
@@ -481,11 +486,11 @@ class WallHeatMap:
                 minor_radius=minor_radius,
             )
 
-        theta_lost = zend[1, lost_mask]
-        zeta_lost = zend[2, lost_mask]
+        theta_lost = zend[lost_mask, 1]
+        zeta_lost = zend[lost_mask, 2]
         # zend[3] = p = v/v0 = normalized velocity at wall impact
-        final_p = zend[3, lost_mask]
-        wall_positions = xend_cart[:, lost_mask]
+        final_p = zend[lost_mask, 3]
+        wall_positions = xend_cart[lost_mask, :].T
         loss_times = times_lost[lost_mask]
 
         # Map angles to canonical ranges for histogram binning

@@ -5,7 +5,10 @@
 
 set -e
 
-export OMP_NUM_THREADS=2
+# Use every core available to this process (nproc honours Slurm/cgroup CPU
+# sets); GOLDEN_RECORD_OMP_THREADS overrides it when several golden cases
+# share one allocation. Reference and current always run with the same count.
+export OMP_NUM_THREADS="${GOLDEN_RECORD_OMP_THREADS:-$(nproc)}"
 export OMP_DYNAMIC=FALSE
 
 PROJECT_ROOT="$1"
@@ -52,18 +55,25 @@ echo "Output directory: $RUN_DIR"
 echo "Test cases: $TEST_CASES"
 echo "Checking for optional symplectic tokamak regression..."
 
+# Cases share downloaded equilibria and converted coils. Finish preparation
+# before another case reads them, then allow their numerical runs to overlap.
+exec {test_data_lock}>"$TEST_DATA_DIR/.prepare.lock"
+flock "$test_data_lock"
+
 # Download wout.nc if not present in test data directory
 WOUT_FILE="$TEST_DATA_DIR/wout.nc"
 if [ ! -f "$WOUT_FILE" ]; then
     echo "Downloading wout.nc..."
-    wget -q https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc -O "$WOUT_FILE"
+    wget -q https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc -O "$WOUT_FILE.tmp.$$"
+    mv -f "$WOUT_FILE.tmp.$$" "$WOUT_FILE"
 fi
 
 # Download NCSX wout.nc for coils tests
 WOUT_NCSX_FILE="$TEST_DATA_DIR/wout_ncsx.nc"
 if [ ! -f "$WOUT_NCSX_FILE" ]; then
     echo "Downloading NCSX wout.nc..."
-    wget -q https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_c09r00_fixedBoundary_0.5T_vacuum_ns201.nc -O "$WOUT_NCSX_FILE"
+    wget -q https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_c09r00_fixedBoundary_0.5T_vacuum_ns201.nc -O "$WOUT_NCSX_FILE.tmp.$$"
+    mv -f "$WOUT_NCSX_FILE.tmp.$$" "$WOUT_NCSX_FILE"
 fi
 
 # Download and convert NCSX coils file
@@ -71,15 +81,16 @@ COILS_STELLOPT="$TEST_DATA_DIR/coils.c09r00"
 COILS_SIMPLE="$TEST_DATA_DIR/coils.c09r00.simple"
 if [ ! -f "$COILS_SIMPLE" ]; then
     echo "Downloading NCSX coils file..."
-    wget -q https://princetonuniversity.github.io/STELLOPT/examples/coils.c09r00 -O "$COILS_STELLOPT"
+    wget -q https://princetonuniversity.github.io/STELLOPT/examples/coils.c09r00 -O "$COILS_STELLOPT.tmp.$$"
+    mv -f "$COILS_STELLOPT.tmp.$$" "$COILS_STELLOPT"
 
-    echo "Converting coils to simple format..."
-    if command -v python3 &> /dev/null; then
-        # Try using libneo converter if available
-        python3 -m libneo.convert_coils_to_simple "$COILS_STELLOPT" "$COILS_SIMPLE" 2>/dev/null || {
-            # Fallback: manual conversion
-            echo "Warning: libneo converter not available, using manual conversion"
-            python3 - "$COILS_STELLOPT" "$COILS_SIMPLE" <<'EOF'
+    # Always use this raw in-tree conversion, never an importable libneo
+    # converter: the golden coil field must not depend on the Python
+    # environment (itpplasma/SIMPLE#573). It keeps every STELLOPT point,
+    # including each coil's I=0 closing point, as neo_biotsavart expects
+    # (segment i joins points i and i+1 and carries current(i)).
+    echo "Converting coils to simple format (raw in-tree converter)..."
+    python3 - "$COILS_STELLOPT" "$COILS_SIMPLE.tmp.$$" <<'EOF'
 import sys
 with open(sys.argv[1], "r") as f:
     coords = []
@@ -105,9 +116,17 @@ with open(sys.argv[2], "w") as f:
     for (x, y, z), I in zip(coords, currents):
         f.write(f"{x:.14E}   {y:.14E}   {z:.14E}   {I:.14E}\n")
 EOF
-        }
-    fi
+    mv -f "$COILS_SIMPLE.tmp.$$" "$COILS_SIMPLE"
 fi
+
+# Downloads above go to per-process temporaries and are renamed into place,
+# so concurrent golden tests never read a partially written data file.
+# The golden_record_prepare fixture stops here after fetching the data.
+if [ "${GOLDEN_RECORD_DATA_ONLY:-0}" = "1" ]; then
+    exit 0
+fi
+flock -u "$test_data_lock"
+exec {test_data_lock}>&-
 
 # Run each test case
 for test_case in $TEST_CASES; do

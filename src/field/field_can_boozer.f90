@@ -1,12 +1,35 @@
 module field_can_boozer
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use field_can_base, only: field_can_t, n_field_evaluations, twopi
+    use field_can_base, only: apply_radial_electric_potential, &
+                              count_field_evaluation, field_can_t, twopi
 
     implicit none
 
     public :: integ_to_ref_boozer_chartmap, ref_to_integ_boozer_chartmap
+    public :: evaluate_boozer_regular
 
 contains
+
+    subroutine evaluate_boozer_regular(x, y, phi, mode, rf)
+        !> Regular near-axis Boozer field at X = sqrt(s) cos(theta_B),
+        !> Y = sqrt(s) sin(theta_B), phi_B (libneo boozer_regular). mode 0, 1, 2
+        !> returns values, first and second derivatives in (X, Y, phi); every
+        !> component is C^2 through the magnetic axis. Requires the field to be
+        !> initialised with field_can_mod regular_axis_field set.
+        use boozer_regular, only: regular_field_t, eval_boozer_regular
+        real(dp), intent(in) :: x, y, phi
+        integer, intent(in) :: mode
+        type(regular_field_t), intent(inout) :: rf
+
+        call eval_boozer_regular(x, y, phi, mode, rf)
+
+        ! Only mode 2 carries second derivatives, the d2 class of the counter.
+        if (mode >= 2) then
+            call count_field_evaluation(1)
+        else
+            call count_field_evaluation(0)
+        end if
+    end subroutine evaluate_boozer_regular
 
     subroutine integ_to_ref_boozer_chartmap(xinteg, xref)
         !> Convert integrator coords (s, theta_B, phi_B) to
@@ -36,8 +59,9 @@ contains
         integer, intent(in) :: mode_secders
 
         call eval_field_booz(f, r, th_c, ph_c, mode_secders)
+        call apply_radial_electric_potential(f, r)
 
-        n_field_evaluations = n_field_evaluations + 1
+        call count_field_evaluation(mode_secders)
     end subroutine evaluate_boozer
 
     subroutine integ_to_ref_boozer(xinteg, xref)

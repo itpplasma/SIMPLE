@@ -19,6 +19,16 @@ set(WOUT_URL "https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_
 set(WOUT_QH_FILE "${TEST_DATA_DIR}/wout_qh.nc")
 set(WOUT_QH_URL "https://raw.githubusercontent.com/hiddenSymmetries/simsopt/master/tests/test_files/wout_LandremanPaul2021_QH_reactorScale_lowres_reference.nc")
 
+if(SIMPLE_ENABLE_VMECPP AND VMECPP_TEST_DATA_DIR)
+    add_executable(test_vmecpp_field_parity.x test_vmecpp_field_parity.f90)
+    target_link_libraries(test_vmecpp_field_parity.x simple)
+    add_test(NAME test_vmecpp_field_parity
+        COMMAND test_vmecpp_field_parity.x
+            ${VMECPP_TEST_DATA_DIR}/cth_like_fixed_bdy.json)
+    set_tests_properties(test_vmecpp_field_parity PROPERTIES
+        LABELS "integration;vmecpp")
+endif()
+
 # Download if not present
 if(NOT EXISTS "${WOUT_FILE}")
     file(MAKE_DIRECTORY "${TEST_DATA_DIR}")
@@ -46,6 +56,17 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/.venv/bin/python")
 endif()
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
+if(SIMPLE_ENABLE_VMECPP AND VMECPP_TEST_DATA_DIR)
+    add_test(NAME test_vmecpp_orbit_parity
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/test/python/test_vmecpp_direct_parity.py
+            $<TARGET_FILE:simple.x>
+            ${VMECPP_TEST_DATA_DIR}/wout_cth_like_fixed_bdy.nc
+            ${VMECPP_TEST_DATA_DIR}/cth_like_fixed_bdy.json)
+    set_tests_properties(test_vmecpp_orbit_parity PROPERTIES
+        LABELS "integration;vmecpp" ENVIRONMENT "OMP_NUM_THREADS=1")
+endif()
+
 if(TARGET fortplot::fortplot)
     add_executable(test_diag_albert.x test_diag_albert.f90)
     target_link_libraries(test_diag_albert.x PRIVATE simple)
@@ -65,6 +86,14 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
     set_tests_properties(test_verification_report PROPERTIES
         LABELS "unit;python" TIMEOUT 30)
 endif()
+
+add_test(
+    NAME test_openmp_optional
+    COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/../python/test_openmp_optional.py
+        ${CMAKE_SOURCE_DIR}
+)
+set_tests_properties(test_openmp_optional PROPERTIES LABELS "unit;regression")
 
 set(BOOZER_CHARTMAP_PYTHON "${Python3_EXECUTABLE}")
 if(EXISTS "${CMAKE_SOURCE_DIR}/.venv/bin/python")
@@ -191,6 +220,7 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS AND SIMPLE_HAVE_MAP2DISC)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(generate_chartmap_ncsx_map2disc PROPERTIES
         LABELS "integration;python"
+        RESOURCE_GROUPS "mem_gb:1"
         TIMEOUT 600
         FIXTURES_SETUP chartmap_ncsx_map2disc)
 
@@ -208,6 +238,7 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS AND SIMPLE_HAVE_MAP2DISC)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(generate_chartmap_ncsx_map2disc_wall PROPERTIES
         LABELS "integration;python"
+        RESOURCE_GROUPS "mem_gb:1"
         TIMEOUT 600
         FIXTURES_SETUP chartmap_ncsx_map2disc_wall)
 
@@ -221,10 +252,30 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS AND SIMPLE_HAVE_MAP2DISC)
                 ${CMAKE_CURRENT_BINARY_DIR}/wout_ncsx.nc
             WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
         set_tests_properties(test_collisional_stl_wall PROPERTIES
-            LABELS "integration;python;wall"
+            LABELS "integration;python;wall;slow"
+            RESOURCE_GROUPS "mem_gb:1"
             TIMEOUT 1200
             PROCESSORS 1
             FIXTURES_REQUIRED chartmap_ncsx_map2disc_wall)
+        if(UNIX)
+            add_executable(test_collisional_stl_wall_fast.x
+                test_collisional_stl_wall_fast.f90)
+            target_link_libraries(test_collisional_stl_wall_fast.x PRIVATE simple)
+            add_test(NAME test_collisional_stl_wall_fast
+                COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/test_collisional_stl_wall_fast.py
+                    $<TARGET_FILE:test_collisional_stl_wall_fast.x>
+                    ${CHARTMAP_NCSX_MAP2DISC_WALL_FILE}
+                    ${CMAKE_CURRENT_BINARY_DIR}/coils.simple
+                    ${CMAKE_CURRENT_BINARY_DIR}/wout_ncsx.nc
+                WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+            set_tests_properties(test_collisional_stl_wall_fast PROPERTIES
+                LABELS "integration;python;wall"
+                RESOURCE_GROUPS "mem_gb:2"
+                TIMEOUT 120
+                PROCESSORS 4
+                FIXTURES_REQUIRED chartmap_ncsx_map2disc_wall)
+        endif()
     endif()
 
     add_test(NAME test_chartmap_ncsx_map2disc_wall_offset
@@ -239,6 +290,7 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS AND SIMPLE_HAVE_MAP2DISC)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(test_chartmap_ncsx_map2disc_wall_offset PROPERTIES
         LABELS "integration;plot;python"
+        RESOURCE_GROUPS "mem_gb:1"
         TIMEOUT 180
         FIXTURES_REQUIRED chartmap_ncsx_map2disc_wall)
 endif()
@@ -341,6 +393,23 @@ if (ENABLE_OPENMP)
         LABELS "integration"
         RUN_SERIAL TRUE
         TIMEOUT 120)
+    # Field-evaluation cost ratio between mode_secders=0 and mode_secders=2.
+    # Built but deliberately not registered with ctest: it is a timing
+    # measurement, so its result is hardware-dependent and must not gate CI.
+    # Run manually from the project root: ./build/test/tests/bench_secders_cost.x
+    add_executable (bench_secders_cost.x bench_secders_cost.f90)
+    target_link_libraries(bench_secders_cost.x simple)
+
+    add_executable (test_field_eval_counters.x test_field_eval_counters.f90)
+    target_link_libraries(test_field_eval_counters.x simple)
+    add_test(NAME test_field_eval_counters
+        COMMAND test_field_eval_counters.x
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+    set_tests_properties(test_field_eval_counters PROPERTIES
+        LABELS "unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 300)
+
     add_executable (test_sympl_testfield.x test_sympl_testfield.f90)
     target_link_libraries(test_sympl_testfield.x simple)
     add_test(NAME test_sympl_testfield
@@ -388,6 +457,16 @@ endif()
 
 add_executable (test_collis.x ../../src/test_collis.f90)
 target_link_libraries(test_collis.x simple)
+
+# Explicit high-order integmodes on the 4D canonical chart: energy drift must
+# respond to the tolerance, and the four adaptive methods must agree. Uses the
+# analytic test field, so it needs no VMEC file.
+add_executable(test_explicit_integmodes.x test_explicit_integmodes.f90)
+target_link_libraries(test_explicit_integmodes.x simple)
+add_test(NAME test_explicit_integmodes COMMAND test_explicit_integmodes.x)
+set_tests_properties(test_explicit_integmodes PROPERTIES
+    LABELS "unit"
+    TIMEOUT 300)
 
 add_executable(test_config_reference.x test_config_reference.f90)
 target_link_libraries(test_config_reference.x simple)
@@ -453,6 +532,14 @@ set_tests_properties(test_fusion_hot_profile PROPERTIES
     PASS_REGULAR_EXPRESSION "fusion source: ion temperature outside")
 set_tests_properties(test_fusion_nonfinite PROPERTIES
     PASS_REGULAR_EXPRESSION "fusion source: nonfinite profiles")
+
+add_executable(test_api_repeated_sampling.x test_api_repeated_sampling.f90)
+target_link_libraries(test_api_repeated_sampling.x simple)
+add_test(NAME test_api_repeated_sampling
+    COMMAND test_api_repeated_sampling.x ${WOUT_FILE})
+set_tests_properties(test_api_repeated_sampling PROPERTIES LABELS "integration"
+    TIMEOUT 120 ENVIRONMENT "OMP_NUM_THREADS=1"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 add_executable(test_fusion_birth_equilibrium.x test_fusion_birth_equilibrium.f90)
 target_link_libraries(test_fusion_birth_equilibrium.x simple)
@@ -527,16 +614,80 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
     set_tests_properties(test_bminmax_driver PROPERTIES
         LABELS "integration;system"
         TIMEOUT 120)
+
+    add_test(NAME test_fast_class_driver
+        COMMAND ${CMAKE_COMMAND} -E env
+            CTEST_BINARY_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}
+            ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_fast_class_driver.py
+            $<TARGET_FILE:simple.x>
+            ${WOUT_FILE}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(test_fast_class_driver PROPERTIES
+        LABELS "integration;system"
+        TIMEOUT 120)
+
+    add_test(NAME test_class_scores_driver
+        COMMAND ${CMAKE_COMMAND} -E env
+            CTEST_BINARY_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}
+            ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_class_scores_driver.py
+            $<TARGET_FILE:simple.x>
+            ${WOUT_FILE}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(test_class_scores_driver PROPERTIES
+        LABELS "integration;system"
+        TIMEOUT 120)
+
+    # The script runs simple.x with OMP_NUM_THREADS=1 and 4 and compares.
+    add_test(NAME test_class_plot_threads
+        COMMAND ${CMAKE_COMMAND} -E env
+            CTEST_BINARY_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}
+            OMP_NUM_THREADS=4
+            OMP_DYNAMIC=FALSE
+            ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_class_plot_threads.py
+            $<TARGET_FILE:simple.x>
+            ${WOUT_FILE}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(test_class_plot_threads PROPERTIES
+        LABELS "integration;system"
+        PROCESSORS 4
+        TIMEOUT 120)
 endif()
 
 add_executable (test_coordinates.x test_coordinates.f90)
 target_link_libraries(test_coordinates.x simple)
 add_test(NAME test_coordinates COMMAND test_coordinates.x vmec cyl)
 
+add_executable(test_radial_electric_potential.x test_radial_electric_potential.f90)
+target_link_libraries(test_radial_electric_potential.x simple)
+add_test(NAME test_radial_electric_potential COMMAND test_radial_electric_potential.x)
+set_tests_properties(test_radial_electric_potential PROPERTIES LABELS "unit;physics")
+
+add_executable(test_radial_potential_config.x test_radial_potential_config.f90)
+target_link_libraries(test_radial_potential_config.x simple)
+foreach(case valid zero_slope_rk field rk full_orbit gpu)
+    add_test(NAME test_radial_potential_config_${case}
+        COMMAND test_radial_potential_config.x ${case})
+    set_tests_properties(test_radial_potential_config_${case} PROPERTIES LABELS "unit")
+endforeach()
+foreach(case field rk full_orbit gpu)
+    set_tests_properties(test_radial_potential_config_${case} PROPERTIES
+        PASS_REGULAR_EXPRESSION "radial_electric_potential_slope (requires|is not)")
+endforeach()
+
 # Unit tests for refactored modules
 add_executable(test_stencil_utils.x test_stencil_utils.f90)
 target_link_libraries(test_stencil_utils.x simple)
 add_test(NAME test_stencil_utils COMMAND test_stencil_utils.x)
+
+add_executable(test_continuous_classifier_scores.x
+    test_continuous_classifier_scores.f90)
+target_link_libraries(test_continuous_classifier_scores.x simple)
+add_test(NAME test_continuous_classifier_scores
+    COMMAND test_continuous_classifier_scores.x)
+set_tests_properties(test_continuous_classifier_scores PROPERTIES LABELS "unit")
 
     add_executable(test_chartmap_metadata.x test_chartmap_metadata.f90)
     target_link_libraries(test_chartmap_metadata.x simple testing_utils)
@@ -576,6 +727,18 @@ add_test(NAME test_stencil_utils COMMAND test_stencil_utils.x)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         DEPENDS "generate_test_boozer_chartmap_data"
         LABELS "unit")
+    # Regular near-axis Boozer field (libneo#437) built on request for the
+    # internal VMEC -> Boozer conversion and for Boozer chartmaps.
+    add_executable(test_boozer_regular_axis_field.x
+        field_can/test_boozer_regular_axis_field.f90)
+    target_link_libraries(test_boozer_regular_axis_field.x simple)
+    foreach(_regular_source IN ITEMS vmec chartmap)
+        add_test(NAME test_boozer_regular_axis_field_${_regular_source}
+            COMMAND test_boozer_regular_axis_field.x ${_regular_source})
+        set_tests_properties(test_boozer_regular_axis_field_${_regular_source}
+            PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+            LABELS "unit" TIMEOUT 300)
+    endforeach()
     add_test(NAME test_chartmap_startmode1
         COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/test_chartmap_startmode1.py
@@ -633,6 +796,18 @@ add_test(NAME test_stencil_utils COMMAND test_stencil_utils.x)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "system;python"
         TIMEOUT 1800)
+
+    # The explicit integmodes must notice a marker leaving the plasma. They
+    # hand a whole substep to an adaptive integrator and see nothing between
+    # its endpoints, so without an explicit radius check a marker that crossed
+    # s = 1 was integrated onwards and reported as confined.
+    add_test(NAME test_explicit_loss_detection
+        COMMAND ${BOOZER_CHARTMAP_PYTHON}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_explicit_loss_detection.py)
+    set_tests_properties(test_explicit_loss_detection PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        LABELS "system;python"
+        TIMEOUT 600)
 
     # E2E test: VMEC-Boozer vs chartmap confined fractions
     add_test(NAME test_e2e_boozer_chartmap
@@ -745,7 +920,8 @@ add_test(NAME test_splined_field_derivatives
     COMMAND test_splined_field_derivatives.x
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_splined_field_derivatives PROPERTIES
-    LABELS "integration")
+    LABELS "integration"
+    RESOURCE_GROUPS "mem_gb:1")
 
 add_executable(test_bder_from_splines.x test_bder_from_splines.f90)
 target_link_libraries(test_bder_from_splines.x simple)
@@ -754,7 +930,19 @@ add_test(NAME test_bder_from_splines
     COMMAND test_bder_from_splines.x
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_bder_from_splines PROPERTIES
-    LABELS "integration")
+    LABELS "integration"
+    RESOURCE_GROUPS "mem_gb:1")
+
+add_executable(test_splined_kernel_bench.x test_splined_kernel_bench.f90)
+target_link_libraries(test_splined_kernel_bench.x simple)
+add_dependencies(test_splined_kernel_bench.x ncsx_test_data)
+add_test(NAME test_splined_kernel_bench
+    COMMAND test_splined_kernel_bench.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_splined_kernel_bench PROPERTIES
+    LABELS "unit;performance"
+    RESOURCE_GROUPS "mem_gb:13"
+    TIMEOUT 120)
 
 add_executable(test_refcoords_file_detection.x test_refcoords_file_detection.f90)
 target_link_libraries(test_refcoords_file_detection.x simple)
@@ -764,6 +952,27 @@ add_test(NAME test_refcoords_file_detection
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_refcoords_file_detection PROPERTIES
     LABELS "unit")
+
+# Collision profile radius for every integ_coords (issue #571)
+add_executable(test_profile_radius.x test_profile_radius.f90)
+target_link_libraries(test_profile_radius.x simple)
+add_dependencies(test_profile_radius.x chartmap_test_data)
+foreach(case IN ITEMS rho_lcfs vmec canflux boozer meiss albert refcoords
+        meiss_chartmap spectre)
+    if(case STREQUAL "spectre")
+        set(case_file ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5)
+    else()
+        set(case_file ${CHARTMAP_FILE})
+    endif()
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/profile_radius_${case})
+    file(CREATE_LINK ${WOUT_FILE}
+        ${CMAKE_CURRENT_BINARY_DIR}/profile_radius_${case}/wout.nc SYMBOLIC)
+    add_test(NAME test_profile_radius_${case}
+        COMMAND test_profile_radius.x ${case} ${case_file}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/profile_radius_${case})
+    set_tests_properties(test_profile_radius_${case} PROPERTIES
+        LABELS "unit;collisions" TIMEOUT 300)
+endforeach()
 
 # Chartmap pipeline unit tests (issue #227)
 add_executable(test_chartmap_pipeline.x test_chartmap_pipeline.f90)
@@ -782,7 +991,7 @@ add_test(NAME test_chartmap_pipeline
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_chartmap_pipeline PROPERTIES
     LABELS "unit"
-    RUN_SERIAL TRUE
+    RESOURCE_GROUPS "mem_gb:10"
     TIMEOUT 120)
 
 # Chartmap R,Z consistency tests
@@ -795,7 +1004,7 @@ add_test(NAME test_chartmap_rz_consistency
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_chartmap_rz_consistency PROPERTIES
     LABELS "unit"
-    RUN_SERIAL TRUE
+    RESOURCE_GROUPS "mem_gb:10"
     TIMEOUT 120)
 
 # Batch spline optimization test
@@ -892,6 +1101,31 @@ set_tests_properties(test_gpu_midpoint_bench PROPERTIES
 # path with an ordinary VMEC file. Native CUDA production requires a compact
 # Boozer RK chartmap, so segmented CUDA accounting is covered by
 # test_cuda_native_bridge instead.
+
+# #569: gpu_mode='production' with a VMEC field must stop at input
+# validation, before the field setup, naming the supported field source.
+set(GPU_VMEC_DIR ${CMAKE_CURRENT_BINARY_DIR}/gpu_production_vmec)
+file(MAKE_DIRECTORY ${GPU_VMEC_DIR})
+file(CREATE_LINK ${WOUT_FILE} ${GPU_VMEC_DIR}/wout.nc SYMBOLIC)
+file(WRITE ${GPU_VMEC_DIR}/simple.in "&config
+trace_time = 1d-3
+sbeg = 0.3d0
+ntestpart = 64
+netcdffile = 'wout.nc'
+isw_field_type = 2
+deterministic = .true.
+gpu_mode = 'production'
+gpu_backend = 'cuda-native'
+/
+")
+add_test(NAME test_gpu_production_rejects_vmec
+    COMMAND $<TARGET_FILE:simple.x> simple.in
+    WORKING_DIRECTORY ${GPU_VMEC_DIR})
+set_tests_properties(test_gpu_production_rejects_vmec PROPERTIES
+    LABELS "unit"
+    PASS_REGULAR_EXPRESSION "Boozer chartmap with RK tables"
+    FAIL_REGULAR_EXPRESSION "Configuration reading completed"
+    TIMEOUT 60)
 
 # Macrostep log grid tests (issue: performance regression with log grid)
 add_executable(test_macrostep_log_grid.x test_macrostep_log_grid.f90)
@@ -1068,6 +1302,7 @@ add_test(
 )
 set_tests_properties(gc_ck_ncsx_vmec_vs_meiss PROPERTIES
     TIMEOUT 600
+    RESOURCE_GROUPS "mem_gb:12"
     LABELS "system;integration;plot;slow"
 )
 
@@ -1107,6 +1342,20 @@ endif()
 # The GOLDEN_RECORD_SKIP_CASES env var is still honored by
 # compare_golden_results.sh for future intentional-divergence bug fixes;
 # pass it through ENVIRONMENT when needed.
+# One fixture builds the main reference and downloads the shared test data,
+# so the per-case tests below never race on the shared clone, build or files.
+add_test(
+    NAME golden_record_prepare
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record/golden_record.sh main
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+set_tests_properties(golden_record_prepare PROPERTIES
+    TIMEOUT 1200  # Initial main clone/build on CI
+    LABELS "golden_record;regression"
+    FIXTURES_SETUP golden_record_reference
+    ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record;GOLDEN_RECORD_PREPARE_ONLY=1"
+)
+
 foreach(CASE ${GOLDEN_RECORD_TEST_CASES})
     add_test(
         NAME golden_record_${CASE}
@@ -1115,10 +1364,22 @@ foreach(CASE ${GOLDEN_RECORD_TEST_CASES})
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     )
     set_tests_properties(golden_record_${CASE} PROPERTIES
-        TIMEOUT 1200  # Includes initial main clone/build on CI
+        TIMEOUT 1200
         LABELS "golden_record;regression"
+        FIXTURES_REQUIRED golden_record_reference
         ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record;GOLDEN_RECORD_RTOL=1.5e-7"
     )
+    # Peak RSS rounded up in GiB; see docs/development/testing.rst.
+    if(CASE STREQUAL "albert_coils")
+        set_tests_properties(golden_record_${CASE} PROPERTIES
+            RESOURCE_GROUPS "mem_gb:15")
+    elseif(CASE STREQUAL "boozer_ncsx")
+        set_tests_properties(golden_record_${CASE} PROPERTIES
+            RESOURCE_GROUPS "mem_gb:8")
+    elseif(CASE STREQUAL "meiss_coils")
+        set_tests_properties(golden_record_${CASE} PROPERTIES
+            RESOURCE_GROUPS "mem_gb:13")
+    endif()
     if(CASE STREQUAL "collision")
         # Intentional stream/operator correction: preserve the run and timing;
         # analytic collision tests supply the physical distribution oracles.
@@ -1157,11 +1418,18 @@ add_test(NAME test_gc_field_extrapolation COMMAND test_gc_field_extrapolation.x)
 set_tests_properties(test_gc_field_extrapolation PROPERTIES
     LABELS "unit;integrator" TIMEOUT 30 ENVIRONMENT "OMP_NUM_THREADS=1")
 
+add_executable(test_gc_gauss_endpoint.x test_gc_gauss_endpoint.f90)
+target_link_libraries(test_gc_gauss_endpoint.x simple)
+add_test(NAME test_gc_gauss_endpoint COMMAND test_gc_gauss_endpoint.x)
+set_tests_properties(test_gc_gauss_endpoint PROPERTIES
+    LABELS "unit;integrator;regression" TIMEOUT 30 ENVIRONMENT "OMP_NUM_THREADS=1")
+
 # Concept-only Gauss2 full orbit: not part of libsimple and not selectable
 # from simple.in. Built here so the generated-kernel proof chain stays executable.
 set(FO_PROOF_DIR "${CMAKE_SOURCE_DIR}/concept/fo_symplectic_proof")
 add_library(fo_gauss2_concept STATIC
     ${FO_PROOF_DIR}/generated/fo_kernel.f90
+    ${FO_PROOF_DIR}/generated/fo_joint_kernel.f90
     ${FO_PROOF_DIR}/spectre_fo_gauss2.f90)
 target_include_directories(fo_gauss2_concept PRIVATE ${FO_PROOF_DIR}/generated)
 target_link_libraries(fo_gauss2_concept PUBLIC simple)
@@ -1283,6 +1551,21 @@ add_test(NAME test_fo_gauss2_resolution_large_matched_policy COMMAND test_fo_sym
     ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 33333334 100 0 0)
 set_tests_properties(test_fo_gauss2_resolution_large_matched_policy PROPERTIES
     LABELS "regression;integration;slow" TIMEOUT 3600)
+
+# Gauss stages are too small to repay an OpenMP team. Run each serial orbit
+# on one reserved core, also when CTest schedules independent tests together.
+set(FO_STEPPER_TESTS test_fo_symplectic test_fo_symplectic_long
+    test_fo_symplectic_resolved test_fo_symplectic_resolved_long
+    test_fo_symplectic_newton_boundary test_fo_gauss2_original_oracle
+    test_fo_gauss2_resolution_large_matched_policy)
+foreach(fo_suffix IN ITEMS second second_long second_resolved second_resolved_long)
+    list(APPEND FO_STEPPER_TESTS test_fo_symplectic_${fo_suffix})
+endforeach()
+foreach(fo_probe IN ITEMS base half quarter tight base_short captured)
+    list(APPEND FO_STEPPER_TESTS test_fo_gauss2_resolution_${fo_probe})
+endforeach()
+set_tests_properties(${FO_STEPPER_TESTS} PROPERTIES
+    PROCESSORS 1 ENVIRONMENT "OMP_NUM_THREADS=1")
 
 add_subdirectory(
     "${CMAKE_SOURCE_DIR}/concept/fo_gc_derivations/D_canonical_switch"
