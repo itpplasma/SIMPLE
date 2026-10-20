@@ -886,7 +886,7 @@ contains
             ! later iterate usually is, so evaluate it to first order first and
             ! add the Hessian at the same point only when the solve continues.
             ! The first/full oracle bounds CSE rounding in the retained values.
-            full = it == 1 .or. present(tangent)
+            full = present(tangent)
             call stage_evals(full)
             do i = 1, 2
                 r(:, i) = dy(:, i) - h*(GL_A(i, 1)*f(:, 1) + GL_A(i, 2)*f(:, 2))

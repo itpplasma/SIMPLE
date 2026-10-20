@@ -85,6 +85,8 @@ jobs:
       inputs.runner == 'hosted') && 'ubuntu-24.04' || fromJSON('["self-hosted","itp-slurm"]') }}
     timeout-minutes: 150
     env:
+      OMP_NUM_THREADS: 1
+      OPENBLAS_NUM_THREADS: 1
       CI_HOSTED: >-
         ${{ (github.event_name == 'pull_request' ||
         inputs.runner == 'hosted') && 'true' || 'false' }}
@@ -161,9 +163,9 @@ jobs:
           make clean
           REF="${{ inputs.libneo_ref }}"
           if [ -n "$REF" ]; then
-            make build-deterministic LIBNEO_REF="$REF"
+            make build-deterministic CONFIG=Fast LIBNEO_REF="$REF"
           else
-            make build-deterministic
+            make build-deterministic CONFIG=Fast
           fi
 
       # libneo-gate dispatch (no full) runs only the sub-minute smoke set;
@@ -177,7 +179,7 @@ jobs:
         run: |
           CTEST_PARALLEL_LEVEL=$(env -u OMP_NUM_THREADS -u OMP_THREAD_LIMIT nproc)
           export CTEST_PARALLEL_LEVEL
-          make test-fast
+          make test-fast CONFIG=Fast
 
       - name: Install Python package
         if: env.CI_HOSTED == 'true' && inputs.full == 'true'

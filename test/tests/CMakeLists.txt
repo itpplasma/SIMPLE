@@ -795,6 +795,8 @@ set_tests_properties(test_continuous_classifier_scores PROPERTIES LABELS "unit")
     set_tests_properties(test_axis_loss_consistency PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "system;python"
+        PROCESSORS 2
+        ENVIRONMENT "OMP_NUM_THREADS=2;OPENBLAS_NUM_THREADS=1"
         TIMEOUT 1800)
 
     # The explicit integmodes must notice a marker leaving the plasma. They
@@ -807,6 +809,8 @@ set_tests_properties(test_continuous_classifier_scores PROPERTIES LABELS "unit")
     set_tests_properties(test_explicit_loss_detection PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "system;python"
+        PROCESSORS 2
+        ENVIRONMENT "OMP_NUM_THREADS=2;OPENBLAS_NUM_THREADS=1"
         TIMEOUT 600)
 
     # E2E test: VMEC-Boozer vs chartmap confined fractions

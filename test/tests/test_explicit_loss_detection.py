@@ -89,6 +89,7 @@ ntimstep = 100
 ntestpart = {npart}
 sbeg = {sbeg}d0
 contr_pp = -1d10
+multharm = 1
 netcdffile = 'wout.nc'
 isw_field_type = 2
 deterministic = .True.
@@ -184,8 +185,8 @@ def check_surface(sbeg, npart, trace, failures):
 
     # The runs are independent once the reference has written start.dat, and
     # a few seconds of start-up dominate each one, so run them side by side
-    # on one thread apiece.
-    with ThreadPoolExecutor(max_workers=len(EXPLICIT)) as pool:
+    # on one thread apiece, bounded by the CTest CPU reservation.
+    with ThreadPoolExecutor(max_workers=int(os.environ.get("OMP_NUM_THREADS", "1"))) as pool:
         futures = [
             pool.submit(run, f"{tag}_{name}", mode, relerr, startmode=2,
                         start_src=d_ref / "start.dat", sbeg=sbeg, npart=npart,

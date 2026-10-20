@@ -282,14 +282,17 @@ contains
     subroutine step(z,tol,reference,out,m,res)
         real(dp),intent(in)::z(6),tol
         logical,intent(in)::reference
-        real(dp),intent(out)::out(6),m(6,6),res
+        real(dp), intent(out)::out(6), res
+        real(dp), intent(out), optional::m(6, 6)
         real(dp)::dt
         logical::ok
         if(reference) then
             call gauss2_step(z,width,ro0,efixed,lfixed,gfixed,h,out,dt,ok,m,radial_scale=mfixed)
             res=-1 ! Reference API does not expose stage residual.
         else
-            call generated_step(z,h,width,ro0,tol,out,m,res,ok,efixed,lfixed,gfixed,mfixed)
+            call shipped_step(z, width, ro0, efixed, lfixed, gfixed, h, out, &
+                              dt, ok, tangent=m, radial_scale=mfixed, &
+                              tolerance=tol, residual=res)
         end if
         if(.not.ok) then
             print '(a,i0,a,l1,2(a,es16.8))','NEWTON_FAILURE step=',diagnostic_step, &
@@ -403,13 +406,20 @@ contains
         real(dp),intent(in)::z(6),tol
         logical,intent(in)::reference
         integer,intent(in)::n
-        real(dp),intent(out)::out(6),m(6,6),res
+        real(dp), intent(out)::out(6), res
+        real(dp), intent(out), optional::m(6, 6)
         real(dp)::current(6),next(6),mi(6,6),ri
         integer::s
-        current=z; m=eye; res=0
+        current = z; res = 0
+        if (present(m)) m = eye
         do s=1,n
-            call step(current,tol,reference,next,mi,ri)
-            m=matmul(mi,m); res=max(res,ri); current=next
+            if (present(m)) then
+                call step(current, tol, reference, next, mi, ri)
+                m = matmul(mi, m)
+            else
+                call step(current, tol, reference, next, res=ri)
+            end if
+            res = max(res, ri); current = next
         end do
         out=current
         if(reference) res=-1 ! Unavailable from frozen reference API.
@@ -425,17 +435,17 @@ contains
         logical,intent(in)::reference
         integer,intent(in)::n
         real(dp),intent(out)::fd(6,6)
-        real(dp)::zp(6),zm(6),fp(6),fm(6),m(6,6),res,eps
+        real(dp)::zp(6), zm(6), fp(6), fm(6), res, eps
         integer::j
         do j=1,6
             eps=eps0*max(1.0_dp,abs(z(j)))
             zp=z; zm=z; zp(j)=zp(j)+eps; zm(j)=zm(j)-eps
-            call map(zp,tol,reference,n,fp,m,res)
-            call map(zm,tol,reference,n,fm,m,res)
+            call map(zp, tol, reference, n, fp, res=res)
+            call map(zm, tol, reference, n, fm, res=res)
             fd(:,j)=8*(fp-fm)
             zp=z; zm=z; zp(j)=zp(j)+2*eps; zm(j)=zm(j)-2*eps
-            call map(zp,tol,reference,n,fp,m,res)
-            call map(zm,tol,reference,n,fm,m,res)
+            call map(zp, tol, reference, n, fp, res=res)
+            call map(zm, tol, reference, n, fm, res=res)
             fd(:,j)=(fd(:,j)-(fp-fm))/(12*eps)
         end do
     end subroutine finite_difference
@@ -459,7 +469,8 @@ contains
         end if
         print '(a,f7.4,a,f6.3)', 'MAP configuration rho=',rho,' gmin=',gfixed
         do k=1,3
-            if(reference.and.k==2) cycle
+            ! The frozen reference has one fixed stopping rule, independent of tol.
+            if (reference .and. k > 1) cycle
             tol=tols(k)
             if(reference) tol=-1 ! Reference Newton tolerance is fixed internally.
             do ncase=1,2
