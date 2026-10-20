@@ -14,11 +14,12 @@ more steps and an h/4 safety refinement, and the L4 obligations below are
 open. The test tree builds `spectre_fo_gauss2.f90` and the kernel as the
 test-only library `fo_gauss2_concept` so the proof chain stays executable.
 
-The six `generated/` leaves and the scalar generator in `gen/` are unchanged
-from that commit (only the regeneration scripts' paths were adapted). SIMPLE
-compiles the committed kernel without requiring a CAS. The registered regeneration test re-emits and compares all six
-leaves and runs the exact symbolic/readback checks (257/257 Hamiltonian and 6/6
-monitor identities). Thus the shipped expressions remain tied to L1/L2.
+The FortSym generators in `gen/` emit the Hamiltonian, monitor, factored
+Hessian, geometry contractions and potential accumulation in `generated/`.
+Verified: `gen/check_fo_generated.sh` checks byte regeneration, 271 exact
+Hamiltonian/readback identities, 153 factored-Hessian/readback identities and
+six monitor/product identities. The frozen reference is checked separately by
+its source hash and the executable field, derivative and map oracles.
 
 `results.json` and `proof-foundation.md` retain the original a27d1ec evidence;
 they are historical records, not a new run of the consolidated checkout. The

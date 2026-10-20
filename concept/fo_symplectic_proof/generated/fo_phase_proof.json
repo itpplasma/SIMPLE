@@ -1,0 +1,8 @@
+{
+  "suite": "Fourier harmonic exact addition identities",
+  "total": 8,
+  "passed": 8,
+  "proved": 8,
+  "by_probe": 0,
+  "failed": 0
+}
