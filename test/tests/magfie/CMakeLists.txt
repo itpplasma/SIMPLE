@@ -72,6 +72,12 @@ add_test(NAME test_magfie_refcoords_splines
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
 )
 
+# Peak RSS rounded up in GiB; these use the reduced coordinate fixture.
+set_tests_properties(test_hcurl_from_dhcov_splines
+    PROPERTIES RESOURCE_GROUPS "mem_gb:1")
+set_tests_properties(test_magfie_refcoords_splines
+    PROPERTIES RESOURCE_GROUPS "mem_gb:2")
+
 add_test(NAME test_orbit_refcoords_rk45
     COMMAND $<TARGET_FILE:test_orbit_refcoords_rk45.x>
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
