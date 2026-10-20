@@ -124,7 +124,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            gfortran \
+            gfortran gfortran-14 gcc-14 g++-14 \
             git-lfs \
             cmake \
             ninja-build \
@@ -169,14 +169,18 @@ jobs:
           CMAKE_BUILD_PARALLEL_LEVEL=$(env -u OMP_NUM_THREADS -u OMP_THREAD_LIMIT nproc)
           export CMAKE_BUILD_PARALLEL_LEVEL
           build_options=()
+          config=Release
           if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            # The existing GCC 14 Fast coverage job validates this toolchain.
+            export CC=gcc-14 CXX=g++-14 FC=gfortran-14
+            config=Fast
             build_options+=("FLAGS=-DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF")
           fi
           REF="${{ inputs.libneo_ref }}"
           if [ -n "$REF" ]; then
-            make build-deterministic CONFIG=Release "${build_options[@]}" LIBNEO_REF="$REF"
+            make build-deterministic CONFIG="$config" "${build_options[@]}" LIBNEO_REF="$REF"
           else
-            make build-deterministic CONFIG=Release "${build_options[@]}"
+            make build-deterministic CONFIG="$config" "${build_options[@]}"
           fi
 
       # libneo-gate dispatch (no full) runs only the sub-minute smoke set;
@@ -190,7 +194,9 @@ jobs:
         run: |
           CTEST_PARALLEL_LEVEL=$(env -u OMP_NUM_THREADS -u OMP_THREAD_LIMIT nproc)
           export CTEST_PARALLEL_LEVEL
-          /usr/bin/time -v make test-fast CONFIG=Release
+          config=Release
+          [ "$GITHUB_EVENT_NAME" != pull_request ] || config=Fast
+          /usr/bin/time -v make test-fast CONFIG="$config"
 
       - name: Install Python package
         if: env.CI_HOSTED == 'true' && inputs.full == 'true'
