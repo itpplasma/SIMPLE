@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 
@@ -59,6 +60,59 @@ jobs:
             </body>
           </html>
           EOF
+
+      - name: Find coverage for the deployed commit
+        id: coverage-run
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          runs=$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/main.yml/runs" \
+            -f event=merge_group -f status=success -f head_sha="$GITHUB_SHA" \
+            -f per_page=100 --jq '.workflow_runs[].id')
+          for run_id in $runs; do
+            artifact=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts" \
+              --jq '.artifacts[] | select(.name == "fast-suite-coverage" and .expired == false) | .id')
+            if [ -n "$artifact" ]; then
+              echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+              echo "Using coverage from merge-group run $run_id for $GITHUB_SHA"
+              exit 0
+            fi
+          done
+          echo "No retained merge-group coverage for $GITHUB_SHA; omitting coverage."
+
+      - name: Download coverage
+        id: coverage-download
+        if: steps.coverage-run.outputs.run_id != ''
+        continue-on-error: true
+        uses: actions/download-artifact@v5
+        with:
+          name: fast-suite-coverage
+          path: ${{ runner.temp }}/coverage
+          run-id: ${{ steps.coverage-run.outputs.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Stage coverage and badge
+        if: steps.coverage-download.outcome == 'success'
+        env:
+          COVERAGE_DIR: ${{ runner.temp }}/coverage
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import shutil
+          import xml.etree.ElementTree as ET
+
+          source = Path(os.environ["COVERAGE_DIR"])
+          rate = float(ET.parse(source / "coverage.xml").getroot().attrib["line-rate"]) * 100
+          destination = Path("site/coverage")
+          shutil.copytree(source, destination)
+          shutil.copyfile(source / "coverage.html", destination / "index.html")
+          color = "brightgreen" if rate >= 80 else "yellow" if rate >= 60 else "red"
+          badge = {"schemaVersion": 1, "label": "coverage", "message": f"{rate:.1f}%", "color": color}
+          (destination / "badge.json").write_text(json.dumps(badge) + "\n")
+          PY
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
