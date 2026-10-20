@@ -5,7 +5,7 @@
 # code forges: src/ (this commit, checked out on SCI_HEAD_REF so dependency
 # branch matching works), bare git mirrors of SIMPLE (main + this commit, for
 # the golden-record reference) and of every FetchContent dependency, and the
-# downloaded test data. Python packages still come from PyPI.
+# downloaded test data and a pip wheel mirror for the cluster's Python 3.11.
 #
 # Environment:
 #   SCI_HEAD_REF    branch name to check out on (default: current branch)
@@ -91,6 +91,38 @@ if [ "${SCI_TIER:-full}" = full ]; then
     fi
     cp "$cache/data/$cgal" "$stage/data/$cgal"
 fi
+
+# Download on the connected runner for Debian 12's CPython 3.11/glibc 2.36.
+# setup-python supplies pip on the dispatch-only runner; accept compatible
+# manylinux wheels, never a wheel requiring a newer cluster glibc.
+mkdir -p "$stage/pip"
+pip_args=(--only-binary=:all: --python-version 3.11 --implementation cp --abi cp311)
+for glibc_minor in {17..36}; do
+    pip_args+=(--platform "manylinux_2_${glibc_minor}_x86_64")
+done
+pip_args+=(--platform manylinux2014_x86_64)
+# GVEC is source-only. Download its sdist separately, then include its
+# declared dependencies in the cross-platform wheel resolution.
+python -m pip download --dest "$stage/pip" --no-deps 'gvec==1.4.1'
+sed '/^gvec==/d' "$src/requirements.txt" > "$stage/pip-requirements.txt"
+python - "$stage" <<'PYTHON'
+from pathlib import Path
+import sys
+import tarfile
+import tomllib
+
+stage = Path(sys.argv[1])
+with tarfile.open(stage / "pip/gvec-1.4.1.tar.gz") as archive:
+    metadata = tomllib.loads(archive.extractfile("gvec-1.4.1/pyproject.toml").read().decode())
+with (stage / "pip-requirements.txt").open("a") as requirements:
+    requirements.write("\n" + "\n".join(metadata["project"]["dependencies"]) + "\n")
+PYTHON
+requirements=(-r "$stage/pip-requirements.txt" pip setuptools wheel)
+if [ "${SCI_TIER:-full}" = full ]; then
+    requirements+=(-r "$src/ci/coverage-requirements.txt" 'numpy==2.2.6' 'scipy==1.16.3' vtk \
+        hatchling hatch-vcs mpmath sympy numexpr numba)
+fi
+python -m pip download --dest "$stage/pip" "${pip_args[@]}" "${requirements[@]}"
 
 {
     printf 'SCI_COMMIT=%s\n' "$(git -C "$src" rev-parse HEAD)"
