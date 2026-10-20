@@ -103,7 +103,7 @@ its IDS equilibrium/marker readers. ``--gorilla /path/to/GORILLA`` adds the
 native GORILLA polynomial pusher on the same converted chartmap. Build the
 external codes using their own instructions. ASCOT's real DD3/DD4 import
 corrections are in https://github.com/ascot4fusion/ascot5/pull/238; the tested
-revision is ``6355721de093cd76d434a96940196404a46054ab``. The GORILLA checkout
+revision is ``0630d19db2abaa72117300ae82c652ea6ecf4898``. The GORILLA checkout
 must support ``grid_kind=6`` (tested revision
 ``2f2d2802011ab895bfad8c188ca652ca5b7222c6``).
 
@@ -113,7 +113,7 @@ input is pinned to an immutable repository revision and verified against the
 SHA256 checksum and COCOS in its ``SOURCES`` table:
 
 * ``diii-d``: DIII-D shot 145419 at 2100 ms (EFIT, COCOS 1), OMAS sample
-  data, MIT licence. A lower-single-null equilibrium of ASDEX Upgrade size
+  data, MIT licence. A lower-single-null equilibrium
   (R = 1.68 m, a = 0.59 m, B0 = 1.86 T, 1.5 MA).
 * ``iter-hybrid``: ITER hybrid scenario (CRONOS/CHEASE; Citrin et al. 2010,
   Nucl. Fusion 50, 115007), COCOS 17, 11.8 MA, from TORAX's third-party data
@@ -124,8 +124,7 @@ SHA256 checksum and COCOS in its ``SOURCES`` table:
 
 The ITER case is a published simulation of an ITER scenario, not an ITER
 Organization equilibrium release, and its fixed CHEASE boundary has no
-X-point. No openly licensed ASDEX Upgrade equilibrium was found, so DIII-D is
-the medium-size single-null tokamak case.
+X-point. DIII-D is the medium-size single-null tokamak case.
 
 The original files remain in ``~/.cache/simple/imas-benchmarks``. Choose a
 new output directory outside the repository for each run; repository-local
@@ -157,11 +156,11 @@ predictability horizon. ``--regimes`` (``--suite regimes``: 10 keV deuterium
 and 3.5 MeV alphas, 100 microseconds, every case) reruns each code with a
 1 micrometre start displacement and a different numerical resolution (SIMPLE
 ``relerr``, ASCOT step halving). It classifies each marker as regular
-passing/trapped, near-separatrix, sensitive or lost, and compares positions,
-invariants and bounce/transit averages only for regular orbits inside the
-horizon. A relativistic-equivalent SIMPLE run (mass gamma*m at ASCOT's speed)
-separates field differences from the nonrelativistic model. ``--stat-markers
-512`` adds a seeded random cohort for paired loss statistics (Wilson
+passing/trapped, incomplete, near-separatrix, sensitive, lost or unresolved.
+Pointwise acceptance uses only regular orbits inside the horizon; invariants
+and bounce/transit averages provide further diagnostics. A relativistic-equivalent
+SIMPLE run (mass gamma*m at ASCOT's speed) separates field differences from the
+nonrelativistic model. ``--stat-markers 512`` adds a seeded random cohort for paired loss statistics (Wilson
 intervals, exact McNemar, Kolmogorov-Smirnov/Anderson-Darling loss times and
 strike points, confined moments). Results are written to ``regimes.json``::
 
@@ -194,8 +193,8 @@ external-code inputs/logs, state CSV and a JSON report. Cylinder directories
 contain the analytic-oracle report and ASCOT inputs. Reports preserve code revisions,
 end conditions, actual final times, losses, invariants and timing. Trajectory
 errors include only markers that completed at the same physical time; lost
-and failed markers cannot masquerade as matched trajectories. SIMPLE and
-ASCOT tracing times are separated from field initialization. GORILLA's time
+and failed markers cannot masquerade as matched trajectories. SIMPLE's time
+includes actor initialization; ASCOT reports tracing time alone. GORILLA's time
 includes repeated mesh initialization for its single-orbit plotting interface
 and must not be treated as a kernel speed comparison.
 
