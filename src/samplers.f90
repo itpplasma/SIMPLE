@@ -44,7 +44,8 @@ contains
             stop
         end if
 
-        ! maximum value of B module:
+        ! Sample extrema for diagnostics; init_tracing_field refines the
+        ! surface extrema in the tracing representation for mirror thresholds.
         bmax = maxval(bstart)
         bmin = minval(bstart)
 
