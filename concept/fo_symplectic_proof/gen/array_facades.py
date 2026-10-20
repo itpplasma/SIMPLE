@@ -61,6 +61,27 @@ for leaf in ['fo_factor_velocity', 'fo_factor_hessian', 'fo_factor_flow']:
         indices.update({f't{i}': f'tj({i})' for i in range(1, 11)})
     factored += 'block\n' + body(leaf) + 'end block\n'
 factored += 'end subroutine fo_eval_factored\n'
+# First-order monitor leaves share the proved full expressions and omit only
+# second derivatives. Bind them to arrays without changing their emitted DAGs.
+for leaf, inputs in [('fo_radial_first', 'gj'), ('fo_metric_monitor_first', 'rj')]:
+    binding = dict(indices)
+    for i in range(1, 5):
+        binding[f'out{i}'] = f'out({i})'
+    for i in range(1, 11):
+        binding[f'rinput{i}'] = f'rj({i})'
+    for i in range(1, 4):
+        binding[f'rinput{10+i}'] = f'tj({i})'
+    scalar = (root / f'{leaf}.inc').read_text()
+    body_text = scalar[scalar.index('    real(dp) :: work'):scalar.rindex('end subroutine')]
+    body_text = re.sub(r'\b\w+\b', lambda m: binding.get(m[0], m[0]), body_text)
+    if inputs == 'gj':
+        signature = f"subroutine {leaf}(gj,out)\nreal(dp),intent(in)::gj(6,10)\n"
+    else:
+        signature = f"subroutine {leaf}(rj,tj,mref,out)\nreal(dp),intent(in)::rj(10),tj(3),mref\n"
+    declaration_end = body_text.index('\n    work1 =')
+    factored += (signature + 'real(dp),intent(out)::out(10)\n'
+                 + body_text[:declaration_end] + '\nout=0\n'
+                 + body_text[declaration_end:] + f'end subroutine {leaf}\n')
 source = source.replace('end module fo_kernel', factored + 'end module fo_kernel')
 
 # Array indexing lengthens tokens. Reflow complete logical lines before formatting.

@@ -387,9 +387,16 @@ potential coefficient tuples without changing their mode/degree order; an
 identically zero interface gauge is skipped as a whole. FortSym emits the fixed
 geometry contractions and the two-component potential accumulation. The field-jet
 call passes geometry's Fourier phases to the potential at the same point,
-avoiding a second trigonometric evaluation. Predictor and residual-only
+avoiding a second trigonometric evaluation. The internal metric path constructs
+integer Fourier harmonics by complex-product recurrence from two fundamental
+phases; FortSym proves the addition identities and emitted expressions. Sparse
+high harmonics retain direct trigonometric evaluation. The public geometry
+helper retains direct phases for the bitwise frozen-provider oracle; the hot
+path also has an independent phase roundoff check and the Hamiltonian/map
+oracles. Predictor and residual-only
 stage evaluations request first-order field jets and a FortSym-generated
-Hamiltonian leaf without Hessian outputs; Newton corrections and tangent maps
+Hamiltonian leaf without Hessian outputs, including first-order radial-metric
+and monitor leaves without unused second derivatives; Newton corrections and tangent maps
 use the complete jets. The full Hessian uses the factored inverse-metric
 identity generated and checked by FortSym; energy and force retain the original
 first-order expressions. The generated array interface binds the scalar DAG
