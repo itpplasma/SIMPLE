@@ -379,6 +379,31 @@ $N_\text{fp}$, `fper` $= 2\pi/N_\text{fp}$ and `rmajor`, the $m = n = 0$
 harmonic of $R$ on the outermost interface (m), so that `params_init` derives
 $\Delta\tau$ as for VMEC.
 
+The canonical Gauss-2 full-orbit evaluator in
+`concept/fo_symplectic_proof/spectre_fo_gauss2.f90` retains the same smooth
+embedding and vector potential. It caches field-constant angular factors and
+shares radial profiles between Fourier modes. Preparation packs the nonzero
+potential coefficient tuples without changing their mode/degree order; an
+identically zero interface gauge is skipped as a whole. FortSym emits the fixed
+geometry contractions and the two-component potential accumulation. The field-jet
+call passes geometry's Fourier phases to the potential at the same point,
+avoiding a second trigonometric evaluation. The internal metric path constructs
+integer Fourier harmonics by complex-product recurrence from two fundamental
+phases; FortSym proves the addition identities and emitted expressions. Sparse
+high harmonics retain direct trigonometric evaluation. The public geometry
+helper retains direct phases for the bitwise frozen-provider oracle; the hot
+path also has an independent phase roundoff check and the Hamiltonian/map
+oracles. Predictor and residual-only
+stage evaluations request first-order field jets and a FortSym-generated
+Hamiltonian leaf without Hessian outputs, including first-order radial-metric
+and monitor leaves without unused second derivatives; Newton corrections and tangent maps
+use the complete jets. The full Hessian uses the factored inverse-metric
+identity generated and checked by FortSym; energy and force retain the original
+first-order expressions. The generated array interface binds the scalar DAG
+directly to arrays. Small stage evaluations run serially. Energy tests reuse
+H at the next step's start and evaluate the final endpoint explicitly, retaining
+the energy envelope and drift diagnostics at every accepted step.
+
 ### 6.1 Field lines
 
 `src/field_line_spectre.f90` traces field lines inside one volume as a
