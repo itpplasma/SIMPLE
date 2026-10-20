@@ -14,15 +14,16 @@ from pathlib import Path
 
 from simple_driver import run_simple_case
 
+NTESTPART = 32
 TOL_PERPINV = 15.0
 
 CONFIG = """
 &config
 netcdffile = 'wout.nc'
-multharm = {multharm}
+multharm = 3
 contr_pp = -1d10
 trace_time = 4d-2
-ntestpart = {npart}
+ntestpart = 32
 nper = 1
 npoiper = 4
 npoiper2 = 64
@@ -49,24 +50,21 @@ def read_rows(path: Path) -> list[list[float]]:
 
 
 def main() -> int:
-    if len(sys.argv) not in (3, 4) or (len(sys.argv) == 4 and sys.argv[3] != "--full"):
-        print("usage: test_class_scores_driver.py SIMPLE_X WOUT_FILE [--full]", file=sys.stderr)
+    if len(sys.argv) != 3:
+        print("usage: test_class_scores_driver.py SIMPLE_X WOUT_FILE", file=sys.stderr)
         return 2
 
-    full = len(sys.argv) == 4
-    npart = 32 if full else 8
     case = run_simple_case(
-        Path(sys.argv[1]).resolve(), Path(sys.argv[2]).resolve(), "class_scores",
-        CONFIG.format(npart=npart, multharm=3 if full else 1)
+        Path(sys.argv[1]).resolve(), Path(sys.argv[2]).resolve(), "class_scores", CONFIG
     )
 
     scores = read_rows(case / "class_scores.dat")
     parts = read_rows(case / "class_parts.dat")
 
-    if len(scores) != npart:
-        raise AssertionError(f"class_scores.dat has {len(scores)} rows, want {npart}")
-    if len(parts) != npart:
-        raise AssertionError(f"class_parts.dat has {len(parts)} rows, want {npart}")
+    if len(scores) != NTESTPART:
+        raise AssertionError(f"class_scores.dat has {len(scores)} rows, want {NTESTPART}")
+    if len(parts) != NTESTPART:
+        raise AssertionError(f"class_parts.dat has {len(parts)} rows, want {NTESTPART}")
 
     checked = 0
     jpar_scores = 0

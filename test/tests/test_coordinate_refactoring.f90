@@ -62,7 +62,8 @@ contains
         field_input = 'wout.nc'
         call init_vmec('wout.nc', 5, 5, 5, dummy)
         call init_reference_coordinates(coord_input)
-        call init_field_can(CANFLUX)
+        ! Inverse-map identities need a smooth chart, not production resolution.
+        call init_field_can(CANFLUX, n_r=16, n_th=17, n_phi=16)
 
         do i = 1, 5
             xref = [0.1_dp + 0.15_dp*i, mod(0.5_dp*i, twopi), mod(0.3_dp*i, twopi)]

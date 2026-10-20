@@ -7,7 +7,7 @@ program test_api_repeated_sampling
                           simple_sample_surface
     use params, only: field_input, coord_input, isw_field_type, integmode, &
                       startmode, num_surf, sbeg, deterministic, ntimstep, &
-                      ntestpart
+                      ntestpart, nper, npoiper
     use new_vmec_stuff_mod, only: multharm
     use timing, only: init_timer
     implicit none
@@ -28,6 +28,9 @@ program test_api_repeated_sampling
     deterministic = .true.
     ntimstep = 2
     ntestpart = n
+    ! 32 positive-volume starting points suffice for eight state-integrity samples.
+    nper = 2
+    npoiper = 16
     ! Sampling/reset semantics do not require a production-resolution field.
     multharm = 1
     call simple_init

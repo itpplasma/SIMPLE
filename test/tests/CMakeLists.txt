@@ -386,12 +386,14 @@ if (ENABLE_OPENMP)
     # branch is the only code path that exercises the root solver behind the
     # quasi steps (fortnum multiroot_hybrids on this branch, MINPACK hybrd1 on
     # main); registering it gives that path real golden coverage.
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/sympl_stell)
+    file(CREATE_LINK ${WOUT_FILE}
+        ${CMAKE_CURRENT_BINARY_DIR}/sympl_stell/wout.nc SYMBOLIC)
     add_test(NAME test_sympl_stell
         COMMAND test_sympl.x
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/sympl_stell)
     set_tests_properties(test_sympl_stell PROPERTIES
         LABELS "integration"
-        RUN_SERIAL TRUE
         TIMEOUT 120)
     # Field-evaluation cost ratio between mode_secders=0 and mode_secders=2.
     # Built but deliberately not registered with ctest: it is a timing
@@ -1008,7 +1010,7 @@ add_test(NAME test_chartmap_rz_consistency
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_chartmap_rz_consistency PROPERTIES
     LABELS "unit"
-    RESOURCE_GROUPS "mem_gb:3"
+    RESOURCE_GROUPS "mem_gb:8"
     TIMEOUT 120)
 
 # Batch spline optimization test
@@ -1615,10 +1617,19 @@ function(add_full_python_driver name timeout)
             WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     endif()
 endfunction()
+# Cold CI checkouts have no CTest cost history. Start the measured long drivers
+# early instead of leaving their two-core reservations in an idle serial tail.
+foreach(driver IN ITEMS test_class_scores_driver test_explicit_loss_detection
+        test_axis_loss_consistency test_spectre_sympl_volume)
+    if(TEST ${driver})
+        set_tests_properties(${driver} PROPERTIES COST 100 PROCESSORS 2)
+        set_property(TEST ${driver} APPEND PROPERTY ENVIRONMENT
+            "OMP_NUM_THREADS=2" "OPENBLAS_NUM_THREADS=1")
+    endif()
+endforeach()
+
 add_full_python_driver(test_axis_loss_consistency 1800)
 add_full_python_driver(test_explicit_loss_detection 600)
-add_full_python_driver(test_class_scores_driver 120
-    $<TARGET_FILE:simple.x> ${WOUT_FILE})
 add_full_python_driver(test_spectre_sympl_volume 300
     $<TARGET_FILE:simple.x> ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5)
 
