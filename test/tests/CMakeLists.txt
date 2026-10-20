@@ -1410,6 +1410,7 @@ set_tests_properties(test_gc_gauss_endpoint PROPERTIES
 set(FO_PROOF_DIR "${CMAKE_SOURCE_DIR}/concept/fo_symplectic_proof")
 add_library(fo_gauss2_concept STATIC
     ${FO_PROOF_DIR}/generated/fo_kernel.f90
+    ${FO_PROOF_DIR}/generated/fo_joint_kernel.f90
     ${FO_PROOF_DIR}/spectre_fo_gauss2.f90)
 target_include_directories(fo_gauss2_concept PRIVATE ${FO_PROOF_DIR}/generated)
 target_link_libraries(fo_gauss2_concept PUBLIC simple)

@@ -11,7 +11,7 @@ mkdir -p build/fo_generator
 ${FC:-gfortran} -I "$fortsym_build/include" $proof/gen/gen_fo_hamiltonian.f90 \
     -L "$fortsym_build/lib" -Wl,-rpath,"$fortsym_build/lib" -lfortsym \
     -o build/fo_generator/gen_fo_hamiltonian
-for generator in geometry hessian phases; do
+for generator in geometry hessian phases poly poly_axis joint; do
     ${FC:-gfortran} -I "$fortsym_build/include" "$proof/gen/gen_fo_${generator}.f90" \
         -L "$fortsym_build/lib" -Wl,-rpath,"$fortsym_build/lib" -lfortsym \
         -o "build/fo_generator/gen_fo_${generator}"
@@ -21,6 +21,13 @@ finish_leaves() {
     FO_GENERATOR_OUTPUT="$directory" build/fo_generator/gen_fo_geometry
     FO_GENERATOR_OUTPUT="$directory" build/fo_generator/gen_fo_hessian
     FO_GENERATOR_OUTPUT="$directory" build/fo_generator/gen_fo_phases
+    FO_GENERATOR_OUTPUT="$directory" build/fo_generator/gen_fo_poly
+    FO_GENERATOR_OUTPUT="$directory" build/fo_generator/gen_fo_poly_axis
+    python3 "$proof/gen/axis_facades.py" "$directory"
+    FO_GENERATOR_OUTPUT="$directory" build/fo_generator/gen_fo_joint
+    python3 "$proof/gen/joint_facades.py" "$directory"
+    fprettify -c .fprettify "$directory/fo_joint_kernel.f90"
+    python3 "$proof/gen/wrap_poly.py" "$directory"
     python3 "$proof/gen/array_facades.py" "$directory"
     fprettify -c .fprettify "$directory/fo_kernel.f90"
 }
