@@ -113,7 +113,8 @@ with :math:`\sigma = \operatorname{sign}(p_\vartheta/s)`. Then
 one chart covers the axis :math:`X = Y = 0`. For a field that is regular in
 :math:`(x, y)` (the libneo regular Boozer field of :doc:`coordinates`, or the
 analytic test field) :math:`\kappa` is regular and positive, and so is the
-Hamiltonian :math:`K(X, Y, \varphi, p_\varphi)`. Midpoint is Gauss-1; for
+Hamiltonian :math:`K(X, Y, \varphi, p_\varphi)`, including the configured
+radial electric potential in Boozer coordinates. Midpoint is Gauss-1; for
 :math:`s` stages the unknowns are the stage points :math:`W_i` and their
 field points :math:`u_i = (x_i, y_i)`:
 

@@ -5,7 +5,7 @@ program test_darboux_chart
     !> polar guiding-centre equations, finite differences, and the exact
     !> invariants.
     !>
-    !> Usage: test_darboux_chart.x leaves | step | axis [nsteps]
+    !> Usage: test_darboux_chart.x leaves | step | axis [nsteps] | lu | electric | negative
     !>   leaves  regular test field vs polar field; q = h/s jets, the vector
     !>           field (vs the polar equations under the chart map) and the
     !>           stage Jacobian blocks vs finite differences
@@ -17,17 +17,20 @@ program test_darboux_chart
     use, intrinsic :: iso_fortran_env, only: dp => real64, int64
     use util, only: pi, twopi
     use boozer_regular, only: regular_field_t
-    use field_can_base, only: field_can_t, n_field_evaluations
+    use field_can_base, only: field_can_t, n_field_evaluations, &
+                              set_radial_electric_potential_slope
     use field_can_mod, only: field_can_from_name, eval_field => evaluate, &
                              get_val, get_derivatives
     use field_can_test, only: evaluate_test_regular
     use orbit_symplectic, only: orbit_sympl_init, orbit_timestep_sympl
     use orbit_symplectic_base, only: symplectic_integrator_t, &
-                            SYMPLECTIC_STEP_OK, MIDPOINT, GAUSS1, GAUSS2, GAUSS3, GAUSS4
+                             SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_BOUNDARY, sympl_rmax, &
+                                     MIDPOINT, GAUSS1, GAUSS2, GAUSS3, GAUSS4
     use orbit_symplectic_darboux, only: darboux_configure, darboux_advance, &
                           darboux_point_eval, darboux_stage_eval, darboux_field_point, &
                                darboux_stats, darboux_stats_reset, DARBOUX_FIELD_NONE, &
-                                        DARBOUX_FIELD_TEST
+                          DARBOUX_FIELD_TEST, DARBOUX_FIELD_BOOZER, darboux_field_values
+    use orbit_rk_core, only: rk_lu_factor, rk_lu_solve, rk_solve
 
     implicit none
 
@@ -54,6 +57,18 @@ program test_darboux_chart
         call check_quotient()
         call check_vector_field()
         call check_stage_jacobian()
+    case ('lu')
+        call check_lu()
+    case ('mode')
+        call check_mode_selection()
+    case ('boundary')
+        call check_boundary()
+    case ('boozer')
+        call check_boozer()
+    case ('negative')
+        call check_negative_orientation()
+    case ('electric')
+        call check_electric()
     case ('step')
         call check_tangent_map([3.0e-4_dp, 1.0e-5_dp, 0.0_dp], 1)
         call check_tangent_map([3.0e-4_dp, 1.0e-5_dp, 0.0_dp], 2)
@@ -87,6 +102,230 @@ contains
             nfail = nfail + 1
         end if
     end subroutine check
+
+    subroutine check_lu()
+        real(dp) :: a(3, 3), lu(3, 3), b(3), expected(3), err
+        integer :: ipiv(3), info, k
+
+        ! A second-column pivot swaps already computed, unequal L entries.
+        a = reshape([2.0_dp, 1.0_dp, 0.0_dp, 1.0_dp, 0.0_dp, 3.0_dp, &
+                     1.0_dp, 2.0_dp, 1.0_dp], [3, 3])
+        lu = a
+        call rk_lu_factor(3, lu, ipiv, info)
+        if (info /= 0) error stop 'check_lu: nonsingular matrix rejected'
+        err = 0.0_dp
+        do k = 1, 2
+            expected = [1.0_dp, -2.0_dp, 3.0_dp]*real(k, dp)
+            b = matmul(a, expected)
+            call rk_lu_solve(3, lu, ipiv, b)
+            err = max(err, maxval(abs(b - expected)))
+        end do
+        call check(err < 1.0e-13_dp, 'pivoted LU with reused factors', err)
+    end subroutine check_lu
+
+    subroutine check_mode_selection()
+        type(field_can_t) :: f
+        type(symplectic_integrator_t) :: si
+        real(dp) :: z(4), result(4), err
+        integer :: pass, status
+
+        do pass = 1, 2
+            call darboux_configure(DARBOUX_FIELD_TEST, pass)
+            call start_marker(0.1_dp, 0.3_dp, -0.3_dp, f, z)
+            call orbit_sympl_init(si, f, z, 0.4_dp, 1, 1.0e-13_dp, GAUSS2)
+            call orbit_timestep_sympl(si, f, status)
+            if (status /= 0) error stop 'check_mode_selection: step failed'
+            if (pass == 1) result = si%z
+        end do
+        err = maxval(abs(result - si%z))
+        call check(err < 1.0e-12_dp, 'init mode selects the Gauss stage count', err)
+    end subroutine check_mode_selection
+
+    subroutine check_boundary()
+        type(field_can_t) :: f
+        type(symplectic_integrator_t) :: si
+        real(dp) :: z(4)
+        integer :: status
+
+        call darboux_configure(DARBOUX_FIELD_TEST, 1)
+        sympl_rmax = 0.02_dp
+        call start_marker(0.0199_dp, -pi/2, -0.3_dp, f, z)
+        call orbit_sympl_init(si, f, z, 0.1_dp, 1, 1.0e-13_dp, MIDPOINT)
+        call orbit_timestep_sympl(si, f, status)
+        call check(status == SYMPLECTIC_STEP_BOUNDARY, &
+                   'Cartesian boundary event', real(status, dp))
+        call check(si%z(1) == sympl_rmax, 'boundary radius', si%z(1))
+        call check(si%last_step_fraction > 0.0_dp .and. &
+                   si%last_step_fraction < 1.0_dp, &
+                   'boundary time within step', si%last_step_fraction)
+        sympl_rmax = 1.0_dp
+    end subroutine check_boundary
+
+    subroutine check_boozer()
+        use simple, only: tracer_t, init_sympl, init_params
+        use simple_main, only: init_field
+        use params, only: canonical_chart, field_input, coord_input
+        use velo_mod, only: isw_field_type
+        use magfie_sub, only: BOOZER
+        type(tracer_t) :: tracer
+        type(symplectic_integrator_t) :: previous_si, boundary_si
+        type(field_can_t) :: previous_f, boundary_f, expected_f
+        real(dp), parameter :: s0(6) = [5.0e-4_dp, 1.0e-4_dp, 1.0e-6_dp, &
+                                        1.0e-8_dp, 1.0e-10_dp, 1.0e-12_dp]
+        real(dp) :: z(5), h0, emax, smin, field_error
+        integer :: marker, k, mode, status, boundary_status
+        logical :: boundary_checked
+
+        isw_field_type = BOOZER
+        canonical_chart = 'cartesian'
+        field_input = 'wout.nc'
+        coord_input = 'wout.nc'
+        call init_field(tracer, 'wout.nc', 5, 5, 5, MIDPOINT)
+        call init_params(tracer, 2, 4, 3.5e6_dp, 256, 1, 1.0e-12_dp)
+        boundary_checked = .false.
+        do mode = MIDPOINT, GAUSS2, 2
+            call darboux_configure(DARBOUX_FIELD_BOOZER, max(1, mode - 3))
+            do marker = 1, size(s0)
+                z = [s0(marker), real(marker - 1, dp), 0.1_dp, 1.0_dp, -0.3_dp]
+                call init_sympl(tracer%si, tracer%f, z, tracer%dtau, &
+                                tracer%dtaumin, 1.0e-12_dp, mode)
+                h0 = tracer%f%H
+                emax = 0.0_dp
+                smin = z(1)
+                do k = 1, 20000
+                    previous_si = tracer%si
+                    previous_f = tracer%f
+                    call orbit_timestep_sympl(tracer%si, tracer%f, status)
+                    if (status /= 0) exit
+                    if (.not. boundary_checked .and. &
+                        tracer%si%z(1) > previous_si%z(1)*1.001_dp) then
+                        sympl_rmax = 0.5_dp*(previous_si%z(1) + tracer%si%z(1))
+                        boundary_si = previous_si
+                        boundary_f = previous_f
+                     call orbit_timestep_sympl(boundary_si, boundary_f, boundary_status)
+                        call check(boundary_status == SYMPLECTIC_STEP_BOUNDARY, &
+                               'Boozer chart boundary event', real(boundary_status, dp))
+                        expected_f = boundary_f
+                        call darboux_field_values(boundary_si%z(1), boundary_si%z(2), &
+                                                  boundary_si%z(3), expected_f)
+                        field_error = abs(boundary_f%Bmod/expected_f%Bmod - 1.0_dp)
+                        call check(field_error < 1.0e-14_dp, &
+                                   'boundary keeps regular field', field_error)
+                        sympl_rmax = 1.0_dp
+                        boundary_checked = .true.
+                    end if
+                    emax = max(emax, abs(tracer%f%H/h0 - 1.0_dp))
+                    smin = min(smin, tracer%si%z(1))
+                end do
+                call check(status == 0, 'Boozer near-axis steps converge', &
+                           real(status, dp))
+                call check(emax < 1.0e-4_dp, 'Boozer near-axis energy bounded', emax)
+                print '(a,i0,a,i0,a,es10.3)', '  mode ', mode, ' marker ', marker, &
+                    ' minimum s ', smin
+            end do
+        end do
+        call check(boundary_checked, 'outward Boozer boundary exercised', 0.0_dp)
+    end subroutine check_boozer
+
+    subroutine check_negative_orientation()
+        type(field_can_t) :: f
+        type(symplectic_integrator_t) :: si
+        real(dp) :: z(4)
+        integer :: status
+
+        call darboux_configure(DARBOUX_FIELD_TEST, 1)
+        call start_marker(0.01_dp, 0.3_dp, -0.3_dp, f, z)
+        f%ro0 = -ro0
+        z(4) = f%vpar*f%hph + f%Aph/f%ro0
+        call orbit_sympl_init(si, f, z, 0.01_dp, 1, 1.0e-13_dp, MIDPOINT)
+        call orbit_timestep_sympl(si, f, status)
+        call check(status == 0 .and. si%chart_sigma < 0.0_dp, &
+                   'negative chart orientation', real(status, dp))
+    end subroutine check_negative_orientation
+
+    subroutine check_electric()
+        use simple, only: init_vmec
+        use magfie_sub, only: BOOZER
+        use field_can_mod, only: init_field_can, set_regular_axis_field
+        type(regular_field_t) :: rf
+        type(field_can_t) :: f
+        type(symplectic_integrator_t) :: si
+        real(dp), parameter :: slope = 1.0e5_dp
+        real(dp) :: fper, u(2), phi, pp, sigma, mu, kap, pth, ham, ham0, vp
+        real(dp) :: chart(2), rhs(4), rhs0(4), gu(2, 2), udot(2), fu(4, 2)
+        real(dp) :: fw(4, 2), gw(2, 2), du(2, 4), dk(4), ref(4), z(4), err
+        real(dp) :: qa(10), qh(10), cp(2), rp(4), cm(2), rm(4), d, jacerr
+        integer :: k, info
+
+        call init_vmec('wout.nc', 5, 5, 5, fper)
+        call set_regular_axis_field(.true.)
+        call init_field_can(BOOZER)
+        call darboux_configure(DARBOUX_FIELD_BOOZER, 2)
+        u = [0.02_dp, 0.01_dp]
+        phi = 0.3_dp
+        mu = 0.4_dp
+        pp = -0.3_dp
+        call darboux_field_point(u, phi, 1, rf, qa, qh)
+        pp = rf%Aph/ro0 - 0.3_dp*rf%hph
+        sigma = sign(1.0_dp, rf%Ath/ro0 + &
+                     rf%hth*(pp - rf%Aph/ro0)/rf%hph)
+        call set_radial_electric_potential_slope(0.0_dp)
+        call darboux_point_eval(u, phi, pp, sigma, mu, ro0, rf, kap, pth, &
+                                ham0, vp, chart, rhs0, gu, udot)
+        call darboux_stage_eval(u, phi, pp, sigma, mu, ro0, chart, rhs, fu, &
+                                fw, gu, gw)
+        du(:, 1) = [1.0_dp, 0.0_dp]
+        du(:, 2) = [0.0_dp, 1.0_dp]
+        du(:, 3:4) = -gw
+        do k = 1, 4
+            call rk_solve(2, gu, du(:, k), info)
+            if (info /= 0) error stop 'check_electric: singular chart'
+            dk(k) = 2*slope*dot_product(u, du(:, k))
+        end do
+        ref = [-dk(2), dk(1), dk(4), -dk(3)]
+        call set_radial_electric_potential_slope(slope)
+        call darboux_point_eval(u, phi, pp, sigma, mu, ro0, rf, kap, pth, &
+                                ham, vp, chart, rhs, gu, udot)
+        err = maxval(abs(rhs - rhs0 - ref))/maxval(abs(ref))
+        call check(err < 1.0e-8_dp, 'electric drift under chart pullback', err)
+        err = abs(ham - ham0 - slope*sum(u*u))
+        call check(err < 1.0e-6_dp, 'electric potential in Hamiltonian', err)
+        call darboux_stage_eval(u, phi, pp, sigma, mu, ro0, chart, rhs, fu, &
+                                fw, gu, gw)
+        jacerr = 0.0_dp
+        d = 1.0e-6_dp
+        do k = 1, 2
+            call darboux_point_eval(u + d*unit2(k), phi, pp, sigma, mu, ro0, rf, &
+                                    kap, pth, ham, vp, cp, rp, gu, udot)
+            call darboux_point_eval(u - d*unit2(k), phi, pp, sigma, mu, ro0, rf, &
+                                    kap, pth, ham, vp, cm, rm, gu, udot)
+            jacerr = max(jacerr, maxval(abs(fu(:, k) - (rp - rm)/(2*d))) &
+                         /max(maxval(abs(fu(:, k))), 1.0_dp))
+        end do
+        call check(jacerr < 1.0e-5_dp, 'electric stage Jacobian vs differences', jacerr)
+        ! Restore the point data after the finite-difference perturbations.
+        call darboux_point_eval(u, phi, pp, sigma, mu, ro0, rf, kap, pth, &
+                                ham, vp, chart, rhs, gu, udot)
+        z = [sum(u*u), atan2(u(2), u(1)), phi, pp]
+        f%ro0 = ro0
+        f%mu = mu
+        call darboux_field_values(z(1), z(2), z(3), f)
+        call get_val(f, pp)
+        call check(abs(f%H - ham) < 1.0e-6_dp, 'regular start energy', f%H - ham)
+        call orbit_sympl_init(si, f, z, 1.0e-6_dp, 1, 1.0e-13_dp, GAUSS2)
+        err = abs(f%Bmod - rf%Bmod)/rf%Bmod
+        call check(err < 1.0e-14_dp, 'initialization keeps the regular field', err)
+        call orbit_timestep_sympl(si, f, info)
+        call check(info == 0, 'electric step converged', real(info, dp))
+        err = abs(f%Phie - slope*si%z(1))
+        call check(err < 1.0e-8_dp, 'endpoint electric potential updated', err)
+        ham = f%H
+        call get_val(f, si%z(4))
+        call check(abs(f%H - ham) < 1.0e-6_dp, 'endpoint Hamiltonian consistent', &
+                   f%H - ham)
+        call set_radial_electric_potential_slope(0.0_dp)
+        call set_regular_axis_field(.false.)
+    end subroutine check_electric
 
     !> Polar field_can_t at (r, theta, phi) with first and second derivatives.
     subroutine polar_field(r, th, pphi, mu, f)
