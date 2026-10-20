@@ -1829,41 +1829,40 @@ end subroutine orbit_timestep_sympl_impl_expl_euler
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-    subroutine attempt_midpoint_step(si, f, status)
-        type(symplectic_integrator_t), intent(inout) :: si
-        type(field_can_t), intent(inout) :: f
-        integer, intent(out) :: status
+subroutine attempt_midpoint_step(si, f, status)
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
+  integer, intent(out) :: status
 
-        integer, parameter :: n = 5, maxit = 32
-        real(dp) :: x(n), xlast(n)
-        logical :: crossed
+  integer, parameter :: n = 5, maxit = 32
+  real(dp) :: x(n), xlast(n)
+  logical :: crossed
 
-        ! 32 as in the other schemes: the atol/rtol exits keep converged steps cheap,
-        ! and the exact-landing substep solve (#441) needs fully converged trial
-        ! steps, which 8 iterations do not guarantee near interfaces.
-        si%pthold = f%pth
-        x(1:4) = si%z
-        x(5) = si%z(1)
+  ! 32 as in the other schemes: the atol/rtol exits keep converged steps cheap,
+  ! and the exact-landing substep solve (#441) needs fully converged trial
+  ! steps, which 8 iterations do not guarantee near interfaces.
+  si%pthold = f%pth
+  x(1:4) = si%z
+  x(5) = si%z(1)
 
-        call newton_midpoint(si, f, x, si%atol, si%rtol, maxit, xlast, status)
-        if (status /= SYMPLECTIC_STEP_OK) return
+  call newton_midpoint(si, f, x, si%atol, si%rtol, maxit, xlast, status)
+  if (status /= SYMPLECTIC_STEP_OK) return
 
-        call apply_axis_chart_switch(x(1), x(2), crossed, status)
-        if (status /= SYMPLECTIC_STEP_OK) return
+  call apply_axis_chart_switch(x(1), x(2), crossed, status)
+  if (status /= SYMPLECTIC_STEP_OK) return
 
-        si%z = x(1:4)
+  si%z = x(1:4)
         if (extrap_field .and. .not. crossed) then
-            ! f holds the endpoint field, not the independent midpoint radius x(5).
-            ! After an axis chart switch xlast lives in the other chart, so the
-            ! extrapolation is invalid there and the field is evaluated fresh.
-            f%pth = f%pth + f%dpth(1)*(x(1) - xlast(1)) &
-                    + f%dpth(2)*(x(2) - xlast(2)) + f%dpth(3)*(x(3) - xlast(3)) &
-                    + f%dpth(4)*(x(4) - xlast(4))
-        else
-            call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
-            call get_val(f, si%z(4))
-        end if
-    end subroutine attempt_midpoint_step
+            ! The carried momentum uses endpoint coordinates, not x(5).
+            ! Old-chart increments cannot extrapolate p_theta after a switch.
+    f%pth = f%pth + f%dpth(1)*(x(1)-xlast(1)) &
+      + f%dpth(2)*(x(2)-xlast(2)) + f%dpth(3)*(x(3)-xlast(3)) &
+      + f%dpth(4)*(x(4)-xlast(4))
+  else
+    call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
+    call get_val(f, si%z(4))
+  end if
+end subroutine attempt_midpoint_step
 
 subroutine get_boundary_event_tolerances(rtol, fraction_tolerance, radial_tolerance)
   real(dp), intent(in) :: rtol
@@ -1996,59 +1995,59 @@ subroutine locate_symplectic_boundary(accepted_integrator, accepted_field, &
   fraction_width = fraction_ceiling - fraction_low
 end subroutine locate_symplectic_boundary
 
-    recursive subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
-        type(symplectic_integrator_t), intent(inout) :: si
-        type(field_can_t), intent(inout) :: f
-        integer, intent(out) :: ierr
+recursive subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
+  type(symplectic_integrator_t), intent(inout) :: si
+  type(field_can_t), intent(inout) :: f
+  integer, intent(out) :: ierr
 
-        integer, parameter :: n = 5, maxit = 32
-        real(dp) :: x(n), xlast(n)
-        integer :: ktau, step_status
-        type(symplectic_integrator_t) :: accepted_integrator
-        type(field_can_t) :: accepted_field
+  integer, parameter :: n = 5, maxit = 32
+  real(dp) :: x(n), xlast(n)
+  integer :: ktau, step_status
+  type(symplectic_integrator_t) :: accepted_integrator
+  type(field_can_t) :: accepted_field
         logical :: crossed
 
-        if (sympl_rmax > 1d0) then
-            ierr = SYMPLECTIC_STEP_OK
-            do ktau = 1, si%ntau
-                accepted_integrator = si
-                accepted_field = f
-                si%pthold = f%pth
-                x(1:4) = si%z
-                x(5) = si%z(1)
-                call newton_midpoint(si, f, x, si%atol, si%rtol, maxit, xlast, &
-                                     step_status)
-                if (step_status /= SYMPLECTIC_STEP_OK) then
-                    si = accepted_integrator
-                    f = accepted_field
-                    ierr = step_status
-                    return
-                end if
-                if (x(1) > sympl_rmax) then
-                    ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
-                    return
-                end if
+  if (sympl_rmax > 1d0) then
+    ierr = SYMPLECTIC_STEP_OK
+    do ktau = 1, si%ntau
+      accepted_integrator = si
+      accepted_field = f
+      si%pthold = f%pth
+      x(1:4) = si%z
+      x(5) = si%z(1)
+      call newton_midpoint(si, f, x, si%atol, si%rtol, maxit, xlast, &
+        step_status)
+      if (step_status /= SYMPLECTIC_STEP_OK) then
+        si = accepted_integrator
+        f = accepted_field
+        ierr = step_status
+        return
+      end if
+      if (x(1) > sympl_rmax) then
+        ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+        return
+      end if
                 call apply_axis_chart_switch(x(1), x(2), crossed, ierr)
                 if (ierr /= SYMPLECTIC_STEP_OK) return
-                si%z = x(1:4)
+      si%z = x(1:4)
                 if (extrap_field .and. .not. crossed) then
-                    ! Only the endpoint coordinates enter the carried momentum. Across
-                    ! an axis chart switch the field is evaluated fresh instead.
-                    f%pth = f%pth + f%dpth(1)*(x(1) - xlast(1)) &
-                           + f%dpth(2)*(x(2) - xlast(2)) + f%dpth(3)*(x(3) - xlast(3)) &
-                            + f%dpth(4)*(x(4) - xlast(4))
-                else
-                    call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
-                    call get_val(f, si%z(4))
-                end if
-            end do
-            return
-        end if
+        ! Only the endpoint coordinates enter the carried momentum.
+                    ! Across a chart switch, evaluate p_theta at the new endpoint.
+        f%pth = f%pth + f%dpth(1)*(x(1)-xlast(1)) &
+          + f%dpth(2)*(x(2)-xlast(2)) + f%dpth(3)*(x(3)-xlast(3)) &
+          + f%dpth(4)*(x(4)-xlast(4))
+      else
+        call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
+        call get_val(f, si%z(4))
+      end if
+    end do
+    return
+  end if
 
-        if (si%ntau /= 1) error stop &
-            'orbit_timestep_sympl_midpoint raw step requires ntau=1'
-        call attempt_midpoint_step(si, f, ierr)
-    end subroutine orbit_timestep_sympl_midpoint
+  if (si%ntau /= 1) error stop &
+    'orbit_timestep_sympl_midpoint raw step requires ntau=1'
+  call attempt_midpoint_step(si, f, ierr)
+end subroutine orbit_timestep_sympl_midpoint
 
 recursive subroutine orbit_timestep_sympl_with_boundary(si, f, ierr)
   type(symplectic_integrator_t), intent(inout) :: si

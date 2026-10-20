@@ -1,115 +1,177 @@
-# SPECTRE orbits: remaining work
+# SPECTRE orbits: plan
 
-Updated 2026-10-18 against `origin/main` `a041da6`. Delete this file when every
-item below is done and verified. History, recovery provenance and the proof
-obligations referenced from `concept/*/README.md` are in the
-[previous plan](https://github.com/itpplasma/SIMPLE/blob/a041da6/PLAN.md).
+Updated 2026-10-16. Production repairs #534–#536 and research PR #537 are on
+`main`, followed by the measured cost and residence records below. The frozen
+measurement baseline of the earlier loss study remains `fe002a3`. Recovery and
+archive history and all retained failed results remain available (see the end).
 
-## Current state (verified)
+## Position
 
-- Spline-based, event-resolved full orbit (FO) is the SPECTRE reference; the
-  GC/FO hybrid (FO entry at 1.5 radial gyroradii, exit check once per radian)
-  is the production path. Cost and loss evidence:
-  `concept/spectre_loss_study/results/{boozer-cost,fo-residence,profile}/`.
-- libneo #427 (quintic spline kernels) is merged and fetched by default.
-- All 24 registered SPECTRE tests pass natively (`make test CONFIG=Fast
-  TEST=spectre`, Python tests need a `.venv` with numpy and h5py).
-- Issue #528 (no gyrophase root at a current sheet) no longer occurs on the
-  production path: entry happens 1.5 gyroradii off the sheet, and
-  `test_spectre_fo_interfaces_rk45` on the current-carrying `tok2vol.h5`
-  asserts zero FO failures.
-- Issue #440 (Level-1 GC interface map) is obsolete: the map was removed in
-  #531/#533 (ledger F1, `DOC/spectre-rejected-interface-models.md`) and
-  `crossing_level` accepts only 3.
-- Midpoint axis chart switch (this branch, `fix/spectre`): after
-  `(r, theta) -> (|r|, theta + pi)` the field is evaluated fresh instead of
-  extrapolating `p_theta` from old-chart jets; `test_axis_crossing_midpoint`
-  defect 1.6e-3 before, 0 after; 150/150 non-regression tests pass. The
-  crossing that this test produces is a warning-mode acceptance, not a
-  converged root (item 1).
+Spline-based, event-resolved FO is the SPECTRE reference and a usable
+production path. The GC/FO hybrid is an accelerator whose value is measured by
+cost against FO at matched loss statistics. Model work is justified only by a
+measured cost or accuracy gain on that scale. Hamiltonian, canonical momenta,
+phase evolution and particle reconstruction must still belong to one consistent
+formulation; a frequency counter added to the fixed-mu GC state does not
+provide one. Matching final loss counts alone is insufficient.
 
-## Remaining items, in order
+## Measured state (NCSX, 3.5 keV alphas, 2 ms, M3 Ultra, 16 threads)
 
-1. **Midpoint step across the axis: needs a regular near-axis chart
-   (decision for Chris).** Traced on `fix/spectre` 047da79. The probes and
-   the near-axis ensemble test are kept outside the repository with the
-   handoff.
-   - Verified: every failing solve has the same 2-cycle. The failing solves
-     are the `test_axis_crossing_midpoint` start, identical to 1%-radius
-     `test_axis_crossing` start 3, at step 156, and scaled starts 4 and 6 at
-     steps 1255 and 2. The first Newton update lands at `r < 0`, the floor
-     `if(x(1) < 0.0) x(1) = 0.01` (`src/orbit_symplectic.f90:827-828`) moves
-     the iterate to `r = 0.01`, where the radial residual is 1.8e5, and the
-     next update lands at `r < 0` again. Angles and `p_phi` converge for
-     that floored radius; `r` never does.
-   - Verified: the accepted crossing in `test_axis_crossing_midpoint` is not
-     a root of the midpoint equations. `accept_warning_axis_crossing`
-     (`:89-110`, called at `:875`) checks only components 2-4 and accepts the
-     update from the floored iterate (`xlast(1) = 0.01`, final
-     `x(1) = -4.64e-7`). The next step then fails. The #503 unit test
-     `test_newton_solver_status` encodes exactly this floored state as an
-     accepted crossing.
-   - Verified (multi-start numerics, not a proof): the failing steps have no
-     root with `r_end, r_mid > 1e-11`. Seeds tried: 3072 for the first start,
-     covering all theta_end in pi/32 steps, `r_end` from 1e-8 to 8e-5 and
-     `r_mid` from 1e-8 to 4e-5, with positivity-damped Newton; 3072 each for
-     the other two failing steps. Euler1 fails at the same three steps.
-     Retry subdivision to depth 8 still fails on start 6 and accepts 41
-     warning-mode crossings, with `max|dH|/H` up to 6e-4.
-   - Hypothesis (mechanism): in the `(s, theta)` chart,
-     `dB/ds = (dB/drho)/(2 rho)` (libneo `boozer_converter.F90:337`; it
-     evaluates at `abs(r)`, `:304`). The midpoint theta residual therefore becomes singular as `r_mid -> 0`, and
-     a step whose chord passes the axis closer than about one step length
-     has no discrete solution. This is a property of the chart, not of
-     Newton conditioning or tolerances.
-   - Rejected: damping the step so that `r` stays positive. It drives `r` to
-     about 1e-20, where the absolute radial tolerance (`tolref(1) = 1`)
-     accepts collapsed non-roots.
-   - Options: (a) take the symplectic step near the axis in a regular
-     canonical chart (`X, Y = sqrt(2 p_theta) (cos, sin) theta`), a new
-     scheme; or (b) reject the floor-cycle state, so that the step returns
-     MAXITER and the production RK axis recovery (`orbit_timestep_axis`,
-     regular chart) takes over. Option (b) reverses the #503 acceptance and
-     can change near-axis golden markers.
-   - Accept: with the chosen option, the 1%-radius ensemble runs with
-     `MIDPOINT` at `dtau = 2 pi R/64` with no loss or fabricated crossing and
-     with bounded energy, and the golden records stay unchanged.
-2. **GC energy-shell guard.** Chatter at `npoiper2=256` comes from the absolute
-   shell band (5e-4); `npoiper2=512` removes it. Decide between keeping the
-   absolute band (then set 512 in SPECTRE examples and tests that trace) and an
-   increment test. Accept: 64-marker NCSX hybrid at `npoiper2=256` shows no
-   bulk recoveries and unchanged loss within the 95% CI; tok2vol p_zeta
-   invariant spread stays below 1e-5.
-3. **SPECTRE golden record (#442).** No `test/golden_record` case uses a
-   SPECTRE field, and `run_golden_tests.sh` stages only VMEC files. Accept: a
-   `tok2vol.h5` hybrid case runs under `make test-golden`, the existing 13
-   cases stage unchanged, and the PR states that the case is vacuous until it
-   is on `main`.
-4. **Poincare validation tolerances (#437).** Accept: `test_spectre_poincare`
-   checks against the reference sections at the tolerances in the issue, or
-   the issue records measured reasons for looser ones.
-5. **FO cost after #427.** Re-profile the hybrid and FO (RK45 stages and GC
-   Meiss evaluations), then test larger accepted RK steps at the same
-   tolerance. Accept: core-s per particle-s against the `profile` records, with
-   matched loss statistics and the tok2vol p_zeta invariant below 1e-5.
-6. **Longer and larger validation** at the production default: both fields,
-   at least 1,024 markers and longer than 2 ms, with the p_zeta invariant as
-   the switch gate. Accept: FO-vs-hybrid final loss fraction within the 95% CI
-   and recorded under `concept/spectre_loss_study/results/`.
-7. **Close stale issues** #528 and #440 with the evidence above, after
-   Chris confirms.
+Cost is core-seconds per simulated particle-second.
+
+| Model | Cost | vs Boozer GC default | Source |
+| --- | ---: | ---: | --- |
+| Boozer GC on the source VMEC, production default | 19.7 | 1 | [boozer-cost](concept/spectre_loss_study/results/boozer-cost/README.md) |
+| SPECTRE GC, midpoint `npoiper2=256` / 1024 | 106 / 390 | 5 / 20 | [fo-residence](concept/spectre_loss_study/results/fo-residence/README.md) |
+| Hybrid, entry 1.5 radial gyroradii (default since 2026-10-16) | 2,178 | 111 | fo-residence |
+| Hybrid, entry 3 (previous default) | 3,862 | 196 | both |
+| FO everywhere | 11,629 | 591 | both |
+| **Hybrid, entry 1.5, exit check per radian + quintic spline kernel** | **657** | **33** | [profile](concept/spectre_loss_study/results/profile/README.md) |
+| **FO everywhere, same changes** | **2,280** | **116** | profile |
+
+The last two rows need [libneo #427](https://github.com/itpplasma/libneo/pull/427)
+for the kernel (3.5x on FO); the exit-check part (1.5x) is in SIMPLE. #427
+also makes Boozer GC 1.18x faster (19.7 to 16.7) with byte-identical output.
+
+- FO costs about 30x GC on the same field and dominates hybrid compute.
+- 63% of FO time (entry 3) is in episodes longer than 1 ms: particles residing
+  within the entry/exit band of a sheet. Crossings under 10 us hold about 1%
+  and the outer wall 0.1%. FO time scales roughly linearly with entry distance.
+- Loss statistics do not resolve the switch error: with 1,024 NCSX markers,
+  entries 1 and 3 both agree with FO within a 95% CI of about +-0.014 in final
+  loss fraction. G3V3L3Fi entries 1 and 1.5 match all 256 FO statuses.
+- The tok2vol p_zeta invariant does resolve it: spread 4.5e-8 at entry 3,
+  8.3e-8 at 1.5 and 1.2e-4 at 1 (tolerance 1e-5). Below about 1.5 gyroradii
+  the gyro-orbit reaches the sheet. The default is therefore 1.5: 1.8x
+  (NCSX) and 2.0x (G3V3L3Fi) cheaper than 3.
+- Midpoint at `npoiper2=256` (the example input) cuts GC cost 3.7x without a
+  resolvable loss change but makes the switch chatter at interface 2.
+  Euler1 chatters far more and doubles total cost.
+- The earlier 42–45% hybrid thread efficiency was the study driver's static
+  schedule; production already uses dynamic scheduling, as the driver now does.
+
+Earlier checkpoint (Linux host, refined FO references, entry 3): NCSX hybrid
+97/256 versus FO 99, eight paired status differences; G3V3L3Fi hybrid 52 versus
+53. Marker 129's 16 FO launch phases span loss times 1.91–2.06 ms across the
+2 ms cutoff. See the [R&D report](concept/spectre_loss_study/RND.md).
+
+## Working rule for iteration
+
+Iterate with runs under about a minute (for example 64 markers, 200 us, matched
+starts). Reserve 256-marker or larger 2 ms runs for decision gates, announce
+them beforehand and run them in the background. Use matched starts and the
+same build for any comparison, and normalize cost per particle-second.
+
+## Next steps
+
+1. **Done: switch chatter at `npoiper2=256`.** It is GC energy-shell guard
+   rejections (absolute band 5e-4) leading to the iteration cap and short FO
+   recoveries, not interface switching. `npoiper2=512` removes it at half the
+   GC cost of 1024; the guard is unchanged. Use 512 for SPECTRE runs; whether
+   the shell band should be an increment test instead is an open decision.
+2. **Reduce the cost of resident FO.** Done in part: profiling showed the
+   per-substep exit check at about 40% of FO time and copy overhead in the
+   general spline kernel; fixing both made FO 5.1x and the hybrid 3.3–3.9x
+   cheaper. Next: merge libneo #427; then profile again (RK45 stages and
+   GC Meiss evaluations are the remaining spline users) and test larger
+   accepted RK steps against the same tolerance.
+3. **Longer and larger validation** at the new default: longer durations,
+   more markers, both fields; keep the invariant test as the switch gate.
 
 ## Deferred, not rejected
 
-Phase-carrying GC switch, second-order GC, encounter maps, resolved GL2,
-variational symplectic FO and NCSX 2/4/8-volume equilibria stay in their
-`concept/` directories; reopen one only on a measured cost or accuracy gap.
-Rejected models F1-F8 stay retired
-(`DOC/spectre-rejected-interface-models.md`). Marker 129 and paired NCSX status
-differences are diagnostics, not tuning targets.
+Phase-carrying GC switch (GC1+): it could at most move entry from 1.5 towards
+1, worth about 1.3x on NCSX, so cost no longer justifies it. Second-order GC
+(GC2), phase-carrying encounter maps and cycle compression,
+resolved smooth-layer GL2, variational symplectic FO, NCSX equilibria with
+2/4/8 volumes and further proof formalization stay retained in their concept
+directories. Reopen one when a measured cost or accuracy gap requires it.
+Residual FO at sheets (2.5–10% of particle time) is intrinsic; encounter maps
+are the only listed route to reduce it further.
 
-## Rules
+## Open concerns
 
-Iterate with runs under a minute (64 markers, 200 us, matched starts); announce
-256+ marker 2 ms runs and run them in the background. Use native `make`/CTest.
-Do not relax thresholds or regenerate golden data. No protected-host work.
+- Marker 129 and NCSX paired differences: retained diagnostics, not tuning
+  targets; do not adjust the entry distance to manufacture a matching count.
+- Pre-existing midpoint axis-chart concern from the Sonnet review: needs a
+  reproducible accepted crossing before a targeted repair
+  ([REVIEW.md](concept/spectre_loss_study/REVIEW.md)).
+- Independent human domain/senior review of #534–#537 was not performed; CI was
+  not awaited.
+
+## Proof and verification obligations
+
+Proof work accompanies model development. It must distinguish source
+correspondence, exact algebra, ideal mathematical maps, finite solves/arithmetic
+and independent numerical behavior. One layer does not discharge the others.
+
+| Retained evidence | Remaining obligation |
+| --- | --- |
+| GC1+/GC2 analytic prototypes: reconstruction-order and canonical midpoint/Gauss checks | Real SPECTRE tables, units, chart/axis patches, production integration and comparable-cost evidence |
+| Local switch: 132 exact identities, regeneration, real-field Hessian/pullback checks, 10-case/seven-epsilon reconstruction study | Generic field hypotheses, extended canonical action/phase evolution and complete production entry/exit |
+| Three GC source repairs with independent closed-Hamiltonian RED/GREEN witnesses | Uniform finite-Newton, field/domain and source-to-theorem bounds |
+| Eight GC methods pass retained one-/100-step stellarator map checks | Long energy/domain acceptance; whole implemented map |
+| FO Gauss2/entry-frozen/Lie and GC tableau Lean results with standard axioms | State-selected parameters, landing/exit time, chart changes, terminated Newton and whole hybrid |
+| Provider-jet baseline: 1149 exact identities | Complete the recorded mutation/source-wiring and domain obligations |
+
+The long-energy acceptance remains open. QH Boozer passes all eight methods
+at both starts for 100,000 steps. NCSX trapped starts reach the chart boundary,
+including unresolved status 5 near it; do not relabel this physical loss.
+NCSX passing Gauss2 fails the original coarse-step envelope gate and passes
+an equal-time half-step control. Preserve both outcomes and original bounds.
+The known RED GC energy acceptance remains outside the default registered suite,
+with its sources, data and registration patch retained explicitly.
+
+Baseline verification is retained, not presented as a fresh full-suite pass:
+the consolidated Fast sweep passed 98/99, followed by the repaired diagnostic's
+passing rerun. The wall affected sweep passed 24/25; its single-volume scope
+failure was repaired and rerun with both wall regressions, 3/3. The isolated
+wall branch passed nine native checks plus that three-case scope rerun.
+The old wall exclusion makes both wall witnesses fail. See the R&D report
+and `results/loss-diagnosis/verification.json` for exact revisions and limits.
+
+Use native Make/CMake authorities for affected behavior. Gremlin previously
+returned `Gremlin state provider error: 2`; this is not a scientific result.
+Do not relax thresholds, erase failures or add tests merely to reject obsolete
+parameters. Do not wait for CI or repeat unaffected checks without a reason.
+
+## Rejected paths and retained provenance
+
+Ledger [F1–F8](DOC/spectre-rejected-interface-models.md) records fixed-mu sheet
+resets, phase-discarding reversible/symplectic claims, refreshed frozen patches,
+unresolved sharp stepping, energy-kick landing, Boris as a canonical guarantee,
+the polar-axis spline defect and the multi-volume GC-only wall absorber.
+Keep their failed implementations/settings retired. Higher-order smooth-volume
+GC, carried-phase switching and resolved FO are not rejected paths.
+
+| Recovered work | Authoritative location |
+| --- | --- |
+| Physical throughput/loss controls and current diagnosis | `concept/spectre_loss_study/` |
+| GC1+/GC2 derivation, canonical completion and measured analytic results | `concept/gc_higher_order/` |
+| Switch/provider/inexact-Newton/GC2 prerequisite work | `concept/fo_gc_derivations/`; local switch in `D_canonical_switch/` |
+| GC source audit, map tests and open energy acceptance | `concept/gc_symplectic_proof/` |
+| FO proofs and test-only Gauss2 | `concept/fo_symplectic_proof/` |
+| FLR/planar encounter derivations | `concept/flr_options/` |
+| Surviving candidate comparison and sharp-sheet controls | `concept/interface_candidates/`, `concept/symplectic_sheet/` |
+| Superseded W4 implementation | `concept/fo_logical_spline/README.md` links its Git archive; unused code/patch removed during integration cleanup |
+
+The [previous full recovery ledger](https://github.com/itpplasma/SIMPLE/blob/fa913186ab29a0cfba3175d6a6b2c7a515f77a1f/PLAN.md)
+retains historical commands, timings, worker commits and verification details.
+Recovery is `recovery/spectre-session-20261014` at `082bea4`; the pre-cleanup
+archive is `archive/spectre-session-20261014-pre-cleanup` at `87aa81f`.
+The research integration preserves recovery (`8afaecb`), GC repair (`0993478`),
+switch work (`97fde90`, `060d17f`, `4d963cc`), wall repair (`535bc9e`, `5e88fe5`)
+and ledger F8 (`c957615`). Separate audit/switch branches retain provenance.
+Do not resume old agents or merge old worker tips over the cleaned sources.
+Generic Lie/code-generation support stays in FortSym, including the retained
+`feat/lie-pullback` dependency work; application physics stays in SIMPLE.
+
+All new measured runs were local. The last retained read-only cluster snapshot
+is 2026-10-14 20:18 CEST, not live monitoring. No protected-host work is
+authorized: do not run/schedule/install/resume on faepop* or faepcr* without
+an explicit request naming the host.
+
+Keep regular commits/pushes and update this plan at completed decision gates.
+Publish reproducible plots through slopbox and record expiring links in the
+R&D report. The external R&D destination remains unspecified; no chat post
+is claimed. Scratch data/build products stay outside product diffs.
