@@ -34,8 +34,17 @@ Memory allocation on workstations and CI
 
 Configure on the machine that will run the tests. CMake writes
 ``build/ctest-resources.json`` with one ``mem_gb`` resource whose slots each
-represent one GiB. The automatic budget uses Linux ``MemAvailable`` (or CMake's
-available physical memory on other systems), rounded down to GiB, less a
+represent one GiB. Usable memory is the minimum of Linux ``MemAvailable``,
+cgroup memory headroom, and any positive Slurm memory allocation
+(``SLURM_MEM_PER_NODE`` or ``SLURM_MEM_PER_CPU * SLURM_CPUS_ON_NODE``, in MiB).
+For cgroup v2, CMake locates the job via ``/proc/self/cgroup``, takes the
+smallest finite ``memory.max`` from that cgroup up to the mount root, and
+subtracts the job cgroup's ``memory.current``. The v1 fallback uses
+``memory.limit_in_bytes`` and ``memory.usage_in_bytes`` under the memory
+controller, ignoring huge unlimited sentinels. Negative headroom becomes zero.
+Missing cgroup files impose no constraint; missing ``MemAvailable`` falls back
+to CMake's available physical memory query.
+The automatic budget is this usable memory, rounded down to GiB, less a
 reserve of 25%, rounded up, or 4 GiB, whichever is larger. This leaves room
 for the OS, other jobs and tests without reservations. Cap this snapshot on
 a shared machine, and reconfigure when its available memory changes::
