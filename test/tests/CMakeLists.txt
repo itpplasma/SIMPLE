@@ -252,10 +252,24 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS AND SIMPLE_HAVE_MAP2DISC)
                 ${CMAKE_CURRENT_BINARY_DIR}/wout_ncsx.nc
             WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
         set_tests_properties(test_collisional_stl_wall PROPERTIES
-            LABELS "integration;python;wall"
+            LABELS "integration;python;wall;slow"
             RESOURCE_GROUPS "mem_gb:1"
             TIMEOUT 1200
             PROCESSORS 1
+            FIXTURES_REQUIRED chartmap_ncsx_map2disc_wall)
+        add_test(NAME test_collisional_stl_wall_fast
+            COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/test_collisional_stl_wall_fast.py
+                $<TARGET_FILE:simple.x>
+                ${CHARTMAP_NCSX_MAP2DISC_WALL_FILE}
+                ${CMAKE_CURRENT_BINARY_DIR}/coils.simple
+                ${CMAKE_CURRENT_BINARY_DIR}/wout_ncsx.nc
+            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+        set_tests_properties(test_collisional_stl_wall_fast PROPERTIES
+            LABELS "integration;python;wall"
+            RESOURCE_GROUPS "mem_gb:5"
+            TIMEOUT 120
+            PROCESSORS 4
             FIXTURES_REQUIRED chartmap_ncsx_map2disc_wall)
     endif()
 
