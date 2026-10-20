@@ -244,7 +244,7 @@ make test CONFIG=Fast TEST='^test_fo_symplectic_(lean|generated)$' VERBOSE=1
 # Long experiments, including retained failures described below:
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 CTEST_PARALLEL_LEVEL=4 \
   make test CONFIG=Fast \
-  TEST='^test_fo_symplectic(_resolved|_second|_second_resolved)?_long$' VERBOSE=1
+  TEST='^test_fo_symplectic(_resolved|_second|_second_resolved)?_long_marker[0-9]+$$' VERBOSE=1
 ```
 
 The passing results are both velocity variants of each stellarator short test,
