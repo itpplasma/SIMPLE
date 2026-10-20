@@ -434,7 +434,7 @@ contains
                         orbit_timestep_sympl => wrong_energy_step
                         candidate_orbit = expected_orbit
                         call wrong_energy_step(candidate_orbit%si, &
-                            candidate_orbit%f, candidate_error)
+                                               candidate_orbit%f, candidate_error)
                         z = initial
                         x_previous = 0.0_dp
                         kt = 0_int64

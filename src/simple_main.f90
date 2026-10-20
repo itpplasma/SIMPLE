@@ -2531,7 +2531,7 @@ contains
     end subroutine validate_rk_step_or_reference_boundary
 
     subroutine validate_symplectic_endpoint(si_start, anorb, z_start, &
-            z_candidate, z, event_fraction, ierr, reference_boundary)
+                               z_candidate, z, event_fraction, ierr, reference_boundary)
         use field_can_mod, only: get_val
 
         type(symplectic_integrator_t), intent(in) :: si_start
@@ -2547,8 +2547,8 @@ contains
 
         ierr = 0
         call validate_rk_step_or_reference_boundary(z_start, z_candidate, &
-            anorb%fper, z=z, event_fraction=event_fraction, ierr=ierr, &
-            reference_boundary=reference_boundary)
+                            anorb%fper, z=z, event_fraction=event_fraction, ierr=ierr, &
+                                                  reference_boundary=reference_boundary)
         if (ierr /= 0) then
             if (.not. reference_boundary .or. ierr /= 1) return
         end if
@@ -2559,12 +2559,12 @@ contains
         endpoint_field = anorb%f
         pphi = anorb%si%z(4)
         if (reference_boundary) pphi = si_start%z(4) + &
-            event_fraction*(pphi - si_start%z(4))
+                                       event_fraction*(pphi - si_start%z(4))
         call evaluate_field(endpoint_field, z(1), z(2), z(3), 0)
         call get_val(endpoint_field, pphi)
         z_physical = z
         z_physical(4) = sqrt(endpoint_field%mu*endpoint_field%Bmod + &
-            0.5_dp*endpoint_field%vpar**2)
+                             0.5_dp*endpoint_field%vpar**2)
         z_physical(5) = endpoint_field%vpar/(sqrt2*z_physical(4))
         momentum_reference = si_start%pabs
         ! Kinetic momentum is invariant only without electric work.
@@ -2572,7 +2572,7 @@ contains
             momentum_reference = z_physical(4)
         momentum_ierr = 0
         call validate_rk_state(z_start, z_physical, momentum_ierr, &
-            momentum_reference)
+                               momentum_reference)
         if (momentum_ierr /= 0) then
             z = z_start
             ierr = momentum_ierr
@@ -2717,8 +2717,8 @@ contains
                     call to_standard_z_coordinates(anorb, z)
                     z_step_end = z
                     call validate_symplectic_endpoint(si_step_start, anorb, &
-                        z_step_start, z_step_end, z, loss_fraction, ierr_orbit, &
-                        reference_boundary)
+                               z_step_start, z_step_end, z, loss_fraction, ierr_orbit, &
+                                                      reference_boundary)
                     if (reference_boundary .and. ierr_orbit == 1) then
                         call integ_to_ref(z(1:3), u_event)
                         anorb%si%last_step_fraction = loss_fraction
@@ -3059,8 +3059,8 @@ contains
                     call to_standard_z_coordinates(anorb, z)
                     z_step_end = z
                     call validate_symplectic_endpoint(si_step_start, anorb, &
-                        z_step_start, z_step_end, z, boundary_fraction, ierr_orbit, &
-                        reference_boundary)
+                           z_step_start, z_step_end, z, boundary_fraction, ierr_orbit, &
+                                                      reference_boundary)
                     if (reference_boundary .and. ierr_orbit == 1) then
                         anorb%si%last_step_fraction = boundary_fraction
                         anorb%si%last_event_fraction_width = 1.d0
