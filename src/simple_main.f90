@@ -2530,6 +2530,56 @@ contains
         call validate_rk_state(z_start, z, ierr, expected_momentum)
     end subroutine validate_rk_step_or_reference_boundary
 
+    subroutine validate_symplectic_endpoint(si_start, anorb, z_start, &
+            z_candidate, z, event_fraction, ierr, reference_boundary)
+        use field_can_mod, only: get_val
+
+        type(symplectic_integrator_t), intent(in) :: si_start
+        type(tracer_t), intent(in) :: anorb
+        real(dp), intent(in) :: z_start(5), z_candidate(5)
+        real(dp), intent(inout) :: z(5)
+        real(dp), intent(out) :: event_fraction
+        integer, intent(out) :: ierr
+        logical, intent(out) :: reference_boundary
+        type(field_can_t) :: endpoint_field
+        real(dp) :: z_physical(5), pphi, momentum_reference
+        integer :: momentum_ierr
+
+        ierr = 0
+        call validate_rk_step_or_reference_boundary(z_start, z_candidate, &
+            anorb%fper, z=z, event_fraction=event_fraction, ierr=ierr, &
+            reference_boundary=reference_boundary)
+        if (ierr /= 0) then
+            if (.not. reference_boundary .or. ierr /= 1) return
+        end if
+
+        ! Euler's carried field is extrapolated before the angular update; it
+        ! is not the field at si%z. Validate a copy at the accepted endpoint,
+        ! without changing the next map's carried field or public coordinates.
+        endpoint_field = anorb%f
+        pphi = anorb%si%z(4)
+        if (reference_boundary) pphi = si_start%z(4) + &
+            event_fraction*(pphi - si_start%z(4))
+        call evaluate_field(endpoint_field, z(1), z(2), z(3), 0)
+        call get_val(endpoint_field, pphi)
+        z_physical = z
+        z_physical(4) = sqrt(endpoint_field%mu*endpoint_field%Bmod + &
+            0.5_dp*endpoint_field%vpar**2)
+        z_physical(5) = endpoint_field%vpar/(sqrt2*z_physical(4))
+        momentum_reference = si_start%pabs
+        ! Kinetic momentum is invariant only without electric work.
+        if (abs(radial_electric_potential_slope) > 0.0_dp) &
+            momentum_reference = z_physical(4)
+        momentum_ierr = 0
+        call validate_rk_state(z_start, z_physical, momentum_ierr, &
+            momentum_reference)
+        if (momentum_ierr /= 0) then
+            z = z_start
+            ierr = momentum_ierr
+            reference_boundary = .false.
+        end if
+    end subroutine validate_symplectic_endpoint
+
     subroutine macrostep(anorb, z, kt, ierr_orbit, ntau_local, exit_step, &
             hold_streak, numerical_hold_any, rk_recovery)
         use alpha_lifetime_sub, only: orbit_timestep_axis
@@ -2550,7 +2600,7 @@ contains
         integer :: hold_streak_local, ktau, recovery_method, symplectic_status
         integer :: ierr_coll, collision_hold_start
         real(dp) :: z_step_start(5), z_step_end(5), loss_fraction
-        real(dp) :: u_event(3), momentum_reference
+        real(dp) :: u_event(3)
         logical :: numerical_hold, numerical_hold_any_local
         logical :: reference_boundary
         type(rk_recovery_state_t) :: rk_recovery_local
@@ -2666,15 +2716,9 @@ contains
                     ierr_orbit = 0
                     call to_standard_z_coordinates(anorb, z)
                     z_step_end = z
-                    ! Resolve truncation error within the same momentum sanity
-                    ! bound as recovery, before accepting an endpoint or hit.
-                    ! Kinetic momentum is invariant only without electric work.
-                    momentum_reference = si_step_start%pabs
-                    if (abs(radial_electric_potential_slope) > 0.0_dp) &
-                        momentum_reference = z_step_end(4)
-                    call validate_rk_step_or_reference_boundary(z_step_start, &
-                                        z_step_end, anorb%fper, momentum_reference, z, &
-                                          loss_fraction, ierr_orbit, reference_boundary)
+                    call validate_symplectic_endpoint(si_step_start, anorb, &
+                        z_step_start, z_step_end, z, loss_fraction, ierr_orbit, &
+                        reference_boundary)
                     if (reference_boundary .and. ierr_orbit == 1) then
                         call integ_to_ref(z(1:3), u_event)
                         anorb%si%last_step_fraction = loss_fraction
@@ -2916,7 +2960,7 @@ contains
         integer :: ierr_coll, collision_hold_start
         real(dp) :: u_ref_prev(3), u_ref_cur(3), x_cur(3), x_cur_m(3)
         real(dp) :: z_step_start(5), z_step_end(5), segment_duration
-        real(dp) :: boundary_fraction, momentum_reference
+        real(dp) :: boundary_fraction
         real(dp) :: wall_exit_step
         logical :: hit, numerical_hold, numerical_hold_any_local
         logical :: reference_boundary
@@ -3014,15 +3058,9 @@ contains
                     ierr_orbit = 0
                     call to_standard_z_coordinates(anorb, z)
                     z_step_end = z
-                    ! Resolve truncation error within the same momentum sanity
-                    ! bound as recovery, before accepting an endpoint or hit.
-                    ! Kinetic momentum is invariant only without electric work.
-                    momentum_reference = si_step_start%pabs
-                    if (abs(radial_electric_potential_slope) > 0.0_dp) &
-                        momentum_reference = z_step_end(4)
-                    call validate_rk_step_or_reference_boundary(z_step_start, &
-                                        z_step_end, anorb%fper, momentum_reference, z, &
-                                      boundary_fraction, ierr_orbit, reference_boundary)
+                    call validate_symplectic_endpoint(si_step_start, anorb, &
+                        z_step_start, z_step_end, z, boundary_fraction, ierr_orbit, &
+                        reference_boundary)
                     if (reference_boundary .and. ierr_orbit == 1) then
                         anorb%si%last_step_fraction = boundary_fraction
                         anorb%si%last_event_fraction_width = 1.d0

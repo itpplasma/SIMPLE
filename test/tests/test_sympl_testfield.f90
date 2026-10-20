@@ -1,6 +1,7 @@
 module failed_symplectic_step_backend
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use field_can_base, only: field_can_t
+    use field_can_mod, only: evaluate
     use orbit_symplectic_base, only: symplectic_integrator_t, SYMPLECTIC_STEP_BOUNDARY
 
     implicit none
@@ -8,6 +9,7 @@ module failed_symplectic_step_backend
     integer :: successful_drift_calls = 0
     integer :: injected_status = 0
     real(dp) :: injected_momentum_ratio = 1d0
+    logical :: injected_stale_cache = .false.
 
 contains
 
@@ -31,9 +33,11 @@ contains
         si%last_step_fraction = 0.25d0
         si%last_event_radial_residual = 1.0d-11
         si%last_event_fraction_width = 1.0d-12
-        f%Bmod = 1.0d0
-        f%mu = 1.0d0
-        f%vpar = 0.0d0
+        call evaluate(f, si%z(1), si%z(2), si%z(3), 0)
+        f%ro0 = 1d0
+        f%mu = si%pabs**2/f%Bmod
+        f%vpar = 0d0
+        si%z(4) = f%Aph/f%ro0
         ierr = SYMPLECTIC_STEP_BOUNDARY
     end subroutine locate_lcfs_step
 
@@ -44,14 +48,19 @@ contains
         integer, intent(out) :: ierr
 
         si%z(1) = 0.3d0
-        f%vpar = sqrt(2d0*((injected_momentum_ratio*si%pabs)**2 - f%mu*f%Bmod))
-        if (radial_electric_potential_slope /= 0d0) &
-            f%Phie = f%Phie + (1d0 - injected_momentum_ratio**2)*si%pabs**2
-        f%H = 0.5d0*f%vpar**2 + f%mu*f%Bmod + f%Phie
         if (injected_status == SYMPLECTIC_STEP_BOUNDARY) then
             si%z(1) = 1d0
             si%last_step_fraction = 0.25d0
         end if
+        call evaluate(f, si%z(1), si%z(2), si%z(3), 0)
+        f%vpar = sqrt(2d0*((injected_momentum_ratio*si%pabs)**2 - f%mu*f%Bmod))
+        si%z(4) = f%vpar*f%hph + f%Aph/f%ro0
+        ! Model Euler's stale cache without changing its canonical endpoint.
+        if (injected_stale_cache) &
+            f%vpar = sqrt(2d0*((1.1d0*si%pabs)**2 - f%mu*f%Bmod))
+        if (radial_electric_potential_slope /= 0d0) &
+            f%Phie = f%Phie + (1d0 - injected_momentum_ratio**2)*si%pabs**2
+        f%H = 0.5d0*f%vpar**2 + f%mu*f%Bmod + f%Phie
         ierr = injected_status
     end subroutine wrong_energy_step
 
@@ -62,9 +71,10 @@ contains
 
         successful_drift_calls = successful_drift_calls + 1
         si%z(1) = si%z(1) + 0.01d0
-        f%Bmod = 1.0d0
-        f%mu = si%pabs**2
-        f%vpar = 0.0d0
+        call evaluate(f, si%z(1), si%z(2), si%z(3), 0)
+        f%mu = si%pabs**2/f%Bmod
+        f%vpar = 0d0
+        si%z(4) = f%Aph/f%ro0
         f%H = si%pabs**2
         ierr = 0
     end subroutine successful_drift_step
@@ -76,7 +86,8 @@ program test_sympl_testfield
     use failed_symplectic_step_backend, only: fail_symplectic_step, &
                          locate_lcfs_step, successful_drift_step, successful_drift_calls
     use failed_symplectic_step_backend, only: wrong_energy_step, injected_status, &
-                                              injected_momentum_ratio
+                                              injected_momentum_ratio, &
+                                              injected_stale_cache
     use simple_main, only: update_momentum
     use classification, only: classify_classifier_exit
     use simple_main, only : classify_orbit_exit, init_field, locate_linear_lcfs, &
@@ -376,12 +387,13 @@ contains
         use libneo_coordinates, only: coordinate_system_t
         use cartesian_coordinates, only: cartesian_coordinate_system_t
         use params, only: wall_query_rho_lcfs, radial_electric_potential_slope
-        type(tracer_t) :: local_orbit, expected_orbit
+        type(tracer_t) :: local_orbit, expected_orbit, candidate_orbit
         class(coordinate_system_t), allocatable :: saved_ref_coords
         real(dp) :: z(5), initial(5), x_previous(3), saved_ro0, exit_step
-        real(dp) :: saved_wall_gate, saved_potential_slope
+        real(dp) :: saved_wall_gate, saved_potential_slope, cached_ratio
         integer(int64) :: kt
         integer :: collisions, endpoint, wall_path, step_error, excessive
+        integer :: candidate_error
 
         call move_alloc(ref_coords, saved_ref_coords)
         allocate (cartesian_coordinate_system_t :: ref_coords)
@@ -394,7 +406,8 @@ contains
         symplectic_newton_warning_mode = .false.
         orbit_model = ORBIT_GC
         integmode = 3
-        do excessive = 0, 2
+        do excessive = 0, 3
+            injected_stale_cache = excessive == 3
             radial_electric_potential_slope = 0.0_dp
             if (excessive == 2) radial_electric_potential_slope = -1.0_dp
             injected_momentum_ratio = 1.004_dp
@@ -406,7 +419,8 @@ contains
                 initial = [0.2_dp, 1.0_dp, 0.2_dp, 1.0_dp, 0.25_dp]
                 do endpoint = 0, 1
                     ! Bounded boundary states return before another collision kick.
-                    if (excessive /= 1 .and. endpoint == 0) cycle
+                    if (excessive /= 1 .and. excessive /= 3 .and. endpoint == 0) cycle
+                    if (swcoll .and. endpoint == 0 .and. excessive == 3) cycle
                     do wall_path = 0, 1
                         initial(4:5) = [1.0_dp, 0.25_dp]
                         call init_sympl(local_orbit%si, local_orbit%f, initial, &
@@ -418,6 +432,9 @@ contains
                         injected_status = SYMPLECTIC_STEP_OK
                         if (endpoint == 1) injected_status = SYMPLECTIC_STEP_BOUNDARY
                         orbit_timestep_sympl => wrong_energy_step
+                        candidate_orbit = expected_orbit
+                        call wrong_energy_step(candidate_orbit%si, &
+                            candidate_orbit%f, candidate_error)
                         z = initial
                         x_previous = 0.0_dp
                         kt = 0_int64
@@ -428,16 +445,28 @@ contains
                                                 step_error, 1, 1, x_previous, exit_step)
                         end if
                         if (excessive /= 1) then
-                            if (step_error /= SYMPLECTIC_STEP_BOUNDARY .or. &
-                                abs(z(4)/initial(4) - injected_momentum_ratio) > &
-                                1.0e-12_dp) &
-                                error stop 'Physical boundary momentum was rejected'
+                            cached_ratio = injected_momentum_ratio
+                            if (injected_stale_cache) cached_ratio = 1.1_dp
+                            if (step_error /= injected_status .or. &
+                                abs(z(4)/initial(4) - cached_ratio) > 1.0e-12_dp) &
+                                error stop 'Physical endpoint momentum was rejected'
+                            if (any(local_orbit%si%z /= candidate_orbit%si%z) .or. &
+                                local_orbit%f%Bmod /= candidate_orbit%f%Bmod .or. &
+                                local_orbit%f%vpar /= candidate_orbit%f%vpar .or. &
+                                local_orbit%f%hph /= candidate_orbit%f%hph .or. &
+                                local_orbit%f%Aph /= candidate_orbit%f%Aph) &
+                                error stop 'Validation mutated the carried endpoint'
                             if (excessive == 2) then
                                 if (abs(local_orbit%f%H - expected_orbit%f%H) > &
                                     1.0e-12_dp) error stop 'Electric energy mismatch'
                             end if
-                            if (kt /= 0_int64 .or. exit_step /= 0.25_dp) &
-                                error stop 'Bounded boundary time was changed'
+                            if (endpoint == 1) then
+                                if (kt /= 0_int64 .or. exit_step /= 0.25_dp) &
+                                    error stop 'Bounded boundary time was changed'
+                            else
+                                if (kt /= 1_int64) &
+                                    error stop 'Accepted ordinary step did not advance'
+                            end if
                             cycle
                         end if
                         if (step_error /= SYMPLECTIC_STEP_EVENT_NOT_CONVERGED) &
@@ -459,6 +488,7 @@ contains
                 end do
             end do
         end do
+        injected_stale_cache = .false.
         swcoll = .false.
         ro0 = saved_ro0
         radial_electric_potential_slope = saved_potential_slope
