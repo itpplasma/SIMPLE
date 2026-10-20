@@ -117,7 +117,8 @@ with tarfile.open(stage / "pip/gvec-1.4.1.tar.gz") as archive:
 with (stage / "pip-requirements.txt").open("a") as requirements:
     requirements.write("\n" + "\n".join(metadata["project"]["dependencies"]) + "\n")
 PYTHON
-requirements=(-r "$stage/pip-requirements.txt" pip setuptools wheel)
+# GVEC also requests setuptools-scm dynamically from its metadata backend.
+requirements=(-r "$stage/pip-requirements.txt" pip setuptools setuptools-scm wheel)
 if [ "${SCI_TIER:-full}" = full ]; then
     requirements+=(-r "$src/ci/coverage-requirements.txt" 'numpy==2.2.6' 'scipy==1.16.3' vtk \
         hatchling hatch-vcs mpmath sympy numexpr numba)
