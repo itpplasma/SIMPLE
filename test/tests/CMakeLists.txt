@@ -1453,18 +1453,16 @@ add_test(NAME test_fo_symplectic COMMAND test_fo_symplectic.x
     ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
     ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000)
 set_tests_properties(test_fo_symplectic PROPERTIES LABELS "integration" TIMEOUT 900)
-# The long energy runs are independent orbits; register one CTest case per
-# marker so they run concurrently. Each passes the same field, step count,
-# velocity scale, step size and tolerance as the former single long test.
-# Its derivative and map checks do not depend on the step count and remain
-# in the 1000-step sibling (test_fo_symplectic, _resolved, _second, ...).
+# Schedule independent long energy orbits concurrently. Step-count-independent
+# derivative and map checks run in the corresponding 1000-step tests.
 function(add_fo_long_markers name field nsteps velocity)
     foreach(marker IN LISTS ARGN)
         add_test(NAME ${name}_marker${marker} COMMAND test_fo_symplectic.x
             ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
             ${field} ${nsteps} ${velocity} ${marker})
         set_tests_properties(${name}_marker${marker} PROPERTIES
-            LABELS "slow;integration" TIMEOUT 14400)
+            LABELS "slow;integration" TIMEOUT 14400
+            PROCESSORS 1 ENVIRONMENT "OMP_NUM_THREADS=1")
     endforeach()
 endfunction()
 add_fo_long_markers(test_fo_symplectic_long
@@ -1557,11 +1555,10 @@ set_tests_properties(test_fo_gauss2_resolution_large_matched_policy PROPERTIES
 
 # Gauss stages are too small to repay an OpenMP team. Run each serial orbit
 # on one reserved core, also when CTest schedules independent tests together.
-set(FO_STEPPER_TESTS test_fo_symplectic test_fo_symplectic_long
-    test_fo_symplectic_resolved test_fo_symplectic_resolved_long
+set(FO_STEPPER_TESTS test_fo_symplectic test_fo_symplectic_resolved
     test_fo_symplectic_newton_boundary test_fo_gauss2_original_oracle
     test_fo_gauss2_resolution_large_matched_policy)
-foreach(fo_suffix IN ITEMS second second_long second_resolved second_resolved_long)
+foreach(fo_suffix IN ITEMS second second_resolved)
     list(APPEND FO_STEPPER_TESTS test_fo_symplectic_${fo_suffix})
 endforeach()
 foreach(fo_probe IN ITEMS base half quarter tight base_short captured)
