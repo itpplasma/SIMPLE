@@ -4,8 +4,9 @@ program test_fo_symplectic
     use magfie_sub, only: set_magfie_spectre_field, spectre_field
     use spectre_fo_gauss2, only: gauss2_prepare, gauss2_geometry, &
         gauss2_potential, gauss2_encode, shipped_step => gauss2_step, &
-        gauss2_entry_step
+                                 gauss2_entry_step, gauss2_phases
     use reference_fo_gauss2, only: reference_prepare => gauss2_prepare, &
+       reference_geometry => gauss2_geometry, reference_potential => gauss2_potential, &
         gauss2_hamiltonian, gauss2_step
     use util, only: c, p_mass, e_charge, ev
     use generated_fo_stepper, only: generated_eval, generated_step
@@ -66,6 +67,8 @@ program test_fo_symplectic
             call energy_run(nlong,only_marker)
             cycle
         end if
+        call check_field_jets
+        call check_first_order
         call check_derivatives
         call check_monitor_derivatives
         efixed=0; lfixed=1; gfixed=1; mfixed=0
@@ -101,6 +104,75 @@ contains
         call gauss2_potential(z(1:3),width,ro0,av,da,ha)
         z(4:6)=av+matmul(transpose(e),vscale*[0.001_dp,0.002_dp,0.001_dp])
     end subroutine initial
+
+    subroutine check_field_jets
+        ! Independent frozen provider, including the axis, every volume and layers.
+        real(dp) :: q(3), x(3), xr(3), e(3, 3), er(3, 3), g(3, 3), gr(3, 3)
+        real(dp) :: dg(3, 3, 3), dgr(3, 3, 3), hg(3, 3, 3, 3), hgr(3, 3, 3, 3)
+        real(dp) :: a(3), ar(3), da(3, 3), dar(3, 3), ha(3, 3, 3), har(3, 3, 3)
+        real(dp), parameter :: offset(5) = [-0.2_dp, -0.01_dp, 0.0_dp, 0.01_dp, 0.2_dp]
+        integer :: volume, sample, mode, order
+        real(dp), allocatable :: phase(:, :)
+        real(dp) :: angle, phase_error, phase_bound
+
+        allocate (phase(2, spectre_field%data%mn))
+
+        do volume = 1, spectre_field%data%Mvol
+            do sample = 1, size(offset)
+                q = [real(volume - 1, dp) + offset(sample), &
+                     0.37_dp*sample, -0.21_dp*sample]
+                call gauss2_phases(q, phase)
+                do mode = 1, spectre_field%data%mn
+                    angle = real(spectre_field%data%im(mode), dp)*q(2) &
+                            - real(spectre_field%data%in(mode), dp)*q(3)
+                    phase_error = maxval(abs(phase(:, mode) - [cos(angle), sin(angle)]))
+                    order = 1 + abs(spectre_field%data%im(mode)) &
+                            + abs(spectre_field%data%in(mode))
+                    phase_bound = 64*epsilon(1.0_dp)*real(order, dp)*(1 + abs(angle))
+                    if (phase_error > phase_bound) error stop 'harmonic phase roundoff'
+                end do
+                call gauss2_geometry(q, width, x, e, g, dg, hg)
+                call reference_geometry(q, width, xr, er, gr, dgr, hgr)
+                if (maxval(abs(x - xr)) > 0.0_dp .or. &
+                    maxval(abs(e - er)) > 0.0_dp .or. &
+                    maxval(abs(g - gr)) > 0.0_dp .or. &
+                    maxval(abs(dg - dgr)) > 0.0_dp .or. &
+                    maxval(abs(hg - hgr)) > 0.0_dp) error stop 'prepared geometry jets'
+                call gauss2_potential(q, width, ro0, a, da, ha)
+                call reference_potential(q, width, ro0, ar, dar, har)
+                if (maxval(abs(a - ar)) > 0.0_dp .or. &
+                    maxval(abs(da - dar)) > 0.0_dp .or. &
+                    maxval(abs(ha - har)) > 0.0_dp) error stop 'prepared potential jets'
+            end do
+        end do
+    end subroutine check_field_jets
+
+    subroutine check_first_order
+        ! The low-order path must retain the value and RHS through interfaces,
+        ! with and without the radial metric monitor.
+        real(dp) :: z(6), en, en1, f(6), f1(6), df(6, 6), df1(6, 6)
+        real(dp) :: ke, ke1, mon, mon1, grad(6), grad1(6), error
+        real(dp), parameter :: rhos(5) = [0.65_dp, 0.98_dp, 1.0_dp, 1.02_dp, 1.35_dp]
+        integer :: r, mode
+        do r = 1, size(rhos)
+            call initial(z, rhos(r))
+            do mode = 0, 1
+                call generated_eval(z, width, ro0, en, f, df, 0.01_dp, &
+                                    0.12_dp, 0.1_dp, real(mode, dp), ke, mon, grad)
+                call generated_eval(z, width, ro0, en1, f1, df1, 0.01_dp, &
+                                    0.12_dp, 0.1_dp, real(mode, dp), ke1, mon1, grad1, &
+                                    first_order=.true.)
+                error = max( &
+                        abs(en1 - en)/max(abs(en), tiny(1.0_dp)), &
+                        abs(ke1 - ke)/max(abs(ke), tiny(1.0_dp)), &
+                        abs(mon1 - mon)/max(abs(mon), tiny(1.0_dp)), &
+                        maxval(abs(f1 - f))/max(maxval(abs(f)), tiny(1.0_dp)), &
+                        maxval(abs(grad1 - grad))/max(maxval(abs(grad)), tiny(1.0_dp)))
+                if (error > 64*epsilon(1.0_dp)) &
+                    error stop 'first-order value/RHS differs from full evaluation'
+            end do
+        end do
+    end subroutine check_first_order
 
     subroutine check_derivatives
         real(dp)::z(6),zp(6),zm(6),fp(6),fm(6),f(6),df(6,6),dfr(6,6)
@@ -439,7 +511,7 @@ contains
         real(dp)::emin,emax,eblock_min,eblock_max,rhomin,rhomax
         real(dp)::xx,yy,mx,my,sxx,sxy,syy,dx,dy,slope,se
         real(dp)::maxres
-        integer::s
+        integer::s, k
         logical::ok
         width=0.06_dp;ro0=1.0e5_dp;h=0.02_dp;lfixed=1;gfixed=1
         select case(marker)
@@ -475,10 +547,34 @@ contains
             width,ro0,h,lfixed,gfixed,mfixed
         emin=e0; emax=e0; eblock_min=e0; eblock_max=e0
         rhomin=z(1);rhomax=z(1);mx=0;my=0;sxx=0;sxy=0;syy=0;maxres=0
-        do s=1,n
-            diagnostic_step=s
-            call shipped_step(z,width,ro0,efixed,lfixed,gfixed,h,out,xx,ok, &
-                radial_scale=mfixed,tolerance=energy_tol,residual=res)
+        ! H after step k is the start energy of step k+1, so record step k's
+        ! diagnostics one step late instead of evaluating the field again.
+        do s = 1, n + 1
+            if (s <= n) then
+                diagnostic_step = s
+                call shipped_step(z, width, ro0, efixed, lfixed, gfixed, h, out, &
+                                  xx, ok, radial_scale=mfixed, tolerance=energy_tol, &
+                                  residual=res, start_energy=en)
+            else
+                call generated_eval(z, width, ro0, en, f, df, first_order=.true.)
+            end if
+            if (s > 1) then
+                k = s - 1
+                emin = min(emin, en); emax = max(emax, en)
+                rhomin = min(rhomin, z(1)); rhomax = max(rhomax, z(1))
+                eblock_min = min(eblock_min, en); eblock_max = max(eblock_max, en)
+                xx = real(k, dp)/real(n, dp); yy = en/e0 - 1
+                dx = xx - mx; dy = yy - my
+                mx = mx + dx/k; my = my + dy/k
+                sxx = sxx + dx*(xx - mx); sxy = sxy + dx*(yy - my); syy = syy + dy*(yy - my)
+                if (mod(k, max(1, n/10)) == 0) then
+                    print '(a,i0,a,i0,3(a,es12.4),a,f8.4)', 'ENERGY marker=', &
+                        marker, ' steps=', k, ' min/E0-1=', eblock_min/e0 - 1, &
+                        ' max/E0-1=', eblock_max/e0 - 1, ' end/E0-1=', yy, ' rho=', z(1)
+                    eblock_min = en; eblock_max = en
+                end if
+            end if
+            if (s > n) exit
             if(.not.ok) then
                 print '(a,i0,a,i0,2(a,es16.8))', 'ENERGY_FAILURE marker=',marker, &
                     ' step=',s,' rho=',z(1),' residual=',res
@@ -488,21 +584,6 @@ contains
                 return
             end if
             maxres=max(maxres,res);z=out
-            call generated_eval(z,width,ro0,en,f,df)
-            emin=min(emin,en); emax=max(emax,en)
-            rhomin=min(rhomin,z(1));rhomax=max(rhomax,z(1))
-            eblock_min=min(eblock_min,en); eblock_max=max(eblock_max,en)
-            xx=real(s,dp)/real(n,dp);yy=en/e0-1
-            dx=xx-mx;dy=yy-my
-            mx=mx+dx/s;my=my+dy/s
-            sxx=sxx+dx*(xx-mx);sxy=sxy+dx*(yy-my);syy=syy+dy*(yy-my)
-            if(mod(s,max(1,n/10))==0) then
-                print '(a,i0,a,i0,3(a,es12.4),a,f8.4)', &
-                    'ENERGY marker=',marker,' steps=',s, &
-                    ' min/E0-1=',eblock_min/e0-1,' max/E0-1=',eblock_max/e0-1, &
-                    ' end/E0-1=',yy,' rho=',z(1)
-                eblock_min=en; eblock_max=en
-            end if
         end do
         slope=0;se=0
         if(n>2) then

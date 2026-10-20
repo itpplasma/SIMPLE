@@ -85,6 +85,17 @@ Newton iteration from $s \approx (d_\text{axis}/d_\text{boundary})^2$: at most
 (`libneo_coordinates_vmec.f90`). It can fail outside the plasma and near the
 boundary ([#288](https://github.com/itpplasma/SIMPLE/issues/288)).
 
+The NCSX spline derivative tests (`test_splined_field_derivatives`,
+`test_bder_from_splines`, `test_magfie_refcoords_splines` and
+`test_hcurl_from_dhcov_splines`) use angular multiplier 1 for their VMEC
+coordinate fixture. They retain quintic splines, the 201 radial surfaces,
+the field sampling grids and all finite-difference checks and tolerances.
+This bounds the three VMEC coordinate spline arrays to 0.43 GiB per process.
+CTest reserves memory for these and the full-resolution NCSX consumers with
+`RESOURCE_GROUPS` (`mem_gb`, one slot per GiB of measured peak RSS rounded up).
+See {doc}`/development/testing` for the generated resource spec
+and the memory budget used by local tests and CI.
+
 ### 1.3 Chartmap coordinates
 
 `chartmap_coordinate_system_t` reads a NetCDF file with Cartesian geometry
@@ -367,6 +378,31 @@ does not initialise VMEC. `init_spectre_field` (`src/simple_main.f90`) sets
 $N_\text{fp}$, `fper` $= 2\pi/N_\text{fp}$ and `rmajor`, the $m = n = 0$
 harmonic of $R$ on the outermost interface (m), so that `params_init` derives
 $\Delta\tau$ as for VMEC.
+
+The canonical Gauss-2 full-orbit evaluator in
+`concept/fo_symplectic_proof/spectre_fo_gauss2.f90` retains the same smooth
+embedding and vector potential. It caches field-constant angular factors and
+shares radial profiles between Fourier modes. Preparation packs the nonzero
+potential coefficient tuples without changing their mode/degree order; an
+identically zero interface gauge is skipped as a whole. FortSym emits the fixed
+geometry contractions and the two-component potential accumulation. The field-jet
+call passes geometry's Fourier phases to the potential at the same point,
+avoiding a second trigonometric evaluation. The internal metric path constructs
+integer Fourier harmonics by complex-product recurrence from two fundamental
+phases; FortSym proves the addition identities and emitted expressions. Sparse
+high harmonics retain direct trigonometric evaluation. The public geometry
+helper retains direct phases for the bitwise frozen-provider oracle; the hot
+path also has an independent phase roundoff check and the Hamiltonian/map
+oracles. Predictor and residual-only
+stage evaluations request first-order field jets and a FortSym-generated
+Hamiltonian leaf without Hessian outputs, including first-order radial-metric
+and monitor leaves without unused second derivatives; Newton corrections and tangent maps
+use the complete jets. The full Hessian uses the factored inverse-metric
+identity generated and checked by FortSym; energy and force retain the original
+first-order expressions. The generated array interface binds the scalar DAG
+directly to arrays. Small stage evaluations run serially. Energy tests reuse
+H at the next step's start and evaluate the final endpoint explicitly, retaining
+the energy envelope and drift diagnostics at every accepted step.
 
 ### 6.1 Field lines
 

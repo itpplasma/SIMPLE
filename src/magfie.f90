@@ -72,6 +72,50 @@ subroutine set_magfie_spectre_field(field)
   allocate (spectre_field, source=field)
 end subroutine set_magfie_spectre_field
 
+    subroutine axis_radial_coordinate(radial_is_rho, ierr)
+        ! The RK axis map must follow the active evaluator's integration chart.
+        ! Non-reference evaluators retain their existing flux-coordinate recovery.
+        logical, intent(out) :: radial_is_rho
+        integer, intent(out) :: ierr
+
+        radial_is_rho = .false.
+        ierr = 0
+        if (.not. associated(magfie, magfie_refcoords)) return
+        ierr = 2
+        if (allocated(refcoords_field)) then
+            call reference_axis_radial_coordinate(refcoords_field, radial_is_rho, ierr)
+        else if (allocated(field_noncan)) then
+            call reference_axis_radial_coordinate(field_noncan, radial_is_rho, ierr)
+        end if
+    end subroutine axis_radial_coordinate
+
+    subroutine reference_axis_radial_coordinate(field, radial_is_rho, ierr)
+        use libneo_coordinates, only: vmec_coordinate_system_t
+        class(magnetic_field_t), intent(in) :: field
+        logical, intent(out) :: radial_is_rho
+        integer, intent(out) :: ierr
+
+        radial_is_rho = .false.
+        ierr = 2
+        if (.not. allocated(field%coords)) return
+        select type (coords => field%coords)
+        class is (chartmap_coordinate_system_t)
+            select case (coords%rho_convention)
+            case (RHO_TOR, RHO_POL)
+                radial_is_rho = .true.
+                ierr = 0
+            end select
+        class is (vmec_coordinate_system_t)
+            ! splined_field_t evaluates on its sqrt(s) grid; a raw VMEC field
+            ! evaluates in normalized toroidal flux itself.
+            select type (field)
+            type is (splined_field_t)
+                radial_is_rho = .true.
+            end select
+            ierr = 0
+        end select
+    end subroutine reference_axis_radial_coordinate
+
 subroutine init_magfie(id)
   integer, intent(in) :: id
 

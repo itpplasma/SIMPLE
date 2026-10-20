@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.20)
+project(simple_axis_generator LANGUAGES Fortran C CXX)
+find_package(fortsym CONFIG REQUIRED)
+add_executable(generate_axis_maps generate_axis_maps.f90)
+target_link_libraries(generate_axis_maps PRIVATE fortsym::fortsym)
