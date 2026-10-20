@@ -22,6 +22,9 @@ head_ref=${SCI_HEAD_REF:-$(git -C "$src" rev-parse --abbrev-ref HEAD)}
 git check-ref-format --branch "$head_ref" > /dev/null
 
 deps="itpplasma/libneo itpplasma/map2disc lazy-fortran/fortnum lazy-fortran/fortplot lazy-fortran/fortio"
+if [ "${SCI_TIER:-full}" = full ]; then
+    deps="$deps dbstein/pybie2d dbstein/function_generator"
+fi
 
 # url<TAB>file name in test/test_data (shared with the golden-record runner).
 data_urls="https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc	wout.nc
@@ -44,7 +47,11 @@ update_mirror() {
         git -C "$dir" config --add remote.origin.fetch '+refs/tags/*:refs/tags/*'
     fi
     git -C "$dir" fetch -q --prune origin
-    git -C "$dir" symbolic-ref HEAD refs/heads/main
+    # map2disc's two Git dependencies use master; our libraries use main.
+    case $slug in
+        dbstein/*) git -C "$dir" symbolic-ref HEAD refs/heads/master ;;
+        *) git -C "$dir" symbolic-ref HEAD refs/heads/main ;;
+    esac
 }
 
 for slug in $deps; do
