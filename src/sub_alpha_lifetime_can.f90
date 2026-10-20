@@ -649,22 +649,79 @@ contains
             call velo_axis_regularized(tau, z_axis, vz_axis, legacy_s_floor)
         end subroutine velo_axis
 
-        subroutine velo_axis_regularized(tau,z_axis,vz_axis,s_floor)
-            !
-            ! Here variables z(1)=s and z(2)=theta are replaced with
-            ! x_axis(1)=x=sqrt(s)*cos(theta) and x_axis(2)=y=sqrt(s)*sin(theta)
-            !
-            implicit none
-            !
-            real(dp), intent(in) :: tau
-            real(dp), intent(in) :: z_axis(:)
-            real(dp), intent(out) :: vz_axis(:)
-            real(dp), intent(in) :: s_floor
-            call evaluate_axis_rhs(tau, z_axis, s_floor, vz_axis)
-        end subroutine velo_axis_regularized
+            subroutine velo_axis_regularized(tau, z_axis, vz_axis, s_floor)
+                ! s_floor uses native radial units; reconstruction uses Cartesian R**2.
+                use magfie_sub, only: axis_radial_coordinate
+                real(dp), intent(in) :: tau, z_axis(:), s_floor
+                real(dp), intent(out) :: vz_axis(:)
+                logical :: radial_is_rho
+                integer :: ierr
 
-        subroutine evaluate_axis_rhs(tau, z_axis, sample_s, vz_axis)
+                call axis_radial_coordinate(radial_is_rho, ierr)
+                if (ierr /= 0) error stop 'unsupported reference axis coordinate'
+                call evaluate_axis_rhs(tau, z_axis, &
+                          axis_native_radius_squared(s_floor, radial_is_rho), vz_axis, &
+                                       radial_is_rho)
+            end subroutine velo_axis_regularized
+
+          pure real(dp) function axis_native_radius_squared(q, radial_is_rho) result(r2)
+                real(dp), intent(in) :: q
+                logical, intent(in) :: radial_is_rho
+
+                r2 = q
+                if (radial_is_rho) r2 = q*q
+            end function axis_native_radius_squared
+
+            subroutine axis_polar_to_cartesian(zpolar, zaxis, radial_is_rho)
+                use axis_map_generated, only: axis_flux_forward, axis_rho_forward
+                real(dp), intent(in) :: zpolar(5)
+                real(dp), intent(out) :: zaxis(5)
+                logical, intent(in) :: radial_is_rho
+
+                if (radial_is_rho) then
+                    call axis_rho_forward(max(zpolar(1), 0.0_dp), zpolar(2), &
+                                          zaxis(1), zaxis(2))
+                else
+                    call axis_flux_forward(max(zpolar(1), 0.0_dp), zpolar(2), &
+                                           zaxis(1), zaxis(2))
+                end if
+                zaxis(3:5) = zpolar(3:5)
+            end subroutine axis_polar_to_cartesian
+
+            subroutine axis_cartesian_to_polar(zaxis, zpolar, radial_is_rho)
+                use axis_map_generated, only: axis_flux_inverse, axis_rho_inverse
+                real(dp), intent(in) :: zaxis(5)
+                real(dp), intent(out) :: zpolar(5)
+                logical, intent(in) :: radial_is_rho
+
+                if (radial_is_rho) then
+                    call axis_rho_inverse(zaxis(1), zaxis(2), zpolar(1))
+                else
+                    call axis_flux_inverse(zaxis(1), zaxis(2), zpolar(1))
+                end if
+                zpolar(2) = atan2(zaxis(2), zaxis(1))
+                zpolar(3:5) = zaxis(3:5)
+            end subroutine axis_cartesian_to_polar
+
+            subroutine axis_polar_velocity(zaxis, vpolar, vaxis, radial_is_rho)
+                use axis_map_generated, only: axis_flux_velocity, axis_rho_velocity
+                real(dp), intent(in) :: zaxis(5), vpolar(5)
+                real(dp), intent(out) :: vaxis(5)
+                logical, intent(in) :: radial_is_rho
+
+                if (radial_is_rho) then
+                    call axis_rho_velocity(zaxis(1), zaxis(2), vpolar(1), vpolar(2), &
+                                           vaxis(1), vaxis(2))
+                else
+                    call axis_flux_velocity(zaxis(1), zaxis(2), vpolar(1), vpolar(2), &
+                                            vaxis(1), vaxis(2))
+                end if
+                vaxis(3:5) = vpolar(3:5)
+            end subroutine axis_polar_velocity
+
+            subroutine evaluate_axis_rhs(tau, z_axis, sample_s, vz_axis, radial_is_rho)
             real(dp), intent(in) :: tau, z_axis(:), sample_s
+                logical, intent(in) :: radial_is_rho
             real(dp), intent(out) :: vz_axis(:)
             integer, parameter :: nang = 8
             real(dp) :: values(axis_rhs_count, nang, 2)
@@ -678,7 +735,7 @@ contains
 
             r2=z_axis(1)*z_axis(1)+z_axis(2)*z_axis(2)
             if(r2.ge.sample_s) then
-                call evaluate_axis_rhs_raw(tau, z_axis, vz_axis)
+                    call evaluate_axis_rhs_raw(tau, z_axis, vz_axis, radial_is_rho)
                 return
             endif
 
@@ -694,7 +751,7 @@ contains
                     zsample(1)=radius*cos(angle)
                     zsample(2)=radius*sin(angle)
                     call evaluate_axis_rhs_raw(tau, zsample, &
-                        values(:,iangle,iring))
+                                                values(:, iangle, iring), radial_is_rho)
                 enddo
             enddo
 
@@ -740,7 +797,7 @@ contains
             ! Join the reconstruction to the exact pullback with a C1
             ! smoothstep in the outer half of the disk.
             if(r2.gt.0.25d0*sample_s) then
-                call evaluate_axis_rhs_raw(tau, z_axis, raw)
+                    call evaluate_axis_rhs_raw(tau, z_axis, raw, radial_is_rho)
                 blend_arg=2.d0*sqrt(r2/sample_s)-1.d0
                 blend=blend_arg*blend_arg*(3.d0-2.d0*blend_arg)
                 reconstructed=(1.d0-blend)*reconstructed+blend*raw
@@ -748,22 +805,18 @@ contains
             vz_axis=reconstructed
         end subroutine evaluate_axis_rhs
 
-        subroutine evaluate_axis_rhs_raw(tau, z_axis, vz_axis)
-            real(dp), intent(in) :: tau, z_axis(:)
-            real(dp), intent(out) :: vz_axis(:)
-            real(dp) :: s, zpolar(5), vpolar(5)
+            subroutine evaluate_axis_rhs_raw(tau, z_axis, vz_axis, radial_is_rho)
+                real(dp), intent(in) :: tau, z_axis(:)
+                real(dp), intent(out) :: vz_axis(:)
+                logical, intent(in) :: radial_is_rho
+                real(dp) :: zpolar(5), vpolar(5)
 
-            s=z_axis(1)*z_axis(1)+z_axis(2)*z_axis(2)
-            if(.not.(s.gt.0.d0)) error stop &
-                'raw axis-RHS evaluation requires nonzero radius'
-            zpolar=[s,atan2(z_axis(2),z_axis(1)),z_axis(3:5)]
-            call velo_can(tau,zpolar,vpolar)
-            vz_axis(1)=0.5d0*vpolar(1)*z_axis(1)/s &
-                -vpolar(2)*z_axis(2)
-            vz_axis(2)=0.5d0*vpolar(1)*z_axis(2)/s &
-                +vpolar(2)*z_axis(1)
-            vz_axis(3:5)=vpolar(3:5)
-        end subroutine evaluate_axis_rhs_raw
+                if (.not. (sum(z_axis(1:2)**2) > 0.0_dp)) error stop &
+                    'raw axis-RHS evaluation requires nonzero radius'
+                call axis_cartesian_to_polar(z_axis, zpolar, radial_is_rho)
+                call velo_can(tau, zpolar, vpolar)
+                call axis_polar_velocity(z_axis, vpolar, vz_axis, radial_is_rho)
+            end subroutine evaluate_axis_rhs_raw
         !
         !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
         !
@@ -820,212 +873,207 @@ contains
             end select
         end subroutine velo_axis_context
 
-        subroutine orbit_timestep_axis(z,dtau,dtaumin,relerr,ierr,step_limit, &
-                axis_floor,near_axis_limit)
-            use finite_check, only: is_finite
-            use odeint_allroutines_sub, only : odeint_has_failed
-            use chamb_sub, only : chamb_can
-            !
-            implicit none
-            !
-            integer, parameter          :: ndim=5, nstepmax=1000000
-            logical :: near_axis
-            integer :: ierr
-            integer, intent(in), optional :: step_limit
-            real(dp), intent(in), optional :: axis_floor,near_axis_limit
-            real(dp) :: dtau,dtaumin,phi,tau1,tau2,z1,z2,axis_floor_local
-            real(dp) :: relerr,snear_axis
-            !
-            real(dp), dimension(2)    :: y
-            real(dp), dimension(ndim) :: z, z_initial
-            !
-            if(abs(dtaumin*nstepmax).le.abs(dtau)) then
-                ierr=2
-                print *,'orbit_timestep: number of steps exceeds nstepmax'
-                return
-            endif
-            !
-            ierr=0
-            axis_floor_local=1.d-8
-            snear_axis=0.01d0
-            if(present(axis_floor)) axis_floor_local=axis_floor
-            if(present(near_axis_limit)) snear_axis=near_axis_limit
-            if(.not.is_finite(axis_floor_local) .or. &
-                axis_floor_local.le.0.d0 .or. &
-                .not.is_finite(snear_axis) .or. &
-                snear_axis.le.axis_floor_local .or. snear_axis.gt.1.d0) then
-                ierr=2
-                return
-            endif
-            z_initial=z
-            y(1)=z(1)
-            y(2)=z(2)
-            phi=z(3)
-            !
-            call chamb_can(y,phi,ierr)
-            !
-            if(ierr.eq.1) return
-            tau1=0.d0
-            tau2=dtaumin
-            !
-            near_axis=.false.
-            !
-            do while((dtau>0 .and. (tau2 .lt. dtau)) .or. (dtau<0 .and. (tau2 .gt. dtau)))
-                if(near_axis) then
-                    if(z(1)**2+z(2)**2.gt.snear_axis) then
-                        near_axis=.false.
-                        z1=z(1)**2+z(2)**2
-                        z2=atan2(z(2),z(1))
-                        z(1)=z1
-                        z(2)=z2
+            subroutine orbit_timestep_axis(z, dtau, dtaumin, relerr, ierr, step_limit, &
+                                           axis_floor, near_axis_limit)
+                use magfie_sub, only: axis_radial_coordinate
+                use finite_check, only: is_finite
+                use odeint_allroutines_sub, only: odeint_has_failed
+                use chamb_sub, only: chamb_can
+                !
+                implicit none
+                !
+                integer, parameter          :: ndim = 5, nstepmax = 1000000
+                logical :: near_axis, radial_is_rho
+                integer :: ierr
+                integer, intent(in), optional :: step_limit
+                real(dp), intent(in), optional :: axis_floor, near_axis_limit
+                real(dp) :: dtau, dtaumin, phi, tau1, tau2, axis_floor_local
+                real(dp) :: relerr, snear_axis, near_radius_squared
+                real(dp) :: z_mapped(5)
+                !
+                real(dp), dimension(2)    :: y
+                real(dp), dimension(ndim) :: z, z_initial
+                !
+                if (abs(dtaumin*nstepmax) .le. abs(dtau)) then
+                    ierr = 2
+                    print *, 'orbit_timestep: number of steps exceeds nstepmax'
+                    return
+                end if
+                !
+                ierr = 0
+                axis_floor_local = 1.d-8
+                snear_axis = 0.01d0
+                if (present(axis_floor)) axis_floor_local = axis_floor
+                if (present(near_axis_limit)) snear_axis = near_axis_limit
+                if (.not. is_finite(axis_floor_local) .or. &
+                    axis_floor_local .le. 0.d0 .or. &
+                    .not. is_finite(snear_axis) .or. &
+                    snear_axis .le. axis_floor_local .or. snear_axis .gt. 1.d0) then
+                    ierr = 2
+                    return
+                end if
+                call axis_radial_coordinate(radial_is_rho, ierr)
+                if (ierr /= 0) return
+             near_radius_squared = axis_native_radius_squared(snear_axis, radial_is_rho)
+                z_initial = z
+                y(1) = z(1)
+                y(2) = z(2)
+                phi = z(3)
+                !
+                call chamb_can(y, phi, ierr)
+                !
+                if (ierr .eq. 1) return
+                tau1 = 0.d0
+                tau2 = dtaumin
+                !
+                near_axis = .false.
+                !
+     do while ((dtau > 0 .and. (tau2 .lt. dtau)) .or. (dtau < 0 .and. (tau2 .gt. dtau)))
+                    if (near_axis) then
+                        if (z(1)**2 + z(2)**2 .gt. near_radius_squared) then
+                            near_axis = .false.
+                            call axis_cartesian_to_polar(z, z_mapped, radial_is_rho)
+                            z = z_mapped
+                            !
+                           call integrate_axis_segment(z, tau1, tau2, relerr, .false., &
+                                                        axis_floor_local, step_limit)
+                            if (odeint_has_failed() .or. .not. all(is_finite(z))) then
+                                z = z_initial
+                                ierr = 2
+                                return
+                            end if
+                            !
+                            y(1) = z(1)
+                            y(2) = z(2)
+                            phi = z(3)
+                            !
+                            call chamb_can(y, phi, ierr)
+                            !
+                            if (ierr .eq. 1) return
+                        else
+                            !
+                            call integrate_axis_segment(z, tau1, tau2, relerr, .true., &
+                                                        axis_floor_local, step_limit)
+                            if (odeint_has_failed() .or. .not. all(is_finite(z))) then
+                                z = z_initial
+                                ierr = 2
+                                return
+                            end if
+                            !
+                        end if
+                    else
+                        if (z(1) .lt. snear_axis) then
+                            near_axis = .true.
+                            call axis_polar_to_cartesian(z, z_mapped, radial_is_rho)
+                            z = z_mapped
+                            !
+                            call integrate_axis_segment(z, tau1, tau2, relerr, .true., &
+                                                        axis_floor_local, step_limit)
+                            if (odeint_has_failed() .or. .not. all(is_finite(z))) then
+                                z = z_initial
+                                ierr = 2
+                                return
+                            end if
+                            !
+                        else
+                            !
+                           call integrate_axis_segment(z, tau1, tau2, relerr, .false., &
+                                                        axis_floor_local, step_limit)
+                            if (odeint_has_failed() .or. .not. all(is_finite(z))) then
+                                z = z_initial
+                                ierr = 2
+                                return
+                            end if
+                            !
+                            y(1) = z(1)
+                            y(2) = z(2)
+                            phi = z(3)
+                            !
+                            call chamb_can(y, phi, ierr)
+                            !
+                            if (ierr .eq. 1) return
+                            !
+                        end if
+                    end if
+                    tau1 = tau2
+                    tau2 = tau2 + dtaumin
+                end do
+                !
+                tau2 = dtau
+                !
+                if (near_axis) then
+                    if (z(1)**2 + z(2)**2 .gt. near_radius_squared) then
+                        near_axis = .false.
+                        call axis_cartesian_to_polar(z, z_mapped, radial_is_rho)
+                        z = z_mapped
                         !
-                        call integrate_axis_segment(z,tau1,tau2,relerr,.false., &
-                            axis_floor_local,step_limit)
+                        call integrate_axis_segment(z, tau1, tau2, relerr, .false., &
+                                                    axis_floor_local, step_limit)
                         if (odeint_has_failed() .or. .not. all(is_finite(z))) then
-                            z=z_initial
-                            ierr=2
+                            z = z_initial
+                            ierr = 2
                             return
-                        endif
+                        end if
                         !
-                        y(1)=z(1)
-                        y(2)=z(2)
-                        phi=z(3)
+                        y(1) = z(1)
+                        y(2) = z(2)
+                        phi = z(3)
                         !
-                        call chamb_can(y,phi,ierr)
+                        call chamb_can(y, phi, ierr)
                         !
-                        if(ierr.eq.1) return
+                        if (ierr .eq. 1) return
                     else
                         !
-                        call integrate_axis_segment(z,tau1,tau2,relerr,.true., &
-                            axis_floor_local,step_limit)
+                        call integrate_axis_segment(z, tau1, tau2, relerr, .true., &
+                                                    axis_floor_local, step_limit)
                         if (odeint_has_failed() .or. .not. all(is_finite(z))) then
-                            z=z_initial
-                            ierr=2
+                            z = z_initial
+                            ierr = 2
                             return
-                        endif
+                        end if
                         !
-                    endif
+                    end if
                 else
-                    if(z(1).lt.snear_axis) then
-                        near_axis=.true.
-                        z1=sqrt(max(z(1),0.d0))*cos(z(2))
-                        z2=sqrt(max(z(1),0.d0))*sin(z(2))
-                        z(1)=z1
-                        z(2)=z2
+                    if (z(1) .lt. snear_axis) then
+                        near_axis = .true.
+                        call axis_polar_to_cartesian(z, z_mapped, radial_is_rho)
+                        z = z_mapped
                         !
-                        call integrate_axis_segment(z,tau1,tau2,relerr,.true., &
-                            axis_floor_local,step_limit)
+                        call integrate_axis_segment(z, tau1, tau2, relerr, .true., &
+                                                    axis_floor_local, step_limit)
                         if (odeint_has_failed() .or. .not. all(is_finite(z))) then
-                            z=z_initial
-                            ierr=2
+                            z = z_initial
+                            ierr = 2
                             return
-                        endif
+                        end if
                         !
                     else
                         !
-                        call integrate_axis_segment(z,tau1,tau2,relerr,.false., &
-                            axis_floor_local,step_limit)
+                        call integrate_axis_segment(z, tau1, tau2, relerr, .false., &
+                                                    axis_floor_local, step_limit)
                         if (odeint_has_failed() .or. .not. all(is_finite(z))) then
-                            z=z_initial
-                            ierr=2
+                            z = z_initial
+                            ierr = 2
                             return
-                        endif
+                        end if
                         !
-                        y(1)=z(1)
-                        y(2)=z(2)
-                        phi=z(3)
+                        y(1) = z(1)
+                        y(2) = z(2)
+                        phi = z(3)
                         !
-                        call chamb_can(y,phi,ierr)
+                        call chamb_can(y, phi, ierr)
                         !
-                        if(ierr.eq.1) return
+                        if (ierr .eq. 1) return
                         !
-                    endif
-                endif
-                tau1=tau2
-                tau2=tau2+dtaumin
-            enddo
+                    end if
+                end if
+                !
+                if (near_axis) then
+                    call axis_cartesian_to_polar(z, z_mapped, radial_is_rho)
+                    z = z_mapped
+                end if
+                !
+            end subroutine orbit_timestep_axis
             !
-            tau2=dtau
-            !
-            if(near_axis) then
-                if(z(1)**2+z(2)**2.gt.snear_axis) then
-                    near_axis=.false.
-                    z1=z(1)**2+z(2)**2
-                    z2=atan2(z(2),z(1))
-                    z(1)=z1
-                    z(2)=z2
-                    !
-                    call integrate_axis_segment(z,tau1,tau2,relerr,.false., &
-                        axis_floor_local,step_limit)
-                    if (odeint_has_failed() .or. .not. all(is_finite(z))) then
-                        z=z_initial
-                        ierr=2
-                        return
-                    endif
-                    !
-                    y(1)=z(1)
-                    y(2)=z(2)
-                    phi=z(3)
-                    !
-                    call chamb_can(y,phi,ierr)
-                    !
-                    if(ierr.eq.1) return
-                else
-                    !
-                    call integrate_axis_segment(z,tau1,tau2,relerr,.true., &
-                        axis_floor_local,step_limit)
-                    if (odeint_has_failed() .or. .not. all(is_finite(z))) then
-                        z=z_initial
-                        ierr=2
-                        return
-                    endif
-                    !
-                endif
-            else
-                if(z(1).lt.snear_axis) then
-                    near_axis=.true.
-                    z1=sqrt(max(z(1),0.d0))*cos(z(2))
-                    z2=sqrt(max(z(1),0.d0))*sin(z(2))
-                    z(1)=z1
-                    z(2)=z2
-                    !
-                    call integrate_axis_segment(z,tau1,tau2,relerr,.true., &
-                        axis_floor_local,step_limit)
-                    if (odeint_has_failed() .or. .not. all(is_finite(z))) then
-                        z=z_initial
-                        ierr=2
-                        return
-                    endif
-                    !
-                else
-                    !
-                    call integrate_axis_segment(z,tau1,tau2,relerr,.false., &
-                        axis_floor_local,step_limit)
-                    if (odeint_has_failed() .or. .not. all(is_finite(z))) then
-                        z=z_initial
-                        ierr=2
-                        return
-                    endif
-                    !
-                    y(1)=z(1)
-                    y(2)=z(2)
-                    phi=z(3)
-                    !
-                    call chamb_can(y,phi,ierr)
-                    !
-                    if(ierr.eq.1) return
-                    !
-                endif
-            endif
-            !
-            if(near_axis) then
-                z1=z(1)**2+z(2)**2
-                z2=atan2(z(2),z(1))
-                z(1)=z1
-                z(2)=z2
-            endif
-            !
-        end subroutine orbit_timestep_axis
-        !
-        !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-    end module alpha_lifetime_sub
+            !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+            end module alpha_lifetime_sub

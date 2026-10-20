@@ -114,6 +114,13 @@ main() {
     mkdir -p "$GOLDEN_RECORD_BASE_DIR"
     mkdir -p "$TEST_DATA_DIR"
 
+    # Resource groups allow cases to overlap. Protect only shared reference
+    # preparation; the numerical runs below use separate case directories.
+    local ref_build_lock
+    mkdir -p "$(dirname "$PROJECT_ROOT_REF")"
+    exec {ref_build_lock}>"$PROJECT_ROOT_REF.build.lock"
+    flock "$ref_build_lock"
+
     local REF_CONTRACT_STAMP="$PROJECT_ROOT_REF/build/.golden-libneo-ref"
     if [ -f "$PROJECT_ROOT_REF/build/simple.x" ] && \
        [ "$(cat "$REF_CONTRACT_STAMP" 2>/dev/null)" != "$GOLDEN_LIBNEO_REF" ]; then
@@ -127,6 +134,17 @@ main() {
         build "$PROJECT_ROOT_REF" || handle_failure $?
     else
         echo "Using existing reference build at: $PROJECT_ROOT_REF/build/simple.x"
+    fi
+    flock -u "$ref_build_lock"
+    exec {ref_build_lock}>&-
+
+    # The CTest fixture golden_record_prepare builds the reference and fetches
+    # the shared test data once, so the per-case tests can run in parallel.
+    if [ "${GOLDEN_RECORD_PREPARE_ONLY:-0}" = "1" ]; then
+        GOLDEN_RECORD_DATA_ONLY=1 "$SCRIPT_DIR/run_golden_tests.sh" \
+            "$PROJECT_ROOT_REF" "$RUN_DIR_REF" "$TEST_DATA_DIR" || handle_failure $?
+        echo "Reference build and test data are ready."
+        exit 0
     fi
 
     # Check if current version needs building (it should already be built)
@@ -223,7 +241,7 @@ build() {
         return 1
     fi
 
-    local BUILD_PARALLEL="${CMAKE_BUILD_PARALLEL_LEVEL:-2}"
+    local BUILD_PARALLEL="${CMAKE_BUILD_PARALLEL_LEVEL:-$(nproc)}"
     cmake --build build --config Release --parallel "$BUILD_PARALLEL" > $PROJECT_ROOT/build.log 2>&1
     if [ $? -ne 0 ]; then
         echo "Build failed. Check $PROJECT_ROOT/build.log"
