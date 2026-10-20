@@ -6,6 +6,18 @@ fit together.
 
 Update this file when coordinates or field-loading paths change.
 
+The IMAS actor (`docs/user-guide/imas.rst`) loads an equilibrium IDS as a libneo
+Boozer chartmap. Its Cartesian geometry covers the full toroidal period even for
+an axisymmetric field; its covariant toroidal field is G, not the transform
+normalization G + iota*I; its uniform rho grid and the uniform s abscissa of
+A_phi are distinct grids.
+
+`simple_cylindrical_to_reference` and `simple_reference_to_cylindrical` map
+`(R [m], phi [rad], Z [m])` to and from the loaded reference coordinates (radius
+s for VMEC, rho for chartmaps) with one status per point; TEST and SPECTRE
+references are rejected. Integration coordinates are unchanged, and the
+tabulated collision-profile abscissa is s for VMEC and Boozer integration.
+
 Fusion birth sampling (`startmode = 7`) uses the VMEC volume Jacobian in
 `(s,theta,phi)` for VMEC input, or the field-derived Boozer Jacobian
 `torflux*(iota*B_theta+B_zeta)/B^2` in integration `(s,theta_B,zeta_B)` for
@@ -15,6 +27,14 @@ not checked at load time. It converts chartmap starts to
 reference coordinates only after sampling; profile arguments remain toroidal
 flux `s`, not reference `sqrt(s)`. See [alpha births](https://github.com/itpplasma/SIMPLE/blob/main/docs/alpha-birth.md)
 for source-grid resolution, units, supported inputs and marker normalization.
+
+Collisions evaluate `&profiles` at `profile_s(z)` (`src/profile_radius.f90`),
+which maps the integration radius to toroidal flux `s`: `z(1)` for
+`integ_coords` -1, 0, 1, 2; the source-field radius after `integ_to_ref` for
+3 and 4 (Meiss `r = sqrt(s)` on VMEC, chartmap `rho` on splined fields; the
+Albert radius `psi/Ath_norm` is not `s`); the reference radius for 5; the
+enclosed toroidal flux of `rho_g` for 6. Chartmap radii use `s = rho^2`, or
+`(rho/rho_lcfs)^2` for `vmec_extended`/`vmec_to_wall` charts.
 
 ---
 
@@ -64,6 +84,17 @@ Newton iteration from $s \approx (d_\text{axis}/d_\text{boundary})^2$: at most
 50 iterations, residual $10^{-10}$, step $10^{-12}$
 (`libneo_coordinates_vmec.f90`). It can fail outside the plasma and near the
 boundary ([#288](https://github.com/itpplasma/SIMPLE/issues/288)).
+
+The NCSX spline derivative tests (`test_splined_field_derivatives`,
+`test_bder_from_splines`, `test_magfie_refcoords_splines` and
+`test_hcurl_from_dhcov_splines`) use angular multiplier 1 for their VMEC
+coordinate fixture. They retain quintic splines, the 201 radial surfaces,
+the field sampling grids and all finite-difference checks and tolerances.
+This bounds the three VMEC coordinate spline arrays to 0.43 GiB per process.
+CTest reserves memory for these and the full-resolution NCSX consumers with
+`RESOURCE_GROUPS` (`mem_gb`, one slot per GiB of measured peak RSS rounded up).
+See {doc}`/development/testing` for the generated resource spec
+and the memory budget used by local tests and CI.
 
 ### 1.3 Chartmap coordinates
 
@@ -166,6 +197,29 @@ to statA ($\times 2.99792458\times 10^{9}$).
 `A_phi` and `torflux` by `vmec_B_scale*vmec_RZ_scale**2`. GVEC equilibria
 enter only through this path after conversion with
 `tools/gvec_to_boozer_chartmap.py`; SIMPLE does not link GVEC.
+
+`vmecpp_field` (`src/field/field_vmecpp.f90`) is the direct VMEC++ path. With
+`SIMPLE_ENABLE_VMECPP=ON`, `netcdffile` may name a VMEC++ JSON input
+(`.json`); `init_field` passes it to the ISO C geometry API
+(`src/field/vmecpp_c_api/`), which runs VMEC++ in memory and keeps the
+geometry handle. No `wout` is read or written. The API returns $R$, $Z$,
+$\lambda$ and both flux profiles as ten-entry jets (value, first derivatives
+in $(s,\vartheta,\zeta)$, all second derivatives); `magfie_vmecpp` forms the
+covariant basis, metric, $B$, `bder` and `hcurl` from them without finite
+differences, in VMEC coordinates and units. `isw_field_type` is set to
+`VMECPP`. The handle is created once and destroyed on close.
+
+VMEC++ upstream installs no C++ headers and exports no CMake package, so the
+option fetches the sources with `FetchContent` at `VMECPP_GIT_TAG` and builds
+them with SIMPLE. The option is off by default; an ordinary build never
+fetches VMEC++. `VMECPP_TEST_DATA_DIR` defaults to the test data of the
+fetched sources (matching input and `wout` pair for the parity tests):
+
+```
+cmake -S . -B build -GNinja -DCMAKE_BUILD_TYPE=Fast -DSIMPLE_ENABLE_VMECPP=ON
+cmake --build build
+ctest --test-dir build/test -R test_vmecpp
+```
 
 ### 2.2 Splined field
 
@@ -274,6 +328,19 @@ For Boozer chartmaps the Boozer splines come from the chartmap
 $s \to \rho = \sqrt s$. The RK45 GPU path evaluates the same Boozer splines
 on the device; `test_gpu_orbit_bench` compares it with the host.
 
+**Regular near-axis Boozer field.** With `field_can_mod`
+`set_regular_axis_field(.true.)` before `init_field_can`, the libneo Boozer
+builders (internal VMEC conversion and `load_boozer_from_chartmap`) also
+construct `boozer_regular`: the same field in $X = \sqrt s\cos\vartheta_B$,
+$Y = \sqrt s\sin\vartheta_B$, $\varphi_B$ with a $\vartheta$-independent axis
+value, $A_\vartheta = \psi_\text{tor}\, s$ and $B_\vartheta = s\, i(\rho)$, $C^2$
+through the axis (libneo#437). `evaluate_boozer_regular(x, y, phi, mode, rf)`
+in `field_can_boozer` returns values and first/second derivatives in
+$(X, Y, \varphi)$ and counts as one field evaluation. The switch is off by
+default and only the Cartesian canonical chart uses it;
+`test_boozer_regular_axis_field_{vmec,chartmap}` compare it with the polar
+splines away from the axis.
+
 **Meiss.** The construction needs only a toroidal covariant field component
 that does not vanish, not flux surfaces, so VMEC, chartmap and coil fields on
 any reference work. Phase 1 integrates the transformation ODE radially on the
@@ -311,6 +378,31 @@ does not initialise VMEC. `init_spectre_field` (`src/simple_main.f90`) sets
 $N_\text{fp}$, `fper` $= 2\pi/N_\text{fp}$ and `rmajor`, the $m = n = 0$
 harmonic of $R$ on the outermost interface (m), so that `params_init` derives
 $\Delta\tau$ as for VMEC.
+
+The canonical Gauss-2 full-orbit evaluator in
+`concept/fo_symplectic_proof/spectre_fo_gauss2.f90` retains the same smooth
+embedding and vector potential. It caches field-constant angular factors and
+shares radial profiles between Fourier modes. Preparation packs the nonzero
+potential coefficient tuples without changing their mode/degree order; an
+identically zero interface gauge is skipped as a whole. FortSym emits the fixed
+geometry contractions and the two-component potential accumulation. The field-jet
+call passes geometry's Fourier phases to the potential at the same point,
+avoiding a second trigonometric evaluation. The internal metric path constructs
+integer Fourier harmonics by complex-product recurrence from two fundamental
+phases; FortSym proves the addition identities and emitted expressions. Sparse
+high harmonics retain direct trigonometric evaluation. The public geometry
+helper retains direct phases for the bitwise frozen-provider oracle; the hot
+path also has an independent phase roundoff check and the Hamiltonian/map
+oracles. Predictor and residual-only
+stage evaluations request first-order field jets and a FortSym-generated
+Hamiltonian leaf without Hessian outputs, including first-order radial-metric
+and monitor leaves without unused second derivatives; Newton corrections and tangent maps
+use the complete jets. The full Hessian uses the factored inverse-metric
+identity generated and checked by FortSym; energy and force retain the original
+first-order expressions. The generated array interface binds the scalar DAG
+directly to arrays. Small stage evaluations run serially. Energy tests reuse
+H at the next step's start and evaluate the final endpoint explicitly, retaining
+the energy envelope and drift diagnostics at every accepted step.
 
 ### 6.1 Field lines
 
@@ -424,6 +516,7 @@ the spline grid as well as in the time step.
 |---|---|
 | `spline_vmec_data`, `splint_vmec_data` | VMEC splines and their evaluation |
 | `vmec_to_boozer`, `boozer_to_vmec`, `splint_boozer_coord` | Boozer coordinates |
+| `set_boozer_regular_enabled`, `eval_boozer_regular` | regular near-axis Boozer field |
 | `vmec_to_can`, `can_to_vmec`, `splint_can_coord` | canonical flux coordinates |
 | `make_vmec_coordinate_system`, `make_chartmap_coordinate_system`, `detect_refcoords_file_type` | reference coordinates |
 | `create_spectre_field`, `spectre_evaluate_der` | SPECTRE fields |

@@ -1,4 +1,5 @@
 [![DOI](https://zenodo.org/badge/146476544.svg)](https://zenodo.org/badge/latestdoi/146476544)
+[![coverage](https://img.shields.io/endpoint?url=https://itpplasma.github.io/SIMPLE/coverage/badge.json)](https://itpplasma.github.io/SIMPLE/coverage/)
 
 # SIMPLE
 

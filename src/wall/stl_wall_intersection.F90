@@ -11,6 +11,13 @@ module stl_wall_intersection
     public :: stl_wall_finalize
     public :: stl_wall_first_hit_segment
     public :: stl_wall_first_hit_segment_with_normal
+    public :: stl_wall_available
+
+#ifdef SIMPLE_ENABLE_CGAL
+    logical, parameter :: stl_wall_available = .true.
+#else
+    logical, parameter :: stl_wall_available = .false.
+#endif
 
     type :: stl_wall_t
         type(c_ptr) :: handle = c_null_ptr
