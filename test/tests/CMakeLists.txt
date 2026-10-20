@@ -395,6 +395,14 @@ if (ENABLE_OPENMP)
     set_tests_properties(test_sympl_stell PROPERTIES
         LABELS "integration"
         TIMEOUT 120)
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/sympl_stell_full)
+    file(CREATE_LINK ${WOUT_FILE}
+        ${CMAKE_CURRENT_BINARY_DIR}/sympl_stell_full/wout.nc SYMBOLIC)
+    add_test(NAME test_sympl_stell_full COMMAND test_sympl.x --full
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/sympl_stell_full)
+    set_tests_properties(test_sympl_stell_full PROPERTIES
+        LABELS "integration;slow" TIMEOUT 120
+        PROCESSORS 1 ENVIRONMENT "OMP_NUM_THREADS=1")
     # Field-evaluation cost ratio between mode_secders=0 and mode_secders=2.
     # Built but deliberately not registered with ctest: it is a timing
     # measurement, so its result is hardware-dependent and must not gate CI.
@@ -720,6 +728,7 @@ set_tests_properties(test_continuous_classifier_scores PROPERTIES LABELS "unit")
         COMMAND $<TARGET_FILE:generate_test_boozer_chartmap.x> ${CMAKE_CURRENT_BINARY_DIR}/test_boozer_chartmap.nc)
     set_tests_properties(generate_test_boozer_chartmap_data PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        FIXTURES_SETUP boozer_chartmap_test_data
         LABELS "unit")
     add_executable(test_boozer_chartmap.x test_boozer_chartmap.f90)
     target_link_libraries(test_boozer_chartmap.x simple)
@@ -727,7 +736,7 @@ set_tests_properties(test_continuous_classifier_scores PROPERTIES LABELS "unit")
     add_test(NAME test_boozer_chartmap COMMAND test_boozer_chartmap.x)
     set_tests_properties(test_boozer_chartmap PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        DEPENDS "generate_test_boozer_chartmap_data"
+        FIXTURES_REQUIRED boozer_chartmap_test_data
         LABELS "unit")
     # Regular near-axis Boozer field (libneo#437) built on request for the
     # internal VMEC -> Boozer conversion and for Boozer chartmaps.
@@ -749,7 +758,7 @@ set_tests_properties(test_continuous_classifier_scores PROPERTIES LABELS "unit")
     set_tests_properties(test_chartmap_startmode1 PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "integration;python"
-        DEPENDS "generate_test_boozer_chartmap_data")
+        FIXTURES_REQUIRED boozer_chartmap_test_data)
 
     add_executable(test_chartmap_scaling.x test_chartmap_scaling.f90)
     target_link_libraries(test_chartmap_scaling.x simple)
@@ -757,7 +766,7 @@ set_tests_properties(test_continuous_classifier_scores PROPERTIES LABELS "unit")
     add_test(NAME test_chartmap_scaling COMMAND test_chartmap_scaling.x)
     set_tests_properties(test_chartmap_scaling PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        DEPENDS "generate_test_boozer_chartmap_data"
+        FIXTURES_REQUIRED boozer_chartmap_test_data
         LABELS "unit")
 
     # Boozer chartmap roundtrip test: requires wout.nc
@@ -1280,6 +1289,7 @@ add_test(
         $<TARGET_FILE:simple.x>
 )
 set_tests_properties(orbit_netcdf_output PROPERTIES
+    FIXTURES_SETUP orbit_netcdf_data
     TIMEOUT 120
     LABELS "system;integration"
 )
@@ -1291,7 +1301,7 @@ add_test(
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 set_tests_properties(orbit_netcdf_verify PROPERTIES
-    DEPENDS orbit_netcdf_output
+    FIXTURES_REQUIRED orbit_netcdf_data
     TIMEOUT 30
     LABELS "system;integration"
 )
