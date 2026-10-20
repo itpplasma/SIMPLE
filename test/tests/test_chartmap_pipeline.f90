@@ -39,7 +39,7 @@ program test_chartmap_pipeline
     call init_timer()
 
     ! Every stage reads the same VMEC splines; construct them only once.
-    call init_vmec(VMEC_FILE, 5, 5, 5, dummy)
+    call init_vmec(VMEC_FILE, 5, 5, 1, dummy)
 
     call test_A_evaluate_roundtrip(nerrors)
     call test_B_covariant_basis_fd(nerrors)

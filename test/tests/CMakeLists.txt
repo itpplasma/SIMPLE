@@ -995,7 +995,7 @@ add_test(NAME test_chartmap_pipeline
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_chartmap_pipeline PROPERTIES
     LABELS "unit"
-    RESOURCE_GROUPS "mem_gb:10"
+    RESOURCE_GROUPS "mem_gb:2"
     TIMEOUT 120)
 
 # Chartmap R,Z consistency tests
@@ -1008,7 +1008,7 @@ add_test(NAME test_chartmap_rz_consistency
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_chartmap_rz_consistency PROPERTIES
     LABELS "unit"
-    RESOURCE_GROUPS "mem_gb:10"
+    RESOURCE_GROUPS "mem_gb:2"
     TIMEOUT 120)
 
 # Batch spline optimization test
@@ -1226,7 +1226,8 @@ add_test(NAME test_spectre_sympl_volume
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_spectre_sympl_volume PROPERTIES
     LABELS "integration;python"
-    RUN_SERIAL TRUE
+    PROCESSORS 2
+    ENVIRONMENT "OMP_NUM_THREADS=2;OPENBLAS_NUM_THREADS=1"
     TIMEOUT 300)
 
 # SPECTRE construction-grid memory knob and axisymmetric phi auto-clamp (#442):
@@ -1253,7 +1254,6 @@ add_test(NAME test_spectre_validation
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_spectre_validation PROPERTIES
     LABELS "integration;python"
-    RUN_SERIAL TRUE
     TIMEOUT 300)
 
 add_subdirectory(field_can)
@@ -1455,7 +1455,7 @@ set_target_properties(test_fo_symplectic.x PROPERTIES
     Fortran_MODULE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/fo_proof_modules)
 add_test(NAME test_fo_symplectic COMMAND test_fo_symplectic.x
     ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
-    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000)
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000 1 -1 0 1e-12 64)
 set_tests_properties(test_fo_symplectic PROPERTIES LABELS "integration" TIMEOUT 900)
 add_test(NAME test_fo_symplectic_long COMMAND test_fo_symplectic.x
     ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
@@ -1465,7 +1465,7 @@ set_tests_properties(test_fo_symplectic_long PROPERTIES
 
 add_test(NAME test_fo_symplectic_resolved COMMAND test_fo_symplectic.x
     ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
-    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000 100)
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000 100 -1 0 1e-12 64)
 set_tests_properties(test_fo_symplectic_resolved PROPERTIES
     LABELS "integration" TIMEOUT 900)
 add_test(NAME test_fo_symplectic_resolved_long COMMAND test_fo_symplectic.x
@@ -1502,9 +1502,13 @@ foreach(fo_suffix IN ITEMS second second_long second_resolved second_resolved_lo
     if(fo_suffix MATCHES "resolved")
         set(fo_velocity 100)
     endif()
+    set(fo_map_args -1 0 1e-12 64)
+    if(fo_suffix MATCHES "long")
+        set(fo_map_args)
+    endif()
     add_test(NAME test_fo_symplectic_${fo_suffix} COMMAND test_fo_symplectic.x
         ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
-        ${FO_SECOND_FIELD} ${fo_nsteps} ${fo_velocity})
+        ${FO_SECOND_FIELD} ${fo_nsteps} ${fo_velocity} ${fo_map_args})
     set_tests_properties(test_fo_symplectic_${fo_suffix} PROPERTIES
         LABELS "integration" TIMEOUT 900)
     if(fo_suffix MATCHES "long")
@@ -1545,9 +1549,37 @@ endforeach()
 # Also retain the original proof's larger-velocity map oracle at base h.
 add_test(NAME test_fo_gauss2_original_oracle COMMAND test_fo_symplectic.x
     ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
-    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000 100 -1 1)
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000 100 -1 1 1e-12 64)
 set_tests_properties(test_fo_gauss2_original_oracle PROPERTIES
     LABELS "integration" TIMEOUT 900)
+
+# Fast checks compose 64 steps with the same strict defect/correspondence bounds.
+# Retain every original 1000-step composition (and its energy checks) in slow.
+foreach(fo_case IN ITEMS base resolved second second_resolved original_oracle)
+    set(fo_name test_fo_symplectic)
+    set(fo_field ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5)
+    set(fo_velocity 1)
+    set(fo_factor 0)
+    if(NOT fo_case STREQUAL "base")
+        set(fo_name test_fo_symplectic_${fo_case})
+    endif()
+    if(fo_case MATCHES "second")
+        set(fo_field ${FO_SECOND_FIELD})
+    endif()
+    if(fo_case MATCHES "resolved|original_oracle")
+        set(fo_velocity 100)
+    endif()
+    if(fo_case STREQUAL "original_oracle")
+        set(fo_name test_fo_gauss2_original_oracle)
+        set(fo_factor 1)
+    endif()
+    add_test(NAME ${fo_name}_full COMMAND test_fo_symplectic.x
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+        ${fo_field} 1000 ${fo_velocity} -1 ${fo_factor})
+    set_tests_properties(${fo_name}_full PROPERTIES
+        LABELS "integration;slow" TIMEOUT 900
+        PROCESSORS 1 ENVIRONMENT "OMP_NUM_THREADS=1")
+endforeach()
 
 # Same fictitious duration as the original P2 million-step larger-velocity run.
 add_test(NAME test_fo_gauss2_resolution_large_matched_policy COMMAND test_fo_symplectic.x

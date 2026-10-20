@@ -29,6 +29,31 @@ quote it and write ``$`` as ``$$``, e.g. ``TEST='^test_finite_check$$'``.
 Tests labelled ``python`` and some unlabelled wrappers need the packages from
 ``./setup-venv.sh``.
 
+CI tiers and CPU allocation
+---------------------------
+
+Every pull request, including drafts and forks, runs ``Build and Test`` on
+GitHub-hosted Ubuntu 24.04 with ``make test-fast CONFIG=Fast``. CTest uses all
+runner cores and the generated cgroup-aware memory resource spec. OpenMP defaults to two threads for field setup and one for the FO stepper;
+OpenBLAS uses one. The loss and SPECTRE orbit checks reserve two CTest
+processors for their existing parallel particle/process work.
+
+The merge queue runs the full suite on ``itp-slurm``. Manual dispatch preserves
+its runner choice (``itp-slurm`` or ``hosted``) and smoke/full selection. The
+``full-ci`` PR label adds compiler and VMEC++ checks, while ``Build and Test``
+continues to run the hosted fast tier. Use full dispatch or the merge queue
+for full testing: the 13--15 GiB golden-record reservations exceed the usable
+memory budget of the standard hosted runner. Hosted GCC 14 coverage remains
+in the full-dispatch and merge-queue matrix.
+
+The short FO tests keep all field-jet, derivative, energy and one-step map
+checks, and compose 64 steps in the fast tier. Their ``_full`` siblings retain
+the original 1,000-step compositions in ``slow``. Both use the same strict
+1e-7 tangent, 1e-5 finite-difference and 1e-8 correspondence bounds: these test
+symplecticity/endpoint agreement for a fixed map, rather than a Monte Carlo
+estimate, so shortening a composition does not require a larger tolerance.
+The long energy and resolution runs retain every original step.
+
 Memory allocation on workstations and CI
 ----------------------------------------
 

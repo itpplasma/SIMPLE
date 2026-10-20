@@ -15,12 +15,12 @@ program test_fo_symplectic
     real(dp)::omega(6,6),eye(6,6),efixed=0,lfixed=1,gfixed=1,vscale=1,mfixed=0
     type(spectre_field_t)::field
     character(1024)::filename,arg
-    integer::case_id,i,nlong,ierr,diagnostic_step=0,only_marker=-1
+    integer::case_id, i, nlong, ierr, diagnostic_step = 0, only_marker = -1, nmap = 1000
     real(dp)::step_factor=0.0_dp,energy_tol=1.0e-12_dp
     logical::failure_mode=.false.,energy_failed=.false.
     nlong=1000
-    if(command_argument_count()<3.or.command_argument_count()>7) &
-        error stop 'two fixtures, step count, optional velocity scale required'
+    if (command_argument_count() < 3 .or. command_argument_count() > 8) &
+        error stop 'two fixtures, steps, optional velocity/marker/factor/tol/map steps'
     call get_command_argument(3,arg)
     read(arg,*) nlong
     if(command_argument_count()>=4) then
@@ -42,6 +42,11 @@ program test_fo_symplectic
     if(command_argument_count()>=7) then
         call get_command_argument(7,arg)
         read(arg,*) energy_tol
+    end if
+    if (command_argument_count() >= 8) then
+        call get_command_argument(8, arg)
+        read (arg, *) nmap
+        if (nmap < 2) error stop 'composition needs at least two steps'
     end if
     print '(a,es12.4)', 'velocity multiplier=',vscale
     omega=0; eye=0
@@ -476,7 +481,7 @@ contains
             if(reference) tol=-1 ! Reference Newton tolerance is fixed internally.
             do ncase=1,2
             n=1
-            if(ncase==2) n=1000
+                if (ncase == 2) n = nmap
             call map(z,tol,reference,n,out,m,res)
             if(.not.reference) then
                 call map(z,tol,.true.,n,outref,mref,refres)
@@ -490,7 +495,7 @@ contains
             call finite_difference(z,tol,reference,n,1.0e-4_dp,fd)
             call finite_difference(z,tol,reference,n,5.0e-5_dp,fd2)
             noise=sqrt(sum((fd-fd2)**2))
-            if(n==1000.and.k==3.and.(noise>1.0e-5_dp.or.defect(fd2)>1.0e-5_dp)) then
+ if (n == nmap .and. k == 3 .and. (noise > 1.0e-5_dp .or. defect(fd2) > 1.0e-5_dp)) then
                 print '(a,2es16.8)', 'FD_REFINEMENT coarse defect/disagreement=', &
                     defect(fd2),noise
                 call finite_difference(z,tol,reference,n,2.5e-5_dp,fd)
@@ -504,10 +509,10 @@ contains
             if(defect(m)>1.0e-7_dp) error stop 'tangent symplecticity defect'
             ! This finite-difference threshold is fixed, separately reported
             ! from the Newton tolerance and refinement disagreement.
-            if(n==1000.and.k<3) then
+                if (n == nmap .and. k < 3) then
                 ! Extra tolerance sweep: preserve failures of the strict criterion
                 ! as observations. The original strict gates apply to 1-step
-                ! maps and the 1000-step map at 1e-12, unchanged.
+                    ! maps and the composed map at 1e-12, unchanged.
                 if(defect(fd2)>1.0e-5_dp) &
                     print '(a)', 'LOOSE_TOLERANCE_MAP exceeds strict FD criterion'
             else

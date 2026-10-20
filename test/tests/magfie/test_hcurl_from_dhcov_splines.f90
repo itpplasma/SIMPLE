@@ -40,7 +40,7 @@ program test_hcurl_from_dhcov_splines
     call init_reference_coordinates('wout_ncsx.nc')
 
     call create_coils_field('coils.simple', raw_coils)
-    call create_splined_field(raw_coils, ref_coords, f, n_r=32, n_th=33, n_phi=32)
+    call create_splined_field(raw_coils, ref_coords, f, n_r=16, n_th=17, n_phi=16)
 
     phi_period = twopi/real(nper, dp)
 
