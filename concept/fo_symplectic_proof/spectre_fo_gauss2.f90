@@ -795,7 +795,7 @@ contains
         if (present(e0)) energy0 = e0
         rhoj = [1.0_dp, 0.0_dp, 0.0_dp]
         if (present(gmin) .and. present(length)) then
-            if (gmin /= 1.0_dp) then
+            if (.not. (gmin <= 1.0_dp .and. gmin >= 1.0_dp)) then
                 do k = 1, spectre_field%data%Mvol - 1
                     call fo_monitor_factor(z(1) - real(k, dp), length, gmin, &
                                            factor(1), factor(2), factor(3))

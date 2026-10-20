@@ -33,7 +33,7 @@ CI tiers and CPU allocation
 ---------------------------
 
 Every pull request, including drafts and forks, runs ``Build and Test`` on
-GitHub-hosted Ubuntu 24.04 with ``make test-fast CONFIG=Release`` and the
+GitHub-hosted Ubuntu 24.04 using GCC 14, ``make test-fast CONFIG=Fast`` and the
 GCC matrix's ``ENABLE_PYTHON_INTERFACE=OFF`` / ``SIMPLE_ENABLE_PYTHON_TOOLS=OFF``
 build mode. Standalone Python driver tests still run; Python-interface and
 frontend tests remain in the full queue build. CTest uses all
