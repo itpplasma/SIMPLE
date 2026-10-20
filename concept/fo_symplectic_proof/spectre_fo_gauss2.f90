@@ -883,7 +883,7 @@ contains
         dy(:, 2) = h*(0.5_dp + sqrt(3.0_dp)/6.0_dp)*f(:, 1)
         do it = 1, 20
             ! The Jacobian is needed only if this iterate is not accepted. A
-            ! later iterate usually is, so evaluate it to first order first and
+            ! small-step predictor may already be, so evaluate to first order and
             ! add the Hessian at the same point only when the solve continues.
             ! The first/full oracle bounds CSE rounding in the retained values.
             full = present(tangent)
