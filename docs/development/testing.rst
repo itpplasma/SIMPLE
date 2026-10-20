@@ -33,7 +33,7 @@ CI tiers and CPU allocation
 ---------------------------
 
 Every pull request, including drafts and forks, runs ``Build and Test`` on
-GitHub-hosted Ubuntu 24.04 with ``make test-fast CONFIG=Fast``. CTest uses all
+GitHub-hosted Ubuntu 24.04 with ``make test-fast CONFIG=Release``. CTest uses all
 runner cores and the generated cgroup-aware memory resource spec. OpenMP defaults to two threads for field setup and one for the FO stepper;
 OpenBLAS uses one. The loss and SPECTRE orbit checks reserve two CTest
 processors for their existing parallel particle/process work.
@@ -53,6 +53,16 @@ the original 1,000-step compositions in ``slow``. Both use the same strict
 symplecticity/endpoint agreement for a fixed map, rather than a Monte Carlo
 estimate, so shortening a composition does not require a larger tolerance.
 The long energy and resolution runs retain every original step.
+
+The loss, classifier-output and SPECTRE trajectory drivers also have slow
+``_full`` siblings with their original configurations. Fast counts are 8/32
+for axis-loss and classifier metadata, 16/64 for outer explicit losses (the
+8 near-axis markers are unchanged), and 4/24 for SPECTRE trajectories. Trace
+lengths and per-orbit bounds are unchanged: zero forbidden losses/escapes,
+energy/trajectory error maxima and exact metadata identities do not acquire
+a sampling tolerance. The explicit loss-count cross-check retains its
+existing ``max(2, round(1.5*sqrt(reference_losses)))`` counting-error bound,
+evaluated for the reduced count; its nonzero-reference-loss guard remains.
 
 Memory allocation on workstations and CI
 ----------------------------------------

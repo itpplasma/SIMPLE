@@ -531,6 +531,7 @@ contains
         real(dp) :: oracle_out(6), oracle_tangent(6, 6), oracle_dt
         integer::s, k
         logical::ok, oracle_ok
+        logical :: fixed_point
         width=0.06_dp;ro0=1.0e5_dp;h=0.02_dp;lfixed=1;gfixed=1
         select case(marker)
         case(0)
@@ -567,6 +568,7 @@ contains
         rhomin=z(1);rhomax=z(1);mx=0;my=0;sxx=0;sxy=0;syy=0;maxres=0
         ! H after step k is the start energy of step k+1, so record step k's
         ! diagnostics one step late instead of evaluating the field again.
+        fixed_point = .true.
         do s = 1, n + 1
             if (s <= n) then
                 diagnostic_step = s
@@ -580,7 +582,8 @@ contains
                 end if
                 call shipped_step(z, width, ro0, efixed, lfixed, gfixed, h, out, &
                                   xx, ok, radial_scale=mfixed, tolerance=energy_tol, &
-                                  residual=res, start_energy=en)
+                                  residual=res, start_energy=en, &
+                                  fixed_point=fixed_point)
                 if (s == 1 .and. ok) then
                     if (maxval(abs(out - oracle_out))/ &
                         max(1.0_dp, maxval(abs(oracle_out))) > 1.0e-8_dp) &

@@ -1008,7 +1008,7 @@ add_test(NAME test_chartmap_rz_consistency
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(test_chartmap_rz_consistency PROPERTIES
     LABELS "unit"
-    RESOURCE_GROUPS "mem_gb:2"
+    RESOURCE_GROUPS "mem_gb:3"
     TIMEOUT 120)
 
 # Batch spline optimization test
@@ -1602,6 +1602,25 @@ foreach(fo_probe IN ITEMS base half quarter tight base_short captured)
 endforeach()
 set_tests_properties(${FO_STEPPER_TESTS} PROPERTIES
     PROCESSORS 1 ENVIRONMENT "OMP_NUM_THREADS=1")
+
+# Reduced particle sets keep the per-marker invariants and non-vacuity checks.
+# Full variants preserve every original particle, trace length and setup grid.
+function(add_full_python_driver name timeout)
+    if(TEST ${name})
+        add_test(NAME ${name}_full COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/${name}.py ${ARGN} --full)
+        set_tests_properties(${name}_full PROPERTIES
+            LABELS "slow;integration;python" TIMEOUT ${timeout} PROCESSORS 2
+            ENVIRONMENT "OMP_NUM_THREADS=2;OPENBLAS_NUM_THREADS=1"
+            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    endif()
+endfunction()
+add_full_python_driver(test_axis_loss_consistency 1800)
+add_full_python_driver(test_explicit_loss_detection 600)
+add_full_python_driver(test_class_scores_driver 120
+    $<TARGET_FILE:simple.x> ${WOUT_FILE})
+add_full_python_driver(test_spectre_sympl_volume 300
+    $<TARGET_FILE:simple.x> ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5)
 
 add_subdirectory(
     "${CMAKE_SOURCE_DIR}/concept/fo_gc_derivations/D_canonical_switch"
