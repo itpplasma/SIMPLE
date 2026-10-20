@@ -528,8 +528,9 @@ contains
         real(dp)::emin,emax,eblock_min,eblock_max,rhomin,rhomax
         real(dp)::xx,yy,mx,my,sxx,sxy,syy,dx,dy,slope,se
         real(dp)::maxres
+        real(dp) :: oracle_out(6), oracle_tangent(6, 6), oracle_dt
         integer::s, k
-        logical::ok
+        logical::ok, oracle_ok
         width=0.06_dp;ro0=1.0e5_dp;h=0.02_dp;lfixed=1;gfixed=1
         select case(marker)
         case(0)
@@ -569,9 +570,22 @@ contains
         do s = 1, n + 1
             if (s <= n) then
                 diagnostic_step = s
+                if (s == 1) then
+                    ! Requesting a tangent retains the original Newton path.
+                    call shipped_step(z, width, ro0, efixed, lfixed, gfixed, h, &
+                                      oracle_out, oracle_dt, oracle_ok, &
+                                      tangent=oracle_tangent, radial_scale=mfixed, &
+                                      tolerance=energy_tol)
+                    if (.not. oracle_ok) error stop 'Newton entry oracle failed'
+                end if
                 call shipped_step(z, width, ro0, efixed, lfixed, gfixed, h, out, &
                                   xx, ok, radial_scale=mfixed, tolerance=energy_tol, &
                                   residual=res, start_energy=en)
+                if (s == 1 .and. ok) then
+                    if (maxval(abs(out - oracle_out))/ &
+                        max(1.0_dp, maxval(abs(oracle_out))) > 1.0e-8_dp) &
+                        error stop 'fixed-point/Newton entry correspondence'
+                end if
             else
                 call generated_eval(z, width, ro0, en, f, df, first_order=.true.)
             end if
