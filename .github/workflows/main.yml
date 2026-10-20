@@ -611,13 +611,27 @@ jobs:
           name: verification-report
           path: build/output/verification-report/
 
+  # Matrix job names gain a shard suffix. Preserve the branch rule's exact
+  # Build and Test context and require every shard to succeed.
+  build-and-test-result:
+    permissions: {}
+    name: Build and Test
+    if: always()
+    needs: [test]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require successful test shards
+        env:
+          TEST_RESULT: ${{ needs.test.result }}
+        run: test "$TEST_RESULT" = success
+
   # Single required check for the merge queue: fails if any gating job failed
   # or was cancelled; full-tier jobs skipped on pull requests count as passed.
   ci-result:
     permissions: {}
     name: CI result
     if: always()
-    needs: [test, gcc-matrix, cgal-wall, vmecpp]
+    needs: [build-and-test-result, gcc-matrix, cgal-wall, vmecpp]
     runs-on: ubuntu-24.04
     steps:
       - name: Check gating jobs
