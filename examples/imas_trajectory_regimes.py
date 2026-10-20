@@ -6,8 +6,8 @@ is therefore rerun with a displaced start (``perturbation`` metres in R) and
 with a different numerical resolution (SIMPLE relerr, ASCOT step halving).
 The per-marker predictability horizon ``t_pred`` is the first sample at which
 either self-divergence exceeds ``horizon_tolerance`` metres. Codes are compared
-pointwise only for regular confined orbits and only for ``t <= t_pred``; lost,
-near-separatrix and sensitive orbits enter statistics only.
+for pointwise acceptance only for regular confined orbits and ``t <= t_pred``;
+lost, near-separatrix and sensitive orbits enter cohort statistics.
 
 ASCOT5 integrates relativistic guiding-centre equations, SIMPLE the
 nonrelativistic ones. In a static field without E, relativistic guiding-centre
@@ -38,13 +38,6 @@ def ascot_speed(energy, mass_number):
     """Relativistic speed [m/s] and gamma of a marker of kinetic energy [eV]."""
     gamma = 1 + energy * EV / (mass_number * PROTON * LIGHT**2)
     return LIGHT * np.sqrt(1 - 1 / gamma**2), gamma
-
-
-def simple_speed(energy, mass_number):
-    """SIMPLE's nonrelativistic speed [m/s] with its CGS constants."""
-    return 1e-2 * np.sqrt(
-        2 * energy * SIMPLE_EV_CGS / (mass_number * SIMPLE_PROTON_CGS)
-    )
 
 
 class CommonField:
@@ -370,11 +363,13 @@ def distance(a, b):
 
 
 def _crossings(t, values):
-    """Interpolated zero crossings: (time, direction, fraction, index)."""
-    sign = np.sign(values)
-    k = np.flatnonzero(sign[:-1] * sign[1:] < 0)
-    fraction = values[k] / (values[k] - values[k + 1])
-    return t[k] + fraction * (t[k + 1] - t[k]), sign[k + 1], fraction, k
+    """Interpolated sign changes, including samples exactly at zero."""
+    nonzero = np.flatnonzero(values)
+    left, right = nonzero[:-1], nonzero[1:]
+    crossing = values[left] * values[right] < 0
+    left, right = left[crossing], right[crossing]
+    fraction = values[left] / (values[left] - values[right])
+    return t[left] + fraction * (t[right] - t[left]), np.sign(values[right])
 
 
 def orbit_averages(orbit, field):
@@ -384,7 +379,7 @@ def orbit_averages(orbit, field):
         return {"class": "unresolved_short"}
     phi = np.unwrap(orbit["phi"])
     rho = field.rho_pol(orbit["r"], orbit["z"])
-    times, direction, fraction, k = _crossings(t, pitch)
+    times, direction = _crossings(t, pitch)
     result = {"radial_width_rho_pol": float(np.ptp(rho))}
     if len(times) == 0:
         theta = np.unwrap(
@@ -402,19 +397,21 @@ def orbit_averages(orbit, field):
             )
             result["toroidal_frequency_rad_s"] = float(np.polyfit(t, phi, 1)[0])
         return result
+    bounce_direction = 1 if np.sum(direction > 0) >= 2 else -1
+    same = times[direction == bounce_direction]
+    if len(same) < 2:
+        result["class"] = "incomplete"
+        return result
     result["class"] = "trapped"
-    same = times[direction > 0]
-    if len(same) >= 2:
-        phase = phi[k] + fraction * (phi[k + 1] - phi[k])
-        phase = phase[direction > 0]
-        result["bounce_period_s"] = float(np.mean(np.diff(same)))
-        result["bounce_period_spread_s"] = float(np.ptp(np.diff(same)))
-        result["precession_rad_per_bounce"] = float(np.mean(np.diff(phase)))
+    phase = np.interp(same, t, phi)
+    result["bounce_period_s"] = float(np.mean(np.diff(same)))
+    result["bounce_period_spread_s"] = float(np.ptp(np.diff(same)))
+    result["precession_rad_per_bounce"] = float(np.mean(np.diff(phase)))
     for name, sign in (("turning_point_up", 1), ("turning_point_down", -1)):
         select = direction == sign
         if select.any():
-            rk = orbit["r"][k] + fraction * (orbit["r"][k + 1] - orbit["r"][k])
-            zk = orbit["z"][k] + fraction * (orbit["z"][k + 1] - orbit["z"][k])
+            rk = np.interp(times, t, orbit["r"])
+            zk = np.interp(times, t, orbit["z"])
             result[name] = [float(np.mean(rk[select])), float(np.mean(zk[select]))]
     return result
 
@@ -607,13 +604,9 @@ def statistics(first, second, duration, field, labels):
         for m in moments.values()
         if m is not None
     ]
-    tests["accepted"] = bool(all(passed))
+    tests["accepted"] = bool(all(passed)) if n else None
     tests["acceptance"] = "McNemar and KS p >= 0.01; paired moments within 3 SE or 1e-3"
     return tests
-
-
-def _class_signature(averages):
-    return averages.get("class")
 
 
 def marker_regime(record, duration):
@@ -623,14 +616,19 @@ def marker_regime(record, duration):
     if record["lost"]:
         return "lost"
     # A window shorter than one bounce/transit does not contradict a class.
-    classes = set(record["classes"].values()) - {"incomplete"} or {"incomplete"}
+    classes = set(record["classes"].values()) - {"incomplete"}
+    if not classes:
+        return "incomplete"
+    if "unresolved_short" in classes:
+        return "unresolved"
     if len(classes) > 1:
         return "near_separatrix"
     if classes == {"passing"} and record["min_abs_pitch"] < 0.05:
         return "near_separatrix"
-    if record["t_pred_s"] < duration * (1 - 1e-9):
-        exponent = record["growth_exponent"]
-        return "stochastic" if exponent is not None and exponent > 2 else "sensitive"
+    if any(record["horizon_reached"].values()) or record["t_pred_s"] < duration * (
+        1 - 1e-9
+    ):
+        return "sensitive"
     return f"regular_{classes.pop()}"
 
 
@@ -717,10 +715,10 @@ def compare(
         ]:
             t, d_ic = distance(nominal, ic)
             _, d_num = distance(nominal, numeric)
-            if len(t) == 0:
+            n = min(len(d_ic), len(d_num))
+            if n == 0:
                 horizons[code] = (0.0, True)
                 continue
-            n = min(len(d_ic), len(d_num))
             horizons[code] = _horizon(
                 t[:n], np.maximum(d_ic[:n], d_num[:n]), horizon_tolerance
             )
@@ -762,7 +760,7 @@ def compare(
                 "SIMPLE": s["nominal"]["loss_time"],
                 "ASCOT5": a["nominal"]["loss_time"],
             },
-            "classes": {k: _class_signature(v) for k, v in averages.items()},
+            "classes": {k: v.get("class") for k, v in averages.items()},
             "min_abs_pitch": min(
                 v.get("min_abs_pitch", 1.0) for v in averages.values()
             ),
@@ -781,9 +779,11 @@ def compare(
             t, d = distance(simple_orbit, a["nominal"])
             inside = t <= t_pred
             if inside.any():
-                path = float(np.mean(simple_orbit["speed"])) * float(t[inside][-1])
+                points = _cartesian(simple_orbit, len(t))[inside]
+                path = float(np.sum(np.linalg.norm(np.diff(points, axis=0), axis=1)))
                 window[name] = {
                     "window_s": float(t[inside][-1]),
+                    "path_length_m": path,
                     "max_distance_m": float(np.max(d[inside])),
                     "relative_to_path": float(np.max(d[inside]) / max(path, 1e-300)),
                 }
@@ -818,7 +818,7 @@ def compare(
                 and eq_window["max_distance_m"]
                 <= max(
                     absolute_tolerance,
-                    relative_tolerance * v_ascot * eq_window["window_s"],
+                    relative_tolerance * eq_window["path_length_m"],
                 )
             )
             record["orbit_average_relative_differences"] = {
@@ -865,12 +865,20 @@ def compare(
                 values.append(value)
         return float(np.max(values)) if values else None
 
+    resolved_horizons = [m["t_pred_s"] for m in markers if not m["unresolved"]]
+    start_gaps = [
+        m["start_position_gap_m"]
+        for m in markers
+        if m["start_position_gap_m"] is not None
+    ]
     summary = {
         "regime_counts": regimes,
         "t_pred_s_quantiles_resolved": np.quantile(
-            [m["t_pred_s"] for m in markers if not m["unresolved"]],
+            resolved_horizons,
             [0, 0.25, 0.5, 0.75, 1],
-        ).tolist(),
+        ).tolist()
+        if resolved_horizons
+        else None,
         "unresolved_markers": [
             {"marker": m["marker"], "start": m["start"], "status": m["variant_status"]}
             for m in markers
@@ -919,15 +927,7 @@ def compare(
             }
             for code in ["SIMPLE", "SIMPLE_relativistic_equivalent", "ASCOT5"]
         },
-        "max_start_position_gap_m": float(
-            np.max(
-                [
-                    m["start_position_gap_m"]
-                    for m in markers
-                    if m["start_position_gap_m"] is not None
-                ]
-            )
-        ),
+        "max_start_position_gap_m": float(max(start_gaps)) if start_gaps else None,
     }
     report = {
         "method": __doc__.strip(),

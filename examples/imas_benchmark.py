@@ -51,17 +51,25 @@ SOURCES = {
 
 
 def revision(checkout):
-    """Record the actual code revision, including whether it has local edits."""
+    """Record a checkout's revision, or explicit unknowns for installed packages."""
 
     def git(*args):
         return subprocess.check_output(
-            ["git", "-C", str(checkout), *args], text=True
+            ["git", "-C", str(checkout), *args], text=True, stderr=subprocess.DEVNULL
         ).strip()
 
-    return {
-        "commit": git("rev-parse", "HEAD"),
-        "dirty": bool(git("status", "--porcelain")),
-    }
+    try:
+        if (
+            Path(git("rev-parse", "--show-toplevel")).resolve()
+            != Path(checkout).resolve()
+        ):
+            return {"commit": None, "dirty": None}
+        return {
+            "commit": git("rev-parse", "HEAD"),
+            "dirty": bool(git("status", "--porcelain")),
+        }
+    except (OSError, subprocess.CalledProcessError):
+        return {"commit": None, "dirty": None}
 
 
 def fetch(case, cache):
@@ -713,10 +721,6 @@ def suite(args, output):
 
 
 def main():
-    import imas
-    import pysimple
-    from pysimple.imas import Markers, equilibrium_to_chartmap, run, write_markers
-
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--case",
@@ -798,26 +802,35 @@ def main():
     args.cache = args.cache.expanduser().resolve()
     if args.cache == repository or repository in args.cache.parents:
         parser.error("Choose a download cache outside the repository")
-    if (
-        args.step <= 0
-        or args.duration <= 0
-        or not np.isclose(
-            args.duration / args.step,
-            round(args.duration / args.step),
-            rtol=0,
-            atol=1e-6,
-        )
+    for name in ("step", "duration", "energy", "perturbation", "horizon_tolerance"):
+        value = getattr(args, name)
+        if not np.isfinite(value) or value <= 0:
+            parser.error(f"{name} must be positive and finite")
+    if args.resolution < 8 or args.stat_markers < 0 or args.jobs < 1:
+        parser.error("resolution must be >=8, stat-markers >=0 and jobs positive")
+    if not np.isclose(
+        args.duration / args.step, round(args.duration / args.step), rtol=0, atol=1e-6
     ):
         parser.error(
             "Require positive duration/step and an integer number of ASCOT steps"
         )
     output.mkdir(parents=True, exist_ok=False)
-    if args.jobs < 1:
-        parser.error("jobs must be positive")
     if args.suite:
         return suite(args, output)
     if args.case == "cylinder":
         return cylinder(output, args.duration, args.step, args.energy, args.species)
+    import imas
+    import pysimple
+    import a5py
+    import libneo
+    from pysimple.imas import Markers, equilibrium_to_chartmap, run, write_markers
+
+    revisions = {
+        "benchmark": revision(repository),
+        "SIMPLE": revision(Path(pysimple.__file__).resolve().parents[2]),
+        "ASCOT5": revision(Path(a5py.__file__).resolve().parents[1]),
+        "libneo_converter": revision(Path(libneo.__file__).resolve().parents[2]),
+    }
     if args.case in SOURCES:
         eq = equilibrium_from_geqdsk(
             fetch(args.case, args.cache), SOURCES[args.case][2]
@@ -890,10 +903,7 @@ def main():
             resolution=n,
             source=SOURCES.get(args.case),
             field_consistency_with_input_IDS=field_consistency(eq, field),
-            revisions={
-                "benchmark": revision(repository),
-                "SIMPLE": revision(Path(pysimple.__file__).resolve().parents[2]),
-            },
+            revisions=revisions,
         )
         regimes.write(report, output)
         (output / "report.json").write_text(
@@ -937,18 +947,10 @@ def main():
     )
     simple_elapsed = time.perf_counter() - start
     simple = np.asarray(result.distribution[0].markers[1].positions)[:, :5]
-    states = np.empty((5, len(positions)), order="F")
-    states[:3] = pysimple.cylindrical_to_reference(positions[:, :3].T)
-    states[3], states[4] = np.sqrt(positions[:, 3] / 3.5e6), positions[:, 4]
-    start = time.perf_counter()
-    pysimple.trace_parallel(states)
-    simple_trace_seconds = time.perf_counter() - start
     ascot, codes, times, ascot_elapsed, native = ascot_run(
         eq, markers, output / "ascot.h5", args.duration, args.step, plasma
     )
     from a5py.ascot5io.state import State
-    import a5py
-    import libneo
 
     simple_codes = np.asarray(result.distribution[0].markers[1].positions)[:, 6].astype(
         int
@@ -968,6 +970,7 @@ def main():
     matched = (
         (simple_codes == 0)
         & ascot_finished
+        & ~ascot_unresolved
         & np.isclose(times, args.duration, rtol=1e-10, atol=1e-14)
     )
     jointly_completed = matched.copy()
@@ -982,12 +985,7 @@ def main():
     report = {
         "case": args.case,
         "created_utc": datetime.now(timezone.utc).isoformat(),
-        "revisions": {
-            "benchmark": revision(repository),
-            "SIMPLE": revision(Path(pysimple.__file__).resolve().parents[2]),
-            "ASCOT5": revision(Path(a5py.__file__).resolve().parents[1]),
-            "libneo_converter": revision(Path(libneo.__file__).resolve().parents[2]),
-        },
+        "revisions": revisions,
         "dd_version": "4.1.1",
         "duration_s": args.duration,
         "resolution": n,
@@ -1004,7 +1002,6 @@ def main():
         "field_consistency_with_input_IDS": field_consistency(eq, field),
         "markers": len(positions),
         "simple_seconds_including_field_initialization": simple_elapsed,
-        "simple_seconds_tracing": simple_trace_seconds,
         "ascot_seconds_tracing": ascot_elapsed,
         "simple_exit_conditions": simple_codes.tolist(),
         "simple_lost_fraction": float(np.mean(simple_codes != 0)),
@@ -1035,9 +1032,10 @@ def main():
                 np.linalg.norm(cart(simple) - cart(ascot), axis=1), matched
             )
         ],
-        "relative_energy_error": (
-            (simple[:, 3] - ascot[:, 3]) / positions[:, 3]
-        ).tolist(),
+        "relative_energy_error": [
+            float(e) if ok else None
+            for e, ok in zip((simple[:, 3] - ascot[:, 3]) / positions[:, 3], matched)
+        ],
         "pitch_error": [
             float(e) if ok else None
             for e, ok in zip(simple[:, 4] - ascot[:, 4], matched)
