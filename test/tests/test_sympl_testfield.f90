@@ -44,11 +44,10 @@ contains
         integer, intent(out) :: ierr
 
         si%z(1) = 0.3d0
-        f%mu = 0d0
-        f%vpar = sqrt(2d0)*injected_momentum_ratio*si%pabs
+        f%vpar = sqrt(2d0*((injected_momentum_ratio*si%pabs)**2 - f%mu*f%Bmod))
         if (radial_electric_potential_slope /= 0d0) &
             f%Phie = f%Phie + (1d0 - injected_momentum_ratio**2)*si%pabs**2
-        f%H = 0.5d0*f%vpar**2 + f%Phie
+        f%H = 0.5d0*f%vpar**2 + f%mu*f%Bmod + f%Phie
         if (injected_status == SYMPLECTIC_STEP_BOUNDARY) then
             si%z(1) = 1d0
             si%last_step_fraction = 0.25d0
