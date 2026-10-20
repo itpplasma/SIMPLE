@@ -469,8 +469,9 @@ contains
         end if
         print '(a,f7.4,a,f6.3)', 'MAP configuration rho=',rho,' gmin=',gfixed
         do k=1,3
-            ! The frozen reference has one fixed stopping rule, independent of tol.
-            if (reference .and. k > 1) cycle
+            ! The frozen reference has one fixed stopping rule. Keep its strict
+            ! k=3 gate; the k=1 repeat only reported the same 1000-step defect.
+            if (reference .and. k < 3) cycle
             tol=tols(k)
             if(reference) tol=-1 ! Reference Newton tolerance is fixed internally.
             do ncase=1,2
