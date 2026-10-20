@@ -56,7 +56,10 @@ contains
         ! All cases read the same equilibrium without changing it. Share the
         ! expensive spline construction while retaining every coordinate check.
         if (vmec_initialized) return
-        call init_vmec(VMEC_FILE, 5, 5, 5, dummy)
+        ! Keep the boundary's original angular resolution. Cubic radial
+        ! interpolation still interpolates the s=1 data exactly and reduces
+        ! the coefficient storage by 4/6; roundtrips use the same smooth chart.
+        call init_vmec(VMEC_FILE, 3, 5, 5, dummy)
         vmec_initialized = .true.
     end subroutine ensure_vmec_initialized
 

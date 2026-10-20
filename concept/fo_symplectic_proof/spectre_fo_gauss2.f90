@@ -795,14 +795,16 @@ contains
         if (present(e0)) energy0 = e0
         rhoj = [1.0_dp, 0.0_dp, 0.0_dp]
         if (present(gmin) .and. present(length)) then
-            do k = 1, spectre_field%data%Mvol - 1
-                call fo_monitor_factor(z(1) - real(k, dp), length, gmin, &
-                    factor(1), factor(2), factor(3))
-                call fo_jet_product(rhoj(1), rhoj(2), rhoj(3), &
-                    factor(1), factor(2), factor(3), &
-                    product(1), product(2), product(3))
-                rhoj = product
-            end do
+            if (.not. (gmin <= 1.0_dp .and. gmin >= 1.0_dp)) then
+                do k = 1, spectre_field%data%Mvol - 1
+                    call fo_monitor_factor(z(1) - real(k, dp), length, gmin, &
+                                           factor(1), factor(2), factor(3))
+                    call fo_jet_product(rhoj(1), rhoj(2), rhoj(3), &
+                                        factor(1), factor(2), factor(3), &
+                                        product(1), product(2), product(3))
+                    rhoj = product
+                end do
+            end if
         end if
         tj = 0.0_dp
         tj(1) = rhoj(1)
@@ -846,18 +848,21 @@ contains
     end function gauss2_entry_step
 
     subroutine gauss2_step(z0, width, ro0, e0, length, gmin, h, z1, dt, ok, &
-                           tangent, radial_scale, tolerance, residual, start_energy)
+                           tangent, radial_scale, tolerance, residual, start_energy, &
+                           fixed_point)
         !> start_energy returns H(z0), also when the Newton solve fails.
         real(dp), intent(in) :: z0(6), width, ro0, e0, length, gmin, h
         real(dp), intent(out) :: z1(6), dt
         logical, intent(out) :: ok
         real(dp), intent(out), optional :: tangent(6, 6), residual, start_energy
         real(dp), intent(in), optional :: radial_scale, tolerance
+        ! Caller-owned segment hint: disable trials after the first fallback.
+        logical, intent(inout), optional :: fixed_point
         real(dp) :: dy(6, 2), f(6, 2), df(6, 6, 2), monitor(2)
         real(dp) :: jac(12, 12), rhs(12, 6), r(6, 2), delta(12)
-        real(dp) :: eye(6, 6), energy, radial_ref, tol, res
+        real(dp) :: eye(6, 6), energy, radial_ref, tol, res, predictor(6, 2)
         integer :: i, it, piv(12), info
-        logical :: full
+        logical :: full, trial
 
         ok = .false.
         z1 = z0
@@ -881,7 +886,39 @@ contains
         ! needlessly adds a cancellation floor to the Newton residual.
         dy(:, 1) = h*(0.5_dp - sqrt(3.0_dp)/6.0_dp)*f(:, 1)
         dy(:, 2) = h*(0.5_dp + sqrt(3.0_dp)/6.0_dp)*f(:, 1)
+        trial = .not. present(tangent)
+        if (present(fixed_point)) trial = trial .and. fixed_point
+        if (trial) then
+            ! A bounded fixed-point trial avoids a Hessian/factorization when
+            ! small fixed steps are already contractive. Acceptance uses the
+            ! identical stage residual. On failure, restore the original
+            ! predictor before the unchanged Newton solve (all 20 iterations).
+            predictor = dy
+            do it = 1, 2
+                call stage_evals(.false.)
+                do i = 1, 2
+                    r(:, i) = dy(:, i) - h*(GL_A(i, 1)*f(:, 1) + GL_A(i, 2)*f(:, 2))
+                end do
+                res = maxval(abs(r))
+                if (.not. all(ieee_is_finite(r))) exit
+                if (res <= tol) then
+                    ok = .true.
+                    if (present(residual)) residual = res
+                    exit
+                end if
+                if (it == 1) then
+                    do i = 1, 2
+                        dy(:, i) = h*(GL_A(i, 1)*f(:, 1) + GL_A(i, 2)*f(:, 2))
+                    end do
+                end if
+            end do
+            if (.not. ok) then
+                dy = predictor
+                if (present(fixed_point)) fixed_point = .false.
+            end if
+        end if
         do it = 1, 20
+            if (ok) exit
             ! The Jacobian is needed only if this iterate is not accepted. A
             ! later iterate usually is, so evaluate it to first order first and
             ! add the Hessian at the same point only when the solve continues.
