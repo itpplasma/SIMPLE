@@ -115,6 +115,13 @@ fast)
     ;;
 full)
     python_env || exit
+    # Enable the unchanged collisional wall test in the merge-queue slow set.
+    # CGAL's release archive is supplied offline by ci/bundle.sh.
+    mkdir -p "$root/cgal" &&
+        tar -xf "$root/data/CGAL-6.0.1.tar.xz" -C "$root/cgal" --strip-components=1 || exit
+    python -m pip install -q 'numpy==2.2.6' 'scipy==1.16.3' vtk \
+        'git+https://github.com/itpplasma/map2disc.git@14da2f094ab2505a639b9cd04af57f5c0dbfaa54' || exit
+    make_args+=("FLAGS=-DSIMPLE_ENABLE_CGAL=ON -DFETCHCONTENT_SOURCE_DIR_CGAL=$root/cgal")
     # Second tree for the regression build (it needs its own build/ and a
     # different libneo); started first because it holds the critical path.
     cp -a "$src" "$root/src-reg"
@@ -124,13 +131,6 @@ full)
     (cd "$root/src-reg" && regression_suite "$jb" "$tb") > "$root/regression.log" 2>&1 &
     reg_pid=$!
     stamp "regression started in background (log follows at the end)"
-    # Enable the unchanged collisional wall test in the merge-queue slow set.
-    # CGAL's release archive is supplied offline by ci/bundle.sh.
-    mkdir -p "$root/cgal" &&
-        tar -xf "$root/data/CGAL-6.0.1.tar.xz" -C "$root/cgal" --strip-components=1 || exit
-    python -m pip install -q 'numpy==2.2.6' 'scipy==1.16.3' vtk \
-        'git+https://github.com/itpplasma/map2disc.git@14da2f094ab2505a639b9cd04af57f5c0dbfaa54' || exit
-    make_args+=("FLAGS=-DSIMPLE_ENABLE_CGAL=ON -DFETCHCONTENT_SOURCE_DIR_CGAL=$root/cgal")
     fast_suite "$ja" && stamp "test-slow (ctest -j$ja)" &&
         (cd build && ctest --test-dir test -N -L slow -R '^test_collisional_stl_wall$' |
             grep 'Test.*test_collisional_stl_wall$') && make test-slow
