@@ -100,6 +100,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Python for the offline bundle
+        if: env.CI_HOSTED != 'true'
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
       - name: Build and test on sCluster
         if: env.CI_HOSTED != 'true'
         env:
@@ -107,6 +113,7 @@ jobs:
           FULL_INPUT: ${{ inputs.full }}
           SCI_HEAD_REF: ${{ github.head_ref || github.ref_name }}
           SCI_LIBNEO_REF: ${{ inputs.libneo_ref }}
+          SCI_OUT: ${{ runner.temp }}/sci-out
         run: |
           case $EVENT in
           workflow_dispatch) [ "$FULL_INPUT" = true ] && tier=full || tier=smoke ;;
@@ -116,6 +123,26 @@ jobs:
           export TMPDIR=$RUNNER_TEMP
           SCI_TIER=$tier ci/bundle.sh "$RUNNER_TEMP/bundle.tar.zst"
           sci-dispatch "$tier" "$RUNNER_TEMP/bundle.tar.zst"
+
+      - name: Summarize sCluster coverage
+        if: always() && env.CI_HOSTED != 'true'
+        run: |
+          if [ -f "$RUNNER_TEMP/sci-out/coverage-summary.txt" ]; then
+            {
+              echo '## Full-tier coverage (sCluster GCC 12.2)'
+              echo '```text'
+              cat "$RUNNER_TEMP/sci-out/coverage-summary.txt"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload sCluster coverage
+        if: always() && env.CI_HOSTED != 'true'
+        uses: actions/upload-artifact@v6
+        with:
+          name: fast-suite-coverage
+          if-no-files-found: warn
+          path: ${{ runner.temp }}/sci-out/coverage*
 
       - name: Set up Python
         if: env.CI_HOSTED == 'true'
@@ -253,17 +280,11 @@ jobs:
       matrix:
         include:
           - gcc: 13
-            coverage: 'OFF'
-          - gcc: 14
-            coverage: 'ON'
     env:
       CC: gcc-${{ matrix.gcc }}
       CXX: g++-${{ matrix.gcc }}
       FC: gfortran-${{ matrix.gcc }}
       OMP_NUM_THREADS: 2
-      # Keep PR additions small; collect full coverage on main/full dispatch.
-      COVERAGE: ${{ matrix.coverage == 'ON' && github.event_name != 'pull_request' && 'ON' || 'OFF' }}
-      TEST_TARGET: ${{ matrix.coverage == 'ON' && github.event_name != 'pull_request' && 'test-fast' || 'test-smoke' }}
 
     steps:
       - uses: actions/checkout@v6
@@ -279,46 +300,20 @@ jobs:
             libgsl-dev libhdf5-dev libfftw3-dev libnetcdf-dev libnetcdff-dev \
             libopenblas-dev liblapack-dev openmpi-bin libopenmpi-dev
           python -m pip install numpy netCDF4
-          if [ "$COVERAGE" = 'ON' ]; then
-            python -m pip install gcovr==8.4
-          fi
 
       - name: Build and run tests
         env:
           LIBNEO_INPUT_REF: ${{ inputs.libneo_ref }}
           FLAGS: >-
-            -DENABLE_COVERAGE=${{ env.COVERAGE }}
+            -DENABLE_COVERAGE=OFF
             -DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF
         run: |
           # CTest's generated resource spec limits concurrent memory use.
           # Ignore OpenMP's thread count when counting runner cores.
           CTEST_PARALLEL_LEVEL=$(env -u OMP_NUM_THREADS -u OMP_THREAD_LIMIT nproc)
           export CTEST_PARALLEL_LEVEL
-          make "$TEST_TARGET" CONFIG=Fast \
+          make test-smoke CONFIG=Fast \
             LIBNEO_REF="$LIBNEO_INPUT_REF"
-
-      - name: Generate coverage report and summary
-        if: env.COVERAGE == 'ON' && !cancelled()
-        run: |
-          gcovr --root . --filter 'src/|app/' --include-internal-functions \
-            --gcov-executable gcov-${{ matrix.gcc }} \
-            --xml-pretty --xml build/coverage.xml \
-            --html-details build/coverage.html --print-summary build \
-            > build/coverage-summary.txt
-          {
-            echo '## Fast-suite coverage (GCC ${{ matrix.gcc }})'
-            echo '```text'
-            cat build/coverage-summary.txt
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload coverage artifact
-        if: env.COVERAGE == 'ON' && !cancelled()
-        uses: actions/upload-artifact@v6
-        with:
-          name: fast-suite-coverage
-          if-no-files-found: error
-          path: build/coverage*
 
   intel-ifx:
     permissions:
