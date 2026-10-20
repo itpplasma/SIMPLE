@@ -273,6 +273,9 @@ contains
             if (ipiv(k) /= k) then
                 tmp = rhs(k); rhs(k) = rhs(ipiv(k)); rhs(ipiv(k)) = tmp
             end if
+        end do
+        ! L already contains every row swap from factorisation.
+        do k = 1, n
             do i = k + 1, n
                 rhs(i) = rhs(i) - A(i, k)*rhs(k)
             end do

@@ -134,7 +134,7 @@ contains
         type(str_t) :: source
         type(expr_t) :: clean(size(roots))
         logical :: ok, shaped
-        character(:), allocatable :: message, arg
+        character(:), allocatable :: message, arg, source_text
         character(32) :: ref
         integer :: j, k, i, c, n, paren
 
@@ -206,7 +206,8 @@ contains
         end do
         source = emit_kernel(clean, spec, ok, message=message)
         if (.not. ok) error stop message
-        write (w%unit, '(a)') chars(source)
+        source_text = chars(source)
+        write (w%unit, '(a)') source_text(:len(source_text) - 1)
     end subroutine writer_emit
 
 end module simple_gen_support
