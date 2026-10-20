@@ -253,7 +253,7 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS AND SIMPLE_HAVE_MAP2DISC)
             WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
         set_tests_properties(test_collisional_stl_wall PROPERTIES
             LABELS "integration;python;wall"
-            RESOURCE_GROUPS "mem_gb:11"
+            RESOURCE_GROUPS "mem_gb:1"
             TIMEOUT 1200
             PROCESSORS 1
             FIXTURES_REQUIRED chartmap_ncsx_map2disc_wall)
