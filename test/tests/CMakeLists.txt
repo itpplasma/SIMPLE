@@ -444,6 +444,19 @@ if (ENABLE_OPENMP)
         LABELS "integration"
         TIMEOUT 120)
 
+    add_executable(test_axis_crossing_midpoint.x test_axis_crossing_midpoint.f90)
+    target_link_libraries(test_axis_crossing_midpoint.x simple)
+    add_test(NAME test_axis_crossing_midpoint
+        COMMAND test_axis_crossing_midpoint.x single
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    add_test(NAME test_axis_crossing_midpoint_multivolume
+        COMMAND test_axis_crossing_midpoint.x multivolume
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(test_axis_crossing_midpoint
+        test_axis_crossing_midpoint_multivolume PROPERTIES
+        LABELS "integration"
+        TIMEOUT 120)
+
     add_executable(test_axis_regular_rhs.x test_axis_regular_rhs.f90)
     target_link_libraries(test_axis_regular_rhs.x simple)
     add_test(NAME test_axis_regular_rhs
