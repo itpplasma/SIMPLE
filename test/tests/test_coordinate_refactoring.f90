@@ -62,8 +62,7 @@ contains
         field_input = 'wout.nc'
         call init_vmec('wout.nc', 5, 5, 5, dummy)
         call init_reference_coordinates(coord_input)
-        ! Inverse-map identities need a smooth chart, not production resolution.
-        call init_field_can(CANFLUX, n_r=16, n_th=17, n_phi=16)
+        call init_field_can(CANFLUX)
 
         do i = 1, 5
             xref = [0.1_dp + 0.15_dp*i, mod(0.5_dp*i, twopi), mod(0.3_dp*i, twopi)]
@@ -133,9 +132,12 @@ contains
 
         coord_input = 'wout.nc'
         field_input = 'wout.nc'
-        ! Reuse the VMEC/reference coordinates built by the roundtrip check.
+        call init_vmec('wout.nc', 5, 5, 5, dummy)
+        call init_reference_coordinates(coord_input)
+
         call create_coils_field('coils.simple', raw_coils)
-    call create_splined_field(raw_coils, ref_coords, splined_coils, n_r=32, n_th=33, n_phi=32)
+        call create_splined_field(raw_coils, ref_coords, splined_coils, &
+                                  n_r=24, n_th=25, n_phi=24)
 
         do i = 1, 5
             ! Grid point in spline coords (r, theta, phi) where r = sqrt(s)

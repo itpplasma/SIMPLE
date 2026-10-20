@@ -149,7 +149,7 @@ def run(case, integmode, relerr, startmode, start_src, sbeg, npart, trace,
 
 def read(d):
     """(loss time, final normalised flux) per marker."""
-    data = np.loadtxt(d / "times_lost.dat")
+    data = np.atleast_2d(np.loadtxt(d / "times_lost.dat"))
     return data[:, 1], data[:, 5]
 
 
@@ -229,7 +229,7 @@ def main():
     if sys.argv[1:] not in ([], ["--full"]):
         sys.exit("usage: test_explicit_loss_detection.py [--full]")
     full = bool(sys.argv[1:])
-    surfaces = LAUNCH_SURFACES if full else [(0.75, 16, 1e-4), (0.05, 8, 3e-4)]
+    surfaces = LAUNCH_SURFACES if full else [(0.75, 16, 1e-4), (0.05, 1, 3e-4)]
     failures = []
     losses = [check_surface(sbeg, npart, trace, failures, full)
               for sbeg, npart, trace in surfaces]

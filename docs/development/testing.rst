@@ -35,8 +35,11 @@ CI tiers and CPU allocation
 Every pull request, including drafts and forks, runs ``Build and Test`` on
 GitHub-hosted Ubuntu 24.04 using GCC 14, ``make test-fast CONFIG=Fast`` and the
 GCC matrix's ``ENABLE_PYTHON_INTERFACE=OFF`` / ``SIMPLE_ENABLE_PYTHON_TOOLS=OFF``
-build mode. Standalone Python driver tests still run; Python-interface and
-frontend tests remain in the full queue build. CTest uses all
+build mode. Two PR shards partition CTest by odd/even test indices; CTest
+fixtures add required producers to either shard. Each shard builds separately
+and uses all runner cores and its own memory resource budget. Full queue and
+dispatch runs remain unsharded. Standalone Python drivers still run;
+Python-interface and frontend tests remain in the full queue build. CTest uses all
 runner cores and the generated cgroup-aware memory resource spec. OpenMP
 defaults to two threads for field setup and one for the FO stepper;
 OpenBLAS uses one. The loss and SPECTRE orbit checks reserve two CTest
@@ -60,13 +63,17 @@ The long energy and resolution runs retain every original step.
 
 The loss and SPECTRE trajectory drivers also have slow
 ``_full`` siblings with their original configurations. Fast counts are 8/32
-for axis-loss, 16/64 for outer explicit losses (the
-8 near-axis markers are unchanged), and 4/24 for SPECTRE trajectories. Trace
+for axis-loss, 16/64 for outer explicit losses, 1/8 for the explicit
+near-axis smoke check, and 4/24 for SPECTRE trajectories. Trace
 lengths and per-orbit bounds are unchanged: zero forbidden losses/escapes,
 energy/trajectory error maxima and exact metadata identities do not acquire
 a sampling tolerance. The explicit loss-count cross-check retains its
 existing ``max(2, round(1.5*sqrt(reference_losses)))`` counting-error bound,
 evaluated for the reduced count; its nonzero-reference-loss guard remains.
+
+The stellarator stepper driver runs two periods (96 stored states) for every
+scheme in fast, requiring zero step errors and finite states. Its ``_full``
+case retains the original 7,500-state plotting trace and output files.
 
 Memory allocation on workstations and CI
 ----------------------------------------
@@ -122,7 +129,11 @@ these measurements ran inside
 use GNU Fortran 16.2.1, the deterministic ``Fast`` build, four OpenMP threads
 and one OpenBLAS thread; golden-record scripts retain their fixed two threads
 and the wall test retains its fixed single thread.
-The wall test uses VMEC angular multiplier 1 for initialization; its coil
+The chartmap measurements use the current fixtures: pipeline shares one
+VMEC setup with angular multiplier 1; R,Z keeps angular multiplier/order 5
+and uses radial order 3 (the boundary remains an exact interpolation node).
+Other derivative reservations retain their previous conservative bounds
+from the larger grids. The wall test uses VMEC angular multiplier 1 for initialization; its coil
 field, chartmap, explicit starts and numerical assertions are unchanged.
 
 ==============================================  ==========  =====
@@ -133,8 +144,8 @@ test_bder_from_splines                          0.8191      1
 test_magfie_refcoords_splines                   1.1990      2
 test_hcurl_from_dhcov_splines                   0.8194      1
 test_splined_kernel_bench                       12.6803     13
-test_chartmap_pipeline                          9.8633      10
-test_chartmap_rz_consistency                    9.8601      10
+test_chartmap_pipeline                          0.4584      2
+test_chartmap_rz_consistency                    6.5831      8
 gc_ck_ncsx_vmec_vs_meiss                        11.9712     12
 golden_record_albert_coils                      14.0856     15
 golden_record_boozer_ncsx                       7.2261      8
