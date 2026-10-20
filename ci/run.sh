@@ -134,7 +134,7 @@ coverage_report() {
     fi
     stamp "coverage result: $bytes bytes (zstd), limit 67108864"
     cat ci-out/coverage-summary.txt
-    [ "$bytes" -le $((64 * 1024 * 1024)) ]
+    [ "$bytes" -le $((64 * 1024 * 1024)) ] || return 4
 }
 
 case $tier in
