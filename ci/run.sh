@@ -121,12 +121,12 @@ coverage_report() {
         --html-details "$result/coverage.html" --print-summary > "$result/coverage-summary.txt" || return
     # Leave headroom for the status files added after reporting. If detailed
     # HTML exceeds the result budget, retain the Pages-compatible overview.
-    bytes=$(tar -C "$result" -cf - . | zstd -q -T1 | wc -c) || return
+    bytes=$( (cd "$result" && tar -cf - coverage*) | zstd -q -T1 | wc -c) || return
     if [ "$bytes" -gt $((63 * 1024 * 1024)) ]; then
         rm -f "$result"/coverage*.html "$result"/coverage*.css
         gcovr --root . --filter 'src/|app/' --include-internal-functions \
             --add-tracefile coverage.json --html "$result/coverage.html" || return
-        bytes=$(tar -C "$result" -cf - . | zstd -q -T1 | wc -c) || return
+        bytes=$( (cd "$result" && tar -cf - coverage*) | zstd -q -T1 | wc -c) || return
     fi
     stamp "coverage result: $bytes bytes (zstd), transport limit 67108864"
     cat "$result/coverage-summary.txt"
