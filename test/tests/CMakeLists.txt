@@ -1429,6 +1429,7 @@ set_tests_properties(test_gc_gauss_endpoint PROPERTIES
 set(FO_PROOF_DIR "${CMAKE_SOURCE_DIR}/concept/fo_symplectic_proof")
 add_library(fo_gauss2_concept STATIC
     ${FO_PROOF_DIR}/generated/fo_kernel.f90
+    ${FO_PROOF_DIR}/generated/fo_joint_kernel.f90
     ${FO_PROOF_DIR}/spectre_fo_gauss2.f90)
 target_include_directories(fo_gauss2_concept PRIVATE ${FO_PROOF_DIR}/generated)
 target_link_libraries(fo_gauss2_concept PUBLIC simple)
@@ -1550,6 +1551,21 @@ add_test(NAME test_fo_gauss2_resolution_large_matched_policy COMMAND test_fo_sym
     ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 33333334 100 0 0)
 set_tests_properties(test_fo_gauss2_resolution_large_matched_policy PROPERTIES
     LABELS "regression;integration;slow" TIMEOUT 3600)
+
+# Gauss stages are too small to repay an OpenMP team. Run each serial orbit
+# on one reserved core, also when CTest schedules independent tests together.
+set(FO_STEPPER_TESTS test_fo_symplectic test_fo_symplectic_long
+    test_fo_symplectic_resolved test_fo_symplectic_resolved_long
+    test_fo_symplectic_newton_boundary test_fo_gauss2_original_oracle
+    test_fo_gauss2_resolution_large_matched_policy)
+foreach(fo_suffix IN ITEMS second second_long second_resolved second_resolved_long)
+    list(APPEND FO_STEPPER_TESTS test_fo_symplectic_${fo_suffix})
+endforeach()
+foreach(fo_probe IN ITEMS base half quarter tight base_short captured)
+    list(APPEND FO_STEPPER_TESTS test_fo_gauss2_resolution_${fo_probe})
+endforeach()
+set_tests_properties(${FO_STEPPER_TESTS} PROPERTIES
+    PROCESSORS 1 ENVIRONMENT "OMP_NUM_THREADS=1")
 
 add_subdirectory(
     "${CMAKE_SOURCE_DIR}/concept/fo_gc_derivations/D_canonical_switch"
