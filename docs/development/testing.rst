@@ -50,8 +50,31 @@ its runner choice (``itp-slurm`` or ``hosted``) and smoke/full selection. The
 ``full-ci`` PR label adds compiler and VMEC++ checks, while ``Build and Test``
 continues to run the hosted fast tier. Use full dispatch or the merge queue
 for full testing: the 13--15 GiB golden-record reservations exceed the usable
-memory budget of the standard hosted runner. Hosted GCC 14 coverage remains
-in the full-dispatch and merge-queue matrix.
+memory budget of the standard hosted runner. GCC 13 smoke remains in the
+compiler matrix; coverage runs on sCluster with GCC 12 instead of hosted GCC 14.
+
+Each full sCluster run uses one unchanged ``full`` Slurm allocation (192 GiB,
+90 minutes), with two concurrent builds: the correctness gate runs fast/slow
+with deterministic Fast and no coverage, plus a separate deterministic Release
+regression tree matching the golden reference; reporting runs only the fast
+tier with ``ENABLE_COVERAGE=ON``. Coverage gets up to 16 CPUs (one quarter of
+smaller allocations); the gate splits the remaining CPUs between fast/slow
+and regression. For 94 CPUs this is 16 coverage, 39 fast/slow and 39 regression.
+The three CTest memory caps sum to 75% of ``SCI_MEM_GB`` (24/60/60 GiB at
+94 CPUs and 192 GiB), and each tree also uses the generated Slurm/cgroup-aware
+resource spec. Python environments and editable installs are isolated.
+
+Only the correctness gate's exit status decides the check. Coverage setup,
+test, package-install or gcovr failures are reporting failures: the job log
+and Actions summary show their exit statuses and a warning, while the gate
+still runs to completion. A successful report is uploaded even if some
+instrumented tests failed; the summary identifies that incomplete test run.
+Artifact upload is also non-blocking. Reports return through ``ci-out/`` and
+``SCI_OUT`` under the infrastructure's 64 MiB compressed cap, retaining the
+``fast-suite-coverage`` artifact's root ``coverage.xml``, ``coverage.html`` and
+summary layout consumed by Pages. Oversized details fall back to an overview;
+a still-oversized or failed report is omitted, with its failure recorded.
+Incomplete XML/HTML artifacts are not uploaded.
 
 The short FO tests keep all field-jet, derivative, energy and one-step map
 checks, and compose 64 steps in the fast tier. Their ``_full`` siblings retain
