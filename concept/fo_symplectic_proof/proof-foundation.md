@@ -266,13 +266,18 @@ The frozen reference API exposes neither tolerance nor residual, so it prints
 
 The map oracle uses fourth-order central differences at spacings
 1e-4*max(1,|z_j|) and 5e-5*max(1,|z_j|), with a separately composed implicit
-stage tangent. Norms are Frobenius in the stated canonical coordinates.
+stage tangent. Endpoint-only finite differences omit discarded tangent solves;
+the unperturbed map still composes every stage tangent. The frozen provider's
+fixed-tolerance sweep runs once, retaining its strict 1,000-step gate.
+Norms are Frobenius in the stated canonical coordinates.
 The tangent is the derivative of the exact stage equations at the computed
 stages, not automatically the derivative of the terminated Newton algorithm.
 Strict thresholds remain 1e-7 for the tangent, 1e-5 for map finite differences,
 1e-6 for compiled derivative consistency and 1e-8 for endpoint correspondence.
 The original strict gates cover all one-step maps and the 1,000-step map at
-1e-12. The additional loose-tolerance 1,000-step sweep is an audit: exceeding
+1e-12 in the slow ``_full`` cases. The fast tier composes 64 steps at the same
+strict thresholds; its energy sample counts, field-jet and derivative checks
+are unchanged. The additional loose-tolerance 1,000-step sweep is an audit: exceeding
 that same strict criterion is explicitly printed and retained as a finding.
 The reference comparison at loose tolerance is reported rather than requiring
 an algorithm with a different stopping rule to return the identical endpoint.

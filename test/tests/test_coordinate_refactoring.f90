@@ -136,7 +136,8 @@ contains
         call init_reference_coordinates(coord_input)
 
         call create_coils_field('coils.simple', raw_coils)
-    call create_splined_field(raw_coils, ref_coords, splined_coils, n_r=32, n_th=33, n_phi=32)
+        call create_splined_field(raw_coils, ref_coords, splined_coils, &
+                                  n_r=24, n_th=25, n_phi=24)
 
         do i = 1, 5
             ! Grid point in spline coords (r, theta, phi) where r = sqrt(s)
