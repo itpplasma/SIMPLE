@@ -8,9 +8,10 @@ module spectre_fo_gauss2
     use fortnum_linalg, only: inv3
     use spectre_basis, only: spectre_vecpot_t, &
         get_cheby_d2, get_zernike_d2
-    use fo_kernel, only: fo_eval_factored, fo_eval_first, fo_monitor_factor, fo_jet_product, &
+    use fo_kernel, only: fo_monitor_factor, fo_jet_product, &
                          fo_radial, fo_metric_monitor, fo_radial_first, &
                          fo_metric_monitor_first
+    use fo_joint_kernel, only: fo_joint_first, fo_joint_full, fo_joint_flow
     implicit none
     private
     real(dp), parameter :: A_SCALE = TESLA_TO_GAUSS*M_TO_CM**2
@@ -18,6 +19,7 @@ module spectre_fo_gauss2
     type :: potential_terms_t
         integer, allocatable :: offset(:), degree(:)
         real(dp), allocatable :: coeff(:, :, :)
+        real(dp), allocatable :: polynomial(:, :, :, :)
     end type potential_terms_t
     type(potential_terms_t), allocatable :: potential_terms(:)
     logical, allocatable :: gauge_active(:)
@@ -37,6 +39,8 @@ contains
         !> gradients of linear functions on the unwrapped angular cover.
         real(dp), allocatable :: radial(:, :), cheby(:, :), zernike(:, :, :)
         real(dp) :: delta(2, 2), wave(2), c, defect, scale
+        real(dp) :: input(2, 2, 0:8), poly(2, 2, 0:8)
+        logical :: axis
         integer :: k, l, j, r, m, n, t, z, term, divisor, remainder
 
         if (.not. allocated(spectre_field)) &
@@ -152,6 +156,24 @@ contains
                 end do
             end do
             potential_terms(k)%offset(spectre_field%data%mn + 1) = term
+            ! Re-express supported radial degrees exactly; larger orders keep
+            ! the recurrence provider. Public direct-phase queries retain it too.
+            if (l <= 8 .and. spectre_field%data%Mpol <= 8) then
+                allocate (potential_terms(k)%polynomial(2, 2, 0:8, &
+                                                        spectre_field%data%mn))
+                axis = k == 1
+                do j = 1, spectre_field%data%mn
+                    m = spectre_field%data%im(j)
+                    input = 0.0_dp
+                    input(1, 1, 0:l) = spectre_field%data%vol(k)%Ate(:, j)
+                    input(2, 1, 0:l) = spectre_field%data%vol(k)%Aze(:, j)
+                    input(1, 2, 0:l) = spectre_field%data%vol(k)%Ato(:, j)
+                    input(2, 2, 0:l) = spectre_field%data%vol(k)%Azo(:, j)
+                    poly = 0.0_dp
+                    include 'fo_poly_coeff.inc'
+                    potential_terms(k)%polynomial(:, :, :, j) = poly
+                end do
+            end if
         end do
     end subroutine gauss2_prepare
 
@@ -304,6 +326,12 @@ contains
         real(dp) :: pe(2), po(2), increment(2)
         integer :: ii, term, ll, mi
 
+        if (present(phase)) then
+            if (allocated(potential_terms(owner)%polynomial)) then
+                call polynomial_potential(owner, s, av, second, phase)
+                return
+            end if
+        end if
         if (owner == 1) then
             call get_zernike_d2(0.5_dp*(s + 1.0_dp), &
                spectre_field%data%Lrad(owner), spectre_field%data%Mpol, zernike, second)
@@ -348,6 +376,51 @@ contains
         av%d2Ath = values(1, 5:10)
         av%d2Azt = values(2, 5:10)
     end subroutine prepared_potential
+
+    subroutine polynomial_potential(owner, s, av, second, phase)
+        integer, intent(in) :: owner
+        real(dp), intent(in) :: s, phase(2, spectre_field%data%mn)
+        type(spectre_vecpot_t), intent(out) :: av
+        logical, intent(in) :: second
+        real(dp) :: poly(2, 2, 0:8), radial(2, 2, 0:2), values(2, 10)
+        real(dp) :: x, radial_scale, rmi, rni, cp, sp
+        integer :: ii, m
+
+        include 'fo_poly_point.inc'
+        values = 0.0_dp
+        do ii = 1, spectre_field%data%mn
+            poly = potential_terms(owner)%polynomial(:, :, :, ii)
+            cp = phase(1, ii)
+            sp = phase(2, ii)
+            rmi = real(spectre_field%data%im(ii), dp)
+            rni = real(spectre_field%data%in(ii), dp)
+            m = spectre_field%data%im(ii)
+            if (owner == 1) then
+                if (second) then
+                    include 'fo_poly_axis_2.inc'
+                else
+                    include 'fo_poly_axis_1.inc'
+                end if
+            else
+                if (second) then
+                    include 'fo_poly_horner_2.inc'
+                else
+                    include 'fo_poly_horner_1.inc'
+                end if
+            end if
+            if (second) then
+                include 'fo_poly_angular_2.inc'
+            else
+                include 'fo_poly_angular_1.inc'
+            end if
+        end do
+        av%Ath = values(1, 1)
+        av%Azt = values(2, 1)
+        av%dAth = values(1, 2:4)
+        av%dAzt = values(2, 2:4)
+        av%d2Ath = values(1, 5:10)
+        av%d2Azt = values(2, 5:10)
+    end subroutine polynomial_potential
 
     real(dp) function gauss2_gauge_zeta(q, owner, ro0) result(shift)
         real(dp), intent(in) :: q(3), ro0
@@ -440,17 +513,20 @@ contains
     end subroutine gauss2_phases
 
     subroutine gauss2_geometry(q, width, x, e, metric, dg, d2g, &
-                               first_order, phase, basis_phase)
+                               first_order, phase, basis_phase, embedding)
         !> Smooth the embedding, not just A: the native stacked chart is C0.
         !> SPEC interface Fourier coefficients and axis power law are unchanged
         !> outside the layer. Analytic geometry derivatives extend through order 3.
         !> first_order stops the embedding jets at order 2 and returns d2g = 0;
         !> x, e, metric and dg are bitwise unchanged.
+        !> Internal embedding requests return only R/Z jets; the Cartesian
+        !> and dense metric outputs are then undefined.
         real(dp), intent(in) :: q(3), width
         real(dp), intent(out) :: x(3), e(3, 3), metric(3, 3)
         real(dp), intent(out) :: dg(3, 3, 3), d2g(3, 3, 3, 3)
         real(dp), intent(out), optional :: phase(2, spectre_field%data%mn)
         real(dp), intent(in), optional :: basis_phase(2, spectre_field%data%mn)
+        real(dp), intent(out), optional :: embedding(0:3, 0:3, 0:3, 2)
         logical, intent(in), optional :: first_order
         real(dp) :: jets(0:3, 0:3, 0:3, 2), coeff(2, 0:3), cl(2, 0:3)
         real(dp) :: cr(2, 0:3), sw(0:3), arg, c(0:3), jet_c, jet_s
@@ -511,6 +587,10 @@ contains
             end do
         end do
         jets = jets*M_TO_CM
+        if (present(embedding)) then
+            embedding = jets
+            return
+        end if
         rz = jets(0, 0, 0, :)
         do i = 1, 3
             idx = 0
@@ -645,7 +725,7 @@ contains
                     radial_scale, kenergy, monitor, grad, hess, radial_jet, first_order)
         !> first_order skips the second-order field jets. energy, kenergy,
         !> monitor, f and grad depend only on value and first-order jets in the
-        !> generated kernel, so they are bitwise unchanged; df, hess and the
+        !> generated kernel. CSE can change their rounding; df, hess and the
         !> second-order radial_jet entries are then meaningless.
         real(dp), intent(in) :: z(6), width, ro0
         real(dp), intent(out) :: energy, f(6), df(6, 6)
@@ -654,44 +734,28 @@ contains
         real(dp), intent(out), optional :: radial_jet(10)
         logical, intent(in), optional :: first_order
         real(dp) :: aj(3, 10), gj(6, 10), phase(2, spectre_field%data%mn)
+        real(dp) :: jets(0:3, 0:3, 0:3, 2), raw_grad(6), raw_hess(6, 6), raw_energy
+        real(dp) :: x(3), basis(3, 3), g(3, 3), dg(3, 3, 3), d2g(3, 3, 3, 3)
+        logical :: first
 
-        call metric_jets(z(1:3), width, gj, first_order, phase)
+        first = .false.
+        if (present(first_order)) first = first_order
+        call gauss2_phases(z(1:3), phase)
+        call gauss2_geometry(z(1:3), width, x, basis, g, dg, d2g, &
+                             first_order=first, basis_phase=phase, embedding=jets)
         call potential_jets(z(1:3), width, ro0, aj, first_order, phase)
-        call jet_eval(z, aj, gj, energy, f, df, e0, length, gmin, &
-                    radial_scale, kenergy, monitor, grad, hess, radial_jet, first_order)
+        if (first) then
+            call fo_joint_first(z(4:6), aj, jets, gj, raw_energy, raw_grad, raw_hess)
+        else
+            call fo_joint_full(z(4:6), aj, jets, gj, raw_energy, raw_grad, raw_hess)
+        end if
+        call jet_eval(z, gj, energy, f, df, e0, length, gmin, &
+                      radial_scale, kenergy, monitor, grad, hess, radial_jet, &
+                      first_order, raw_energy, raw_grad, raw_hess)
     end subroutine gauss2_eval
 
-    subroutine metric_jets(q, width, gj, first_order, phase)
-        !> Metric jets: value, rho, theta, zeta, rr, rt, tt, rz, tz, zz.
-        real(dp), intent(in) :: q(3), width
-        real(dp), intent(out) :: gj(6, 10)
-        real(dp), intent(out), optional :: phase(2, spectre_field%data%mn)
-        logical, intent(in), optional :: first_order
-        real(dp) :: x(3), basis(3, 3), g(3, 3), dg(3, 3, 3), d2g(3, 3, 3, 3)
-        real(dp) :: fourier(2, spectre_field%data%mn)
-        integer :: i, j, k, l
-        integer, parameter :: si(6) = [1, 1, 1, 2, 2, 3], sj(6) = [1, 2, 3, 2, 3, 3]
-
-        call gauss2_phases(q, fourier)
-        call gauss2_geometry(q, width, x, basis, g, dg, d2g, &
-                             first_order, phase, fourier)
-        do l = 1, 6
-            gj(l, 1) = g(si(l), sj(l))
-            gj(l, 2:4) = dg(si(l), sj(l), :)
-        end do
-        k = 4
-        do j = 1, 3
-            do i = 1, j
-                k = k + 1
-                do l = 1, 6
-                    gj(l, k) = d2g(si(l), sj(l), i, j)
-                end do
-            end do
-        end do
-    end subroutine metric_jets
-
     subroutine potential_jets(q, width, ro0, aj, first_order, phase)
-        !> Potential jets in the order of metric_jets.
+        !> Potential jets: value, rho, theta, zeta, rr, rt, tt, rz, tz, zz.
         real(dp), intent(in) :: q(3), width, ro0
         real(dp), intent(out) :: aj(3, 10)
         real(dp), intent(in), optional :: phase(2, spectre_field%data%mn)
@@ -711,9 +775,11 @@ contains
         end do
     end subroutine potential_jets
 
-    subroutine jet_eval(z, aj, gj, energy, f, df, e0, length, gmin, &
-                    radial_scale, kenergy, monitor, grad, hess, radial_jet, first_order)
-        real(dp), intent(in) :: z(6), aj(3, 10), gj(6, 10)
+    subroutine jet_eval(z, gj, energy, f, df, e0, length, gmin, &
+                        radial_scale, kenergy, monitor, grad, hess, radial_jet, &
+                        first_order, raw_energy, raw_grad, raw_hess)
+        real(dp), intent(in) :: raw_energy, raw_grad(6), raw_hess(6, 6)
+        real(dp), intent(in) :: z(6), gj(6, 10)
         real(dp), intent(out) :: energy, f(6), df(6, 6)
         real(dp), intent(in), optional :: e0, length, gmin, radial_scale
         real(dp), intent(out), optional :: kenergy, monitor, grad(6), hess(6, 6)
@@ -759,13 +825,10 @@ contains
             end if
         end if
         end if
-        if (first) then
-            call fo_eval_first(z(4:6), aj, gj, 1.0_dp, 1.0_dp, energy0, &
-                               tj, energy, ke, gh, hh, f, df)
-        else
-            call fo_eval_factored(z(4:6), aj, gj, 1.0_dp, 1.0_dp, energy0, &
-                                  tj, energy, ke, gh, hh, f, df)
-        end if
+        energy = raw_energy
+        gh = raw_grad
+        hh = raw_hess
+        call fo_joint_flow(energy, energy0, tj, gh, hh, ke, f, df)
         if (present(kenergy)) kenergy = ke
         if (present(monitor)) monitor = tj(1)
         if (present(grad)) grad = gh
@@ -822,7 +885,7 @@ contains
             ! The Jacobian is needed only if this iterate is not accepted. A
             ! later iterate usually is, so evaluate it to first order first and
             ! add the Hessian at the same point only when the solve continues.
-            ! Stage values and the accepted step are bitwise unchanged.
+            ! The first/full oracle bounds CSE rounding in the retained values.
             full = it == 1 .or. present(tangent)
             call stage_evals(full)
             do i = 1, 2
@@ -861,19 +924,16 @@ contains
             !> These small evaluations run serially, including when the caller
             !> already distributes markers over an OpenMP team.
             logical, intent(in) :: hessian
-            real(dp) :: y(6, 2), aj(3, 10, 2), gj(6, 10, 2), stage_energy
-            real(dp) :: phase(2, spectre_field%data%mn)
+            real(dp) :: y(6, 2), stage_energy
             integer :: j, k
             logical :: first
             first = .not. hessian
             y(:, 1) = z0 + dy(:, 1)
             y(:, 2) = z0 + dy(:, 2)
             do j = 1, 2
-                call metric_jets(y(1:3, j), width, gj(:, :, j), first, phase)
-                call potential_jets(y(1:3, j), width, ro0, aj(:, :, j), first, phase)
-                call jet_eval(y(:, j), aj(:, :, j), gj(:, :, j), stage_energy, &
-                              f(:, j), df(:, :, j), e0, length, gmin, radial_ref, &
-                              monitor=monitor(j), first_order=first)
+                call gauss2_eval(y(:, j), width, ro0, stage_energy, &
+                                 f(:, j), df(:, :, j), e0, length, gmin, radial_ref, &
+                                 monitor=monitor(j), first_order=first)
                 if (hessian) then
                     do k = 1, 2
                         jac(6*k - 5:6*k, 6*j - 5:6*j) = -h*GL_A(k, j)*df(:, :, j)
