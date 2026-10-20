@@ -25,9 +25,10 @@ SIMPLE_IN = """\
 &config
 trace_time = 1d-2
 ntimstep = 200
-ntestpart = 32
+ntestpart = {npart}
 sbeg = 0.05d0
 contr_pp = -1e10
+multharm = {multharm}
 netcdffile = 'wout.nc'
 isw_field_type = 2
 deterministic = .True.
@@ -41,15 +42,16 @@ facE_al = 1.0d0
 
 
 def run(case: str, integmode: int, relerr: str, startmode: int,
-        start_src: Path | None) -> Path:
-    d = WORKDIR / case
+        start_src: Path | None, *, full: bool = False) -> Path:
+    d = WORKDIR / ("full" if full else "fast") / case
     if d.exists():
         shutil.rmtree(d)
     d.mkdir(parents=True)
     (d / "wout.nc").symlink_to(WOUT)
     (d / "simple.in").write_text(
         SIMPLE_IN.format(integmode=integmode, relerr=relerr,
-                         startmode=startmode))
+                         startmode=startmode, npart=32 if full else 8,
+                         multharm=5 if full else 1))
     if start_src is not None:
         shutil.copy2(start_src, d / "start.dat")
     res = subprocess.run([str(SIMPLE_X)], cwd=d, capture_output=True,
@@ -69,11 +71,15 @@ def main() -> None:
     if not SIMPLE_X.exists() or not WOUT.exists():
         sys.exit("missing simple.x or wout.nc")
 
+    if sys.argv[1:] not in ([], ["--full"]):
+        sys.exit("usage: test_axis_loss_consistency.py [--full]")
+    full = bool(sys.argv[1:])
+
     # Symplectic run generates the deterministic start.dat; RK reuses it.
     d_sympl = run("sympl", integmode=1, relerr="1d-13", startmode=1,
-                  start_src=None)
+                  start_src=None, full=full)
     d_rk = run("rk", integmode=0, relerr="1d-12", startmode=2,
-               start_src=d_sympl / "start.dat")
+               start_src=d_sympl / "start.dat", full=full)
 
     trace_time = 1e-2
     tl_s = loss_times(d_sympl)

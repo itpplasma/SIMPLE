@@ -15,12 +15,12 @@ program test_fo_symplectic
     real(dp)::omega(6,6),eye(6,6),efixed=0,lfixed=1,gfixed=1,vscale=1,mfixed=0
     type(spectre_field_t)::field
     character(1024)::filename,arg
-    integer::case_id,i,nlong,ierr,diagnostic_step=0,only_marker=-1
+    integer::case_id, i, nlong, ierr, diagnostic_step = 0, only_marker = -1, nmap = 1000
     real(dp)::step_factor=0.0_dp,energy_tol=1.0e-12_dp
     logical::failure_mode=.false.,energy_failed=.false.
     nlong=1000
-    if(command_argument_count()<3.or.command_argument_count()>7) &
-        error stop 'two fixtures, step count, optional velocity scale required'
+    if (command_argument_count() < 3 .or. command_argument_count() > 8) &
+        error stop 'two fixtures, steps, optional velocity/marker/factor/tol/map steps'
     call get_command_argument(3,arg)
     read(arg,*) nlong
     if(command_argument_count()>=4) then
@@ -42,6 +42,11 @@ program test_fo_symplectic
     if(command_argument_count()>=7) then
         call get_command_argument(7,arg)
         read(arg,*) energy_tol
+    end if
+    if (command_argument_count() >= 8) then
+        call get_command_argument(8, arg)
+        read (arg, *) nmap
+        if (nmap < 2) error stop 'composition needs at least two steps'
     end if
     print '(a,es12.4)', 'velocity multiplier=',vscale
     omega=0; eye=0
@@ -282,14 +287,17 @@ contains
     subroutine step(z,tol,reference,out,m,res)
         real(dp),intent(in)::z(6),tol
         logical,intent(in)::reference
-        real(dp),intent(out)::out(6),m(6,6),res
+        real(dp), intent(out)::out(6), res
+        real(dp), intent(out), optional::m(6, 6)
         real(dp)::dt
         logical::ok
         if(reference) then
             call gauss2_step(z,width,ro0,efixed,lfixed,gfixed,h,out,dt,ok,m,radial_scale=mfixed)
             res=-1 ! Reference API does not expose stage residual.
         else
-            call generated_step(z,h,width,ro0,tol,out,m,res,ok,efixed,lfixed,gfixed,mfixed)
+            call shipped_step(z, width, ro0, efixed, lfixed, gfixed, h, out, &
+                              dt, ok, tangent=m, radial_scale=mfixed, &
+                              tolerance=tol, residual=res)
         end if
         if(.not.ok) then
             print '(a,i0,a,l1,2(a,es16.8))','NEWTON_FAILURE step=',diagnostic_step, &
@@ -403,13 +411,20 @@ contains
         real(dp),intent(in)::z(6),tol
         logical,intent(in)::reference
         integer,intent(in)::n
-        real(dp),intent(out)::out(6),m(6,6),res
+        real(dp), intent(out)::out(6), res
+        real(dp), intent(out), optional::m(6, 6)
         real(dp)::current(6),next(6),mi(6,6),ri
         integer::s
-        current=z; m=eye; res=0
+        current = z; res = 0
+        if (present(m)) m = eye
         do s=1,n
-            call step(current,tol,reference,next,mi,ri)
-            m=matmul(mi,m); res=max(res,ri); current=next
+            if (present(m)) then
+                call step(current, tol, reference, next, mi, ri)
+                m = matmul(mi, m)
+            else
+                call step(current, tol, reference, next, res=ri)
+            end if
+            res = max(res, ri); current = next
         end do
         out=current
         if(reference) res=-1 ! Unavailable from frozen reference API.
@@ -425,17 +440,17 @@ contains
         logical,intent(in)::reference
         integer,intent(in)::n
         real(dp),intent(out)::fd(6,6)
-        real(dp)::zp(6),zm(6),fp(6),fm(6),m(6,6),res,eps
+        real(dp)::zp(6), zm(6), fp(6), fm(6), res, eps
         integer::j
         do j=1,6
             eps=eps0*max(1.0_dp,abs(z(j)))
             zp=z; zm=z; zp(j)=zp(j)+eps; zm(j)=zm(j)-eps
-            call map(zp,tol,reference,n,fp,m,res)
-            call map(zm,tol,reference,n,fm,m,res)
+            call map(zp, tol, reference, n, fp, res=res)
+            call map(zm, tol, reference, n, fm, res=res)
             fd(:,j)=8*(fp-fm)
             zp=z; zm=z; zp(j)=zp(j)+2*eps; zm(j)=zm(j)-2*eps
-            call map(zp,tol,reference,n,fp,m,res)
-            call map(zm,tol,reference,n,fm,m,res)
+            call map(zp, tol, reference, n, fp, res=res)
+            call map(zm, tol, reference, n, fm, res=res)
             fd(:,j)=(fd(:,j)-(fp-fm))/(12*eps)
         end do
     end subroutine finite_difference
@@ -459,12 +474,14 @@ contains
         end if
         print '(a,f7.4,a,f6.3)', 'MAP configuration rho=',rho,' gmin=',gfixed
         do k=1,3
-            if(reference.and.k==2) cycle
+            ! The frozen reference has one fixed stopping rule. Keep its strict
+            ! k=3 gate; the k=1 repeat only reported the same 1000-step defect.
+            if (reference .and. k < 3) cycle
             tol=tols(k)
             if(reference) tol=-1 ! Reference Newton tolerance is fixed internally.
             do ncase=1,2
             n=1
-            if(ncase==2) n=1000
+                if (ncase == 2) n = nmap
             call map(z,tol,reference,n,out,m,res)
             if(.not.reference) then
                 call map(z,tol,.true.,n,outref,mref,refres)
@@ -478,7 +495,7 @@ contains
             call finite_difference(z,tol,reference,n,1.0e-4_dp,fd)
             call finite_difference(z,tol,reference,n,5.0e-5_dp,fd2)
             noise=sqrt(sum((fd-fd2)**2))
-            if(n==1000.and.k==3.and.(noise>1.0e-5_dp.or.defect(fd2)>1.0e-5_dp)) then
+ if (n == nmap .and. k == 3 .and. (noise > 1.0e-5_dp .or. defect(fd2) > 1.0e-5_dp)) then
                 print '(a,2es16.8)', 'FD_REFINEMENT coarse defect/disagreement=', &
                     defect(fd2),noise
                 call finite_difference(z,tol,reference,n,2.5e-5_dp,fd)
@@ -492,10 +509,10 @@ contains
             if(defect(m)>1.0e-7_dp) error stop 'tangent symplecticity defect'
             ! This finite-difference threshold is fixed, separately reported
             ! from the Newton tolerance and refinement disagreement.
-            if(n==1000.and.k<3) then
+                if (n == nmap .and. k < 3) then
                 ! Extra tolerance sweep: preserve failures of the strict criterion
                 ! as observations. The original strict gates apply to 1-step
-                ! maps and the 1000-step map at 1e-12, unchanged.
+                    ! maps and the composed map at 1e-12, unchanged.
                 if(defect(fd2)>1.0e-5_dp) &
                     print '(a)', 'LOOSE_TOLERANCE_MAP exceeds strict FD criterion'
             else
@@ -511,8 +528,10 @@ contains
         real(dp)::emin,emax,eblock_min,eblock_max,rhomin,rhomax
         real(dp)::xx,yy,mx,my,sxx,sxy,syy,dx,dy,slope,se
         real(dp)::maxres
+        real(dp) :: oracle_out(6), oracle_tangent(6, 6), oracle_dt
         integer::s, k
-        logical::ok
+        logical::ok, oracle_ok
+        logical :: fixed_point
         width=0.06_dp;ro0=1.0e5_dp;h=0.02_dp;lfixed=1;gfixed=1
         select case(marker)
         case(0)
@@ -549,12 +568,27 @@ contains
         rhomin=z(1);rhomax=z(1);mx=0;my=0;sxx=0;sxy=0;syy=0;maxres=0
         ! H after step k is the start energy of step k+1, so record step k's
         ! diagnostics one step late instead of evaluating the field again.
+        fixed_point = .true.
         do s = 1, n + 1
             if (s <= n) then
                 diagnostic_step = s
+                if (s == 1) then
+                    ! Requesting a tangent retains the original Newton path.
+                    call shipped_step(z, width, ro0, efixed, lfixed, gfixed, h, &
+                                      oracle_out, oracle_dt, oracle_ok, &
+                                      tangent=oracle_tangent, radial_scale=mfixed, &
+                                      tolerance=energy_tol)
+                    if (.not. oracle_ok) error stop 'Newton entry oracle failed'
+                end if
                 call shipped_step(z, width, ro0, efixed, lfixed, gfixed, h, out, &
                                   xx, ok, radial_scale=mfixed, tolerance=energy_tol, &
-                                  residual=res, start_energy=en)
+                                  residual=res, start_energy=en, &
+                                  fixed_point=fixed_point)
+                if (s == 1 .and. ok) then
+                    if (maxval(abs(out - oracle_out))/ &
+                        max(1.0_dp, maxval(abs(oracle_out))) > 1.0e-8_dp) &
+                        error stop 'fixed-point/Newton entry correspondence'
+                end if
             else
                 call generated_eval(z, width, ro0, en, f, df, first_order=.true.)
             end if
