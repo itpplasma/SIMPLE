@@ -171,6 +171,68 @@ Adding an integrator
    the boundedness of :math:`H` and :math:`p_\varphi` and a short loss
    comparison against an existing scheme.
 
+IMAS actor
+----------
+
+``python/pysimple/imas`` (extra ``imas``; usage: :doc:`/user-guide/imas`) is
+Python on top of ``pysimple``; physics stays in the Fortran library.
+
+=====================  ===============================================================
+Module                 Role
+=====================  ===============================================================
+``_common.py``         DD 3/4 check, exact-time slice selection, array and scalar
+                       validation, output provenance (``code.name``, version)
+``markers.py``         ``Markers``; ``read_markers``/``write_markers`` by coordinate
+                       identifier for ``distribution_sources`` and ``distributions``
+``equilibrium.py``     equilibrium IDS to COCOS 3 G-EQDSK, then libneo
+                       ``convert_eqdsk_to_chartmap`` in a child Python process
+``plasma.py``          ``core_profiles`` to a ``(6, n)`` table and collision settings
+``actor.py``           ``run``, ``run_entry`` and the ``simple-imas`` entry point
+=====================  ===============================================================
+
+A wall IDS is rejected by ``run`` and ``run_entry`` before any tracing: the
+equilibrium chartmap ends at the LCFS, so a wall would never be queried. Wall
+tracing for IDS input needs a chartmap beyond ``rho_lcfs`` first.
+
+``run`` converts the equilibrium once, then per population calls
+``pysimple.init`` with the actor-owned keys and ``plasma_profiles=table``,
+``cylindrical_to_reference``, ``trace_parallel``, ``reference_to_cylindrical``
+and fills one ``distributions.distribution`` entry. The native side adds to
+``src/simple_api.f90``: ``simple_set_profile_table`` (``set_profile_table`` in
+``src/profiles.f90``, linear in :math:`s`, replaces ``&profiles`` until
+``reset_profiles``), ``simple_cylindrical_to_reference``,
+``simple_reference_to_cylindrical``, ``simple_reference_info`` (coordinate
+semantics: :doc:`design/coordinates-and-fields`) and ``simple_wall_supported``
+(compile-time CGAL flag ``stl_wall_available``).
+
+Keep when changing it:
+
+- libneo's ``field_eq`` shifts the G-EQDSK flux by its axis value and stops
+  the surface scan at ``psimax`` in the axis-to-edge direction, so
+  ``equilibrium.py`` passes the signed
+  ``psimax`` :math:`=(\psi_\text{edge}-\psi_\text{axis})\cdot10^8`
+  G cm\ :sup:`2` (Wb/rad to G cm\ :sup:`2`). An unsigned value ends
+  reversed-flux scans at the first surface (millimetre-sized chartmap). The
+  signed scan needs libneo with itpplasma/libneo#434, pinned at ``151f58b``
+  in ``pyproject.toml``.
+- The converter runs in a child process: a Fortran ``STOP`` or module state in
+  ``efit_to_boozer`` must not reach the caller.
+- Native exit codes other than 0, 1, 2 and invalid final states raise; they are
+  never written as losses. Weights are never converted between rate and count
+  implicitly.
+- Every output IDS passes ``validate()``; the coordinate API keeps its length
+  scale after the temporary chartmap is deleted.
+
+Tests: ``test/python/test_imas.py`` (CTest ``test_imas``, labels ``imas``,
+``slow``; needs ``pysimple[imas]`` with libneo's ``_efit_to_boozer``) covers
+NetCDF round trips in DD 3.42.2 and 4.1.1, identifier reordering, COCOS signs
+against an analytic circular field, chartmap extent for all flux and field
+signs, the coordinate round trip, particle and energy totals, rejection of
+invalid native states, the DBEntry path with ``core_profiles``, and both wall
+forms; ``test/tests/test_profiles.f90`` covers the profile table. A new IDS
+mapping gets a reader that validates through ``_common``, selects time with
+``select_slice`` and a test with real IMAS-Python IDS of both DD versions.
+
 Invariants to keep
 ------------------
 

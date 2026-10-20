@@ -1,10 +1,9 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
+  merge_group:
   workflow_dispatch:
     inputs:
       libneo_ref:
@@ -24,6 +23,21 @@ on:
         description: build and upload the bounded EUROfusion verification report
         required: false
         default: 'false'
+      runner:
+        description: where Build and Test runs (itp-slurm = sCluster via self-hosted dispatch)
+        type: choice
+        options: [itp-slurm, hosted]
+        required: false
+        default: itp-slurm
+
+# A new push to a pull request cancels its running checks (and Slurm jobs).
+# A label event never cancels a run: full-ci gets its own group, and other
+# labels do not start Build and Test (see its if:).
+concurrency:
+  group: >-
+    ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}-${{
+    github.event.action == 'labeled' && github.event.label.name == 'full-ci' && 'full' || 'std' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action != 'labeled' }}
 
 permissions:
   contents: write
@@ -62,25 +76,70 @@ jobs:
           python tools/check_changed_lines.py
           --base "${{ github.event.pull_request.base.sha }}"
 
+  # Pushes and same-repository PRs run on the itp-slurm runners, which pack an
+  # offline bundle and run ci/run.sh in a Slurm job on sCluster. Fork PRs (and
+  # workflow_dispatch with runner=hosted) use the GitHub-hosted steps below.
   test:
     name: Build and Test
-    runs-on: ubuntu-24.04
+    runs-on: >-
+      ${{ ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) ||
+      inputs.runner == 'hosted') && 'ubuntu-24.04' || fromJSON('["self-hosted","itp-slurm"]') }}
+    timeout-minutes: 150
     if: >-
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      github.event_name == 'merge_group' ||
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false &&
+      (github.event.action != 'labeled' || github.event.label.name == 'full-ci'))
+    env:
+      CI_HOSTED: >-
+        ${{ ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) ||
+        inputs.runner == 'hosted') && 'true' || 'false' }}
 
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
+      - name: Build and test on sCluster
+        if: env.CI_HOSTED != 'true'
+        env:
+          EVENT: ${{ github.event_name }}
+          FULL_INPUT: ${{ inputs.full }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          FULL_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
+          SCI_HEAD_REF: ${{ github.head_ref || github.ref_name }}
+          SCI_LIBNEO_REF: ${{ inputs.libneo_ref }}
+        run: |
+          case $EVENT in
+          workflow_dispatch) [ "$FULL_INPUT" = true ] && tier=full || tier=smoke ;;
+          pull_request)
+            # Full tier on PRs only with full-ci; the merge queue runs it (*).
+            if [ "$FULL_LABEL" = true ]; then
+              tier=full
+            else
+              tier=fast
+            fi
+            changed=$(git diff --name-only "$BASE_SHA" HEAD)
+            if ! grep -qvE '^(DOC|docs)/|\.(md|rst)$' <<< "$changed"; then
+              echo "Documentation-only change; nothing to build."
+              exit 0
+            fi
+            ;;
+          *) tier=full ;;
+          esac
+          echo "tier: $tier"
+          export TMPDIR=$RUNNER_TEMP
+          SCI_TIER=$tier ci/bundle.sh "$RUNNER_TEMP/bundle.tar.zst"
+          sci-dispatch "$tier" "$RUNNER_TEMP/bundle.tar.zst"
+
       - name: Set up Python
+        if: env.CI_HOSTED == 'true'
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
       - name: Install system dependencies
+        if: env.CI_HOSTED == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -100,11 +159,13 @@ jobs:
             libopenmpi-dev
 
       - name: Install Python dependencies
+        if: env.CI_HOSTED == 'true'
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
       - name: Fetch Cached GVEC QA Data
+        if: env.CI_HOSTED == 'true'
         env:
           GITLAB_ACCESS_TOKEN: ${{ secrets.GITLAB_ACCESS_TOKEN }}
           SIMPLE_GVEC_QA_CACHE_ROOT: ${{ github.workspace }}/.ci-data/gvec_qa_roundtrip
@@ -116,6 +177,7 @@ jobs:
           fi
 
       - name: Build SIMPLE (deterministic FP for reproducibility)
+        if: env.CI_HOSTED == 'true'
         run: |
           make clean
           REF="${{ inputs.libneo_ref }}"
@@ -126,31 +188,41 @@ jobs:
           fi
 
       # libneo-gate dispatch (no full) runs only the sub-minute smoke set;
-      # push, PR and full=true run the complete suite below.
+      # PRs, the merge queue and full=true run the suites below.
       - name: Run Smoke Tests (libneo gate)
-        if: github.event_name == 'workflow_dispatch' && inputs.full != 'true'
+        if: env.CI_HOSTED == 'true' && (github.event_name == 'workflow_dispatch' && inputs.full != 'true')
         run: make test-smoke
 
       - name: Run Fast Tests (Fortran only)
-        if: github.event_name != 'workflow_dispatch' || inputs.full == 'true'
+        if: env.CI_HOSTED == 'true' && (github.event_name != 'workflow_dispatch' || inputs.full == 'true')
         run: make test-fast
 
       - name: Install Python package
-        if: github.event_name != 'workflow_dispatch' || inputs.full == 'true'
-        run: python -m pip install -e . --no-build-isolation -Ccmake.define.SIMPLE_DETERMINISTIC_FP=ON
+        if: env.CI_HOSTED == 'true' && (github.event_name != 'workflow_dispatch' || inputs.full == 'true')
+        run: python -m pip install -e '.[imas]' --no-build-isolation -Ccmake.define.SIMPLE_DETERMINISTIC_FP=ON
 
+      # Full tier: runs in the merge queue and on PRs labeled full-ci;
+      # pull requests (including stacked layers) run the fast tier only.
       - name: Run Slow Tests (Python)
-        if: github.event_name != 'workflow_dispatch' || inputs.full == 'true'
+        if: >-
+          env.CI_HOSTED == 'true' &&
+          ((github.event_name != 'workflow_dispatch' || inputs.full == 'true') &&
+          (github.event_name != 'pull_request' ||
+          contains(github.event.pull_request.labels.*.name, 'full-ci')))
         env:
           SIMPLE_GVEC_QA_CACHE_ROOT: ${{ github.workspace }}/.ci-data/gvec_qa_roundtrip
         run: make test-slow
 
       - name: Run Regression Tests (Golden Record)
-        if: github.event_name != 'workflow_dispatch' || inputs.full == 'true'
+        if: >-
+          env.CI_HOSTED == 'true' &&
+          ((github.event_name != 'workflow_dispatch' || inputs.full == 'true') &&
+          (github.event_name != 'pull_request' ||
+          contains(github.event.pull_request.labels.*.name, 'full-ci')))
         run: make test-regression
 
       - name: Upload test results
-        if: always()
+        if: always() && env.CI_HOSTED == 'true'
         uses: actions/upload-artifact@v6
         with:
           name: test-results
@@ -168,9 +240,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     if: >-
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'merge_group' ||
       (github.event_name == 'workflow_dispatch' && inputs.full == 'true') ||
-      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)) &&
+      (github.event_name != 'pull_request' ||
+      contains(github.event.pull_request.labels.*.name, 'full-ci'))
     strategy:
       fail-fast: false
       matrix:
@@ -184,8 +258,6 @@ jobs:
       CXX: g++-${{ matrix.gcc }}
       FC: gfortran-${{ matrix.gcc }}
       OMP_NUM_THREADS: 2
-      # Fast-suite spline fixtures each exceed 10 GiB on 16 GiB hosted runners.
-      CTEST_PARALLEL_LEVEL: ${{ matrix.coverage == 'ON' && '1' || '2' }}
       # Keep PR additions small; collect full coverage on main/full dispatch.
       COVERAGE: ${{ matrix.coverage == 'ON' && github.event_name != 'pull_request' && 'ON' || 'OFF' }}
       TEST_TARGET: ${{ matrix.coverage == 'ON' && github.event_name != 'pull_request' && 'test-fast' || 'test-smoke' }}
@@ -215,6 +287,10 @@ jobs:
             -DENABLE_COVERAGE=${{ env.COVERAGE }}
             -DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF
         run: |
+          # CTest's generated resource spec limits concurrent memory use.
+          # Ignore OpenMP's thread count when counting runner cores.
+          CTEST_PARALLEL_LEVEL=$(env -u OMP_NUM_THREADS -u OMP_THREAD_LIMIT nproc)
+          export CTEST_PARALLEL_LEVEL
           make "$TEST_TARGET" CONFIG=Fast \
             LIBNEO_REF="$LIBNEO_INPUT_REF"
 
@@ -330,7 +406,7 @@ jobs:
     name: CGAL Wall Unit Tests
     runs-on: ubuntu-24.04
     if: >-
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      github.event_name == 'merge_group' ||
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'pull_request'
 
@@ -381,12 +457,14 @@ jobs:
       - name: Run CGAL Wall Tests
         run: |
           make clean
-          # Full-torus cylindrical chartmaps: itpplasma/libneo#429.
-          REF="${{ inputs.libneo_ref || 'a816f928b8dcf2211db81e710b92f0f3d10fe0b5' }}"
+          # Full-torus cylindrical chartmaps (itpplasma/libneo#429) and the regular
+          # near-axis Boozer field (itpplasma/libneo#437).
+          REF="${{ inputs.libneo_ref || '924ba7735366d95c2c6855bf00bd0e46b8c05cf2' }}"
           make test CONFIG=Fast \
             FLAGS="-DSIMPLE_ENABLE_CGAL=ON -DENABLE_PYTHON_INTERFACE=ON -DSIMPLE_ENABLE_PYTHON_TOOLS=ON -DLIBNEO_REF=$REF" \
-            TEST='test_chartmap_metadata|test_stl_wall_intersection|test_collisional_stl_wall|test_triangle_heat_load|test_profiles' VERBOSE=1
+            TEST='test_chartmap_metadata|test_stl_wall_intersection|test_collisional_stl_wall_fast|test_triangle_heat_load|test_profiles' VERBOSE=1
           # A missing Python interface must not silently omit the integration test.
+          ctest --test-dir build/test -N -R '^test_collisional_stl_wall_fast$' | grep 'Test.*test_collisional_stl_wall_fast'
           ctest --test-dir build/test -N -R '^test_triangle_heat_load$' | grep 'Test.*test_triangle_heat_load'
 
       - name: Upload wall-test results
@@ -396,7 +474,64 @@ jobs:
           name: cgal-wall-results
           path: |
             build/test/Testing/
-            build/test/tests/collisional_stl_wall/
+            build/test/tests/collisional_stl_wall_fast/
+
+  vmecpp:
+    name: VMEC++ Direct Geometry
+    runs-on: ubuntu-24.04
+    if: >-
+      (github.event_name == 'merge_group' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)) &&
+      (github.event_name != 'pull_request' ||
+      contains(github.event.pull_request.labels.*.name, 'full-ci'))
+
+    timeout-minutes: 60
+    env:
+      OMP_NUM_THREADS: 1
+      OPENBLAS_NUM_THREADS: 1
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gfortran \
+            g++ \
+            git-lfs \
+            cmake \
+            ninja-build \
+            pkg-config \
+            zlib1g-dev \
+            libgsl-dev \
+            libhdf5-dev \
+            libfftw3-dev \
+            libnetcdf-dev \
+            libnetcdff-dev \
+            libopenblas-dev \
+            liblapack-dev \
+            openmpi-bin \
+            libopenmpi-dev
+
+      - name: Configure SIMPLE with VMEC++
+        run: |
+          cmake -S . -B build -GNinja -DCMAKE_BUILD_TYPE=Release \
+            -DSIMPLE_ENABLE_VMECPP=ON
+
+      - name: Build SIMPLE with VMEC++
+        run: cmake --build build --config Release
+
+      - name: Run VMEC++ tests
+        run: ctest --test-dir build/test -R vmecpp --output-on-failure
 
   build-docs:
     name: Build Documentation
@@ -472,3 +607,18 @@ jobs:
         with:
           name: verification-report
           path: build/output/verification-report/
+
+  # Single required check for the merge queue: fails if any gating job failed
+  # or was cancelled; full-tier jobs skipped on pull requests count as passed.
+  ci-result:
+    permissions: {}
+    name: CI result
+    if: always()
+    needs: [test, gcc-matrix, cgal-wall, vmecpp]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check gating jobs
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: |
+          echo "A gating job failed or was cancelled; see the jobs above."
+          exit 1
