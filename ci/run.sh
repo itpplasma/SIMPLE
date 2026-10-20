@@ -73,11 +73,14 @@ python_env() {
         python -m pip install -q -r requirements.txt
 }
 
-fast_suite() {
+fast_tests() {
     export CTEST_PARALLEL_LEVEL=$1
     stamp "build-deterministic" && make build-deterministic "${make_args[@]}" &&
-        stamp "test-fast (ctest -j$CTEST_PARALLEL_LEVEL)" && make test-fast "${make_args[@]}" &&
-        stamp "pip install -e .[imas]" &&
+        stamp "test-fast (ctest -j$CTEST_PARALLEL_LEVEL)" && make test-fast "${make_args[@]}"
+}
+
+install_package() {
+    stamp "pip install -e .[imas]" &&
         python -m pip install -q -e '.[imas]' --no-build-isolation \
             -Ccmake.define.SIMPLE_DETERMINISTIC_FP=ON "${pip_args[@]}"
 }
@@ -87,8 +90,9 @@ regression_suite() {
     golden=$(cmake -DDEPENDENCY=libneo_golden -P cmake/read_dependency_version.cmake)
     export CTEST_PARALLEL_LEVEL=$jobs GOLDEN_RECORD_OMP_THREADS=$threads
     export GOLDEN_RECORD_PERF_GATE=0 GOLDEN_LIBNEO_REF=$golden
+    # The golden reference runner uses Release; match its architecture flags.
     stamp "build-deterministic-nopy (libneo $golden)" &&
-        make build-deterministic-nopy CONFIG=Fast \
+        make build-deterministic-nopy CONFIG=Release \
             FLAGS="-DLIBNEO_REF=$golden -DENABLE_COVERAGE=ON -DSIMPLE_TEST_MEMORY_GB=$reg_mem" || return
     # Start the longest serial test first; ctest orders by recorded cost.
     mkdir -p build/test/Testing/Temporary
@@ -150,7 +154,7 @@ smoke)
     ;;
 fast)
     python_env || exit
-    fast_suite "$(clamp $((cpus / 2)) 2 16)"
+    fast_tests "$(clamp $((cpus / 2)) 2 16)" && install_package
     ;;
 full)
     python_env || exit
@@ -177,10 +181,14 @@ full)
     (cd "$root/src-reg" && regression_suite "$jb" "$tb") > "$root/regression.log" 2>&1 &
     reg_pid=$!
     stamp "regression started in background (log follows at the end)"
-    fast_suite "$ja" && stamp "test-slow (ctest -j$ja)" &&
+    fast_tests "$ja"; rc_a=$?
+    # Still collect the slow suite when a fast test fails. Preserve the first
+    # failure, and do not run slow tests if the Python package cannot install.
+    install_package && stamp "test-slow (ctest -j$ja)" &&
         (cd build && ctest --test-dir test -N -L slow -R '^test_collisional_stl_wall$' |
             grep 'Test.*test_collisional_stl_wall$') && make test-slow "${make_args[@]}"
-    rc_a=$?
+    rc_slow=$?
+    [ "$rc_a" -ne 0 ] || rc_a=$rc_slow
     stamp "fast/slow finished: exit $rc_a; waiting for regression"
     wait "$reg_pid"; rc_b=$?
     stamp "regression log"
