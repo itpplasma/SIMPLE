@@ -60,6 +60,13 @@ invariants a change must keep.
    that are ready for review.
 5. Answer review with new commits. A maintainer merges.
 
+Before marking a PR ready, compare the final diff with the issue and PR
+contract. Remove unrelated work, redundant tests/docs, transient generated data
+and accidental large result sets. Squash fixups or reorganize commits into a few
+meaningful steps; preserve rejected scientific approaches only when their
+history is useful evidence. Do not rewrite shared, stacked or queued branches
+without coordinating with their users.
+
 Each pull request carries one risk tier, set by its highest-risk part. The
 tier sets the depth of review and the evidence required:
 
@@ -98,6 +105,18 @@ reference output without that explanation.
   it lands on `main` as a merge commit. `main` itself is not re-tested on push.
 - A branch need not be up to date with `main`. Merge `main` into a PR only
   when it conflicts.
+
+The current merge queue uses `MERGE` for every queued PR; GitHub does not offer
+per-PR squash selection there. Prefer one coherent commit for a standalone PR
+before queueing; retain multiple commits only when their separation matters.
+If the queue policy later changes to `SQUASH`, standalone PRs will be squashed
+at integration without changing these review rules.
+
+Install the existing quick mechanical hooks with `pre-commit install`. They
+check staged formatting, secrets and data volume, not builds or numerical tests.
+Reuse valid tests already run for the current revision; expensive or optional
+AI scope review belongs at PR-ready time, never to every commit or as a
+mandatory account-dependent gate.
 
 ## Commit messages
 
