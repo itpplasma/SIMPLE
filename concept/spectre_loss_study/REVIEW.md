@@ -3,8 +3,8 @@
 Three bounded read-only Claude Code one-shots used `--model sonnet`: FO
 provider/events, GC extrapolation, and research/build integration. Each was
 limited to five minutes and twelve tool calls, with no edits, tests or agents.
-They reviewed integrated tree `6918892` and the focused production commits
-`47d3fb0`, `6970eff` and `914544f`. The CLI model alias was requested; a concrete
+They reviewed integrated tree `5bae656` and the focused production commits
+`7958557`, `2c9db26` and `8d3d72f`. The CLI model alias was requested; a concrete
 backend model version was not captured. These are advisory AI reviews, not
 independent human domain/senior approval. No new full-suite pass is claimed.
 

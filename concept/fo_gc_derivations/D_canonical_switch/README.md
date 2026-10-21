@@ -41,7 +41,7 @@ order. Maximum scaled round-trip errors are 2.90e-13 (GC), 2.04e-13 (particle)
 and 3.94e-13 (SIMPLE variables). The absolute FO canonical-chart error is
 6.65e-11, but relative error is 6.87e-14; it is not an absolute 1e-12 claim.
 The largest magnetic-moment defect change on temporal refinement is 0.0328%.
-Runtime sources are checked against `7626cd8` in the retained provenance.
+Runtime sources are checked against `f06dbc7` in the retained provenance.
 
 Independent two-form tests compare the generated Jacobian pullback of the
 particle form with dGamma for

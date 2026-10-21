@@ -8,7 +8,7 @@ removed curved-field patch refresh. See the
 [rejection ledger](../../DOC/spectre-rejected-interface-models.md#implementation-removal-ledger).
 
 The tables and model descriptions below are the **historical comparison** from
-`4a1f842`, including failed methods; they are not a list of current CLI options.
+`7ebcf4c`, including failed methods; they are not a list of current CLI options.
 Their data are retained as evidence. Fresh `run_study.py` output goes to
 `build/study/`, leaving those records intact. The historical report tools read
 `results/`; they do not run or restore retired methods.

@@ -19,7 +19,7 @@ Machine, build and case
      - AMD Ryzen 9 5950X (16 cores, 32 hardware threads), 94 GiB RAM, Linux;
        shared workstation, clocks not locked
    * - SIMPLE
-     - ``fe2de273681642ed1f651d3c14c5e23e398fb458``
+     - ``ffd7f4a19740020b41df925da783fe9c7ed6515c``
    * - Dependencies
      - libneo ``f6090e8``, Fortnum ``1a52e13``, Fortplot ``5daec54``,
        Fortio ``38add03``
