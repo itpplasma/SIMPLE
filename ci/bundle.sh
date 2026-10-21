@@ -61,11 +61,16 @@ for slug in $deps; do
 done
 
 # SIMPLE: main (golden-record reference), this commit as $head_ref, tags.
-git -C "$src" fetch -q origin "+refs/heads/main:refs/remotes/origin/main"
+# A run on main itself (push or dispatch) tests this commit as main; two
+# refspecs for refs/heads/main in one push would be rejected.
 simple=$stage/mirrors/itpplasma/SIMPLE.git
 git init -q --bare "$simple"
-git -C "$src" push -q "$simple" "HEAD:refs/heads/$head_ref" \
-    "refs/remotes/origin/main:refs/heads/main" "+refs/tags/*:refs/tags/*"
+refspecs=("HEAD:refs/heads/$head_ref" "+refs/tags/*:refs/tags/*")
+if [ "$head_ref" != main ]; then
+    git -C "$src" fetch -q origin "+refs/heads/main:refs/remotes/origin/main"
+    refspecs+=("refs/remotes/origin/main:refs/heads/main")
+fi
+git -C "$src" push -q "$simple" "${refspecs[@]}"
 git -C "$simple" symbolic-ref HEAD refs/heads/main
 git clone -q --branch "$head_ref" "$simple" "$stage/src"
 git -C "$stage/src" remote set-url origin https://github.com/itpplasma/SIMPLE.git
