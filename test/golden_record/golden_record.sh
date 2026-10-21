@@ -159,7 +159,7 @@ main() {
     "$SCRIPT_DIR/run_golden_tests.sh" "$PROJECT_ROOT_REF" "$RUN_DIR_REF" "$TEST_DATA_DIR" "$SINGLE_CASE" || handle_failure $?
     "$SCRIPT_DIR/run_golden_tests.sh" "$PROJECT_ROOT_CUR" "$RUN_DIR_CUR" "$TEST_DATA_DIR" "$SINGLE_CASE" || handle_failure $?
 
-    # These two historical references contain the #540 momentum regression.
+    # These historical references predate physical endpoint momentum validation.
     # Preserve their raw runs; compare coil orbits with the qualified #560
     # records instead. Other cases, diagnostics and tolerances are unchanged.
     local comparison_ref="$RUN_DIR_REF" reference_revision
