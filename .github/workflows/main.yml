@@ -85,10 +85,6 @@ jobs:
   # full-ci adds compiler/VMEC++ checks but never moves PR tests onto sCluster.
   test:
     name: Build and Test
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: ${{ fromJSON(github.event_name == 'pull_request' && '[1,2]' || '[1]') }}
     runs-on: >-
       ${{ (github.event_name == 'pull_request' ||
       inputs.runner == 'hosted') && 'ubuntu-24.04' || fromJSON('["self-hosted","itp-slurm"]') }}
@@ -107,10 +103,7 @@ jobs:
 
       - name: Set up Python for the offline bundle
         if: env.CI_HOSTED != 'true'
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.11"
-
+        run: python3 --version
       - name: Build and test on sCluster
         if: env.CI_HOSTED != 'true'
         env:
@@ -240,8 +233,7 @@ jobs:
 
       - name: Run Fast Tests (Fortran only)
         if: env.CI_HOSTED == 'true' && (github.event_name != 'workflow_dispatch' || inputs.full == 'true')
-        env:
-          TEST_SHARD: ${{ matrix.shard }}
+        env: {}
         run: |
           CTEST_PARALLEL_LEVEL=$(env -u OMP_NUM_THREADS -u OMP_THREAD_LIMIT nproc)
           export CTEST_PARALLEL_LEVEL
@@ -249,7 +241,7 @@ jobs:
           [ "$GITHUB_EVENT_NAME" != pull_request ] || config=Fast
           if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
             /usr/bin/time -v make test-fast CONFIG="$config" \
-              CTEST_CMD="cd build && ctest --test-dir test --output-on-failure -I $TEST_SHARD,,2"
+              CTEST_CMD="cd build && ctest --test-dir test --output-on-failure"
           else
             /usr/bin/time -v make test-fast CONFIG="$config"
           fi
@@ -273,7 +265,7 @@ jobs:
         if: always() && env.CI_HOSTED == 'true'
         uses: actions/upload-artifact@v6
         with:
-          name: ${{ github.event_name == 'pull_request' && format('test-results-{0}', matrix.shard) || 'test-results' }}
+          name: test-results
           path: |
             build/test/Testing/
             build/test/tests/golden_record/runs/**/simple.in
