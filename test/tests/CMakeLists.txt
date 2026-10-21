@@ -707,6 +707,15 @@ set_tests_properties(test_restart_io PROPERTIES
     LABELS "unit"
     TIMEOUT 15)
 
+add_executable(test_netcdf_results_output.x test_netcdf_results_output.f90)
+target_link_libraries(test_netcdf_results_output.x simple)
+add_test(NAME test_netcdf_results_output
+    COMMAND test_netcdf_results_output.x
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_netcdf_results_output PROPERTIES
+    LABELS "unit"
+    TIMEOUT 15)
+
 # Restart integration test (TEST field, deterministic)
 add_test(NAME test_restart_integration
     COMMAND ${Python3_EXECUTABLE}

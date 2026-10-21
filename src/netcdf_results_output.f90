@@ -375,9 +375,11 @@ contains
 
         use params, only: ntestpart, zstart, zend, wall_hit, wall_hit_cart
         use reference_coordinates, only: ref_coords
+        use field_can_mod, only: integ_to_ref
 
         real(dp), intent(out) :: xstart_cart(:, :)
         real(dp), intent(out) :: xend_cart(:, :)
+        real(dp) :: zend_ref(3)
         integer :: i
         logical :: zend_is_zero
 
@@ -401,7 +403,8 @@ contains
                     ! Particle not traced - keep xend_cart as zero
                     xend_cart(:, i) = 0.0_dp
                 else
-                    call ref_coords%evaluate_cart(zend(1:3, i), xend_cart(:, i))
+                    call integ_to_ref(zend(1:3, i), zend_ref)
+                    call ref_coords%evaluate_cart(zend_ref, xend_cart(:, i))
                 end if
             end if
         end do
