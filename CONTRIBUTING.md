@@ -60,6 +60,13 @@ invariants a change must keep.
    that are ready for review.
 5. Answer review with new commits. A maintainer merges.
 
+Before marking a PR ready, compare the final diff with the issue and PR
+contract. Remove unrelated work, redundant tests/docs, transient generated data
+and accidental large result sets. Squash fixups or reorganize commits into a few
+meaningful steps; preserve rejected scientific approaches only when their
+history is useful evidence. Do not rewrite shared, stacked or queued branches
+without coordinating with their users.
+
 Each pull request carries one risk tier, set by its highest-risk part. The
 tier sets the depth of review and the evidence required:
 
@@ -98,6 +105,28 @@ reference output without that explanation.
   it lands on `main` as a merge commit. `main` itself is not re-tested on push.
 - A branch need not be up to date with `main`. Merge `main` into a PR only
   when it conflicts.
+
+The merge queue uses `SQUASH`. Standalone PRs land as one commit; stacks
+land one squashed commit per layer. Record the lower layer's old head before
+merging; rebase the upper layer with
+`git rebase --onto origin/main <old-lower-head>` and retarget it to main.
+Recheck its final diff and affected tests after rebasing.
+
+The required repository-hygiene workflow scans the PR commit range for secrets,
+files over 1 MiB, data/archive types and aggregate additions over 5 MiB. The
+[pinned shared checker](https://github.com/lazy-fortran/.github/blob/main/REPO_HYGIENE.md)
+also runs offline on staged changes through the prompts global hook, before
+this repository's pre-commit hooks. Install `pre-commit` and its existing quick
+mechanical checks before committing. Reuse valid test evidence; builds,
+numerical tests and optional AI review do not belong in ordinary commit hooks.
+
+Artifact exceptions require a tracked `.repo-hygiene-allow`: repository-relative
+path glob, TAB, one-line provenance/reason. There is no environment override.
+Never commit non-public machine, experiment or collaborator data as fixtures
+(ITER/TC24/IMAS, AUG shots, JT-60SA inputs included). Use synthetic or published
+data with provenance. Keep campaign results externally with checksums.
+Heavy CI runs only in public repositories. Private repositories validate via
+cluster jobs, with job IDs, revision, commands and results recorded in the PR.
 
 ## Commit messages
 

@@ -1,0 +1,11 @@
+name: Repository hygiene
+on:
+  pull_request:
+  merge_group:
+permissions:
+  contents: read
+jobs:
+  repo-hygiene:
+    uses: lazy-fortran/.github/.github/workflows/repo-hygiene.yml@4a515a95feac1fa1e79d2f721a4b20eb124b20f4
+    with:
+      hygiene-revision: 4a515a95feac1fa1e79d2f721a4b20eb124b20f4
