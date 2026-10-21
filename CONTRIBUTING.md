@@ -98,23 +98,21 @@ reference output without that explanation.
 
 - Pull requests, including every layer of a stacked PR, run the fast CI tier.
   Label a PR `full-ci` to run the full tier on it before queueing.
-- Review a stack layer by layer. When it is ready, collapse it into one PR into
-  `main` (retarget the top layer to `main`); the lower PRs then show as merged.
-- Click "Merge when ready" (or `gh pr merge --merge --auto`). The PR enters the
-  merge queue, the full CI tier runs on the exact merge result, and on success
-  it lands on `main` as a merge commit. `main` itself is not re-tested on push.
-- A branch need not be up to date with `main`. Merge `main` into a PR only
-  when it conflicts.
-
-The merge queue uses `SQUASH`. Standalone PRs land as one commit; stacks
-land one squashed commit per layer. Record the lower layer's old head before
-merging; rebase the upper layer with
-`git rebase --onto origin/main <old-lower-head>` and retarget it to main.
-Recheck its final diff and affected tests after rebasing.
+- Review and land a stack bottom-up, one squashed commit per layer. Keep each
+  layer's independent diff and its own pull request.
+- Use "Merge when ready" (or `gh pr merge --squash --auto`). The squash merge
+  queue runs the full CI tier on the exact merge result. `main` itself is not
+  re-tested on push.
+- Record `<old-lower-head>` before the bottom layer squashes. Fetch `main`,
+  then rebase the next layer with
+  `git rebase --onto origin/main <old-lower-head>` and retarget it to `main`.
+  Recheck that layer's final diff and affected tests before queueing it.
+- Merge current `main` into an independent PR before its final validation.
+  Coordinate before rewriting a shared or queued branch.
 
 The required repository-hygiene workflow scans the PR commit range for secrets,
 files over 1 MiB, data/archive types and aggregate additions over 5 MiB. The
-[pinned shared checker](https://github.com/lazy-fortran/.github/blob/main/REPO_HYGIENE.md)
+[pinned shared checker](https://github.com/itpplasma/.github/blob/main/REPO_HYGIENE.md)
 also runs offline on staged changes through the prompts global hook, before
 this repository's pre-commit hooks. Install `pre-commit` and its existing quick
 mechanical checks before committing. Reuse valid test evidence; builds,

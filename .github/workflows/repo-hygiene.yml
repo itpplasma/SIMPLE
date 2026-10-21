@@ -6,6 +6,6 @@ permissions:
   contents: read
 jobs:
   repo-hygiene:
-    uses: lazy-fortran/.github/.github/workflows/repo-hygiene.yml@4a515a95feac1fa1e79d2f721a4b20eb124b20f4
+    uses: itpplasma/.github/.github/workflows/repo-hygiene.yml@ea1b6401dad136e8b61206fe0647d6ecc772523b
     with:
-      hygiene-revision: 4a515a95feac1fa1e79d2f721a4b20eb124b20f4
+      hygiene-revision: ea1b6401dad136e8b61206fe0647d6ecc772523b
