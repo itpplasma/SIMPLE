@@ -1482,22 +1482,29 @@ add_test(NAME test_fo_symplectic COMMAND test_fo_symplectic.x
     ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
     ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000 1 -1 0 1e-12 64)
 set_tests_properties(test_fo_symplectic PROPERTIES LABELS "integration" TIMEOUT 900)
-add_test(NAME test_fo_symplectic_long COMMAND test_fo_symplectic.x
-    ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
-    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000000)
-set_tests_properties(test_fo_symplectic_long PROPERTIES
-    LABELS "slow;integration" TIMEOUT 14400)
+# Schedule independent long energy orbits concurrently. Step-count-independent
+# derivative and map checks run in the corresponding 1000-step tests.
+function(add_fo_long_markers name field nsteps velocity)
+    foreach(marker IN LISTS ARGN)
+        add_test(NAME ${name}_marker${marker} COMMAND test_fo_symplectic.x
+            ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+            ${field} ${nsteps} ${velocity} ${marker})
+        set_tests_properties(${name}_marker${marker} PROPERTIES
+            LABELS "slow;integration" TIMEOUT 14400
+            PROCESSORS 1 ENVIRONMENT "OMP_NUM_THREADS=1")
+    endforeach()
+endfunction()
+add_fo_long_markers(test_fo_symplectic_long
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000000 1
+    0 1 2 9 20 21 120)
 
 add_test(NAME test_fo_symplectic_resolved COMMAND test_fo_symplectic.x
     ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
     ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000 100 -1 0 1e-12 64)
 set_tests_properties(test_fo_symplectic_resolved PROPERTIES
     LABELS "integration" TIMEOUT 900)
-add_test(NAME test_fo_symplectic_resolved_long COMMAND test_fo_symplectic.x
-    ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
-    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000000 100)
-set_tests_properties(test_fo_symplectic_resolved_long PROPERTIES
-    LABELS "slow;integration" TIMEOUT 14400)
+add_fo_long_markers(test_fo_symplectic_resolved_long
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/ncsx_freeboundary.h5 1000000 100 0 1 2)
 
 add_test(NAME test_fo_symplectic_newton_boundary COMMAND test_fo_symplectic.x
     ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
@@ -1518,28 +1525,19 @@ endif()
 # Second 3D stellarator already shipped with the pinned libneo dependency.
 # Its provenance identifies SPECTRE's Nfp=5, Ntor=2 G3V3L3Fi case.
 set(FO_SECOND_FIELD "${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5")
-foreach(fo_suffix IN ITEMS second second_long second_resolved second_resolved_long)
-    set(fo_nsteps 1000)
+foreach(fo_suffix IN ITEMS second second_resolved)
     set(fo_velocity 1)
-    if(fo_suffix MATCHES "long")
-        set(fo_nsteps 1000000)
-    endif()
     if(fo_suffix MATCHES "resolved")
         set(fo_velocity 100)
     endif()
     set(fo_map_args -1 0 1e-12 64)
-    if(fo_suffix MATCHES "long")
-        set(fo_map_args)
-    endif()
     add_test(NAME test_fo_symplectic_${fo_suffix} COMMAND test_fo_symplectic.x
         ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
-        ${FO_SECOND_FIELD} ${fo_nsteps} ${fo_velocity} ${fo_map_args})
+        ${FO_SECOND_FIELD} 1000 ${fo_velocity} ${fo_map_args})
     set_tests_properties(test_fo_symplectic_${fo_suffix} PROPERTIES
         LABELS "integration" TIMEOUT 900)
-    if(fo_suffix MATCHES "long")
-        set_tests_properties(test_fo_symplectic_${fo_suffix} PROPERTIES
-            LABELS "integration;slow" TIMEOUT 14400)
-    endif()
+    add_fo_long_markers(test_fo_symplectic_${fo_suffix}_long
+        ${FO_SECOND_FIELD} 1000000 ${fo_velocity} 0 1 2)
 endforeach()
 
 # Same fictitious duration at successive resolutions; no hybrid switches.
@@ -1615,11 +1613,10 @@ set_tests_properties(test_fo_gauss2_resolution_large_matched_policy PROPERTIES
 
 # Gauss stages are too small to repay an OpenMP team. Run each serial orbit
 # on one reserved core, also when CTest schedules independent tests together.
-set(FO_STEPPER_TESTS test_fo_symplectic test_fo_symplectic_long
-    test_fo_symplectic_resolved test_fo_symplectic_resolved_long
+set(FO_STEPPER_TESTS test_fo_symplectic test_fo_symplectic_resolved
     test_fo_symplectic_newton_boundary test_fo_gauss2_original_oracle
     test_fo_gauss2_resolution_large_matched_policy)
-foreach(fo_suffix IN ITEMS second second_long second_resolved second_resolved_long)
+foreach(fo_suffix IN ITEMS second second_resolved)
     list(APPEND FO_STEPPER_TESTS test_fo_symplectic_${fo_suffix})
 endforeach()
 foreach(fo_probe IN ITEMS base half quarter tight base_short captured)
