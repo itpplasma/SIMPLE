@@ -17,3 +17,12 @@ repos:
       - id: check-toml
       - id: detect-private-key
       - id: mixed-line-ending
+  - repo: local
+    hooks:
+      - id: staged-artifact-budget
+        name: Check aggregate staged result artifacts
+        entry: python3 tools/check_staged_artifacts.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
