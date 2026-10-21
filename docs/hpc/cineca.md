@@ -1,7 +1,7 @@
 # CINECA Leonardo and Pitagora
 
 This page builds, tests and runs SIMPLE on the CINECA machines Leonardo and
-Pitagora. Tested on Leonardo (CPU, GCC 12.2, OpenMP) at SIMPLE `fe2de27`:
+Pitagora. Tested on Leonardo (CPU, GCC 12.2, OpenMP) at SIMPLE `ffd7f4a`:
 build, the test selection and the smoke run below pass, also as a batch job.
 The CUDA build compiles but was not run on a GPU. The Pitagora recipe has not
 been run.
