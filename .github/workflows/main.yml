@@ -2,7 +2,11 @@ name: CI
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review, labeled]
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
   merge_group:
   workflow_dispatch:
     inputs:
@@ -24,20 +28,22 @@ on:
         required: false
         default: 'false'
       runner:
-        description: where Build and Test runs (itp-slurm = sCluster via self-hosted dispatch)
+        description: 'where Build and Test runs: Slurm or the isolated owned Ubuntu runner'
         type: choice
-        options: [itp-slurm, hosted]
+        options:
+          - itp-slurm
+          - portable
         required: false
         default: itp-slurm
 
 # A new push cancels superseded PR checks. Label-triggered full-ci compiler
 # checks keep their own group and do not cancel an ordinary PR run.
+  push:
+    branches:
+      - main
 concurrency:
-  group: >-
-    ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}-${{
-    github.event.action == 'labeled' && github.event.label.name == 'full-ci' && 'full' || 'std' }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action != 'labeled' }}
-
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || format('{0}-{1}', github.ref, github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 permissions:
   contents: write
   pull-requests: write
@@ -50,14 +56,18 @@ jobs:
     permissions:
       contents: read
     name: Changed-line lint
-    runs-on: ubuntu-24.04
-    if: github.event_name == 'pull_request'
+    runs-on:
+      - self-hosted
+      - itp-ubuntu24
+    if: >-
+      github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]')
+
 
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -72,28 +82,21 @@ jobs:
 
       - name: Check changed lines
         run: >-
-          python tools/check_changed_lines.py
-          --base "${{ github.event.pull_request.base.sha }}"
+          python tools/check_changed_lines.py --base "${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || format('{0}^', github.sha) }}"
 
-  # Every PR uses the hosted fast tier, including drafts and forks. The merge
-  # queue runs the full suite on sCluster; dispatch retains its runner choice.
-  # full-ci adds compiler/VMEC++ checks but never moves PR tests onto sCluster.
+  # Ordinary PR events skip without allocating a runner. Explicit PR validation
+  # uses the isolated owned Ubuntu runner. The merge queue runs the full suite
+  # on sCluster; dispatch selects either owned capacity.
   test:
     name: Build and Test
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: ${{ fromJSON(github.event_name == 'pull_request' && '[1,2]' || '[1]') }}
     runs-on: >-
-      ${{ (github.event_name == 'pull_request' ||
-      inputs.runner == 'hosted') && 'ubuntu-24.04' || fromJSON('["self-hosted","itp-slurm"]') }}
+      ${{ (github.event_name == 'pull_request' || inputs.runner == 'portable' || inputs.runner == 'hosted') && fromJSON('["self-hosted","itp-ubuntu24"]') || fromJSON('["self-hosted","itp-dispatch"]') }}
     timeout-minutes: 150
     env:
       OMP_NUM_THREADS: 2
       OPENBLAS_NUM_THREADS: 1
       CI_HOSTED: >-
-        ${{ (github.event_name == 'pull_request' ||
-        inputs.runner == 'hosted') && 'true' || 'false' }}
+        ${{ (github.event_name == 'pull_request' || inputs.runner == 'portable' || inputs.runner == 'hosted') && 'true' || 'false' }}
 
     steps:
       - uses: actions/checkout@v6
@@ -102,10 +105,7 @@ jobs:
 
       - name: Set up Python for the offline bundle
         if: env.CI_HOSTED != 'true'
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.11"
-
+        run: python3 --version
       - name: Build and test on sCluster
         if: env.CI_HOSTED != 'true'
         env:
@@ -235,8 +235,6 @@ jobs:
 
       - name: Run Fast Tests (Fortran only)
         if: env.CI_HOSTED == 'true' && (github.event_name != 'workflow_dispatch' || inputs.full == 'true')
-        env:
-          TEST_SHARD: ${{ matrix.shard }}
         run: |
           CTEST_PARALLEL_LEVEL=$(env -u OMP_NUM_THREADS -u OMP_THREAD_LIMIT nproc)
           export CTEST_PARALLEL_LEVEL
@@ -244,7 +242,7 @@ jobs:
           [ "$GITHUB_EVENT_NAME" != pull_request ] || config=Fast
           if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
             /usr/bin/time -v make test-fast CONFIG="$config" \
-              CTEST_CMD="cd build && ctest --test-dir test --output-on-failure -I $TEST_SHARD,,2"
+              CTEST_CMD="cd build && ctest --test-dir test --output-on-failure"
           else
             /usr/bin/time -v make test-fast CONFIG="$config"
           fi
@@ -268,7 +266,7 @@ jobs:
         if: always() && env.CI_HOSTED == 'true'
         uses: actions/upload-artifact@v6
         with:
-          name: ${{ github.event_name == 'pull_request' && format('test-results-{0}', matrix.shard) || 'test-results' }}
+          name: test-results
           path: |
             build/test/Testing/
             build/test/tests/golden_record/runs/**/simple.in
@@ -276,18 +274,18 @@ jobs:
             build/test/tests/golden_record/runs/**/times_lost.dat
             build/test/tests/golden_record/runs/**/orbit_exit_code.dat
 
+    if: >-
+      github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]')
   gcc-matrix:
     permissions:
       contents: read
     name: GCC ${{ matrix.gcc }}
-    runs-on: ubuntu-24.04
+    runs-on:
+      - self-hosted
+      - itp-ubuntu24
     timeout-minutes: 45
     if: >-
-      (github.event_name == 'merge_group' ||
-      (github.event_name == 'workflow_dispatch' && inputs.full == 'true') ||
-      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)) &&
-      (github.event_name != 'pull_request' ||
-      contains(github.event.pull_request.labels.*.name, 'full-ci'))
+      (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]')) && ((github.event_name == 'merge_group' || (github.event_name == 'workflow_dispatch' && inputs.full == 'true') || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)) && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')))
     strategy:
       fail-fast: false
       matrix:
@@ -311,8 +309,12 @@ jobs:
             gcc-${{ matrix.gcc }} g++-${{ matrix.gcc }} gfortran-${{ matrix.gcc }} \
             git-lfs cmake ninja-build pkg-config lcov \
             libgsl-dev libhdf5-dev libfftw3-dev libnetcdf-dev libnetcdff-dev \
-            libopenblas-dev liblapack-dev openmpi-bin libopenmpi-dev
-          python -m pip install numpy netCDF4
+            libopenblas-dev liblapack-dev openmpi-bin libopenmpi-dev \
+            python3-venv
+          # System pip is externally managed (PEP 668); use a private venv.
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/python" -m pip install numpy netCDF4
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
 
       - name: Build and run tests
         env:
@@ -332,8 +334,11 @@ jobs:
     permissions:
       contents: read
     name: Intel ifx smoke tests (non-blocking)
-    runs-on: ubuntu-24.04
-    if: github.event_name == 'workflow_dispatch' && inputs.experimental_compilers
+    runs-on:
+      - self-hosted
+      - itp-ubuntu24
+    if: >-
+      (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]')) && (github.event_name == 'workflow_dispatch' && inputs.experimental_compilers)
     continue-on-error: true
     timeout-minutes: 30
     container:
@@ -377,8 +382,11 @@ jobs:
     permissions:
       contents: read
     name: LLVM flang smoke tests (non-blocking)
-    runs-on: ubuntu-24.04
-    if: github.event_name == 'workflow_dispatch' && inputs.experimental_compilers
+    runs-on:
+      - self-hosted
+      - itp-ubuntu24
+    if: >-
+      (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]')) && (github.event_name == 'workflow_dispatch' && inputs.experimental_compilers)
     continue-on-error: true
     timeout-minutes: 30
 
@@ -415,11 +423,11 @@ jobs:
 
   cgal-wall:
     name: CGAL Wall Unit Tests
-    runs-on: ubuntu-24.04
+    runs-on:
+      - self-hosted
+      - itp-ubuntu24
     if: >-
-      github.event_name == 'merge_group' ||
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'pull_request'
+      (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]')) && (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request')
 
     timeout-minutes: 20
     env:
@@ -489,13 +497,11 @@ jobs:
 
   vmecpp:
     name: VMEC++ Direct Geometry
-    runs-on: ubuntu-24.04
+    runs-on:
+      - self-hosted
+      - itp-ubuntu24
     if: >-
-      (github.event_name == 'merge_group' ||
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)) &&
-      (github.event_name != 'pull_request' ||
-      contains(github.event.pull_request.labels.*.name, 'full-ci'))
+      (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]')) && ((github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)) && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')))
 
     timeout-minutes: 60
     env:
@@ -546,9 +552,12 @@ jobs:
 
   build-docs:
     name: Build Documentation
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))
-    runs-on: ubuntu-24.04
+    if: >-
+      (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]')) && (github.event_name == 'workflow_dispatch')
+    runs-on:
 
+      - self-hosted
+      - itp-ubuntu24
     steps:
       - uses: actions/checkout@v6
 
@@ -578,11 +587,14 @@ jobs:
 
   verification-report:
     name: Generate Verification Report
-    runs-on: ubuntu-24.04
+    runs-on:
+      - self-hosted
+      - itp-ubuntu24
     timeout-minutes: 20
     permissions:
       contents: read
-    if: github.event_name == 'workflow_dispatch' && inputs.verification_report == 'true'
+    if: >-
+      (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]')) && (github.event_name == 'workflow_dispatch' && inputs.verification_report == 'true')
     steps:
       - uses: actions/checkout@v6
         with:
@@ -625,9 +637,12 @@ jobs:
   build-and-test-result:
     permissions: {}
     name: Build and Test
-    if: always()
+    if: >-
+      (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]')) && (always())
     needs: [test]
-    runs-on: ubuntu-24.04
+    runs-on:
+      - self-hosted
+      - itp-light
     steps:
       - name: Require successful test shards
         env:
@@ -639,9 +654,12 @@ jobs:
   ci-result:
     permissions: {}
     name: CI result
-    if: always()
+    if: >-
+      (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]')) && (always())
     needs: [build-and-test-result, gcc-matrix, cgal-wall, vmecpp]
-    runs-on: ubuntu-24.04
+    runs-on:
+      - self-hosted
+      - itp-light
     steps:
       - name: Check gating jobs
         if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')

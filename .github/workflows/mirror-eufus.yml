@@ -17,10 +17,10 @@ concurrency:
 jobs:
   mirror:
     name: Push main and tags to EUFUS GitLab
-    if: >-
-      github.repository == 'itpplasma/SIMPLE' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-24.04
+    if: github.repository == 'itpplasma/SIMPLE' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on:
+      - self-hosted
+      - itp-ubuntu24
     timeout-minutes: 10
     env:
       EUFUS_GITLAB_TOKEN: ${{ secrets.EUFUS_GITLAB_TOKEN }}

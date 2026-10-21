@@ -93,7 +93,7 @@ if [ "${SCI_TIER:-full}" = full ]; then
 fi
 
 # Download on the connected runner for Debian 12's CPython 3.11/glibc 2.36.
-# setup-python supplies pip on the dispatch-only runner; accept compatible
+# The trusted build dispatcher supplies python3/pip; accept compatible
 # manylinux wheels, never a wheel requiring a newer cluster glibc.
 mkdir -p "$stage/pip"
 pip_args=(--only-binary=:all: --python-version 3.11 --implementation cp --abi cp311)
@@ -103,9 +103,9 @@ done
 pip_args+=(--platform manylinux2014_x86_64)
 # GVEC is source-only. Download its sdist separately, then include its
 # declared dependencies in the cross-platform wheel resolution.
-python -m pip download --dest "$stage/pip" --no-deps 'gvec==1.4.1'
+python3 -m pip download --dest "$stage/pip" --no-deps 'gvec==1.4.1'
 sed '/^gvec==/d' "$src/requirements.txt" > "$stage/pip-requirements.txt"
-python - "$stage" <<'PYTHON'
+python3 - "$stage" <<'PYTHON'
 from pathlib import Path
 import sys
 import tarfile
@@ -123,7 +123,7 @@ if [ "${SCI_TIER:-full}" = full ]; then
     requirements+=(-r "$src/ci/coverage-requirements.txt" 'numpy==2.2.6' 'scipy==1.16.3' vtk \
         hatchling hatch-vcs mpmath sympy numexpr numba)
 fi
-python -m pip download --dest "$stage/pip" "${pip_args[@]}" "${requirements[@]}"
+python3 -m pip download --dest "$stage/pip" "${pip_args[@]}" "${requirements[@]}"
 
 {
     printf 'SCI_COMMIT=%s\n' "$(git -C "$src" rev-parse HEAD)"

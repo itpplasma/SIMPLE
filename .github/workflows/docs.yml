@@ -18,8 +18,11 @@ concurrency:
 
 jobs:
   build:
-    if: github.ref != 'refs/heads/gh-pages'
-    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on:
+      - self-hosted
+      - itp-ubuntu24
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -121,8 +124,11 @@ jobs:
   deploy:
     name: Deploy to GitHub Pages
     needs: build
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
+    if: >-
+      github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on:
+      - self-hosted
+      - itp-light
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
