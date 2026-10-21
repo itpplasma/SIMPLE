@@ -1,10 +1,15 @@
 module failed_symplectic_step_backend
+    use, intrinsic :: iso_fortran_env, only: dp => real64
     use field_can_base, only: field_can_t
+    use field_can_mod, only: evaluate
     use orbit_symplectic_base, only: symplectic_integrator_t, SYMPLECTIC_STEP_BOUNDARY
 
     implicit none
 
     integer :: successful_drift_calls = 0
+    integer :: injected_status = 0
+    real(dp) :: injected_momentum_ratio = 1d0
+    logical :: injected_stale_cache = .false.
 
 contains
 
@@ -28,11 +33,36 @@ contains
         si%last_step_fraction = 0.25d0
         si%last_event_radial_residual = 1.0d-11
         si%last_event_fraction_width = 1.0d-12
-        f%Bmod = 1.0d0
-        f%mu = 1.0d0
-        f%vpar = 0.0d0
+        call evaluate(f, si%z(1), si%z(2), si%z(3), 0)
+        f%ro0 = 1d0
+        f%mu = si%pabs**2/f%Bmod
+        f%vpar = 0d0
+        si%z(4) = f%Aph/f%ro0
         ierr = SYMPLECTIC_STEP_BOUNDARY
     end subroutine locate_lcfs_step
+
+    subroutine wrong_energy_step(si, f, ierr)
+        use params, only: radial_electric_potential_slope
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        integer, intent(out) :: ierr
+
+        si%z(1) = 0.3d0
+        if (injected_status == SYMPLECTIC_STEP_BOUNDARY) then
+            si%z(1) = 1d0
+            si%last_step_fraction = 0.25d0
+        end if
+        call evaluate(f, si%z(1), si%z(2), si%z(3), 0)
+        f%vpar = sqrt(2d0*((injected_momentum_ratio*si%pabs)**2 - f%mu*f%Bmod))
+        si%z(4) = f%vpar*f%hph + f%Aph/f%ro0
+        ! Model Euler's stale cache without changing its canonical endpoint.
+        if (injected_stale_cache) &
+            f%vpar = sqrt(2d0*((1.1d0*si%pabs)**2 - f%mu*f%Bmod))
+        if (radial_electric_potential_slope /= 0d0) &
+            f%Phie = f%Phie + (1d0 - injected_momentum_ratio**2)*si%pabs**2
+        f%H = 0.5d0*f%vpar**2 + f%mu*f%Bmod + f%Phie
+        ierr = injected_status
+    end subroutine wrong_energy_step
 
     subroutine successful_drift_step(si, f, ierr)
         type(symplectic_integrator_t), intent(inout) :: si
@@ -41,9 +71,10 @@ contains
 
         successful_drift_calls = successful_drift_calls + 1
         si%z(1) = si%z(1) + 0.01d0
-        f%Bmod = 1.0d0
-        f%mu = si%pabs**2
-        f%vpar = 0.0d0
+        call evaluate(f, si%z(1), si%z(2), si%z(3), 0)
+        f%mu = si%pabs**2/f%Bmod
+        f%vpar = 0d0
+        si%z(4) = f%Aph/f%ro0
         f%H = si%pabs**2
         ierr = 0
     end subroutine successful_drift_step
@@ -54,6 +85,10 @@ program test_sympl_testfield
     use, intrinsic :: iso_fortran_env, only : dp => real64, int64
     use failed_symplectic_step_backend, only: fail_symplectic_step, &
                          locate_lcfs_step, successful_drift_step, successful_drift_calls
+    use failed_symplectic_step_backend, only: wrong_energy_step, injected_status, &
+                                              injected_momentum_ratio, &
+                                              injected_stale_cache
+    use simple_main, only: update_momentum
     use classification, only: classify_classifier_exit
     use simple_main, only : classify_orbit_exit, init_field, locate_linear_lcfs, &
         locate_validated_lcfs, macrostep, macrostep_with_wall_check, &
@@ -125,6 +160,7 @@ program test_sympl_testfield
     call test_macrostep_lcfs_event
     call test_failed_step_preserves_state
     call test_collision_failure_propagation
+    call test_wrong_energy_symplectic_endpoint
     call test_rk_recovery_regions
     call test_exit_classification
     call test_numerically_confined_classification
@@ -343,6 +379,123 @@ contains
         efcolf_grid = 0.0_dp
         swcoll = .false.
     end subroutine test_collision_failure_propagation
+
+    subroutine test_wrong_energy_symplectic_endpoint
+        use orbit_symplectic_base, only: SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
+        use parmot_mod, only: ro0
+        use reference_coordinates, only: ref_coords
+        use libneo_coordinates, only: coordinate_system_t
+        use cartesian_coordinates, only: cartesian_coordinate_system_t
+        use params, only: wall_query_rho_lcfs, radial_electric_potential_slope
+        type(tracer_t) :: local_orbit, expected_orbit, candidate_orbit
+        class(coordinate_system_t), allocatable :: saved_ref_coords
+        real(dp) :: z(5), initial(5), x_previous(3), saved_ro0, exit_step
+        real(dp) :: saved_wall_gate, saved_potential_slope, cached_ratio
+        integer(int64) :: kt
+        integer :: collisions, endpoint, wall_path, step_error, excessive
+        integer :: candidate_error
+
+        call move_alloc(ref_coords, saved_ref_coords)
+        allocate (cartesian_coordinate_system_t :: ref_coords)
+        saved_potential_slope = radial_electric_potential_slope
+        saved_wall_gate = wall_query_rho_lcfs
+        wall_query_rho_lcfs = 1.0_dp
+        local_orbit = norb
+        saved_ro0 = ro0
+        ro0 = 1.0_dp ! Normalized TEST-field charge-to-mass scale.
+        symplectic_newton_warning_mode = .false.
+        orbit_model = ORBIT_GC
+        integmode = 3
+        do excessive = 0, 3
+            injected_stale_cache = excessive == 3
+            radial_electric_potential_slope = 0.0_dp
+            if (excessive == 2) radial_electric_potential_slope = -1.0_dp
+            injected_momentum_ratio = 1.004_dp
+            if (excessive == 1) injected_momentum_ratio = 1.006_dp
+            if (excessive == 2) injected_momentum_ratio = 1.1_dp
+            do collisions = 0, 1
+                swcoll = collisions == 1
+                ! A collision can change both momentum and pitch before this push.
+                initial = [0.2_dp, 1.0_dp, 0.2_dp, 1.0_dp, 0.25_dp]
+                do endpoint = 0, 1
+                    ! Bounded boundary states return before another collision kick.
+                    if (excessive /= 1 .and. excessive /= 3 .and. endpoint == 0) cycle
+                    if (swcoll .and. endpoint == 0 .and. excessive == 3) cycle
+                    do wall_path = 0, 1
+                        initial(4:5) = [1.0_dp, 0.25_dp]
+                        call init_sympl(local_orbit%si, local_orbit%f, initial, &
+                                        1.0e-3_dp, 1.0e-3_dp, 1.0e-12_dp, 3)
+                        ! Leave a stale pre-collision reference in the active orbit.
+                        if (swcoll) initial(4:5) = [0.7_dp, -0.4_dp]
+                        expected_orbit = local_orbit
+                        if (swcoll) call update_momentum(expected_orbit, initial)
+                        injected_status = SYMPLECTIC_STEP_OK
+                        if (endpoint == 1) injected_status = SYMPLECTIC_STEP_BOUNDARY
+                        orbit_timestep_sympl => wrong_energy_step
+                        candidate_orbit = expected_orbit
+                        call wrong_energy_step(candidate_orbit%si, &
+                                               candidate_orbit%f, candidate_error)
+                        z = initial
+                        x_previous = 0.0_dp
+                        kt = 0_int64
+                        if (wall_path == 0) then
+                            call macrostep(local_orbit, z, kt, step_error, 1, exit_step)
+                        else
+                            call macrostep_with_wall_check(local_orbit, z, kt, &
+                                                step_error, 1, 1, x_previous, exit_step)
+                        end if
+                        if (excessive /= 1) then
+                            cached_ratio = injected_momentum_ratio
+                            if (injected_stale_cache) cached_ratio = 1.1_dp
+                            if (step_error /= injected_status .or. &
+                                abs(z(4)/initial(4) - cached_ratio) > 1.0e-12_dp) &
+                                error stop 'Physical endpoint momentum was rejected'
+                            if (any(local_orbit%si%z /= candidate_orbit%si%z) .or. &
+                                local_orbit%f%Bmod /= candidate_orbit%f%Bmod .or. &
+                                local_orbit%f%vpar /= candidate_orbit%f%vpar .or. &
+                                local_orbit%f%hph /= candidate_orbit%f%hph .or. &
+                                local_orbit%f%Aph /= candidate_orbit%f%Aph) &
+                                error stop 'Validation mutated the carried endpoint'
+                            if (excessive == 2) then
+                                if (abs(local_orbit%f%H - expected_orbit%f%H) > &
+                                    1.0e-12_dp) error stop 'Electric energy mismatch'
+                            end if
+                            if (endpoint == 1) then
+                                if (kt /= 0_int64 .or. exit_step /= 0.25_dp) &
+                                    error stop 'Bounded boundary time was changed'
+                            else
+                                if (kt /= 1_int64) &
+                                    error stop 'Accepted ordinary step did not advance'
+                            end if
+                            cycle
+                        end if
+                        if (step_error /= SYMPLECTIC_STEP_EVENT_NOT_CONVERGED) &
+                            error stop 'Wrong-energy endpoint accepted as a step or hit'
+                        if (classify_orbit_exit(step_error, ORBIT_GC, integmode, &
+                                                ORBIT_EXIT_LCFS) /= &
+                            ORBIT_EXIT_NUMERICAL_EVENT) &
+                        error stop 'Wrong-energy rejection classified as Newton failure'
+                        if (kt /= 0_int64 .or. exit_step /= 0.0_dp .or. &
+                            any(z /= initial) .or. any(x_previous /= 0.0_dp)) &
+                            error stop 'Wrong-energy rejection changed particle or time'
+                        if (any(local_orbit%si%z /= expected_orbit%si%z) .or. &
+                            local_orbit%si%pabs /= expected_orbit%si%pabs .or. &
+                            local_orbit%f%vpar /= expected_orbit%f%vpar .or. &
+                            local_orbit%f%mu /= expected_orbit%f%mu .or. &
+                            local_orbit%f%H /= expected_orbit%f%H) &
+                        error stop 'Wrong-energy rejection did not restore hidden state'
+                    end do
+                end do
+            end do
+        end do
+        injected_stale_cache = .false.
+        swcoll = .false.
+        ro0 = saved_ro0
+        radial_electric_potential_slope = saved_potential_slope
+        wall_query_rho_lcfs = saved_wall_gate
+        deallocate (ref_coords)
+        call move_alloc(saved_ref_coords, ref_coords)
+    end subroutine test_wrong_energy_symplectic_endpoint
 
     subroutine test_rk_recovery_regions
         type(rk_recovery_state_t) :: recovery
@@ -646,21 +799,21 @@ contains
         integer :: step_error
         logical :: reference_boundary
 
-        ! Without a reference momentum (symplectic steps), the O(dt) energy
-        ! error of the map is accepted; impossible phase space is not.
-        z_after = [0.21_dp, 0.4_dp, 0.5_dp, 1.015_dp, -0.49_dp]
+        ! Symplectic endpoints allow bounded truncation error, but share the
+        ! recovery momentum sanity bound before committing a physical state.
+        z_after = [0.21_dp, 0.4_dp, 0.5_dp, 1.004_dp, -0.49_dp]
         step_error = 0
         call validate_rk_step_or_reference_boundary(z_before, z_after, &
-            1.0_dp, z=z, event_fraction=event_fraction, ierr=step_error, &
-            reference_boundary=reference_boundary)
+                      1.0_dp, 1.0_dp, z, event_fraction, step_error, reference_boundary)
         if (step_error /= 0 .or. any(z /= z_after)) &
-            error stop 'symplectic energy error was rejected as RK drift'
+            error stop 'bounded symplectic truncation error was rejected'
 
+        z_after(4) = 1.015_dp
         step_error = 0
         call validate_rk_step_or_reference_boundary(z_before, z_after, &
             1.0_dp, 1.0_dp, z, event_fraction, step_error, reference_boundary)
         if (step_error /= 2) &
-            error stop 'RK momentum drift gate no longer applies'
+            error stop 'excessive symplectic momentum drift was accepted'
 
         z_after(5) = 2.0_dp
         step_error = 0
