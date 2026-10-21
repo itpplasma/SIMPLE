@@ -159,8 +159,29 @@ main() {
     "$SCRIPT_DIR/run_golden_tests.sh" "$PROJECT_ROOT_REF" "$RUN_DIR_REF" "$TEST_DATA_DIR" "$SINGLE_CASE" || handle_failure $?
     "$SCRIPT_DIR/run_golden_tests.sh" "$PROJECT_ROOT_CUR" "$RUN_DIR_CUR" "$TEST_DATA_DIR" "$SINGLE_CASE" || handle_failure $?
 
+    # These two historical references contain the #540 momentum regression.
+    # Preserve their raw runs; compare coil orbits with the qualified #560
+    # records instead. Other cases, diagnostics and tolerances are unchanged.
+    local comparison_ref="$RUN_DIR_REF" reference_revision
+    reference_revision=$(git -C "$PROJECT_ROOT_REF" rev-parse HEAD)
+    case "$reference_revision" in
+        9ec87fda7d42864b85121eb901375183aa2ba34c|9a6697e192f37c73a4acd2eda2b6a6a8b6e31092)
+            comparison_ref="$RUN_DIR_CUR.reference"
+            local case_name baseline
+            for case_name in $TEST_CASES; do
+                mkdir -p "$comparison_ref/$case_name"
+                cp -asf "$RUN_DIR_REF/$case_name/." "$comparison_ref/$case_name/"
+                baseline="$SCRIPT_DIR/baselines/physical_momentum/$case_name"
+                if [ -d "$baseline" ]; then
+                    cp --remove-destination "$baseline/"*.dat "$comparison_ref/$case_name/"
+                    echo "Using qualified #560 orbit records for $case_name"
+                fi
+            done
+            ;;
+    esac
+
     # Compare results
-    "$SCRIPT_DIR/compare_golden_results.sh" "$RUN_DIR_REF" "$RUN_DIR_CUR" "$TEST_CASES"
+    "$SCRIPT_DIR/compare_golden_results.sh" "$comparison_ref" "$RUN_DIR_CUR" "$TEST_CASES"
     comparison_result=$?
 
     if [ $comparison_result -eq 0 ]; then
