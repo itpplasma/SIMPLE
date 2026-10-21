@@ -10,8 +10,8 @@ The focused production changes are merged on main:
 [FO performance #534](https://github.com/itpplasma/SIMPLE/pull/534),
 [GC extrapolation #535](https://github.com/itpplasma/SIMPLE/pull/535), and
 [particle-wall repair #536](https://github.com/itpplasma/SIMPLE/pull/536).
-They merged as `934d964`, `71ad9ae` and `27e963c`, respectively. The frozen
-measurement baseline remains `fe002a3`. Chris explicitly requested promotion;
+They merged as `81b2eca`, `2297745` and `e132b55`, respectively. The frozen
+measurement baseline remains `a4e28d8`. Chris explicitly requested promotion;
 independent human domain/senior review was not performed and CI was not awaited.
 Retained research and the updated plan are integrated by
 [#537](https://github.com/itpplasma/SIMPLE/pull/537). The requested

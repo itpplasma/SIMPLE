@@ -2,7 +2,7 @@
 
 Updated 2026-10-16. Production repairs #534–#536 and research PR #537 are on
 `main`, followed by the measured cost and residence records below. The frozen
-measurement baseline of the earlier loss study remains `fe002a3`. Recovery and
+measurement baseline of the earlier loss study remains `a4e28d8`. Recovery and
 archive history and all retained failed results remain available (see the end).
 
 ## Position
@@ -155,13 +155,13 @@ GC, carried-phase switching and resolved FO are not rejected paths.
 | Surviving candidate comparison and sharp-sheet controls | `concept/interface_candidates/`, `concept/symplectic_sheet/` |
 | Superseded W4 implementation | `concept/fo_logical_spline/README.md` links its Git archive; unused code/patch removed during integration cleanup |
 
-The [previous full recovery ledger](https://github.com/itpplasma/SIMPLE/blob/fa913186ab29a0cfba3175d6a6b2c7a515f77a1f/PLAN.md)
+The [previous full recovery ledger](https://github.com/itpplasma/SIMPLE/blob/a5df913925a8c74deb0cd7559415d73407def61b/PLAN.md)
 retains historical commands, timings, worker commits and verification details.
-Recovery is `recovery/spectre-session-20261014` at `082bea4`; the pre-cleanup
-archive is `archive/spectre-session-20261014-pre-cleanup` at `87aa81f`.
-The research integration preserves recovery (`8afaecb`), GC repair (`0993478`),
-switch work (`97fde90`, `060d17f`, `4d963cc`), wall repair (`535bc9e`, `5e88fe5`)
-and ledger F8 (`c957615`). Separate audit/switch branches retain provenance.
+Recovery is `recovery/spectre-session-20261014` at `35831c0`; the pre-cleanup
+archive is `archive/spectre-session-20261014-pre-cleanup` at `b73669f`.
+The research integration preserves recovery (`e38aec7`), GC repair (`0e53bd7`),
+switch work (`df8667f`, `73e8c57`, `c4b8768`), wall repair (`dd7d136`, `4d2c6d8`)
+and ledger F8 (`25daf35`). Separate audit/switch branches retain provenance.
 Do not resume old agents or merge old worker tips over the cleaned sources.
 Generic Lie/code-generation support stays in FortSym, including the retained
 `feat/lie-pullback` dependency work; application physics stays in SIMPLE.

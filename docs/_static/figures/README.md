@@ -56,7 +56,7 @@ from $s = 0.5$ for 50 ms in Boozer coordinates with symplectic Euler.
 `data/front/` stores the result as text: positions, times and initial classes
 (`trap_par`) of the 194 lost markers in `losses.csv`, 101 confinement samples
 in `confinement.csv`, and population counts and provenance in
-`metadata.json` (SIMPLE `fe2de27`, libneo `f6090e8`, GNU Fortran 16.1 on
+`metadata.json` (SIMPLE `ffd7f4a`, libneo `f6090e8`, GNU Fortran 16.1 on
 macOS, `Fast` profile). The other markers enter only through their counts.
 `build_doc_figures.py` downloads the VMEC file from the simsopt test data at a
 pinned commit, checks its SHA-256, checks the event-based confined fractions

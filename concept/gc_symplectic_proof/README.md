@@ -37,7 +37,7 @@ scientific acceptance gap, not a reason to remove valid GC integrators.
 
 The closed-form polynomial canonical Hamiltonian witness in
 `test/tests/test_gc_field_extrapolation.f90` fails against unchanged production
-source (`9c62300`). It compares the actual Gauss update with independent
+source (`c566734`). It compares the actual Gauss update with independent
 Hamiltonian quadrature at the solved stages and checks the midpoint endpoint
 momentum against its closed expression. It exercises Gauss1–4 with/without a
 cyclic toroidal coordinate, and both midpoint volume branches. The error bound
