@@ -233,7 +233,6 @@ jobs:
 
       - name: Run Fast Tests (Fortran only)
         if: env.CI_HOSTED == 'true' && (github.event_name != 'workflow_dispatch' || inputs.full == 'true')
-        env: {}
         run: |
           CTEST_PARALLEL_LEVEL=$(env -u OMP_NUM_THREADS -u OMP_THREAD_LIMIT nproc)
           export CTEST_PARALLEL_LEVEL
