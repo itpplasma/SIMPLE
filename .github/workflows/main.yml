@@ -309,8 +309,12 @@ jobs:
             gcc-${{ matrix.gcc }} g++-${{ matrix.gcc }} gfortran-${{ matrix.gcc }} \
             git-lfs cmake ninja-build pkg-config lcov \
             libgsl-dev libhdf5-dev libfftw3-dev libnetcdf-dev libnetcdff-dev \
-            libopenblas-dev liblapack-dev openmpi-bin libopenmpi-dev
-          python -m pip install numpy netCDF4
+            libopenblas-dev liblapack-dev openmpi-bin libopenmpi-dev \
+            python3-venv
+          # System pip is externally managed (PEP 668); use a private venv.
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/python" -m pip install numpy netCDF4
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
 
       - name: Build and run tests
         env:
