@@ -2,9 +2,7 @@ name: docs
 
 on:
   push:
-    branches:
-      - "**"
-  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -13,9 +11,10 @@ permissions:
   pages: write
   id-token: write
 
+# Only PR runs share a group; pending push and merge-group runs stay independent.
 concurrency:
-  group: docs-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || format('{0}-{1}', github.ref, github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
