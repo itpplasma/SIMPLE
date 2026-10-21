@@ -52,7 +52,12 @@ end subroutine evaluate_test
             rf%d2Bmod = bmod(5:10)
         end if
 
-        n_field_evaluations = n_field_evaluations + 1
+        ! Regular mode 2 supplies the second derivatives counted by class 1.
+        if (mode >= 2) then
+            call count_field_evaluation(1)
+        else
+            call count_field_evaluation(0)
+        end if
     end subroutine evaluate_test_regular
 
 ! for testing -> circular tokamak
