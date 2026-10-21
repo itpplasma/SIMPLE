@@ -2,6 +2,15 @@ name: Mirror to EUFUS GitLab
 
 on:
   workflow_dispatch:
+    inputs:
+      force:
+        description: 'Allow a one-time main history repair with an exact lease'
+        type: boolean
+        default: false
+      expected_main:
+        description: 'Current EUFUS main SHA (required when force is true)'
+        type: string
+        default: ''
   push:
     branches: [main]
     tags: ["**"]
@@ -43,9 +52,24 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Temporarily permit the authorized main repair
+        if: github.event_name == 'workflow_dispatch' && inputs.force
+        run: python3 .github/scripts/eufus_main_protection.py enable
+
       - name: Push mirror
+        env:
+          FORCE_MAIN: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
+          EXPECTED_MAIN: ${{ inputs.expected_main }}
         if: steps.credentials.outputs.available == 'true'
         run: |
+          lease=()
+          if [ "$FORCE_MAIN" = true ]; then
+            if [[ ! "$EXPECTED_MAIN" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::error::Force requires the exact current EUFUS main SHA"
+              exit 1
+            fi
+            lease=("--force-with-lease=refs/heads/main:$EXPECTED_MAIN")
+          fi
           git fetch --no-tags origin main:refs/remotes/origin/main
           cat > "$RUNNER_TEMP/eufus-askpass" <<'ASKPASS'
           #!/bin/sh
@@ -58,4 +82,18 @@ jobs:
           GIT_ASKPASS="$RUNNER_TEMP/eufus-askpass" GIT_TERMINAL_PROMPT=0 \
             git -c http.version=HTTP/1.1 -c credential.helper= push \
               https://gitlab.eufus.psnc.pl/itpplasma/simple.git \
-              refs/remotes/origin/main:refs/heads/main --tags
+              "${lease[@]}" refs/remotes/origin/main:refs/heads/main
+          # Tags always use ordinary non-forcing push semantics.
+          GIT_ASKPASS="$RUNNER_TEMP/eufus-askpass" GIT_TERMINAL_PROMPT=0 \
+            git -c http.version=HTTP/1.1 -c credential.helper= push \
+              https://gitlab.eufus.psnc.pl/itpplasma/simple.git --tags
+          expected=$(git rev-parse refs/remotes/origin/main)
+          actual=$(GIT_ASKPASS="$RUNNER_TEMP/eufus-askpass" GIT_TERMINAL_PROMPT=0 \
+            git -c http.version=HTTP/1.1 -c credential.helper= ls-remote \
+              https://gitlab.eufus.psnc.pl/itpplasma/simple.git refs/heads/main | cut -f1)
+          test "$actual" = "$expected"
+          echo "Verified EUFUS main: $actual" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Restore main protection
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.force
+        run: python3 .github/scripts/eufus_main_protection.py restore
