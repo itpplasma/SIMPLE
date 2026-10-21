@@ -90,7 +90,7 @@ jobs:
   test:
     name: Build and Test
     runs-on: >-
-      ${{ (github.event_name == 'pull_request' || inputs.runner == 'portable' || inputs.runner == 'hosted') && fromJSON('["self-hosted","itp-ubuntu24"]') || fromJSON('["self-hosted","itp-build","itp-slurm"]') }}
+      ${{ (github.event_name == 'pull_request' || inputs.runner == 'portable' || inputs.runner == 'hosted') && fromJSON('["self-hosted","itp-ubuntu24"]') || fromJSON('["self-hosted","itp-dispatch"]') }}
     timeout-minutes: 150
     env:
       OMP_NUM_THREADS: 2
