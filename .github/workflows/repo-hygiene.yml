@@ -1,10 +1,16 @@
 name: Repository hygiene
 on:
   pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
   merge_group:
   push:
     branches:
       - main
+  workflow_dispatch:
 permissions:
   contents: read
 # Only PR runs share a group; pending push and merge-group runs stay independent.
