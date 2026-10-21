@@ -19,8 +19,10 @@ concurrency:
 jobs:
   build:
     if: >-
-      (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]') || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))) && (github.ref != 'refs/heads/gh-pages')
-    runs-on: ubuntu-latest
+      github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on:
+      - self-hosted
+      - itp-ubuntu24
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -123,8 +125,10 @@ jobs:
     name: Deploy to GitHub Pages
     needs: build
     if: >-
-      (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]') || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))) && (github.ref == 'refs/heads/main' && github.event_name != 'pull_request')
-    runs-on: ubuntu-latest
+      github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on:
+      - self-hosted
+      - itp-light
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
