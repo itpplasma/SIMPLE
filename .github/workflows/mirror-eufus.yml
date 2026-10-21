@@ -17,9 +17,10 @@ concurrency:
 jobs:
   mirror:
     name: Push main and tags to EUFUS GitLab
-    if: >-
-      (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]') || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))) && (github.repository == 'itpplasma/SIMPLE' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch'))
-    runs-on: ubuntu-24.04
+    if: github.repository == 'itpplasma/SIMPLE' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on:
+      - self-hosted
+      - itp-ubuntu24
     timeout-minutes: 10
     env:
       EUFUS_GITLAB_TOKEN: ${{ secrets.EUFUS_GITLAB_TOKEN }}

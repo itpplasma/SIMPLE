@@ -82,7 +82,7 @@ jobs:
 
       - name: Check changed lines
         run: >-
-          python tools/check_changed_lines.py --base "${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}"
+          python tools/check_changed_lines.py --base "${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || format('{0}^', github.sha) }}"
 
   # Ordinary PR events skip without allocating a runner. Explicit PR validation
   # uses the isolated owned Ubuntu runner. The merge queue runs the full suite
