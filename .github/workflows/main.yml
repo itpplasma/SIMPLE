@@ -32,6 +32,9 @@ on:
 
 # A new push cancels superseded PR checks. Label-triggered full-ci compiler
 # checks keep their own group and do not cancel an ordinary PR run.
+  push:
+    branches:
+      - main
 concurrency:
   group: >-
     ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}-${{
@@ -51,7 +54,9 @@ jobs:
       contents: read
     name: Changed-line lint
     runs-on: ubuntu-24.04
-    if: github.event_name == 'pull_request'
+    if: >-
+      github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]') || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))
+
 
     steps:
       - uses: actions/checkout@v6
@@ -276,6 +281,8 @@ jobs:
             build/test/tests/golden_record/runs/**/times_lost.dat
             build/test/tests/golden_record/runs/**/orbit_exit_code.dat
 
+    if: >-
+      github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]') || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))
   gcc-matrix:
     permissions:
       contents: read
@@ -283,11 +290,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     if: >-
-      (github.event_name == 'merge_group' ||
-      (github.event_name == 'workflow_dispatch' && inputs.full == 'true') ||
-      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)) &&
-      (github.event_name != 'pull_request' ||
-      contains(github.event.pull_request.labels.*.name, 'full-ci'))
+      (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]') || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))) && ((github.event_name == 'merge_group' || (github.event_name == 'workflow_dispatch' && inputs.full == 'true') || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)) && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')))
     strategy:
       fail-fast: false
       matrix:
@@ -333,7 +336,8 @@ jobs:
       contents: read
     name: Intel ifx smoke tests (non-blocking)
     runs-on: ubuntu-24.04
-    if: github.event_name == 'workflow_dispatch' && inputs.experimental_compilers
+    if: >-
+      (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]') || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))) && (github.event_name == 'workflow_dispatch' && inputs.experimental_compilers)
     continue-on-error: true
     timeout-minutes: 30
     container:
@@ -378,7 +382,8 @@ jobs:
       contents: read
     name: LLVM flang smoke tests (non-blocking)
     runs-on: ubuntu-24.04
-    if: github.event_name == 'workflow_dispatch' && inputs.experimental_compilers
+    if: >-
+      (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]') || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))) && (github.event_name == 'workflow_dispatch' && inputs.experimental_compilers)
     continue-on-error: true
     timeout-minutes: 30
 
@@ -417,9 +422,7 @@ jobs:
     name: CGAL Wall Unit Tests
     runs-on: ubuntu-24.04
     if: >-
-      github.event_name == 'merge_group' ||
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'pull_request'
+      (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]') || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))) && (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request')
 
     timeout-minutes: 20
     env:
@@ -491,11 +494,7 @@ jobs:
     name: VMEC++ Direct Geometry
     runs-on: ubuntu-24.04
     if: >-
-      (github.event_name == 'merge_group' ||
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)) &&
-      (github.event_name != 'pull_request' ||
-      contains(github.event.pull_request.labels.*.name, 'full-ci'))
+      (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]') || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))) && ((github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)) && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')))
 
     timeout-minutes: 60
     env:
@@ -546,7 +545,8 @@ jobs:
 
   build-docs:
     name: Build Documentation
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))
+    if: >-
+      (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]') || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))) && (github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci')))
     runs-on: ubuntu-24.04
 
     steps:
@@ -582,7 +582,8 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
-    if: github.event_name == 'workflow_dispatch' && inputs.verification_report == 'true'
+    if: >-
+      (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]') || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))) && (github.event_name == 'workflow_dispatch' && inputs.verification_report == 'true')
     steps:
       - uses: actions/checkout@v6
         with:
@@ -625,7 +626,8 @@ jobs:
   build-and-test-result:
     permissions: {}
     name: Build and Test
-    if: always()
+    if: >-
+      (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]') || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))) && (always())
     needs: [test]
     runs-on: ubuntu-24.04
     steps:
@@ -639,7 +641,8 @@ jobs:
   ci-result:
     permissions: {}
     name: CI result
-    if: always()
+    if: >-
+      (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]') || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))) && (always())
     needs: [build-and-test-result, gcc-matrix, cgal-wall, vmecpp]
     runs-on: ubuntu-24.04
     steps:
