@@ -27,6 +27,7 @@ target_link_libraries(test_hcurl_from_dhcov_splines.x simple)
 
 add_executable(test_magfie_refcoords_splines.x test_magfie_refcoords_splines.f90)
 target_link_libraries(test_magfie_refcoords_splines.x simple)
+add_dependencies(test_magfie_refcoords_splines.x ncsx_test_data)
 
 add_executable(test_orbit_refcoords_rk45.x test_orbit_refcoords_rk45.f90)
 target_link_libraries(test_orbit_refcoords_rk45.x simple)

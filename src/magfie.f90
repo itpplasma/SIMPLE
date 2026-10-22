@@ -9,7 +9,7 @@ use field_spectre, only: spectre_field_t
 #ifdef SIMPLE_ENABLE_VMECPP
     use field_vmecpp, only: magfie_vmecpp
 #endif
-use libneo_coordinates, only: coordinate_system_t, chartmap_coordinate_system_t, &
+use libneo_coordinates, only: coordinate_system_t, chartmap_coordinate_system_t, UNKNOWN, &
                               RHO_TOR, RHO_POL, PSI_TOR_NORM, PSI_POL_NORM
 
 implicit none
@@ -101,7 +101,8 @@ end subroutine set_magfie_spectre_field
         select type (coords => field%coords)
         class is (chartmap_coordinate_system_t)
             select case (coords%rho_convention)
-            case (RHO_TOR, RHO_POL)
+            case (RHO_TOR, RHO_POL, UNKNOWN)
+                ! Map2disc's geometric disk radius has the same polar axis map.
                 radial_is_rho = .true.
                 ierr = 0
             end select
