@@ -120,23 +120,26 @@ contains
 
     subroutine loacol_alpha(am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, &
                             tempe, ealpha, v0, dchichi, slowrate, &
-                            dchichi_norm, slowrate_norm)
+                            dchichi_norm, slowrate_norm, test_mass, test_charge)
         real(wp), intent(in) :: am1, am2, Z1, Z2, densi1, densi2
         real(wp), intent(in) :: tempi1, tempi2, tempe, ealpha
+        real(wp), intent(in), optional :: test_mass, test_charge
         real(wp), intent(out) :: v0, dchichi, slowrate, dchichi_norm, slowrate_norm
 
         call compute_collision_coeffs(am1, am2, Z1, Z2, densi1, densi2, &
                                       tempi1, tempi2, tempe, ealpha, v0, &
-                                      efcolf, velrat, enrat)
+                                      efcolf, velrat, enrat, test_mass, test_charge)
 
         call compute_rates(v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
     end subroutine loacol_alpha
 
     subroutine compute_collision_coeffs(am1, am2, Z1, Z2, densi1, densi2, &
                                         tempi1, tempi2, tempe, ealpha, v0, &
-                                        efcolf_out, velrat_out, enrat_out)
+                                        efcolf_out, velrat_out, enrat_out, &
+                                        test_mass, test_charge)
         real(wp), intent(in) :: am1, am2, Z1, Z2, densi1, densi2
         real(wp), intent(in) :: tempi1, tempi2, tempe, ealpha
+        real(wp), intent(in), optional :: test_mass, test_charge
         real(wp), intent(out) :: v0
         real(wp), intent(out) :: efcolf_out(nsorts), velrat_out(nsorts), enrat_out(nsorts)
 
@@ -147,13 +150,20 @@ contains
         real(wp), parameter :: ev_cgs = 1.6022d-12
 
         real(wp) :: dense, vti1, vti2, vte
-        real(wp) :: alami1, alami2, alame, frecol_base
+        real(wp) :: alami1, alami2, alame, frecol_base, mass, charge
+
+        mass = 4.0_wp
+        charge = 2.0_wp
+        if (present(test_mass)) mass = test_mass
+        if (present(test_charge)) charge = test_charge
+        if (mass <= 0.0_wp .or. charge <= 0.0_wp) &
+            error stop "Collision test species must have positive mass and charge"
 
         enrat_out(1) = ealpha/tempi1
         enrat_out(2) = ealpha/tempi2
         enrat_out(3) = ealpha/tempe
 
-        v0 = sqrt(2.d0*ealpha*ev_cgs/(4.d0*pmass))
+        v0 = sqrt(2.d0*ealpha*ev_cgs/(mass*pmass))
         vti1 = sqrt(2.d0*tempi1*ev_cgs/(pmass*am1))
         vti2 = sqrt(2.d0*tempi2*ev_cgs/(pmass*am2))
         vte = sqrt(2.d0*tempe*ev_cgs/emass)
@@ -168,12 +178,14 @@ contains
             return
         end if
         alami1 = 23.d0 - log(max(epsilon(1.d0), &
-                                 sqrt(densi1*Z1**2/tempi1)*2.d0*Z1*(4.d0 + am1)/(4.d0*tempi1 + am1*ealpha)))
+                                 sqrt(densi1*Z1**2/tempi1)*charge*Z1*(mass + am1)/ &
+                                 (mass*tempi1 + am1*ealpha)))
         alami2 = 23.d0 - log(max(epsilon(1.d0), &
-                                 sqrt(densi2*Z2**2/tempi2)*2.d0*Z2*(4.d0 + am2)/(4.d0*tempi2 + am2*ealpha)))
+                                 sqrt(densi2*Z2**2/tempi2)*charge*Z2*(mass + am2)/ &
+                                 (mass*tempi2 + am2*ealpha)))
         alame = 24.d0 - log(sqrt(dense)/tempe)
 
-        frecol_base = 2.d0*pi*dense*e_cgs**4*2.d0**2/((4.d0*pmass)**2*v0**3)
+        frecol_base = 2.d0*pi*dense*e_cgs**4*charge**2/((mass*pmass)**2*v0**3)
         frecol_base = frecol_base/v0
 
         efcolf_out(1) = frecol_base*Z1**2*alami1*densi1/dense
@@ -198,10 +210,12 @@ contains
         slowrate_norm = abs(fpeff)
     end subroutine compute_rates
 
-    subroutine init_collision_profiles(am1, am2, Z1, Z2, ealpha, v0)
+    subroutine init_collision_profiles(am1, am2, Z1, Z2, ealpha, v0, &
+                                       test_mass, test_charge)
         use simple_profiles, only: get_plasma_params
 
         real(wp), intent(in) :: am1, am2, Z1, Z2, ealpha, v0
+        real(wp), intent(in), optional :: test_mass, test_charge
         real(wp) :: s, Te, Ti1, Ti2, ni1, ni2
         real(wp) :: densi1_loc, densi2_loc, tempi1_loc, tempi2_loc, tempe_loc
         real(wp) :: v0_loc
@@ -228,7 +242,8 @@ contains
                                           densi1_loc, densi2_loc, &
                                           tempi1_loc, tempi2_loc, tempe_loc, &
                                           ealpha, v0_loc, &
-                                          efcolf_grid(:, i), velrat_grid(:, i), enrat_grid(:, i))
+                               efcolf_grid(:, i), velrat_grid(:, i), enrat_grid(:, i), &
+                                          test_mass, test_charge)
         end do
     end subroutine init_collision_profiles
 

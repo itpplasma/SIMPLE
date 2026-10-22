@@ -9,12 +9,14 @@ Usage: :doc:`/user-guide/running`.
 Scope and splitting
 -------------------
 
-A test alpha particle scatters on a Maxwellian background of electrons and
+A test ion scatters on a Maxwellian background of electrons and
 two ion species with densities :math:`n_a` and temperatures :math:`T_a` from
-the ``&profiles`` namelist. The operator always uses the alpha mass
-:math:`m_\alpha = 4m_p` and charge :math:`Z_\alpha = 2`
-(``src/collis_alphas.f90:107,126``): ``n_e`` does not enter, and a run with
-``n_d`` :math:`\neq 4` stops in ``init_collisions`` with ``v0_coll != v0``.
+the ``&profiles`` namelist. The test mass is ``n_d`` times the proton mass
+and its charge number is ``n_e``. Defaults remain alpha particles (4, 2).
+For 55 keV hydrogen use ``n_d = 1``, ``n_e = 1`` and
+``particle_energy_eV = 55000``; for deuterium use ``n_d = 2``.
+In the formulas below :math:`m_\alpha` and :math:`Z_\alpha` denote this
+configured test ion, and :math:`E_\alpha` is its reference kinetic energy.
 Collisions cannot be combined with classification.
 
 Each orbit microstep :math:`\Delta\tau` is followed by a collision step of
@@ -74,13 +76,13 @@ whose speed flux vanishes for each species on the Maxwellian
 The Coulomb logarithms (``compute_collision_coeffs``; :math:`n` in
 cm\ :sup:`-3`, :math:`T`, :math:`E_\alpha` in eV, :math:`A_i` = ``am1``,
 ``am2``) are the NRL electron–ion form and the NRL mixed ion–ion form with
-:math:`m_\alpha = 4m_p`, :math:`T_\alpha \to E_\alpha` and only the
+:math:`m_\alpha = A_\alpha m_p`, :math:`T_\alpha \to E_\alpha` and only the
 background-ion density under the root:
 
 .. math::
 
    \ln\Lambda_e = 24 - \ln\frac{\sqrt{n_e}}{T_e}, \qquad
-   \ln\Lambda_i = 23 - \ln\Bigl[\frac{Z_\alpha Z_i(4 + A_i)}{4T_i + A_iE_\alpha}
+   \ln\Lambda_i = 23 - \ln\Bigl[\frac{Z_\alpha Z_i(A_\alpha + A_i)}{A_\alpha T_i + A_iE_\alpha}
                   \sqrt{\frac{n_iZ_i^2}{T_i}}\Bigr].
 
 ``init_collision_profiles`` tabulates :math:`\nu_a`, :math:`v_0/v_{T,a}` and
