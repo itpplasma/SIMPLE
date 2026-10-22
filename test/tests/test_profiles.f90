@@ -12,6 +12,7 @@ program test_profiles
     all_passed = .true.
     n_failed = 0
 
+    call test_file_exterior_profiles()
     call test_tabulated_profiles()
     call test_power_series_evaluation(all_passed, n_failed)
     call test_two_power_evaluation(all_passed, n_failed)
@@ -174,6 +175,45 @@ contains
                 p1_mean, p2_mean
         end if
     end subroutine test_lorentz_legendre_relaxation
+
+    subroutine test_file_exterior_profiles()
+        real(dp) :: te, ti1, ti2, ni1, ni2, ef(3), vr(3), er(3)
+        real(dp) :: edge(3)
+        integer :: unit
+
+        call reset_profiles()
+        open (newunit=unit, file='test-plasma.dat', status='replace')
+        write (unit, *) 3
+        write (unit, *) 0, 1000, 1000, 1000, 1e19_dp, 1e18_dp
+        write (unit, *) 1, 1000, 1000, 1000, 1e19_dp, 1e18_dp
+        write (unit, *) 2, 1000, 1000, 1000, 0, 0
+        close (unit)
+        open (newunit=unit, file='test-profiles.in', status='replace')
+        write (unit, '(a)') "&profiles profile_file='test-plasma.dat' /"
+        close (unit)
+        call read_profiles('test-profiles.in')
+        call get_plasma_params(1.5_dp, te, ti1, ti2, ni1, ni2)
+        if (abs(ni1/1e19_dp - 0.5_dp) > 1e-14_dp) &
+            error stop 'Exterior file density was clamped to LCFS'
+        if (abs(ni2/1e18_dp - 0.5_dp) > 1e-14_dp) &
+            error stop 'Exterior impurity density was clamped to LCFS'
+        call init_collision_profiles(1.0_dp, 12.0_dp, 1.0_dp, 6.0_dp, &
+                                     55000.0_dp, 1.0_dp)
+        call get_local_coeffs(1.0_dp, edge, vr, er)
+        call get_local_coeffs(1.5_dp, ef, vr, er)
+        if (any(ef >= edge) .or. any(ef <= 0)) &
+            error stop 'Exterior collision coefficients ignore profile table'
+        call get_local_coeffs(2.5_dp, ef, vr, er)
+        if (any(ef /= 0)) error stop 'Exterior vacuum was not retained'
+        call reset_profiles()
+        call init_collision_profiles(1.0_dp, 12.0_dp, 1.0_dp, 6.0_dp, &
+                                     55000.0_dp, 1.0_dp)
+        if (collision_s_max /= 1) error stop 'Profile reset retained exterior grid'
+        open (newunit=unit, file='test-plasma.dat', status='old')
+        close (unit, status='delete')
+        open (newunit=unit, file='test-profiles.in', status='old')
+        close (unit, status='delete')
+    end subroutine test_file_exterior_profiles
 
     subroutine test_tabulated_profiles()
         real(dp) :: table(6, 3), te, ti1, ti2, ni1, ni2

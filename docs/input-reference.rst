@@ -719,7 +719,7 @@ Source: ``src/params.f90:240``.
 &profiles
 ---------
 
-Source: ``src/profiles.f90:37``.
+Source: ``src/profiles.f90:38``.
 
 .. list-table::
    :header-rows: 1
@@ -736,6 +736,12 @@ Source: ``src/profiles.f90:37``.
      - ``default``
      - ``scalar``
      - ``"power_series"``
+     -
+   * - ``profile_file``
+     - ``character(len=1000)``
+     - ``default``
+     - ``scalar``
+     - ``""``
      -
    * - ``te_scale``
      - ``real``

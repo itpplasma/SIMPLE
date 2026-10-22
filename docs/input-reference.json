@@ -1691,7 +1691,7 @@
     },
     "profiles": {
       "source": "src/profiles.f90",
-      "source_line": 37,
+      "source_line": 38,
       "variables": [
         {
           "name": "profile_type",
@@ -1707,20 +1707,20 @@
           "source_line": 10
         },
         {
-          "name": "te_scale",
-          "type": "real",
-          "kind": "dp",
-          "length": "",
+          "name": "profile_file",
+          "type": "character",
+          "kind": "",
+          "length": "1000",
           "shape": [],
           "extent": [],
-          "default": "1.0d4",
-          "default_value": "1.0d4",
+          "default": "\"\"",
+          "default_value": "\"\"",
           "documentation": "",
           "source": "src/profiles.f90",
-          "source_line": 14
+          "source_line": 11
         },
         {
-          "name": "ti1_scale",
+          "name": "te_scale",
           "type": "real",
           "kind": "dp",
           "length": "",
@@ -1733,7 +1733,7 @@
           "source_line": 15
         },
         {
-          "name": "ti2_scale",
+          "name": "ti1_scale",
           "type": "real",
           "kind": "dp",
           "length": "",
@@ -1746,6 +1746,19 @@
           "source_line": 16
         },
         {
+          "name": "ti2_scale",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "1.0d4",
+          "default_value": "1.0d4",
+          "documentation": "",
+          "source": "src/profiles.f90",
+          "source_line": 17
+        },
+        {
           "name": "ni1_scale",
           "type": "real",
           "kind": "dp",
@@ -1756,7 +1769,7 @@
           "default_value": "0.5d20",
           "documentation": "",
           "source": "src/profiles.f90",
-          "source_line": 17
+          "source_line": 18
         },
         {
           "name": "ni2_scale",
@@ -1769,7 +1782,7 @@
           "default_value": "0.5d20",
           "documentation": "",
           "source": "src/profiles.f90",
-          "source_line": 18
+          "source_line": 19
         },
         {
           "name": "te_coef",
@@ -1786,7 +1799,7 @@
           "default_value": "[1.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0,  0.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0]",
           "documentation": "",
           "source": "src/profiles.f90",
-          "source_line": 20
+          "source_line": 21
         },
         {
           "name": "ti1_coef",
@@ -1803,7 +1816,7 @@
           "default_value": "[1.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0,  0.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0]",
           "documentation": "",
           "source": "src/profiles.f90",
-          "source_line": 22
+          "source_line": 23
         },
         {
           "name": "ti2_coef",
@@ -1820,7 +1833,7 @@
           "default_value": "[1.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0,  0.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0]",
           "documentation": "",
           "source": "src/profiles.f90",
-          "source_line": 24
+          "source_line": 25
         },
         {
           "name": "ni1_coef",
@@ -1837,7 +1850,7 @@
           "default_value": "[1.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0,  0.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0]",
           "documentation": "",
           "source": "src/profiles.f90",
-          "source_line": 26
+          "source_line": 27
         },
         {
           "name": "ni2_coef",
@@ -1854,7 +1867,7 @@
           "default_value": "[1.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0,  0.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0]",
           "documentation": "",
           "source": "src/profiles.f90",
-          "source_line": 28
+          "source_line": 29
         },
         {
           "name": "te_p1",
@@ -1867,7 +1880,7 @@
           "default_value": "1.0d0",
           "documentation": "",
           "source": "src/profiles.f90",
-          "source_line": 31
+          "source_line": 32
         },
         {
           "name": "te_p2",
@@ -1880,7 +1893,7 @@
           "default_value": "0.0d0",
           "documentation": "",
           "source": "src/profiles.f90",
-          "source_line": 31
+          "source_line": 32
         },
         {
           "name": "ti1_p1",
@@ -1893,7 +1906,7 @@
           "default_value": "1.0d0",
           "documentation": "",
           "source": "src/profiles.f90",
-          "source_line": 32
+          "source_line": 33
         },
         {
           "name": "ti1_p2",
@@ -1906,7 +1919,7 @@
           "default_value": "0.0d0",
           "documentation": "",
           "source": "src/profiles.f90",
-          "source_line": 32
+          "source_line": 33
         },
         {
           "name": "ti2_p1",
@@ -1919,7 +1932,7 @@
           "default_value": "1.0d0",
           "documentation": "",
           "source": "src/profiles.f90",
-          "source_line": 33
+          "source_line": 34
         },
         {
           "name": "ti2_p2",
@@ -1932,7 +1945,7 @@
           "default_value": "0.0d0",
           "documentation": "",
           "source": "src/profiles.f90",
-          "source_line": 33
+          "source_line": 34
         },
         {
           "name": "ni1_p1",
@@ -1945,7 +1958,7 @@
           "default_value": "1.0d0",
           "documentation": "",
           "source": "src/profiles.f90",
-          "source_line": 34
+          "source_line": 35
         },
         {
           "name": "ni1_p2",
@@ -1958,7 +1971,7 @@
           "default_value": "0.0d0",
           "documentation": "",
           "source": "src/profiles.f90",
-          "source_line": 34
+          "source_line": 35
         },
         {
           "name": "ni2_p1",
@@ -1971,7 +1984,7 @@
           "default_value": "1.0d0",
           "documentation": "",
           "source": "src/profiles.f90",
-          "source_line": 35
+          "source_line": 36
         },
         {
           "name": "ni2_p2",
@@ -1984,7 +1997,7 @@
           "default_value": "0.0d0",
           "documentation": "",
           "source": "src/profiles.f90",
-          "source_line": 35
+          "source_line": 36
         }
       ]
     },
