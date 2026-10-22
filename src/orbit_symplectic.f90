@@ -24,6 +24,8 @@ use orbit_symplectic_euler1, only: sympl_euler1_residual, sympl_euler1_jacobian,
   sympl_euler1_newton_iter, sympl_euler1_extrapolate_field, &
   sympl_euler1_advance_angles
 use orbit_rk_core, only: rk_gauss_residual, rk_gauss_jacobian, rk_solve, MODEL_GC
+    use orbit_symplectic_darboux, only: darboux_enabled, orbit_timestep_sympl_darboux, &
+                                        darboux_field_values, darboux_set_stages
 use vector_potentail_mod, only: torflux
 use diag_counters, only: count_event, EVT_NEWTON1_MAXIT, EVT_NEWTON2_MAXIT, &
   EVT_RK_GAUSS_MAXIT, EVT_RK_LOBATTO_MAXIT, EVT_FIXPOINT_MAXIT, EVT_R_NEGATIVE, &
@@ -160,8 +162,10 @@ recursive subroutine advance_retry_interval(si, f, stepper, interval, depth, &
   si = initial_integrator
   f = initial_field
   si%dt = interval
-  recoverable = status == SYMPLECTIC_STEP_MAXITER .or. &
-    status == SYMPLECTIC_STEP_LINEAR_SOLVE
+        ! The Cartesian chart has no recovery path: its steps either converge or
+        ! fail.
+        recoverable = (status == SYMPLECTIC_STEP_MAXITER .or. &
+                   status == SYMPLECTIC_STEP_LINEAR_SOLVE) .and. .not. darboux_enabled()
   if (.not. symplectic_newton_warning_mode .or. .not. recoverable .or. &
       depth >= max_retry_depth) then
     if (recoverable .and. depth >= max_retry_depth) &
@@ -244,7 +248,11 @@ recursive subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
 
   si%z = z
 
-  call eval_field(f, z(1), z(2), z(3), 0)
+        if (darboux_enabled()) then
+            call darboux_field_values(z(1), z(2), z(3), f)
+        else
+            call eval_field(f, z(1), z(2), z(3), 0)
+        end if
   call get_val(f, si%z(4)) ! for pth
   si%pthold = f%pth
 
@@ -296,6 +304,20 @@ recursive subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
       print *, 'invalid mode for orbit_timestep_sympl: ', mode_init
       error stop
   end select
+        si%chart_valid = .false.
+        if (darboux_enabled()) then
+            ! Cartesian canonical chart: midpoint and Gauss1-4 step in the global
+            ! Darboux chart (orbit_symplectic_darboux), configured with its stages.
+            select case (mode_init)
+            case (MIDPOINT, GAUSS1, GAUSS2, GAUSS3, GAUSS4)
+                call darboux_set_stages(max(1, mode_init - 3))
+                raw_timestep_sympl => orbit_timestep_sympl_darboux
+            case (RK45)
+                continue
+            case default
+                error stop "canonical_chart = 'cartesian' requires integmode 3-7"
+            end select
+        end if
   if (mode_init /= RK45 .and. sympl_rmax <= 1d0) then
     orbit_timestep_sympl => orbit_timestep_sympl_with_boundary
   else if (mode_init /= RK45) then
@@ -1947,7 +1969,11 @@ subroutine locate_symplectic_boundary(accepted_integrator, accepted_field, &
         si%dt = accepted_integrator%dt
         si%ntau = accepted_integrator%ntau
         si%z(1) = sympl_rmax
-        call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
+                    if (darboux_enabled()) then
+                        call darboux_field_values(si%z(1), si%z(2), si%z(3), f)
+                    else
+                        call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
+                    end if
         call get_val(f, si%z(4))
         event_fraction = fraction_low
         status = SYMPLECTIC_STEP_BOUNDARY

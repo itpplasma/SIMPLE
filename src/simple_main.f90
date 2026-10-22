@@ -56,6 +56,7 @@ module simple_main
         stl_wall_finalize, &
         stl_wall_first_hit_segment_with_normal
     use libneo_coordinates, only: chartmap_coordinate_system_t
+    use orbit_symplectic_darboux, only: darboux_enabled
     use orbit_symplectic_base, only: symplectic_integrator_t, &
         SYMPLECTIC_STEP_BOUNDARY, &
         SYMPLECTIC_STEP_OUTSIDE_DOMAIN, SYMPLECTIC_STEP_MAXITER, &
@@ -529,13 +530,17 @@ contains
         use field_can_mod, only: init_field_can_boozer_chartmap_compact
         use new_vmec_stuff_mod, only: nper
         use orbit_symplectic_base, only: sympl_rmax
+        use params, only: canonical_chart
+        use field_can_mod, only: set_regular_axis_field
+        use orbit_symplectic_darboux, only: darboux_configure, &
+                            DARBOUX_FIELD_NONE, DARBOUX_FIELD_TEST, DARBOUX_FIELD_BOOZER
 
         character(*), intent(in) :: vmec_file
         type(tracer_t), intent(inout) :: self
         integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
         class(magnetic_field_t), allocatable :: field_temp
         character(:), allocatable :: vmec_equilibrium_file
-        logical :: use_boozer_chartmap, use_spectre, use_vmecpp
+        logical :: use_boozer_chartmap, use_spectre, use_vmecpp, cartesian_chart
 
         ! Release the previous FO tables when a library run changes fields.
         call spectre_fo_field_clear
@@ -554,6 +559,24 @@ contains
         if (len_trim(field_input) > 0 .and. .not. use_vmecpp) then
             use_spectre = is_spectre_file(field_input)
             if (.not. use_spectre) use_boozer_chartmap = is_boozer_chartmap(field_input)
+        end if
+
+        ! The Cartesian canonical chart evaluates the regular near-axis field:
+        ! libneo builds it for Boozer fields, the test field is analytic.
+        cartesian_chart = trim(canonical_chart) == 'cartesian'
+        if (cartesian_chart .and. use_spectre) error stop &
+            "canonical_chart = 'cartesian' does not support SPECTRE fields"
+        if (cartesian_chart .and. (aintegmode < 3 .or. aintegmode > 7)) error stop &
+            "canonical_chart = 'cartesian' requires integmode 3-7"
+        call set_regular_axis_field(cartesian_chart)
+        if (.not. cartesian_chart) then
+            call darboux_configure(DARBOUX_FIELD_NONE, 1)
+        else if (isw_field_type == TEST) then
+            call darboux_configure(DARBOUX_FIELD_TEST, max(1, aintegmode - 3))
+        else if (isw_field_type == BOOZER) then
+            call darboux_configure(DARBOUX_FIELD_BOOZER, max(1, aintegmode - 3))
+        else
+            error stop "canonical_chart = 'cartesian' requires a Boozer or test field"
         end if
 
         if (gpu_compact_init) then
@@ -2742,7 +2765,8 @@ contains
                     exit
                 end if
                 if (ierr_orbit .ne. 0 .and. &
-                    symplectic_newton_warning_mode) then
+                    symplectic_newton_warning_mode .and. &
+                    .not. darboux_enabled()) then
                     ! A failed symplectic map has restored its last accepted
                     ! state. Advance that same interval with the established
                     ! adaptive RK/axis path, then thread-locally reseed the
@@ -3099,7 +3123,8 @@ contains
                     exit
                 end if
                 if (ierr_orbit .ne. 0 .and. &
-                    symplectic_newton_warning_mode) then
+                    symplectic_newton_warning_mode .and. &
+                    .not. darboux_enabled()) then
                     ! Recover from the reference momentum, not the H-derived
                     ! z(4) of the symplectic state, so that RK, validation and
                     ! LCFS interpolation share one start state.
