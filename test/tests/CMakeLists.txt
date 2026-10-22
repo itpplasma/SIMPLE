@@ -992,7 +992,7 @@ add_executable(test_profile_radius.x test_profile_radius.f90)
 target_link_libraries(test_profile_radius.x simple)
 add_dependencies(test_profile_radius.x chartmap_test_data)
 foreach(case IN ITEMS rho_lcfs vmec canflux boozer meiss albert refcoords
-        meiss_chartmap spectre)
+        meiss_chartmap spectre label label_outside)
     if(case STREQUAL "spectre")
         set(case_file ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5)
     else()
@@ -1007,6 +1007,8 @@ foreach(case IN ITEMS rho_lcfs vmec canflux boozer meiss albert refcoords
     set_tests_properties(test_profile_radius_${case} PROPERTIES
         LABELS "unit;collisions" TIMEOUT 300)
 endforeach()
+set_tests_properties(test_profile_radius_label_outside PROPERTIES
+    PASS_REGULAR_EXPRESSION "position outside the profile label table")
 
 # Chartmap pipeline unit tests (issue #227)
 add_executable(test_chartmap_pipeline.x test_chartmap_pipeline.f90)

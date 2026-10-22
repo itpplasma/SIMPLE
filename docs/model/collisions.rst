@@ -98,7 +98,18 @@ radius; for 6 the enclosed toroidal flux of the SPECTRE chart
 radius gives :math:`s = \rho^2`, and ``vmec_extended``/``vmec_to_wall``
 charts give :math:`s = (\rho/\rho_\mathrm{lcfs})^2`. Radii without
 toroidal-flux meaning (geometric or poloidal chartmaps) are accepted only
-for radially uniform ``&profiles``.
+for radially uniform ``&profiles``, unless ``&config profile_label_file``
+supplies the profile radius as a table :math:`s(R,\varphi,Z)`. With
+``integ_coords = 5`` the label is then interpolated trilinearly at the
+marker's physical position, which the reference coordinates give, and
+periodically in :math:`\varphi` modulo :math:`2\pi/N_\mathrm{fp}`. The
+netCDF file has dimensions ``R``, ``Z`` and ``phi``, uniform coordinate
+variables ``R(R)`` and ``Z(Z)`` with ``units`` ``"m"`` or ``"cm"``,
+``phi(phi)`` at :math:`(i-1)\,2\pi/(N_\mathrm{fp} n_\varphi)`, the
+variable ``label(phi, Z, R)`` and the integer global attribute ``nfp``.
+The table has to cover the whole tracing domain, and a position outside
+it stops the run. How the label is constructed, for example a flux label
+of a separate equilibrium, is the user's model choice.
 
 Discrete step
 -------------

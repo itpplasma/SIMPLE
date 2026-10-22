@@ -25,7 +25,7 @@ and ``DOC/config.md`` for additional usage, units and option interactions.
 &config
 -------
 
-Source: ``src/params.f90:240``.
+Source: ``src/params.f90:243``.
 
 .. list-table::
    :header-rows: 1
@@ -565,6 +565,12 @@ Source: ``src/params.f90:240``.
      - ``scalar``
      - ``''``
      -
+   * - ``profile_label_file``
+     - ``character(len=1000)``
+     - ``default``
+     - ``scalar``
+     - ``''``
+     - Optional netCDF profile label s(R, phi, Z) for the collision profiles with integ_coords = REFCOORDS (format: src/profile_label.f90).
    * - ``wall_input``
      - ``character(len=1000)``
      - ``default``
