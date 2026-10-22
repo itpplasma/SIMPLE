@@ -1458,8 +1458,7 @@ contains
                           collision_model, nu_star_standard, lorentz_major_radius_cm, &
                           lorentz_iota, lorentz_nu, dchichi, slowrate, &
                           dchichi_norm, slowrate_norm, v0, n_d, n_e
-        use simple_profiles, only: Te_scale, Ti1_scale, Ti2_scale, &
-            ni1_scale, ni2_scale
+        use simple_profiles, only: get_plasma_params
 
         real(dp) :: v0_coll, ealpha
         real(dp) :: densi1, densi2, tempi1, tempi2, tempe
@@ -1476,11 +1475,12 @@ contains
             slowrate_norm = 0.0_dp
             return
         end if
-        densi1 = ni1_scale*1.0d-6
-        densi2 = ni2_scale*1.0d-6
-        tempi1 = Ti1_scale
-        tempi2 = Ti2_scale
-        tempe = Te_scale
+        call get_plasma_params(0.0_dp, tempe, tempi1, tempi2, densi1, densi2)
+        tempe = max(tempe, 1.0_dp)
+        tempi1 = max(tempi1, 1.0_dp)
+        tempi2 = max(tempi2, 1.0_dp)
+        densi1 = densi1*1.0d-6
+        densi2 = densi2*1.0d-6
 
         call loacol_alpha(am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, tempe, &
                           ealpha, v0_coll, dchichi, slowrate, dchichi_norm, &

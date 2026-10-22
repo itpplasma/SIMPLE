@@ -8,6 +8,7 @@ module simple_profiles
     integer, parameter :: TWO_POWER = 2
 
     character(len=32) :: profile_type = "power_series"
+    character(len=1000) :: profile_file = ""
     integer :: active_profile = POWER_SERIES
     real(dp), allocatable, private :: table_radius(:), table_values(:, :)
 
@@ -34,7 +35,7 @@ module simple_profiles
     real(dp) :: ni1_p1 = 1.0d0, ni1_p2 = 0.0d0
     real(dp) :: ni2_p1 = 1.0d0, ni2_p2 = 0.0d0
 
-    namelist /profiles/ profile_type, &
+    namelist /profiles/ profile_type, profile_file, &
         Te_scale, Ti1_scale, Ti2_scale, ni1_scale, ni2_scale, &
         Te_coef, Ti1_coef, Ti2_coef, ni1_coef, ni2_coef, &
         Te_p1, Te_p2, Ti1_p1, Ti1_p2, Ti2_p1, Ti2_p2, &
@@ -51,7 +52,10 @@ contains
 
         read (unit, nml=profiles, iostat=ios)
         close (unit)
+        if (ios > 0) error stop 'Invalid profiles namelist'
         call select_active_profile
+        if (allocated(table_radius)) deallocate (table_radius, table_values)
+        if (len_trim(profile_file) > 0) call read_profile_table(profile_file)
     end subroutine read_profiles
 
     subroutine reset_profiles
@@ -81,7 +85,7 @@ contains
         end select
     end subroutine select_active_profile
 
-    !> Library plasma table: reference radius, Te, Ti1, Ti2 [eV], ni1, ni2 [m^-3].
+    !> Library plasma table: toroidal flux s (0 to smax >= 1), Te, Ti1, Ti2 [eV], ni1, ni2 [m^-3].
     subroutine set_profile_table(n, table, status)
         use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
         integer, intent(in) :: n
@@ -92,7 +96,7 @@ contains
         if (n < 2) return
         if (.not. all(ieee_is_finite(table))) return
         if (any(table(2:6, :) < 0.0_dp)) return
-        if (table(1, 1) /= 0.0_dp .or. table(1, n) /= 1.0_dp) return
+        if (table(1, 1) /= 0.0_dp .or. table(1, n) < 1.0_dp) return
         if (any(table(1, 2:n) <= table(1, 1:n - 1))) return
         if (allocated(table_radius)) deallocate (table_radius, table_values)
         allocate (table_radius(n), table_values(5, n))
@@ -100,6 +104,32 @@ contains
         table_values = table(2:6, :)
         status = 0
     end subroutine set_profile_table
+
+    subroutine read_profile_table(filename)
+        character(len=*), intent(in) :: filename
+        real(dp), allocatable :: table(:, :)
+        integer :: unit, n, i, ios, status
+
+        open (newunit=unit, file=filename, status='old', action='read', iostat=ios)
+        if (ios /= 0) error stop 'Cannot open profile_file'
+        read (unit, *, iostat=ios) n
+        if (ios /= 0) error stop 'Cannot read profile_file row count'
+        if (n < 2) error stop 'profile_file needs at least two rows'
+        allocate (table(6, n))
+        do i = 1, n
+            read (unit, *, iostat=ios) table(:, i)
+            if (ios /= 0) error stop 'Cannot read profile_file row'
+        end do
+        close (unit)
+        call set_profile_table(n, table, status)
+        if (status /= 0) error stop 'Invalid profile_file values or radius grid'
+    end subroutine read_profile_table
+
+    function profile_max_s() result(smax)
+        real(dp) :: smax
+        smax = 1.0_dp
+        if (allocated(table_radius)) smax = table_radius(size(table_radius))
+    end function profile_max_s
 
     subroutine get_plasma_params(s, Te, Ti1, Ti2, ni1, ni2)
         use plag_coeff_sub, only: plag_coeff
@@ -109,7 +139,7 @@ contains
         integer :: i
 
         if (allocated(table_radius)) then
-            radius = max(0.0_dp, min(1.0_dp, s))
+            radius = max(0.0_dp, min(table_radius(size(table_radius)), s))
             i = max(1, min(size(table_radius) - 1, count(table_radius <= radius)))
             call plag_coeff(2, 0, radius, table_radius(i:i + 1), coefficient)
             values = matmul(table_values(:, i:i + 1), coefficient(0, :))
