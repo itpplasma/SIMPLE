@@ -94,6 +94,11 @@ Kasilov and Kernbichler 2020, JPP).
 Adaptive Runge–Kutta (``integmode = 0``)
 ----------------------------------------
 
+The adaptive error scale has an absolute floor of one for the dimensionless
+radial coordinate, pitch, and Cartesian axis variables. Their error bound
+therefore remains finite when they pass through zero. The remaining state
+components retain their relative error scale.
+
 The Cash–Karp RK5(4) integrator of libneo (``odeint_allroutines``) solves the
 non-canonical guiding-centre equations in any coordinates, with relative
 tolerance ``relerr`` and :math:`w = v/v_0` (``velo_can`` in

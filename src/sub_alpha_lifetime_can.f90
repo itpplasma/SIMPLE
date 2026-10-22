@@ -18,6 +18,19 @@ module alpha_lifetime_sub
     ! regularized step and must fall through to the next recovery method.
     real(dp), parameter :: toroidal_energy_shell_tolerance = 1.0e-5_dp
 
+    ! Absolute error-scale floors for the adaptive guiding-centre RK state.
+    ! The error scale is otherwise purely relative, so a component that passes
+    ! through zero drives the step size to roundoff: the solve then exhausts
+    ! its step limit or underflows the step size (native exit code 104).
+    ! This happens for the pitch lambda=v_par/v, zero at every mirror point,
+    ! for the polar radial coordinate on approach to the axis, and for the
+    ! Cartesian axis variables X and Y. All of them have natural scale one.
+    ! Angles, phi and the momentum keep their relative scale.
+    real(dp), parameter :: polar_ode_scale_floor(axis_rhs_count) = &
+                           [1.0_dp, 0.0_dp, 0.0_dp, 0.0_dp, 1.0_dp]
+    real(dp), parameter :: axis_ode_scale_floor(axis_rhs_count) = &
+                           [1.0_dp, 1.0_dp, 0.0_dp, 0.0_dp, 1.0_dp]
+
 contains
 
     subroutine bstar_parallel_factor(z, factor)
@@ -830,22 +843,25 @@ contains
             real(dp), intent(inout) :: z(5)
             real(dp) :: context
 
-            context=axis_floor
-            if(present(step_limit)) then
-                if(near_axis) then
-                    call odeint_allroutines(z,5,context,tau1,tau2,relerr, &
-                        velo_axis_context,step_limit=step_limit)
+                context = axis_floor
+                if (present(step_limit)) then
+                    if (near_axis) then
+                        call odeint_allroutines(z, 5, context, tau1, tau2, relerr, &
+                                             velo_axis_context, step_limit=step_limit, &
+                                                scale_floor=axis_ode_scale_floor)
+                    else
+                        call odeint_allroutines(z, 5, context, tau1, tau2, relerr, &
+                                              velo_can_context, step_limit=step_limit, &
+                                                scale_floor=polar_ode_scale_floor)
+                    end if
+                else if (near_axis) then
+                    call odeint_allroutines(z, 5, context, tau1, tau2, relerr, &
+                                    velo_axis_context, scale_floor=axis_ode_scale_floor)
                 else
-                    call odeint_allroutines(z,5,context,tau1,tau2,relerr, &
-                        velo_can_context,step_limit=step_limit)
-                endif
-            else if(near_axis) then
-                call odeint_allroutines(z,5,context,tau1,tau2,relerr, &
-                    velo_axis_context)
-            else
-                call odeint_allroutines(z,5,tau1,tau2,relerr,velo_can)
-            endif
-        end subroutine integrate_axis_segment
+                    call odeint_allroutines(z, 5, tau1, tau2, relerr, velo_can, &
+                                            scale_floor=polar_ode_scale_floor)
+                end if
+            end subroutine integrate_axis_segment
 
         subroutine velo_can_context(tau,z,vz,context)
             implicit none
