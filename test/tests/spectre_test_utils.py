@@ -32,7 +32,11 @@ def axis_volume(source):
 
             for key in ("input/physics/Igeometry", "input/physics/Nfp",
                         "input/physics/Mpol",
-                        "input/physics/Ntor", "output/mn", "output/im", "output/in"):
+                        "input/physics/Ntor", "input/physics/phiedge",
+                        "output/mn", "output/im", "output/in"):
+                # phiedge is SPECTRE's global edge toroidal flux, kept unchanged
+                # because real SPECTRE output always carries it and libneo's
+                # reader requires it.
                 write(key, src[key][:])
             for key in ("input/physics/Nvol", "output/Mvol"):
                 write(key, [1])
