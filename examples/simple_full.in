@@ -66,6 +66,8 @@ field_input = ''                 ! field file: VMEC wout (.nc), Boozer chartmap 
 !                                  SPECTRE (.h5) or coils file; '' = use netcdffile
 coord_input = ''                 ! reference coordinate file: VMEC wout or chartmap (.nc);
 !                                  '' = netcdffile, then field_input
+profile_label_file = ''          ! netCDF label s(R,phi,Z) as &profiles radius for
+!                                  integ_coords = 5 (src/profile_label.f90); '' = chart radius
 netcdffile = ''                  ! VMEC wout file; deprecated fallback for field_input and
 !                                  coord_input; '' = 'wout.nc' where a VMEC file is required
 radial_electric_potential_slope = 0d0 ! Boozer integration: Phi(s) = slope*s added to H; 0 = off

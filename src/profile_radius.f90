@@ -7,13 +7,18 @@ module profile_radius
     !> their own radius and map back to the reference coordinates of their
     !> source field; REFCOORDS integrates in the reference coordinates; SPECTRE
     !> integrates in the stacked volume chart rho_g in [0, Mvol].
+    !>
+    !> With &config profile_label_file, REFCOORDS takes the profile radius from
+    !> a tabulated label at the physical position of the marker instead
+    !> (module profile_label), e.g. for geometric chartmaps without flux
+    !> meaning.
     use, intrinsic :: iso_fortran_env, only: dp => real64
 
     implicit none
 
     private
     public :: init_profile_radius, set_profile_radius, profile_s
-    public :: RADIUS_S, RADIUS_RHO_TOR, RADIUS_SPECTRE, RADIUS_NONE
+    public :: RADIUS_S, RADIUS_RHO_TOR, RADIUS_SPECTRE, RADIUS_NONE, RADIUS_LABEL
 
     !> Reference radius is s.
     integer, parameter :: RADIUS_S = 1
@@ -23,6 +28,8 @@ module profile_radius
     integer, parameter :: RADIUS_SPECTRE = 3
     !> No toroidal-flux meaning (geometric or poloidal radius).
     integer, parameter :: RADIUS_NONE = 4
+    !> Tabulated profile label at the physical position (profile_label_file).
+    integer, parameter :: RADIUS_LABEL = 5
 
     abstract interface
         function radius_i(z) result(r)
@@ -35,6 +42,7 @@ module profile_radius
     !> Set by set_profile_radius; called from profile_s only when needed.
     procedure(radius_i), pointer, save :: reference_radius => null()
     procedure(radius_i), pointer, save :: spectre_s_of_rho => null()
+    procedure(radius_i), pointer, save :: label_s => null()
 
     integer, save :: radius_kind = RADIUS_S
     logical, save :: map_to_reference = .false.
@@ -48,14 +56,21 @@ contains
         logical, intent(in) :: use_integ_to_ref
         real(dp), intent(in), optional :: rho_lcfs
 
-        if (kind < RADIUS_S .or. kind > RADIUS_NONE) &
+        if (kind < RADIUS_S .or. kind > RADIUS_LABEL) &
             error stop 'set_profile_radius: unknown radius kind'
         radius_kind = kind
         map_to_reference = use_integ_to_ref
         reference_radius => null()
         spectre_s_of_rho => null()
+        label_s => null()
         if (use_integ_to_ref) reference_radius => integ_to_ref_radius_meiss
         if (kind == RADIUS_SPECTRE) spectre_s_of_rho => spectre_s
+        if (kind == RADIUS_LABEL) then
+            if (use_integ_to_ref) &
+                error stop 'set_profile_radius: a profile label needs '// &
+                'reference coordinates'
+            label_s => label_s_refcoords
+        end if
         rho_scale = 1.0_dp
         if (present(rho_lcfs)) then
             if (.not. (rho_lcfs > 0.0_dp .and. rho_lcfs <= 1.0_dp)) &
@@ -75,7 +90,21 @@ contains
         use field_vmec, only: vmec_field_t
         use field_splined, only: splined_field_t
         use reference_coordinates, only: ref_coords
-        use params, only: coord_input
+        use params, only: coord_input, profile_label_file
+        use profile_label, only: load_profile_label
+
+        if (len_trim(profile_label_file) > 0) then
+            ! The label replaces the chart radius; it needs the physical position,
+            ! which REFCOORDS states give through the reference coordinates.
+            if (isw_field_type /= REFCOORDS) &
+                error stop 'init_profile_radius: profile_label_file needs '// &
+                'integ_coords = REFCOORDS'
+            if (.not. allocated(ref_coords)) &
+                error stop 'init_profile_radius: no reference coordinates'
+            call load_profile_label(profile_label_file)
+            call set_profile_radius(RADIUS_LABEL, .false.)
+            return
+        end if
 
         select case (isw_field_type)
         case (TEST, CANFLUX, VMEC, BOOZER)
@@ -111,7 +140,8 @@ contains
                 isw_field_type, ' with coord_input = ', trim(coord_input), &
                 ' has no toroidal-flux meaning.'
             error stop 'radially varying &profiles need a toroidal-flux radius; '// &
-                'use a rho_tor/psi_tor_norm chartmap, VMEC or radially uniform profiles'
+                'use a rho_tor/psi_tor_norm chartmap, VMEC, a profile_label_file '// &
+                'or radially uniform profiles'
         end if
 
     contains
@@ -192,11 +222,25 @@ contains
         case (RADIUS_SPECTRE)
             ! SPECTRE integrates in rho_g itself, so r = z(1) here.
             s = spectre_s_of_rho(z)
+        case (RADIUS_LABEL)
+            s = label_s(z)
         case default
             ! RADIUS_NONE is accepted only for radially uniform profiles.
             s = r
         end select
     end function profile_s
+
+    !> Profile label at the physical position of the REFCOORDS state z.
+    function label_s_refcoords(z) result(s)
+        use reference_coordinates, only: ref_coords
+        use profile_label, only: profile_label_at
+        real(dp), intent(in) :: z(3)
+        real(dp) :: s
+        real(dp) :: x(3)
+
+        call ref_coords%evaluate_cyl(z, x)
+        s = profile_label_at(x)
+    end function label_s_refcoords
 
     function spectre_s(z) result(s)
         use magfie_sub, only: spectre_field

@@ -4,7 +4,7 @@
   "namelists": {
     "config": {
       "source": "src/params.f90",
-      "source_line": 240,
+      "source_line": 243,
       "variables": [
         {
           "name": "notrace_passing",
@@ -1313,6 +1313,19 @@
           "source_line": 198
         },
         {
+          "name": "profile_label_file",
+          "type": "character",
+          "kind": "",
+          "length": "1000",
+          "shape": [],
+          "extent": [],
+          "default": "''",
+          "default_value": "''",
+          "documentation": "Optional netCDF profile label s(R, phi, Z) for the collision profiles with integ_coords = REFCOORDS (format: src/profile_label.f90).",
+          "source": "src/params.f90",
+          "source_line": 201
+        },
+        {
           "name": "wall_input",
           "type": "character",
           "kind": "",
@@ -1323,7 +1336,7 @@
           "default_value": "''",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 199
+          "source_line": 202
         },
         {
           "name": "wall_units",
@@ -1336,7 +1349,7 @@
           "default_value": "'m'",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 200,
+          "source_line": 203,
           "validation": {
             "choices": [
               "m",
@@ -1355,7 +1368,7 @@
           "default_value": "'auto'",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 204,
+          "source_line": 207,
           "validation": {
             "choices": [
               "auto",
@@ -1376,7 +1389,7 @@
           "default_value": "-1000",
           "documentation": "Sentinel: -1000 means user did not set it",
           "source": "src/params.f90",
-          "source_line": 206
+          "source_line": 209
         },
         {
           "name": "crossing_level",
@@ -1389,7 +1402,7 @@
           "default_value": "3",
           "documentation": "SPECTRE interface treatment: only full orbit (3) is supported.",
           "source": "src/params.f90",
-          "source_line": 208,
+          "source_line": 211,
           "validation": {
             "choices": [
               3
@@ -1407,7 +1420,7 @@
           "default_value": "1.5_dp",
           "documentation": "Full orbit near SPECTRE interfaces: entry distance in radial gyroradii and the relative tolerance of RK45 on the sharp per-volume field. 1.5 keeps the switch's p_zeta invariant as at 3 (entry 1 breaks it) at about half the FO time (concept/spectre_loss_study/results/fo-residence).",
           "source": "src/params.f90",
-          "source_line": 213,
+          "source_line": 216,
           "validation": {
             "positive": true
           }
@@ -1423,7 +1436,7 @@
           "default_value": "1.0e-9_dp",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 214,
+          "source_line": 217,
           "validation": {
             "positive": true
           }
@@ -1443,7 +1456,7 @@
           "default_value": "(/32, 64, 32/)",
           "documentation": "Per-volume FO spline points: rho, theta, zeta per field period.",
           "source": "src/params.f90",
-          "source_line": 216
+          "source_line": 219
         },
         {
           "name": "spectre_sbeg_is_toroidal_flux",
@@ -1456,7 +1469,7 @@
           "default_value": ".false.",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 217
+          "source_line": 220
         },
         {
           "name": "spectre_ncon_r",
@@ -1469,7 +1482,7 @@
           "default_value": "48",
           "documentation": "SPECTRE per-volume Meiss construction grid (n_r, n_th, n_phi). Each volume allocates rank-3 arrays plus batch splines of this size, so the total peak memory scales as Mvol*n_r*n_th*n_phi. spectre_ncon_phi = -1 means automatic: 32 for fields with toroidal harmonics and a minimal phi grid for axisymmetric fields (all n = 0), the dominant memory saver for tokamak cases. A positive value forces that phi count verbatim, bypassing the axisymmetric clamp.",
           "source": "src/params.f90",
-          "source_line": 226,
+          "source_line": 229,
           "validation": {
             "min": 1
           }
@@ -1485,7 +1498,7 @@
           "default_value": "48",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 227,
+          "source_line": 230,
           "validation": {
             "min": 1
           }
@@ -1501,7 +1514,7 @@
           "default_value": "-1",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 228
+          "source_line": 231
         },
         {
           "name": "spectre_ncon_order",
@@ -1514,7 +1527,7 @@
           "default_value": "5",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 229,
+          "source_line": 232,
           "validation": {
             "min": 1
           }
@@ -1530,7 +1543,7 @@
           "default_value": "1000000",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 230,
+          "source_line": 233,
           "validation": {
             "min": 1
           }
@@ -1546,7 +1559,7 @@
           "default_value": "1.0e-2_dp",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 231,
+          "source_line": 234,
           "validation": {
             "positive": true
           }
@@ -1646,7 +1659,7 @@
           "default_value": ".true.",
           "documentation": "Removed &config keys. They are still read so that old input files run; a value other than the historical default prints a warning.",
           "source": "src/params.f90",
-          "source_line": 235
+          "source_line": 238
         },
         {
           "name": "loopskip",
@@ -1659,7 +1672,7 @@
           "default_value": "0",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 236
+          "source_line": 239
         },
         {
           "name": "bmod_ref",
@@ -1672,7 +1685,7 @@
           "default_value": "5.0d4",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 237
+          "source_line": 240
         },
         {
           "name": "macrostep_log_ratio",
@@ -1685,7 +1698,7 @@
           "default_value": "1.0d3",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 238
+          "source_line": 241
         }
       ]
     },
