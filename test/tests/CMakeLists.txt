@@ -1473,6 +1473,12 @@ add_test(NAME test_gc_gauss_endpoint COMMAND test_gc_gauss_endpoint.x)
 set_tests_properties(test_gc_gauss_endpoint PROPERTIES
     LABELS "unit;integrator;regression" TIMEOUT 30 ENVIRONMENT "OMP_NUM_THREADS=1")
 
+add_executable(test_euler_endpoint_decode.x test_euler_endpoint_decode.f90)
+target_link_libraries(test_euler_endpoint_decode.x simple)
+add_test(NAME test_euler_endpoint_decode COMMAND test_euler_endpoint_decode.x)
+set_tests_properties(test_euler_endpoint_decode PROPERTIES
+    LABELS "unit;integrator;regression" TIMEOUT 30 ENVIRONMENT "OMP_NUM_THREADS=1")
+
 # Concept-only Gauss2 full orbit: not part of libsimple and not selectable
 # from simple.in. Built here so the generated-kernel proof chain stays executable.
 set(FO_PROOF_DIR "${CMAKE_SOURCE_DIR}/concept/fo_symplectic_proof")
