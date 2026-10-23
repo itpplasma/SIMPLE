@@ -4,6 +4,7 @@ module collis_alp
 
     integer, parameter :: nsorts = 3
     integer, parameter :: N_S_GRID = 101
+    real(wp) :: collision_s_max = 1.0_wp
 
     real(wp), dimension(nsorts) :: efcolf, velrat, enrat
     real(wp), dimension(nsorts, N_S_GRID) :: efcolf_grid, velrat_grid, enrat_grid
@@ -244,7 +245,7 @@ contains
 
     subroutine init_collision_profiles(am1, am2, Z1, Z2, ealpha, v0, &
                                        test_mass, test_charge)
-        use simple_profiles, only: get_plasma_params
+        use simple_profiles, only: get_plasma_params, profile_max_s
 
         real(wp), intent(in) :: am1, am2, Z1, Z2, ealpha, v0
         real(wp), intent(in), optional :: test_mass, test_charge
@@ -253,8 +254,9 @@ contains
         real(wp) :: v0_loc
         integer :: i
 
+        collision_s_max = profile_max_s()
         do i = 1, N_S_GRID
-            s = dble(i - 1)/dble(N_S_GRID - 1)
+            s = collision_s_max*dble(i - 1)/dble(N_S_GRID - 1)
 
             call get_plasma_params(s, Te, Ti1, Ti2, ni1, ni2)
 
@@ -286,8 +288,8 @@ contains
         real(wp) :: s_clamped, s_norm, weight
         integer :: idx_lo, idx_hi
 
-        s_clamped = max(0.0d0, min(1.0d0, s))
-        s_norm = s_clamped*dble(N_S_GRID - 1)
+        s_clamped = max(0.0d0, min(collision_s_max, s))
+        s_norm = s_clamped*dble(N_S_GRID - 1)/collision_s_max
         idx_lo = max(1, min(N_S_GRID - 1, int(s_norm) + 1))
         idx_hi = idx_lo + 1
         weight = s_norm - dble(idx_lo - 1)

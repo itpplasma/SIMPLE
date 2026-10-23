@@ -180,3 +180,25 @@ References
 
 * J. D. Huba, NRL Plasma Formulary, NRL/PU/6790--19-640, Naval Research
   Laboratory (2019)
+
+Tabulated files and exterior plasma
+-----------------------------------
+
+Set ``profile_file = 'plasma.dat'`` in ``&profiles`` to read a radial table.
+The first line is the row count. Each following line contains
+``s Te Ti1 Ti2 ni1 ni2``, with temperatures in eV and ion densities in
+m\ :sup:`-3`. Radii must increase strictly from zero to a last radius at
+least one; every value must be finite and temperatures/densities nonnegative.
+The two ion species are selected by ``am1``, ``Z1``, ``am2``, ``Z2`` in
+``&config``. A main ion plus an impurity therefore supplies both ion
+backgrounds, with electron density fixed by quasineutrality.
+
+Tables override the analytic profiles. Linear interpolation is used between
+rows, with endpoint values held outside the table. Rows beyond ``s = 1``
+define an explicit exterior plasma. To model an exterior vacuum, extend the
+table to the desired exterior radius and set both ion densities to zero
+there. The collision grid has 101 points across the table's entire radial
+range, so resolve steep edge gradients in a radial convergence study.
+Without a table, the existing grid over ``[0, 1]`` and held edge coefficients
+are preserved. There is no automatic thermalization stop; ``trace_time``
+sets the observation window.

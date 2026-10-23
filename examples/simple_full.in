@@ -205,6 +205,7 @@ macrostep_log_ratio = 1d3
 &profiles
 ! Radial profiles f(s) for collisions and mode 7 births; s = normalized toroidal flux.
 ! Mode 7: species 1 = deuterium, species 2 = tritium.
+profile_file = ''               ! optional table: count, then s Te Ti1 Ti2 ni1 ni2
 profile_type = 'power_series'    ! 'power_series' or 'two_power'; other values = power_series
 Te_scale = 1d4                   ! electron temperature scale, eV
 Ti1_scale = 1d4                  ! ion species 1 temperature scale, eV
