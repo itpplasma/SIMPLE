@@ -25,6 +25,8 @@ program test_profile_radius
 
     real(dp), parameter :: s_known(3) = [0.09_dp, 0.25_dp, 0.64_dp]
     real(dp), parameter :: theta = 0.7_dp, phi = 0.3_dp
+    !> Synthetic profile label table (cases label, label_outside).
+    integer, parameter :: nfp_label = 3, label_nr = 7, label_nz = 5, label_nphi = 8
     character(len=64) :: mode
     character(len=1024) :: file
     type(tracer_t) :: norb
@@ -70,6 +72,11 @@ program test_profile_radius
                           legacy_differs=.true.)
     case ('spectre')
         call check_spectre(trim(file))
+    case ('label')
+        call check_label(trim(file), .false.)
+    case ('label_outside')
+        ! Must stop: the table does not cover the marker position.
+        call check_label(trim(file), .true.)
     case default
         error stop 'usage: test_profile_radius.x <case> [file]'
     end select
@@ -196,5 +203,120 @@ contains
         if (ierr /= 0) error stop 'SPECTRE axis flux label failed'
         call compare('spectre', label, [0.5_dp, theta, phi], 1.0e-12_dp)
     end subroutine check_spectre
+
+    subroutine check_label(chartmap_file, too_small)
+        !> profile_label_file on a REFCOORDS chart: profile_s must be the
+        !> tabulated label at the physical position, independently of the
+        !> chart radius. The analytic label is bilinear in (R, Z) plus a
+        !> periodic triangle wave in phi with kinks on grid nodes, which
+        !> trilinear interpolation reproduces exactly.
+        use reference_coordinates, only: ref_coords
+        use params, only: profile_label_file
+        use profile_label, only: profile_label_at
+        character(*), intent(in) :: chartmap_file
+        logical, intent(in) :: too_small
+        real(dp), parameter :: pi = 3.141592653589793238462643383279_dp
+        real(dp) :: u(3, 27), x(3, 27), box(5), xc(3)
+        integer :: i, j, k, n
+
+        isw_field_type = REFCOORDS
+        field_input = 'wout.nc'
+        coord_input = chartmap_file
+        call init_field(norb, 'wout.nc', 5, 5, 3, 0)
+        n = 0
+        do i = 1, 3
+            do j = 1, 3
+                do k = 1, 3
+                    n = n + 1
+                    u(:, n) = [0.3_dp*i, 0.7_dp + 1.9_dp*(j - 1), &
+                               0.1_dp + 0.37_dp*(k - 1)]
+                    call ref_coords%evaluate_cart(u(:, n), xc)
+                    x(:, n) = [hypot(xc(1), xc(2)), atan2(xc(2), xc(1)), xc(3)]
+                end do
+            end do
+        end do
+        ! box = R range, Z range [cm] and the label period 2*pi/nfp_label.
+        box = [minval(x(1, :)) - 7.0_dp, maxval(x(1, :)) + 11.0_dp, &
+               minval(x(3, :)) - 5.0_dp, maxval(x(3, :)) + 3.0_dp, &
+               2.0_dp*pi/nfp_label]
+        if (too_small) box(2) = box(1) + 0.5_dp*(maxval(x(1, :)) - box(1))
+        call write_label_file('profile_label.nc', box)
+        profile_label_file = 'profile_label.nc'
+        call init_profile_radius
+
+        do i = 1, n
+            call compare('label', analytic(x(:, i), box), u(:, i), 1.0e-12_dp)
+        end do
+        ! Periodicity in phi modulo 2*pi/nfp of the table.
+        do i = 1, n
+            xc = x(:, i) + [0.0_dp, real(i - 14, dp)*box(5), 0.0_dp]
+            if (abs(profile_label_at(xc) - analytic(x(:, i), box)) > 1.0e-12_dp) &
+                error stop 'profile label is not periodic in phi'
+        end do
+    end subroutine check_label
+
+    real(dp) function analytic(y, box)
+        real(dp), intent(in) :: y(3), box(5)
+        real(dp) :: a, b
+
+        a = (y(1) - box(1))/(box(2) - box(1))
+        b = (y(3) - box(3))/(box(4) - box(3))
+        analytic = 0.1_dp + 0.3_dp*a + 0.15_dp*b + 0.1_dp*a*b &
+                   + 0.4_dp*abs(modulo(y(2), box(5)) - 0.5_dp*box(5))/box(5)
+    end function analytic
+
+    subroutine write_label_file(path, box)
+        !> R and Z in metres to exercise the unit conversion.
+        use netcdf
+        character(*), intent(in) :: path
+        real(dp), intent(in) :: box(5)
+        real(dp) :: rg(label_nr), zg(label_nz), pg(label_nphi)
+        real(dp) :: table(label_nr, label_nz, label_nphi)
+        integer :: ncid, dims(3), vr, vz, vp, vl, a, b, c
+
+        do a = 1, label_nr
+            rg(a) = box(1) + (box(2) - box(1))*real(a - 1, dp)/real(label_nr - 1, dp)
+        end do
+        do b = 1, label_nz
+            zg(b) = box(3) + (box(4) - box(3))*real(b - 1, dp)/real(label_nz - 1, dp)
+        end do
+        do c = 1, label_nphi
+            pg(c) = real(c - 1, dp)*box(5)/real(label_nphi, dp)
+        end do
+        do c = 1, label_nphi
+            do b = 1, label_nz
+                do a = 1, label_nr
+                    table(a, b, c) = analytic([rg(a), pg(c), zg(b)], box)
+                end do
+            end do
+        end do
+        call ok(nf90_create(path, nf90_clobber, ncid))
+        call ok(nf90_def_dim(ncid, 'R', label_nr, dims(1)))
+        call ok(nf90_def_dim(ncid, 'Z', label_nz, dims(2)))
+        call ok(nf90_def_dim(ncid, 'phi', label_nphi, dims(3)))
+        call ok(nf90_def_var(ncid, 'R', nf90_double, dims(1:1), vr))
+        call ok(nf90_put_att(ncid, vr, 'units', 'm'))
+        call ok(nf90_def_var(ncid, 'Z', nf90_double, dims(2:2), vz))
+        call ok(nf90_put_att(ncid, vz, 'units', 'm'))
+        call ok(nf90_def_var(ncid, 'phi', nf90_double, dims(3:3), vp))
+        call ok(nf90_def_var(ncid, 'label', nf90_double, dims, vl))
+        call ok(nf90_put_att(ncid, nf90_global, 'nfp', nfp_label))
+        call ok(nf90_enddef(ncid))
+        call ok(nf90_put_var(ncid, vr, rg/100.0_dp))
+        call ok(nf90_put_var(ncid, vz, zg/100.0_dp))
+        call ok(nf90_put_var(ncid, vp, pg))
+        call ok(nf90_put_var(ncid, vl, table))
+        call ok(nf90_close(ncid))
+    end subroutine write_label_file
+
+    subroutine ok(status)
+        use netcdf, only: nf90_noerr, nf90_strerror
+        integer, intent(in) :: status
+
+        if (status /= nf90_noerr) then
+            print *, trim(nf90_strerror(status))
+            error stop 'cannot write the profile label fixture'
+        end if
+    end subroutine ok
 
 end program test_profile_radius

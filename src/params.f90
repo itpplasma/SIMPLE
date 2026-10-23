@@ -196,6 +196,9 @@ module params
 
     character(1000) :: field_input = ''
     character(1000) :: coord_input = ''
+    !> Optional netCDF profile label s(R, phi, Z) for the collision profiles
+    !> with integ_coords = REFCOORDS (format: src/profile_label.f90).
+    character(1000) :: profile_label_file = ''
     character(1000) :: wall_input = ''
     character(16) :: wall_units = 'm'
     !> Radial threshold for querying an external STL wall. A negative value
@@ -261,7 +264,7 @@ module params
         am1, am2, Z1, Z2, &
         densi1, densi2, tempi1, tempi2, tempe, &
         batch_size, ran_seed, particle_index_offset, reuse_batch, &
-        field_input, coord_input, &
+        field_input, coord_input, profile_label_file, &
         wall_input, wall_units, chart_boundary_kind, integ_coords, crossing_level, &
         spectre_fo_entry_larmor, spectre_fo_tolerance, spectre_fo_grid, &
         spectre_sbeg_is_toroidal_flux, spectre_ncon_r, spectre_ncon_th, &
