@@ -917,8 +917,18 @@ contains
                 end if
                 !
                 ierr = 0
+                call axis_radial_coordinate(radial_is_rho, ierr)
+                if (ierr /= 0) return
+                ! Defaults are given in normalized toroidal flux s and converted to
+                ! the native chart coordinate (rho = sqrt(s)), so that the
+                ! regularization disc has the same Cartesian radius for flux- and
+                ! rho-native charts. Explicit arguments stay in native units.
                 axis_floor_local = 1.d-8
                 snear_axis = 0.01d0
+                if (radial_is_rho) then
+                    axis_floor_local = sqrt(axis_floor_local)
+                    snear_axis = sqrt(snear_axis)
+                end if
                 if (present(axis_floor)) axis_floor_local = axis_floor
                 if (present(near_axis_limit)) snear_axis = near_axis_limit
                 if (.not. is_finite(axis_floor_local) .or. &
@@ -928,8 +938,6 @@ contains
                     ierr = 2
                     return
                 end if
-                call axis_radial_coordinate(radial_is_rho, ierr)
-                if (ierr /= 0) return
              near_radius_squared = axis_native_radius_squared(snear_axis, radial_is_rho)
                 z_initial = z
                 y(1) = z(1)
