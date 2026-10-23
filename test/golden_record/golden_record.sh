@@ -24,6 +24,8 @@ else
     PROJECT_ROOT_CUR="$GOLDEN_RECORD_CUR_DIR"
 fi
 
+CURRENT_BUILD_DIR=${GOLDEN_RECORD_CUR_BUILD_DIR:-"$PROJECT_ROOT_CUR/build"}
+
 RUN_DIR_REF="$GOLDEN_RECORD_BASE_DIR/runs/run_$REF_VER"
 RUN_DIR_CUR="$GOLDEN_RECORD_BASE_DIR/runs/run_$CUR_VER"
 TEST_DATA_DIR="$GOLDEN_RECORD_BASE_DIR/test_data"
@@ -116,10 +118,9 @@ main() {
 
     # Resource groups allow cases to overlap. Protect only shared reference
     # preparation; the numerical runs below use separate case directories.
-    local ref_build_lock
     mkdir -p "$(dirname "$PROJECT_ROOT_REF")"
-    exec {ref_build_lock}>"$PROJECT_ROOT_REF.build.lock"
-    flock "$ref_build_lock"
+    exec 9>"$PROJECT_ROOT_REF.build.lock"
+    flock 9
 
     local REF_CONTRACT_STAMP="$PROJECT_ROOT_REF/build/.golden-libneo-ref"
     if [ -f "$PROJECT_ROOT_REF/build/simple.x" ] && \
@@ -135,8 +136,8 @@ main() {
     else
         echo "Using existing reference build at: $PROJECT_ROOT_REF/build/simple.x"
     fi
-    flock -u "$ref_build_lock"
-    exec {ref_build_lock}>&-
+    flock -u 9
+    exec 9>&-
 
     # The CTest fixture golden_record_prepare builds the reference and fetches
     # the shared test data once, so the per-case tests can run in parallel.
@@ -148,16 +149,17 @@ main() {
     fi
 
     # Check if current version needs building (it should already be built)
-    if [ ! -f "$PROJECT_ROOT_CUR/build/simple.x" ]; then
-        echo "Current build not found at: $PROJECT_ROOT_CUR/build/simple.x"
+    if [ ! -f "$CURRENT_BUILD_DIR/simple.x" ]; then
+        echo "Current build not found at: $CURRENT_BUILD_DIR/simple.x"
         handle_failure 1
     else
-        echo "Using current build at: $PROJECT_ROOT_CUR/build/simple.x"
+        echo "Using current build at: $CURRENT_BUILD_DIR/simple.x"
     fi
 
     # Use the new scripts to run tests and compare
     "$SCRIPT_DIR/run_golden_tests.sh" "$PROJECT_ROOT_REF" "$RUN_DIR_REF" "$TEST_DATA_DIR" "$SINGLE_CASE" || handle_failure $?
-    "$SCRIPT_DIR/run_golden_tests.sh" "$PROJECT_ROOT_CUR" "$RUN_DIR_CUR" "$TEST_DATA_DIR" "$SINGLE_CASE" || handle_failure $?
+    "$SCRIPT_DIR/run_golden_tests.sh" "$PROJECT_ROOT_CUR" "$RUN_DIR_CUR" "$TEST_DATA_DIR" "$SINGLE_CASE" \
+        "$CURRENT_BUILD_DIR" || handle_failure $?
 
     # These historical references predate physical endpoint momentum validation.
     # Preserve their raw runs; compare coil orbits with the qualified #560
