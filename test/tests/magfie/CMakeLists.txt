@@ -135,3 +135,12 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS AND SIMPLE_HAVE_MAP2DISC)
         FIXTURES_REQUIRED chartmap_map2disc
     )
 endif()
+
+add_executable(test_refcoords_cartesian_axis.x test_refcoords_cartesian_axis.f90)
+target_link_libraries(test_refcoords_cartesian_axis.x simple)
+add_dependencies(test_refcoords_cartesian_axis.x ncsx_test_data)
+add_test(NAME test_refcoords_cartesian_axis
+    COMMAND $<TARGET_FILE:test_refcoords_cartesian_axis.x>
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
+)
+set_tests_properties(test_refcoords_cartesian_axis PROPERTIES TIMEOUT 120)
