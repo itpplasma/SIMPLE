@@ -21,7 +21,8 @@ program test_magfie_refcoords_splines
     use reference_coordinates, only: init_reference_coordinates, ref_coords
     use magfie_sub, only: init_magfie, magfie, REFCOORDS, BOOZER, &
                           set_magfie_refcoords_field, axis_radial_coordinate
-    use libneo_coordinates, only: coordinate_system_t
+    use libneo_coordinates, only: coordinate_system_t, chartmap_coordinate_system_t, &
+                                  make_chartmap_coordinate_system, UNKNOWN, RHO_TOR
     use alpha_lifetime_sub, only: velo_can, velo_axis_regularized, orbit_timestep_axis
     use finite_check, only: is_finite
 
@@ -90,6 +91,7 @@ program test_magfie_refcoords_splines
     do i = 1, 20
         call check_unsplined_hcurl(i, phi_period, vmec_field, n_failed)
     end do
+    call check_geometric_chart_rk(n_failed)
 
     if (n_failed > 0) then
         print *, '================================'
@@ -103,6 +105,44 @@ program test_magfie_refcoords_splines
     print *, '================================'
 
 contains
+
+    subroutine check_geometric_chart_rk(n_failed)
+        integer, intent(inout) :: n_failed
+        class(coordinate_system_t), allocatable :: chart
+        type(splined_field_t) :: chart_field
+        real(dp) :: initial(5), flux_result(5), geometric_result(5)
+        integer :: status
+
+        call make_chartmap_coordinate_system(chart, 'wout_ncsx.chartmap.nc')
+        call create_splined_field(raw_coils, chart, chart_field, &
+                                  n_r=16, n_th=17, n_phi=16)
+        initial = [0.45_dp, 0.7_dp, 0.1_dp, 1.0_dp, -0.3_dp]
+        call init_magfie(REFCOORDS)
+        select type (coords => chart_field%coords)
+        class is (chartmap_coordinate_system_t)
+            coords%rho_convention = RHO_TOR
+            call set_magfie_refcoords_field(chart_field)
+            flux_result = initial
+            call orbit_timestep_axis(flux_result, 1.0e-3_dp, 1.0e-3_dp, &
+                                     1.0e-10_dp, status)
+            if (status /= 0) error stop 'Reference chart RK step failed'
+            coords%rho_convention = UNKNOWN
+            call set_magfie_refcoords_field(chart_field)
+            geometric_result = initial
+            call orbit_timestep_axis(geometric_result, 1.0e-3_dp, 1.0e-3_dp, &
+                                     1.0e-10_dp, status)
+            if (status /= 0 .or. .not. all(is_finite(geometric_result))) then
+                print *, 'FAIL: geometric disk chart rejected by RK'
+                n_failed = n_failed + 1
+            else if (maxval(abs(geometric_result - flux_result)) > 1.0e-12_dp &
+                     .or. maxval(abs(geometric_result - initial)) <= 1.0e-12_dp) then
+                print *, 'FAIL: geometric radius changed the physical RK step'
+                n_failed = n_failed + 1
+            end if
+        class default
+            error stop 'Expected chartmap reference coordinates'
+        end select
+    end subroutine check_geometric_chart_rk
 
     subroutine check_active_rho_rhs(n_failed)
         integer, intent(inout) :: n_failed

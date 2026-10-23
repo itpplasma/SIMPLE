@@ -116,6 +116,8 @@ conformal disc map (`unknown`, geometric centre at $\rho = 0$); it serves as a
 smooth reference for Meiss coordinates. At equal nominal
 $(\rho, \vartheta, \zeta)$ the two give different points and metrics; a
 particle started at the same physical position follows the same orbit.
+REFCOORDS/RK also accepts the geometric disk radius for its polar axis map,
+without interpreting that radius as normalized flux.
 
 **Extended Boozer chartmap.** A chartmap with `boozer_field = 1` also stores
 the field in Boozer coordinates; the format is specified in
