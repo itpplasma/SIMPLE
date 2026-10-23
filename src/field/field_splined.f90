@@ -37,12 +37,17 @@ module field_splined
     use coordinate_scaling, only: coordinate_scaling_t, sqrt_s_scaling_t, &
                                   identity_scaling_t
     use cartesian_coordinates, only: cartesian_coordinate_system_t
+    use libneo_coordinate_jets, only: cylindrical_field_direction, &
+                                      cylindrical_field_direction_der, &
+                               pullback_covector, pullback_covector_der, scale_basis_der
 
     implicit none
 
     type, extends(magnetic_field_t) :: splined_field_t
         type(BatchSplineData3D) :: splines
         logical :: initialized = .false.
+        logical :: regular_cartesian_direction = .false.
+        class(coordinate_scaling_t), allocatable :: direction_scaling
     contains
         procedure :: evaluate => splined_evaluate
         procedure :: evaluate_with_der => splined_evaluate_with_der
@@ -59,6 +64,8 @@ contains
         real(dp), intent(out), optional :: sqgBctr(3)
 
         real(dp) :: y_batch(7)
+        real(dp) :: u(3), jacobian(3), basis(3, 3), scaled(3, 3), direction(3)
+        real(dp) :: zeros(3, 3, 3), unused(3, 3, 3), position(3)
 
         call evaluate_batch_splines_3d(self%splines, x, y_batch)
 
@@ -71,6 +78,16 @@ contains
         hcov(3) = y_batch(6)
 
         Bmod = y_batch(7)
+        if (self%regular_cartesian_direction) then
+            call self%direction_scaling%inverse(x, u, jacobian)
+            call self%coords%covariant_basis(u, basis)
+            zeros = 0.0_dp
+            call scale_basis_der(jacobian, [0.0_dp, 0.0_dp, 0.0_dp], basis, zeros, &
+                                 scaled, unused)
+            call self%coords%evaluate_cart(u, position)
+            call cylindrical_field_direction(position, y_batch(4:6), direction)
+            call pullback_covector(direction, scaled, hcov)
+        end if
 
         if (present(sqgBctr)) then
             error stop "sqgBctr not implemented for splined_field_t"
@@ -89,6 +106,9 @@ contains
 
         real(dp) :: y_batch(7)
         real(dp) :: dy_batch(3, 7)
+        real(dp) :: u(3), jacobian(3), second(3), basis(3, 3), dbasis(3, 3, 3)
+        real(dp) :: scaled(3, 3), dscaled(3, 3, 3), direction(3), ddirection(3, 3)
+        real(dp) :: position(3)
 
         call evaluate_batch_splines_3d_der(self%splines, x, y_batch, dy_batch)
 
@@ -111,6 +131,20 @@ contains
         dhcov(:, 3) = dy_batch(:, 6)
 
         dBmod = dy_batch(:, 7)
+        if (self%regular_cartesian_direction) then
+            call self%direction_scaling%inverse(x, u, jacobian)
+            second = 0.0_dp
+            select type (scaling => self%direction_scaling)
+            type is (sqrt_s_scaling_t)
+                second(1) = 2.0_dp
+            end select
+            call self%coords%covariant_basis_with_der(u, basis, dbasis)
+            call scale_basis_der(jacobian, second, basis, dbasis, scaled, dscaled)
+            call self%coords%evaluate_cart(u, position)
+            call cylindrical_field_direction_der(position, scaled, y_batch(4:6), &
+                                     transpose(dy_batch(:, 4:6)), direction, ddirection)
+         call pullback_covector_der(direction, ddirection, scaled, dscaled, hcov, dhcov)
+        end if
 
         if (present(sqgBctr)) then
             error stop "sqgBctr not implemented for splined_field_t"
@@ -128,15 +162,41 @@ contains
         integer, intent(in), optional :: n_r, n_th, n_phi
         real(dp), intent(in), optional :: xmin(3), xmax(3)
 
+        class(coordinate_scaling_t), pointer :: selected_scaling
+        type(sqrt_s_scaling_t), target :: sqrt_scaling
+        type(identity_scaling_t), target :: identity_scaling
+
+        ! Only these two charts supply the exact basis-derivative capability.
+        if (allocated(source%coords)) then
+            select type (coords => source%coords)
+            type is (cartesian_coordinate_system_t)
+                select type (ref_coords)
+                class is (vmec_coordinate_system_t)
+                    field%regular_cartesian_direction = .true.
+                class is (chartmap_coordinate_system_t)
+                    field%regular_cartesian_direction = .true.
+                end select
+            end select
+        end if
+        if (field%regular_cartesian_direction) then
+            if (present(scaling)) then
+                allocate (field%direction_scaling, source=scaling)
+            else
+                selected_scaling => get_default_scaling(ref_coords, sqrt_scaling, &
+                                                        identity_scaling)
+                allocate (field%direction_scaling, source=selected_scaling)
+            end if
+        end if
         call build_splines(source, ref_coords, field%splines, scaling, &
-                           n_r, n_th, n_phi, xmin, xmax)
+                           n_r, n_th, n_phi, xmin, xmax, &
+                           field%regular_cartesian_direction)
 
         allocate (field%coords, source=ref_coords)
         field%initialized = .true.
     end subroutine create_splined_field
 
     subroutine build_splines(source, ref_coords, spl, scaling, &
-                             n_r_in, n_th_in, n_phi_in, xmin_in, xmax_in)
+                         n_r_in, n_th_in, n_phi_in, xmin_in, xmax_in, regular_direction)
         !> Build splines by sampling source field on uniform grid.
         !> Grid is in scaled coordinates. Default scaling: r = sqrt(s).
         class(magnetic_field_t), intent(in) :: source
@@ -145,6 +205,8 @@ contains
         class(coordinate_scaling_t), intent(in), optional, target :: scaling
         integer, intent(in), optional :: n_r_in, n_th_in, n_phi_in
         real(dp), intent(in), optional :: xmin_in(3), xmax_in(3)
+
+        logical, intent(in) :: regular_direction
 
         class(coordinate_scaling_t), pointer :: scaling_ptr
         type(sqrt_s_scaling_t), target :: sqrt_s_scaling
@@ -179,7 +241,7 @@ contains
 
         call sample_spline_arrays(source, ref_coords, scaling_ptr, n_r, n_th, n_phi, &
                                   xmin, h_r, h_th, h_phi, Ar, Ath, Aphi, hr, hth, &
-                                  hphi, Bmod_arr)
+                                  hphi, Bmod_arr, regular_direction)
 
         dims = shape(Ar)
         allocate (y_batch(dims(1), dims(2), dims(3), 7))
@@ -275,7 +337,7 @@ contains
                                     n_th, n_phi, &
                                     xmin, h_r, h_th, h_phi, Ar, Ath, &
                                     Aphi, hr, hth, &
-                                    hphi, Bmod_arr)
+                                    hphi, Bmod_arr, regular_direction)
         class(magnetic_field_t), intent(in) :: source
         class(coordinate_system_t), intent(in) :: ref_coords
         class(coordinate_scaling_t), pointer, intent(in) :: scaling_ptr
@@ -287,6 +349,7 @@ contains
                                               hphi(:, :, :)
         real(dp), allocatable, intent(out) :: Bmod_arr(:, :, :)
 
+        logical, intent(in) :: regular_direction
         real(dp) :: x_scaled(3), x_ref(3), x_cart(3)
         real(dp) :: e_cov(3, 3), scaling_jac(3)
         real(dp) :: Bmod
@@ -338,10 +401,11 @@ contains
 
                     call evaluate_at_ref_coords(source, ref_coords, x_scaled, &
                                                 x_ref, x_cart, e_cov, Acov, &
-                                                hcov, Bmod, needs_scaling)
+                                           hcov, Bmod, needs_scaling, regular_direction)
                     if (needs_scaling) then
                         Acov(1) = Acov(1)*scaling_jac(1)
-                        hcov(1) = hcov(1)*scaling_jac(1)
+                        if (.not. regular_direction) &
+                            hcov(1) = hcov(1)*scaling_jac(1)
                     end if
 
                     Ar(i_r, i_th, i_phi) = Acov(1)
@@ -384,10 +448,11 @@ contains
 
                     call evaluate_at_ref_coords(source, ref_coords, x_scaled, &
                                                 x_ref, x_cart, e_cov, Acov, &
-                                                hcov, Bmod, needs_scaling)
+                                           hcov, Bmod, needs_scaling, regular_direction)
                     if (needs_scaling) then
                         Acov(1) = Acov(1)*scaling_jac(1)
-                        hcov(1) = hcov(1)*scaling_jac(1)
+                        if (.not. regular_direction) &
+                            hcov(1) = hcov(1)*scaling_jac(1)
                     end if
 
                     Ar(i_r, i_th, i_phi) = Acov(1)
@@ -412,7 +477,8 @@ contains
     end subroutine sample_spline_arrays
 
     subroutine evaluate_at_ref_coords(source, ref_coords, x_scaled, x_ref, x_cart, &
-                                      e_cov, Acov, hcov, Bmod, needs_scaling)
+                                      e_cov, Acov, hcov, Bmod, needs_scaling, &
+                                      regular_direction)
         !> Evaluate source field for spline sampling.
         !>
         !> Supported source modes:
@@ -430,9 +496,10 @@ contains
         real(dp), intent(out) :: x_cart(3), e_cov(3, 3)
         real(dp), intent(out) :: Acov(3), hcov(3), Bmod
         logical, intent(out) :: needs_scaling
+        logical, intent(in) :: regular_direction
 
         real(dp) :: A_cart(3), h_cart(3)
-        real(dp) :: x_src(3)
+        real(dp) :: x_src(3), radius_squared, radius
 
         select type (source)
         type is (vmec_field_t)
@@ -480,7 +547,19 @@ contains
             call ref_coords%covariant_basis(x_ref, e_cov)
             call source%evaluate(x_cart, A_cart, h_cart, Bmod)
             Acov = matmul(A_cart, e_cov)
-            hcov = matmul(h_cart, e_cov)
+            if (regular_direction) then
+                ! Interpolate physical cylindrical components (B_R, B^phi, B_z).
+                ! Normalize after evaluation, so normalization cannot pollute the
+                ! spline derivatives of a constant axial or toroidal component.
+                radius_squared = sum(x_cart(1:2)**2)
+                if (radius_squared <= 0.0_dp) error stop 'field sampling: R=0'
+                radius = sqrt(radius_squared)
+                hcov(1) = Bmod*dot_product(x_cart(1:2), h_cart(1:2))/radius
+               hcov(2) = Bmod*(x_cart(1)*h_cart(2) - x_cart(2)*h_cart(1))/radius_squared
+                hcov(3) = Bmod*h_cart(3)
+            else
+                hcov = matmul(h_cart, e_cov)
+            end if
             needs_scaling = .true.
         class default
             error stop &
