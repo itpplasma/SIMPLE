@@ -632,6 +632,29 @@ set_tests_properties(test_bminmax_lifecycle PROPERTIES
     LABELS "unit"
     TIMEOUT 15)
 
+add_executable(test_classifier_boundary.x test_classifier_boundary.f90)
+target_link_libraries(test_classifier_boundary.x simple)
+foreach(SURFACES 1 2)
+    set(BOUNDARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/classifier_boundary_${SURFACES})
+    file(MAKE_DIRECTORY ${BOUNDARY_DIR})
+    add_test(NAME test_classifier_boundary_${SURFACES}
+        COMMAND test_classifier_boundary.x ${WOUT_FILE} ${SURFACES})
+    set_tests_properties(test_classifier_boundary_${SURFACES} PROPERTIES
+        WORKING_DIRECTORY ${BOUNDARY_DIR}
+        ENVIRONMENT "OMP_NUM_THREADS=1"
+        LABELS "integration;physics"
+        TIMEOUT 120)
+endforeach()
+
+add_test(NAME test_classifier_boundary_offgrid
+    COMMAND test_classifier_boundary.x ${WOUT_FILE} 2 0.2357)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/classifier_boundary_offgrid)
+set_tests_properties(test_classifier_boundary_offgrid PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/classifier_boundary_offgrid
+    ENVIRONMENT "OMP_NUM_THREADS=1"
+    LABELS "integration;physics"
+    TIMEOUT 120)
+
 add_executable(test_orbit_invariants.x test_orbit_invariants.f90)
 target_link_libraries(test_orbit_invariants.x simple)
 add_test(NAME test_orbit_invariants COMMAND test_orbit_invariants.x)
