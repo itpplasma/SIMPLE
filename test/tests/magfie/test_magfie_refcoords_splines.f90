@@ -76,6 +76,7 @@ program test_magfie_refcoords_splines
         error stop 'inactive reference field changed the RK axis chart'
     call init_magfie(REFCOORDS)
     call check_active_rho_rhs(n_failed)
+    call check_default_axis_disc(n_failed)
 
     phi_period = twopi/real(nper, dp)
 
@@ -230,6 +231,55 @@ contains
             n_failed = n_failed + 1
         end if
     end subroutine check_active_rho_rhs
+
+    subroutine check_default_axis_disc(n_failed)
+        !> The default regularization disc and near-axis zone are defined in flux
+        !> units (1e-8, 0.01) and must keep their Cartesian size (1e-4, 0.1) on a
+        !> rho-native chart. A step that starts within 1e-6 of the axis crosses it
+        !> at Cartesian radius ~1e-6 and used to exhaust the RK step budget with
+        !> the unconverted defaults (ierr = 2). The reference integrates the same
+        !> orbit in many short steps with the equivalent explicit native limits.
+        integer, intent(inout) :: n_failed
+        type(tracer_t) :: orbit
+        real(dp), parameter :: rho0(2) = [1.0e-8_dp, 1.0e-6_dp]
+        real(dp), parameter :: pitch(3) = [0.3_dp, -0.6_dp, 0.05_dp]
+        real(dp), parameter :: tol = 1.0e-9_dp
+        real(dp) :: z(5), zref(5), dist, dtau
+        integer :: irho, ipitch, istep, status, status_ref
+        integer, parameter :: n_sub = 40
+
+        call init_params(orbit, 2, 4, 3.5e6_dp, 256, 1, 1.0e-10_dp)
+        dtau = 0.2_dp*orbit%dtau
+        do irho = 1, size(rho0)
+            do ipitch = 1, size(pitch)
+                z = [rho0(irho), 0.4_dp, 0.1_dp, 1.0_dp, pitch(ipitch)]
+                zref = z
+                call orbit_timestep_axis(z, dtau, dtau, 1.0e-10_dp, status)
+                status_ref = 0
+                do istep = 1, n_sub
+                    if (status_ref == 0) &
+                        call orbit_timestep_axis(zref, dtau/n_sub, dtau/n_sub, &
+                                                 1.0e-10_dp, status_ref, &
+                                                 axis_floor=1.0e-4_dp, &
+                                                 near_axis_limit=0.1_dp)
+                end do
+                if (status /= 0 .or. status_ref /= 0 .or. &
+                    .not. all(is_finite([z, zref]))) then
+                    print *, 'FAIL: default axis disc orbit failed', irho, ipitch, &
+                        status, status_ref
+                    n_failed = n_failed + 1
+                    cycle
+                end if
+                dist = hypot(z(1)*cos(z(2)) - zref(1)*cos(zref(2)), &
+                             z(1)*sin(z(2)) - zref(1)*sin(zref(2)))
+                if (dist > tol .or. maxval(abs(z(3:5) - zref(3:5))) > tol) then
+                    print *, 'FAIL: default axis disc differs from explicit disc', &
+                        irho, ipitch, dist
+                    n_failed = n_failed + 1
+                end if
+            end do
+        end do
+    end subroutine check_default_axis_disc
 
     subroutine check_point(i, phi_period, f, n_failed)
         integer, intent(in) :: i
