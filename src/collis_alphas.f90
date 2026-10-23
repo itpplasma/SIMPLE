@@ -118,6 +118,38 @@ contains
         end if
     end subroutine onseff
 
+    !> Cartesian-velocity coefficients of the same collision operator, regular
+    !> at p = 0: parallel diffusion dpar, perpendicular diffusion dperp and the
+    !> drift a along the velocity, with fpeff = a + 2*dperp/p.
+    subroutine coleff_cartesian(p, efcolf_loc, velrat_loc, enrat_loc, &
+                                dpar, dperp, a)
+        real(wp), intent(in) :: p
+        real(wp), intent(in) :: efcolf_loc(nsorts), velrat_loc(nsorts), enrat_loc(nsorts)
+        real(wp), intent(out) :: dpar, dperp, a
+
+        real(wp), parameter :: cons = 0.75225278d0
+        integer :: i
+        real(wp) :: x, dp, dh, dpd, g
+
+        dpar = 0.0_wp
+        dperp = 0.0_wp
+        a = 0.0_wp
+        do i = 1, nsorts
+            x = p*velrat_loc(i)
+            call onseff(x, dp, dh, dpd)
+            if (x < 0.01d0) then
+                g = -2.0d0*cons*x
+            else if (x > 6.0d0) then
+                g = -2.0d0/x**2
+            else
+                g = (dpd - 2.0d0*dh)/x
+            end if
+            dpar = dpar + dp*efcolf_loc(i)
+            dperp = dperp + dh*efcolf_loc(i)
+            a = a + efcolf_loc(i)*(velrat_loc(i)*g - 2.0d0*dp*p*enrat_loc(i))
+        end do
+    end subroutine coleff_cartesian
+
     subroutine loacol_alpha(am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, &
                             tempe, ealpha, v0, dchichi, slowrate, &
                             dchichi_norm, slowrate_norm, test_mass, test_charge)
@@ -288,10 +320,11 @@ contains
         integer, parameter :: max_substeps = 100000
         real(wp) :: initial(5), fraction, remaining, step, p, dpp, dhh, fpeff
         real(wp) :: alam, angle, azimuth
+        real(wp) :: p_switch, dpar, dperp, adrift, vhat(2), vnew(3), xi(3)
         real(wp) :: efcolf_loc(nsorts), velrat_loc(nsorts), enrat_loc(nsorts)
         real :: ur
-        integer :: substep
-        logical :: pitch, energy, diffusion
+        integer :: substep, i
+        logical :: pitch, energy, diffusion, cartesian_ok
 
         initial = z
         ierr = 0
@@ -324,9 +357,56 @@ contains
         energy = iswmode /= 4
         diffusion = iswmode < 3
         remaining = dtauc
+        ! Below the thermal speed of the slowest field species the radial
+        ! process is Bessel-like and the Euler walk in p can collapse towards
+        ! p = 0. There the substep is taken in Cartesian velocity space.
+        cartesian_ok = iswmode <= 2 .and. any(efcolf_loc > 0.0_wp .and. &
+                                              velrat_loc > 0.0_wp)
+        p_switch = 0.0_wp
+        if (cartesian_ok) p_switch = 1.0_wp/maxval(velrat_loc, &
+                                                   mask=efcolf_loc > 0.0_wp)
 
         do substep = 1, max_substeps
             p = z(4)
+            if (cartesian_ok .and. p < p_switch) then
+                call coleff_cartesian(p, efcolf_loc, velrat_loc, enrat_loc, &
+                                      dpar, dperp, adrift)
+                if (.not. all(is_finite([dpar, dperp, adrift])) .or. &
+                    dpar < 0.0_wp .or. dperp < 0.0_wp) then
+                    ierr = 1
+                    exit
+                end if
+                step = remaining
+                if (max(dpar, dperp) > 0.0_wp) step = min(step, &
+                    fraction**2*p_switch**2/(6.0_wp*max(dpar, dperp)))
+                if (abs(adrift) > 0.0_wp) &
+                    step = min(step, fraction*p_switch/abs(adrift))
+                if (step <= 0.0_wp .or. remaining - step == remaining) then
+                    ierr = 4 ! Cannot represent further time progress.
+                    exit
+                end if
+                alam = z(5)
+                vhat = [alam, sqrt(1.0_wp - alam**2)]
+                do i = 1, 3
+                    call getran(0, ur)
+                    xi(i) = real(ur, wp)
+                end do
+                vnew(1:2) = p*vhat + (adrift*step + &
+                            sqrt(2.0_wp*dpar*step)*xi(1))*vhat + &
+                            sqrt(2.0_wp*dperp*step)*xi(2)*[-vhat(2), vhat(1)]
+                vnew(3) = sqrt(2.0_wp*dperp*step)*xi(3)
+                z(4) = sqrt(sum(vnew**2))
+                if (pitch .and. is_finite(z(4)) .and. z(4) > 0.0_wp) &
+                    z(5) = max(-1.0_wp, min(1.0_wp, vnew(1)/z(4)))
+                if (.not. all(is_finite(z)) .or. z(4) <= 0.0_wp .or. &
+                    abs(z(5)) > 1.0_wp) then
+                    ierr = 1
+                    exit
+                end if
+                remaining = remaining - step
+                if (remaining == 0.0_wp) return
+                cycle
+            end if
             call coleff_local(p, efcolf_loc, velrat_loc, enrat_loc, dpp, dhh, fpeff)
             if (.not. all(is_finite([dpp, dhh, fpeff])) .or. &
                 dpp < 0.0_wp .or. dhh < 0.0_wp) then
