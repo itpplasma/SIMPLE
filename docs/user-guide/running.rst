@@ -55,7 +55,9 @@ Species and energy
 ``n_e`` (charge number, default 2), ``n_d`` (mass number, default ``4d0``)
 and ``facE_al`` (default ``1d0``, energy :math:`E_0 = 3.5\,\text{MeV}/`
 ``facE_al``) set the species: 100 keV protons are ``n_e = 1, n_d = 1d0,
-facE_al = 35d0`` (collisionless only, see below).
+facE_al = 35d0``. Alternatively set ``particle_energy_eV = 100000``
+with the default ``facE_al = 1``. These species settings apply to both
+orbit integration and full Coulomb collisions.
 
 Start positions
 ---------------
@@ -147,9 +149,8 @@ temperature profiles :math:`f(s)` come from ``&profiles``, either
 
 Limits that change results:
 
-* The operator uses alpha mass and charge. ``n_d`` must be 4 (other values
-  stop with ``v0_coll != v0``) and ``n_e`` is ignored; ``facE_al`` sets the
-  energy.
+* ``n_d`` and ``n_e`` select the test-ion mass and charge. Energy is set by
+  ``particle_energy_eV`` or ``facE_al``.
 * Collisions cannot be combined with classification (``tcut > 0``,
   ``class_plot``, ``fast_class``), full orbits or GPU tracing.
 * ``trace_time`` must cover the slowing-down time for complete heat loads.

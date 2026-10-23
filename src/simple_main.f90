@@ -1457,7 +1457,7 @@ contains
         use params, only: am1, am2, Z1, Z2, particle_energy_eV_effective, &
                           collision_model, nu_star_standard, lorentz_major_radius_cm, &
                           lorentz_iota, lorentz_nu, dchichi, slowrate, &
-            dchichi_norm, slowrate_norm, v0
+                          dchichi_norm, slowrate_norm, v0, n_d, n_e
         use simple_profiles, only: Te_scale, Ti1_scale, Ti2_scale, &
             ni1_scale, ni2_scale
 
@@ -1483,14 +1483,15 @@ contains
         tempe = Te_scale
 
         call loacol_alpha(am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, tempe, &
-            ealpha, v0_coll, dchichi, slowrate, dchichi_norm, &
-            slowrate_norm)
+                          ealpha, v0_coll, dchichi, slowrate, dchichi_norm, &
+                          slowrate_norm, n_d, real(n_e, dp))
 
         if (abs(v0_coll - v0) > 1d-6) then
             error stop 'simple_main.init_collisions: v0_coll != v0'
         end if
 
-        call init_collision_profiles(am1, am2, Z1, Z2, ealpha, v0)
+        call init_collision_profiles(am1, am2, Z1, Z2, ealpha, v0, &
+                                     n_d, real(n_e, dp))
         call init_profile_radius
     end subroutine init_collisions
 
