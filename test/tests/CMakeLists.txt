@@ -535,6 +535,12 @@ add_test(NAME test_collision_substeps COMMAND test_collision_substeps.x)
 set_tests_properties(test_collision_substeps PROPERTIES
     LABELS "unit;collisions;physics" TIMEOUT 180)
 
+add_executable(test_collision_low_speed.x test_collision_low_speed.f90)
+target_link_libraries(test_collision_low_speed.x simple)
+add_test(NAME test_collision_low_speed COMMAND test_collision_low_speed.x)
+set_tests_properties(test_collision_low_speed PROPERTIES
+    LABELS "unit;collisions;physics" TIMEOUT 180)
+
 add_executable (test_profiles.x test_profiles.f90)
 target_link_libraries(test_profiles.x simple)
 add_test(NAME test_profiles COMMAND test_profiles.x)
