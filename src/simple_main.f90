@@ -4,8 +4,8 @@ module simple_main
     use timing, only: get_wtime
     use util, only: sqrt2, twopi
     use simple, only: init_vmec, init_sympl, init_fo, orbit_timestep_fo, &
-        orbit_timestep_fo_bridge, reseed_sympl, tracer_t, ORBIT_FO_LOSS, &
-        ORBIT_FO_NUMERICAL
+                      orbit_timestep_fo_bridge, reseed_sympl, tracer_t, ORBIT_FO_LOSS, &
+                      ORBIT_FO_NUMERICAL, decode_symplectic_state
     use diag_mod, only: icounter
     use collis_alp, only: loacol_alpha, stost, init_collision_profiles, &
                           configure_lorentz_nustar, stost_lorentz
@@ -2170,7 +2170,7 @@ contains
             SYMPL_SPECTRE_STOP
         use field_can_spectre, only: spectre_mvol, set_spectre_volume_lock
         use params, only: crossing_level
-        use finite_check, only: quiet_nan
+        use finite_check, only: quiet_nan, is_finite
 
         type(tracer_t), intent(inout) :: anorb
         integer, intent(in) :: ipart
@@ -2181,7 +2181,7 @@ contains
 
         type(sympl_spectre_state_t) :: state
         integer :: it, it_f, ktau, ierr_orbit, it_final
-        integer :: first_unresolved_it
+        integer :: first_unresolved_it, decode_status
         integer(8) :: kt
         real(dp) :: t_stop, t_frac
 
@@ -2222,13 +2222,32 @@ contains
             if (state%fo%active .and. state%fo%has_y) then
                 z = state%fo%last_y
             else
-                call to_standard_z_coordinates(anorb, z)
+                call to_standard_z_coordinates(anorb, z, decode_status)
+                if (decode_status /= 0) then
+                    ierr_orbit = decode_status
+                    orbit_exit_code(ipart) = ORBIT_EXIT_NUMERICAL_EVENT
+                    first_unresolved_it = it
+                    it_final = it - 1
+                    exit
+                end if
             end if
             orbit_traj(:, it) = z
             orbit_times(it) = kt*dtaumin/v0
             if (first_unresolved_it == 0) call increase_confined_count(it, passing)
             it_final = it
         end do
+
+        if (state%fo%active .and. state%fo%has_y) then
+            z = state%fo%last_y
+        else
+            call to_standard_z_coordinates(anorb, z, decode_status)
+            if (decode_status /= 0) then
+                ierr_orbit = decode_status
+                orbit_exit_code(ipart) = ORBIT_EXIT_NUMERICAL_EVENT
+                if (first_unresolved_it == 0) &
+                    first_unresolved_it = max(1, it_final)
+            end if
+        end if
 
         if (first_unresolved_it > 0) then
             do it_f = first_unresolved_it, ntimstep
@@ -2253,16 +2272,15 @@ contains
             t_stop = (real(kt, dp) + t_frac)*dtaumin/v0
         end if
 
-        if (state%fo%active .and. state%fo%has_y) then
-            z = state%fo%last_y
-        else
-            call to_standard_z_coordinates(anorb, z)
-        end if
         ! The next marker on this thread starts with an unlocked field dispatch.
         call set_spectre_volume_lock(0)
 
         !$omp critical
-        call integ_to_ref(z(1:3), zend(1:3, ipart))
+        if (all(is_finite(z(1:3)))) then
+            call integ_to_ref(z(1:3), zend(1:3, ipart))
+        else
+            zend(1:3, ipart) = quiet_nan()
+        end if
         zend(4:5, ipart) = z(4:5)
         times_lost(ipart) = t_stop
         !$omp end critical
@@ -2729,9 +2747,10 @@ contains
                     ierr_orbit == SYMPLECTIC_STEP_BOUNDARY) then
                     symplectic_status = ierr_orbit
                     ierr_orbit = 0
-                    call to_standard_z_coordinates(anorb, z)
+                    call to_standard_z_coordinates(anorb, z, ierr_orbit)
                     z_step_end = z
-                    call validate_symplectic_endpoint(si_step_start, anorb, &
+                    if (ierr_orbit == 0) &
+                        call validate_symplectic_endpoint(si_step_start, anorb, &
                                z_step_start, z_step_end, z, loss_fraction, ierr_orbit, &
                                                       reference_boundary)
                     if (reference_boundary .and. ierr_orbit == 1) then
@@ -2743,6 +2762,7 @@ contains
                         ierr_orbit = SYMPLECTIC_STEP_BOUNDARY
                     else if (ierr_orbit /= 0) then
                         ierr_orbit = SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
+                        z = z_step_start
                         anorb%si = si_step_start
                         anorb%f = f_step_start
                     else if (symplectic_status == SYMPLECTIC_STEP_BOUNDARY) then
@@ -2751,8 +2771,6 @@ contains
                 end if
                 if (ierr_orbit /= 0) rk_recovery_local%symplectic_steps = 0
                 if (ierr_orbit == SYMPLECTIC_STEP_BOUNDARY) then
-                    if (.not. reference_boundary) &
-                        call to_standard_z_coordinates(anorb, z)
                     if (present(exit_step)) exit_step = real(kt, dp) + &
                         anorb%si%last_step_fraction
                     exit
@@ -2812,7 +2830,6 @@ contains
                             numerical_hold_any_local)
                     end if
                 else if (ierr_orbit == 0) then
-                    call to_standard_z_coordinates(anorb, z)
                     hold_streak_local = 0
                     symplectic_accepted = .true.
                 end if
@@ -3076,9 +3093,10 @@ contains
                     ierr_orbit == SYMPLECTIC_STEP_BOUNDARY) then
                     symplectic_status = ierr_orbit
                     ierr_orbit = 0
-                    call to_standard_z_coordinates(anorb, z)
+                    call to_standard_z_coordinates(anorb, z, ierr_orbit)
                     z_step_end = z
-                    call validate_symplectic_endpoint(si_step_start, anorb, &
+                    if (ierr_orbit == 0) &
+                        call validate_symplectic_endpoint(si_step_start, anorb, &
                            z_step_start, z_step_end, z, boundary_fraction, ierr_orbit, &
                                                       reference_boundary)
                     if (reference_boundary .and. ierr_orbit == 1) then
@@ -3087,6 +3105,7 @@ contains
                         ierr_orbit = SYMPLECTIC_STEP_BOUNDARY
                     else if (ierr_orbit /= 0) then
                         ierr_orbit = SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
+                        z = z_step_start
                         anorb%si = si_step_start
                         anorb%f = f_step_start
                     else if (symplectic_status == SYMPLECTIC_STEP_BOUNDARY) then
@@ -3095,8 +3114,6 @@ contains
                 end if
                 if (ierr_orbit /= 0) rk_recovery_local%symplectic_steps = 0
                 if (ierr_orbit == SYMPLECTIC_STEP_BOUNDARY) then
-                    if (.not. reference_boundary) &
-                        call to_standard_z_coordinates(anorb, z)
                     call integ_to_ref(z(1:3), u_ref_cur)
                     if (reference_boundary) then
                         anorb%si%last_event_radial_residual = &
@@ -3178,7 +3195,6 @@ contains
                             numerical_hold_any_local)
                     end if
                 else if (ierr_orbit == 0) then
-                    call to_standard_z_coordinates(anorb, z)
                     hold_streak_local = 0
                     symplectic_accepted = .true.
                 end if
@@ -3251,13 +3267,15 @@ contains
         if (present(rk_recovery)) rk_recovery = rk_recovery_local
     end subroutine macrostep_with_wall_check
 
-    subroutine to_standard_z_coordinates(anorb, z)
+    subroutine to_standard_z_coordinates(anorb, z, ierr)
         type(tracer_t), intent(in) :: anorb
         real(dp), intent(inout) :: z(5)
+        integer, intent(out), optional :: ierr
+        integer :: decode_status
 
-        z(1:3) = anorb%si%z(1:3)
-        z(4) = dsqrt(anorb%f%mu*anorb%f%Bmod + 0.5d0*anorb%f%vpar**2)
-        z(5) = anorb%f%vpar/(z(4)*sqrt2)
+        call decode_symplectic_state(anorb%si, anorb%f, anorb%integmode, &
+                                     z, decode_status)
+        if (present(ierr)) ierr = decode_status
     end subroutine to_standard_z_coordinates
 
     subroutine increase_confined_count(it, passing)

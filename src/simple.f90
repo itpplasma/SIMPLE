@@ -48,9 +48,74 @@ public
       module procedure timestep_sympl_z
    end interface tstep
 
-  public :: encode_symplectic_state
+    public :: encode_symplectic_state, decode_symplectic_state
 
 contains
+
+    subroutine decode_symplectic_state(si, f, integmode, z0, ierr)
+        !> Decode Euler's carried canonical momenta at the advanced angles without
+        !> changing its mixed-stage radius or field cache, which seed the next map.
+        use field_can_mod, only: get_derivatives
+        use orbit_symplectic_base, only: EXPL_IMPL_EULER, IMPL_EXPL_EULER, &
+                                         SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
+        use finite_check, only: is_finite, quiet_nan
+        type(symplectic_integrator_t), intent(in) :: si
+        type(field_can_t), intent(in) :: f
+        integer, intent(in) :: integmode
+        real(dp), intent(out) :: z0(5)
+        integer, intent(out) :: ierr
+        type(field_can_t) :: endpoint
+        real(dp) :: radius, residual, correction, radial_tolerance, momentum_tolerance
+        integer :: iteration
+
+        ierr = 0
+        if (integmode /= EXPL_IMPL_EULER .and. integmode /= IMPL_EXPL_EULER) then
+            z0(1:3) = si%z(1:3)
+            z0(4) = sqrt(f%mu*f%Bmod + 0.5_dp*f%vpar**2)
+            z0(5) = f%vpar/(sqrt(2.0_dp)*z0(4))
+            return
+        end if
+
+        ierr = SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
+        z0 = quiet_nan()
+        if (.not. all(is_finite(si%z))) return
+        if (.not. all(is_finite([f%pth, f%mu, f%ro0, si%rtol]))) return
+        if (abs(f%ro0) <= tiny(1.0_dp) .or. si%z(1) < 0.0_dp) return
+        endpoint = f
+        radius = si%z(1)
+        radial_tolerance = max(64.0_dp*epsilon(1.0_dp), &
+                               min(1.0e-10_dp, max(0.0_dp, si%rtol)))
+        momentum_tolerance = 64.0_dp*epsilon(1.0_dp)*max(1.0_dp, abs(f%pth))
+        do iteration = 1, 32
+            call eval_field(endpoint, radius, si%z(2), si%z(3), 0)
+            if (.not. is_finite(endpoint%hph)) return
+            if (abs(endpoint%hph) <= tiny(1.0_dp)) return
+            call get_derivatives(endpoint, si%z(4))
+            if (.not. all(is_finite([endpoint%pth, endpoint%dpth(1), &
+                                     endpoint%vpar, endpoint%Bmod]))) return
+            if (abs(endpoint%dpth(1)) <= tiny(1.0_dp)) return
+            residual = endpoint%pth - f%pth
+            correction = residual/endpoint%dpth(1)
+            if (.not. is_finite(correction)) return
+            if (abs(residual) <= momentum_tolerance .and. &
+                abs(correction) <= radial_tolerance*max(1.0_dp, abs(radius))) then
+                if (endpoint%mu*endpoint%Bmod + 0.5_dp*endpoint%vpar**2 <= &
+                    0.0_dp) return
+                z0(1:3) = [radius, si%z(2), si%z(3)]
+                z0(4) = sqrt(endpoint%mu*endpoint%Bmod + 0.5_dp*endpoint%vpar**2)
+                z0(5) = endpoint%vpar/(sqrt(2.0_dp)*z0(4))
+                if (.not. all(is_finite(z0))) then
+                    z0 = quiet_nan()
+                    return
+                end if
+                ierr = 0
+                return
+            end if
+            radius = radius - correction
+            if (.not. is_finite(radius)) return
+            if (radius < 0.0_dp) return
+        end do
+    end subroutine decode_symplectic_state
 
   subroutine encode_symplectic_state(f, z0, zsympl, h0, jperp, psi_star)
     !> Convert the public GC state to the normalization used by the symplectic
