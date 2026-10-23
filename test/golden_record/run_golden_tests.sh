@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Run golden record tests for a SIMPLE build
-# Usage: run_golden_tests.sh <project_root> <run_dir> <test_data_dir> [single_case]
+# Usage: run_golden_tests.sh <project_root> <run_dir> <test_data_dir> [single_case] [build_dir]
 
 set -e
 
@@ -17,11 +17,12 @@ TEST_DATA_DIR="$3"
 SINGLE_CASE="$4"  # Optional: specific test case to run
 
 if [ -z "$PROJECT_ROOT" ] || [ -z "$RUN_DIR" ] || [ -z "$TEST_DATA_DIR" ]; then
-    echo "Usage: $0 <project_root> <run_dir> <test_data_dir> [single_case]"
+    echo "Usage: $0 <project_root> <run_dir> <test_data_dir> [single_case] [build_dir]"
     exit 1
 fi
 
-SIMPLE_EXE="$PROJECT_ROOT/build/simple.x"
+BUILD_DIR="${5:-$PROJECT_ROOT/build}"
+SIMPLE_EXE="$BUILD_DIR/simple.x"
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 # Test case directory in the project being tested
@@ -57,8 +58,8 @@ echo "Checking for optional symplectic tokamak regression..."
 
 # Cases share downloaded equilibria and converted coils. Finish preparation
 # before another case reads them, then allow their numerical runs to overlap.
-exec {test_data_lock}>"$TEST_DATA_DIR/.prepare.lock"
-flock "$test_data_lock"
+exec 9>"$TEST_DATA_DIR/.prepare.lock"
+flock 9
 
 # Download wout.nc if not present in test data directory
 WOUT_FILE="$TEST_DATA_DIR/wout.nc"
@@ -125,8 +126,8 @@ fi
 if [ "${GOLDEN_RECORD_DATA_ONLY:-0}" = "1" ]; then
     exit 0
 fi
-flock -u "$test_data_lock"
-exec {test_data_lock}>&-
+flock -u 9
+exec 9>&-
 
 # Run each test case
 for test_case in $TEST_CASES; do
@@ -204,7 +205,7 @@ for test_case in $TEST_CASES; do
         ln -sfn ../wout.nc "$diag_dir/wout.nc"
         ln -sfn ../coils.simple "$diag_dir/coils.simple"
 
-        ALBERT_DIAG_BIN="$PROJECT_ROOT/build/test/tests/field_can/test_field_can_albert_coils_diagnostic.x"
+        ALBERT_DIAG_BIN="$BUILD_DIR/test/tests/field_can/test_field_can_albert_coils_diagnostic.x"
         if [ -x "$ALBERT_DIAG_BIN" ]; then
             echo "Running Albert coordinate diagnostic..."
             if (cd "$diag_dir" && "$ALBERT_DIAG_BIN") >> simple.log 2>&1; then
@@ -214,7 +215,7 @@ for test_case in $TEST_CASES; do
             fi
         fi
         # Also run intermediate values test for detailed regression tracking
-        ALBERT_INTER_BIN="$PROJECT_ROOT/build/test/tests/field_can/test_albert_intermediate.x"
+        ALBERT_INTER_BIN="$BUILD_DIR/test/tests/field_can/test_albert_intermediate.x"
         if [ -x "$ALBERT_INTER_BIN" ]; then
             echo "Running Albert intermediate values diagnostic..."
             if (cd "$diag_dir" && "$ALBERT_INTER_BIN") >> simple.log 2>&1; then
@@ -231,7 +232,7 @@ done
 #
 # Optional symplectic tokamak regression (test_sympl_tok.x)
 #
-SYMP_TOK_BIN="$PROJECT_ROOT/build/test/tests/test_sympl_tok.x"
+SYMP_TOK_BIN="$BUILD_DIR/test/tests/test_sympl_tok.x"
 SYMP_TOK_DIR="$RUN_DIR/sympl_tokamak"
 if [ -x "$SYMP_TOK_BIN" ]; then
     echo "Running symplectic tokamak regression via test_sympl_tok.x"

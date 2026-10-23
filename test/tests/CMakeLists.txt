@@ -1396,7 +1396,7 @@ foreach(CASE ${GOLDEN_RECORD_TEST_CASES})
         TIMEOUT 1200
         LABELS "golden_record;regression"
         FIXTURES_REQUIRED golden_record_reference
-        ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record;GOLDEN_RECORD_RTOL=1.5e-7"
+        ENVIRONMENT "GOLDEN_RECORD_BASE_DIR=${CMAKE_CURRENT_BINARY_DIR}/golden_record;GOLDEN_RECORD_CUR_BUILD_DIR=${CMAKE_BINARY_DIR};GOLDEN_RECORD_RTOL=1.5e-7"
     )
     # Peak RSS rounded up in GiB; see docs/development/testing.rst.
     if(CASE STREQUAL "albert_coils")
@@ -1428,6 +1428,12 @@ set_tests_properties(golden_record_sanity PROPERTIES
     TIMEOUT 60  # 1 minute for sanity checks
     LABELS "golden_record;regression"
 )
+
+add_test(NAME test_golden_build_directory
+    COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/../golden_record_sanity/test_build_directory.py)
+set_tests_properties(test_golden_build_directory PROPERTIES
+    LABELS "unit;regression" TIMEOUT 30)
 
 # Chartmap Meiss debug test (rho_convention, scaling)
 add_executable(test_chartmap_meiss_debug.x test_chartmap_meiss_debug.f90)

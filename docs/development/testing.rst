@@ -251,7 +251,11 @@ Golden records
 ``golden_record_<case>`` clones and builds ``main`` under ``build/``, runs
 ``test/golden_record/<case>/simple.in`` with both builds and compares the
 outputs with relative tolerance ``1.5e-7``. The first run needs network
-access and several minutes. Use ``make test-regression TEST=golden_record_``:
+access and several minutes. CTest runs the candidate executable and diagnostics
+from its configured build directory, including when ``BUILD_DIR`` differs from
+``build``. Direct script calls default to ``build`` and can set
+``GOLDEN_RECORD_CUR_BUILD_DIR`` to select another candidate build.
+Use ``make test-regression TEST=golden_record_``:
 it pins the reference libneo revision (``libneo_golden`` in
 ``cmake/dependency_versions.json``) for both builds. Patches in
 ``test/golden_record/reference_patches/`` make old reference revisions
