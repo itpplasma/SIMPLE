@@ -109,6 +109,7 @@ module simple_main
         integer :: steps = 0
         integer :: safe_steps = 0
         integer :: failures = 0
+        integer :: symplectic_steps = 0
         real(dp) :: momentum_reference = 0.0_dp
     end type rk_recovery_state_t
 
@@ -217,6 +218,7 @@ contains
         state%has_momentum_reference = .true.
         state%steps = 0
         state%safe_steps = 0
+        state%symplectic_steps = 0
         state%momentum_reference = momentum_reference
         state%failures = min(state%failures + 1, 9)
         if (x_reference(1) < RK_AXIS_ENTER) then
@@ -227,6 +229,17 @@ contains
             state%reason = RK_RECOVERY_GENERIC
         end if
     end subroutine activate_rk_recovery
+
+    subroutine record_symplectic_success(state)
+        type(rk_recovery_state_t), intent(inout) :: state
+
+        ! The first accepted step is a provisional probe. A second consecutive
+        ! accepted step confirms resumption and clears the old failure history.
+        state%has_momentum_reference = .false.
+        if (state%failures == 0) return
+        state%symplectic_steps = state%symplectic_steps + 1
+        if (state%symplectic_steps >= 2) state = rk_recovery_state_t()
+    end subroutine record_symplectic_success
 
     logical function should_resume_symplectic(state, z)
         type(rk_recovery_state_t), intent(in) :: state
@@ -2603,7 +2616,7 @@ contains
         real(dp) :: z_step_start(5), z_step_end(5), loss_fraction
         real(dp) :: u_event(3)
         logical :: numerical_hold, numerical_hold_any_local
-        logical :: reference_boundary
+        logical :: reference_boundary, symplectic_accepted
         type(rk_recovery_state_t) :: rk_recovery_local
         type(symplectic_integrator_t) :: si_step_start
         type(field_can_t) :: f_step_start
@@ -2622,6 +2635,7 @@ contains
         do ktau = 1, ntau_local
             numerical_hold = .false.
             reference_boundary = .false.
+            symplectic_accepted = .false.
             z_step_start = z
             if (swcoll) then
                 collision_si_start = anorb%si
@@ -2735,6 +2749,7 @@ contains
                         ierr_orbit = SYMPLECTIC_STEP_BOUNDARY
                     end if
                 end if
+                if (ierr_orbit /= 0) rk_recovery_local%symplectic_steps = 0
                 if (ierr_orbit == SYMPLECTIC_STEP_BOUNDARY) then
                     if (.not. reference_boundary) &
                         call to_standard_z_coordinates(anorb, z)
@@ -2799,7 +2814,7 @@ contains
                 else if (ierr_orbit == 0) then
                     call to_standard_z_coordinates(anorb, z)
                     hold_streak_local = 0
-                    rk_recovery_local = rk_recovery_state_t()
+                    symplectic_accepted = .true.
                 end if
                 if (ierr_orbit .ne. 0) exit
             end if
@@ -2835,6 +2850,7 @@ contains
                     anorb%f = collision_field_start
                     anorb%fo = collision_fo_start
                     rk_recovery_local = collision_recovery_start
+                    rk_recovery_local%symplectic_steps = 0
                     hold_streak_local = collision_hold_start
                     ierr_orbit = SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
                     exit
@@ -2843,6 +2859,8 @@ contains
                     rk_recovery_local%momentum_reference = z(4)
                 end if
             end if
+            if (symplectic_accepted) &
+                call record_symplectic_success(rk_recovery_local)
             kt = kt + 1
         end do
         if (present(hold_streak)) hold_streak = hold_streak_local
@@ -2964,7 +2982,7 @@ contains
         real(dp) :: boundary_fraction
         real(dp) :: wall_exit_step
         logical :: hit, numerical_hold, numerical_hold_any_local
-        logical :: reference_boundary
+        logical :: reference_boundary, symplectic_accepted
         type(rk_recovery_state_t) :: rk_recovery_local
         type(symplectic_integrator_t) :: si_step_start
         type(field_can_t) :: f_step_start
@@ -2983,6 +3001,7 @@ contains
         do ktau = 1, ntau_local
             numerical_hold = .false.
             reference_boundary = .false.
+            symplectic_accepted = .false.
             segment_duration = 1.0_dp
             z_step_start = z
             if (swcoll) then
@@ -3074,6 +3093,7 @@ contains
                         ierr_orbit = SYMPLECTIC_STEP_BOUNDARY
                     end if
                 end if
+                if (ierr_orbit /= 0) rk_recovery_local%symplectic_steps = 0
                 if (ierr_orbit == SYMPLECTIC_STEP_BOUNDARY) then
                     if (.not. reference_boundary) &
                         call to_standard_z_coordinates(anorb, z)
@@ -3160,7 +3180,7 @@ contains
                 else if (ierr_orbit == 0) then
                     call to_standard_z_coordinates(anorb, z)
                     hold_streak_local = 0
-                    rk_recovery_local = rk_recovery_state_t()
+                    symplectic_accepted = .true.
                 end if
                 if (ierr_orbit .ne. 0) exit
             end if
@@ -3177,6 +3197,7 @@ contains
                 x_prev_m, u_ref_prev, x_cur_m, u_ref_cur, anorb%fper, &
                 real(kt, dp), segment_duration, hit, wall_exit_step)
             if (hit) then
+                rk_recovery_local%symplectic_steps = 0
                 ierr_orbit = 77
                 if (present(exit_step)) exit_step = wall_exit_step
                 exit
@@ -3192,6 +3213,7 @@ contains
                     anorb%f = collision_field_start
                     anorb%fo = collision_fo_start
                     rk_recovery_local = collision_recovery_start
+                    rk_recovery_local%symplectic_steps = 0
                     hold_streak_local = collision_hold_start
                     ierr_orbit = SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
                     exit
@@ -3200,6 +3222,8 @@ contains
                     rk_recovery_local%momentum_reference = z(4)
                 end if
             end if
+            if (symplectic_accepted) &
+                call record_symplectic_success(rk_recovery_local)
             kt = kt + 1
             if (rk_recovery_local%active) then
                 hold_streak_local = 0

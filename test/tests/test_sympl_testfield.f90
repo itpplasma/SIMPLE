@@ -9,6 +9,7 @@ module failed_symplectic_step_backend
     integer :: successful_drift_calls = 0
     integer :: injected_status = 0
     real(dp) :: injected_momentum_ratio = 1d0
+    real(dp) :: injected_radial_drift = 0.01d0
     logical :: injected_stale_cache = .false.
 
 contains
@@ -70,7 +71,7 @@ contains
         integer, intent(out) :: ierr
 
         successful_drift_calls = successful_drift_calls + 1
-        si%z(1) = si%z(1) + 0.01d0
+        si%z(1) = si%z(1) + injected_radial_drift
         call evaluate(f, si%z(1), si%z(2), si%z(3), 0)
         f%mu = si%pabs**2/f%Bmod
         f%vpar = 0d0
@@ -87,7 +88,8 @@ program test_sympl_testfield
                          locate_lcfs_step, successful_drift_step, successful_drift_calls
     use failed_symplectic_step_backend, only: wrong_energy_step, injected_status, &
                                               injected_momentum_ratio, &
-                                              injected_stale_cache
+                                              injected_stale_cache, &
+                                              injected_radial_drift
     use simple_main, only: update_momentum
     use classification, only: classify_classifier_exit
     use simple_main, only : classify_orbit_exit, init_field, locate_linear_lcfs, &
@@ -162,6 +164,7 @@ program test_sympl_testfield
     call test_collision_failure_propagation
     call test_wrong_energy_symplectic_endpoint
     call test_rk_recovery_regions
+    call test_recovery_backoff_after_probe
     call test_exit_classification
     call test_numerically_confined_classification
     call test_fo_lcfs_location
@@ -203,6 +206,7 @@ contains
         integer(int64) :: kt
         integer :: hold_streak, step_error
         logical :: numerical_hold
+        type(rk_recovery_state_t) :: recovery
 
         swcoll = .false.
         orbit_model = ORBIT_GC
@@ -211,7 +215,10 @@ contains
         kt = 0_int64
         symplectic_newton_warning_mode = .false.
 
-        call macrostep(norb, z, kt, step_error, 1)
+        recovery = rk_recovery_state_t(failures=1, symplectic_steps=1)
+        call macrostep(norb, z, kt, step_error, 1, rk_recovery=recovery)
+        if (recovery%symplectic_steps /= 0 .or. recovery%failures /= 1) &
+            error stop 'failed symplectic attempt preserved a provisional success'
 
         if (step_error /= 1) error stop 'failed step status was not preserved'
         if (kt /= 0_int64) error stop 'failed step advanced the time index'
@@ -222,7 +229,11 @@ contains
         z = initial_state
         x_previous = 0.0_dp
         kt = 0_int64
-        call macrostep_with_wall_check(norb, z, kt, step_error, 1, 1, x_previous)
+        recovery = rk_recovery_state_t(failures=1, symplectic_steps=1)
+        call macrostep_with_wall_check(norb, z, kt, step_error, 1, 1, x_previous, &
+                                       rk_recovery=recovery)
+        if (recovery%symplectic_steps /= 0 .or. recovery%failures /= 1) &
+            error stop 'failed wall attempt preserved a provisional success'
         if (step_error /= 1) error stop 'wall path lost failed step status'
         if (kt /= 0_int64) error stop 'failed wall path advanced the time index'
         if (any(z /= initial_state)) then
@@ -233,18 +244,21 @@ contains
         kt = 0_int64
         hold_streak = 0
         symplectic_newton_warning_mode = .true.
+        recovery = rk_recovery_state_t(failures=1, symplectic_steps=1)
         call macrostep(norb, z, kt, step_error, 1, hold_streak=hold_streak, &
-            numerical_hold_any=numerical_hold)
+                       numerical_hold_any=numerical_hold, rk_recovery=recovery)
         if (step_error /= 0) error stop 'isolated warning failure stopped orbit'
         if (kt /= 1_int64) error stop 'isolated warning hold lost its interval'
         if (.not. numerical_hold .or. hold_streak /= 1) &
             error stop 'isolated warning hold was not reported'
+        if (recovery%symplectic_steps /= 0 .or. recovery%failures /= 1) &
+            error stop 'unresolved hold preserved a provisional success'
         if (any(z /= initial_state)) then
             error stop 'isolated warning hold changed the last accepted state'
         end if
 
         call macrostep(norb, z, kt, step_error, 1, hold_streak=hold_streak, &
-            numerical_hold_any=numerical_hold)
+                       numerical_hold_any=numerical_hold, rk_recovery=recovery)
         if (step_error == 0) error stop 'repeated warning failure was hidden'
         if (kt /= 1_int64) error stop 'repeated failure consumed another interval'
         if (numerical_hold .or. hold_streak /= 1) &
@@ -257,18 +271,23 @@ contains
         x_previous = 0.0_dp
         kt = 0_int64
         hold_streak = 0
+        recovery = rk_recovery_state_t(failures=1, symplectic_steps=1)
         call macrostep_with_wall_check(norb, z, kt, step_error, 1, 1, x_previous, &
-            hold_streak=hold_streak, numerical_hold_any=numerical_hold)
+                           hold_streak=hold_streak, numerical_hold_any=numerical_hold, &
+                                       rk_recovery=recovery)
         if (step_error /= 0) error stop 'isolated wall warning stopped orbit'
         if (kt /= 1_int64) error stop 'isolated wall hold lost its interval'
         if (.not. numerical_hold .or. hold_streak /= 1) &
             error stop 'isolated wall hold was not reported'
+        if (recovery%symplectic_steps /= 0 .or. recovery%failures /= 1) &
+            error stop 'unresolved wall hold preserved a provisional success'
         if (any(z /= initial_state)) then
             error stop 'isolated wall hold changed the last accepted state'
         end if
 
         call macrostep_with_wall_check(norb, z, kt, step_error, 1, 1, x_previous, &
-            hold_streak=hold_streak, numerical_hold_any=numerical_hold)
+                           hold_streak=hold_streak, numerical_hold_any=numerical_hold, &
+                                       rk_recovery=recovery)
         if (step_error == 0) error stop 'repeated wall failure was hidden'
         if (kt /= 1_int64) error stop 'repeated wall failure consumed another interval'
         if (numerical_hold .or. hold_streak /= 1) &
@@ -290,6 +309,7 @@ contains
                                          SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
         use params, only: dtaumin, wall_query_rho_lcfs
         type(tracer_t) :: local_orbit
+        type(rk_recovery_state_t) :: recovery
         class(coordinate_system_t), allocatable :: saved_ref_coords
         type(symplectic_integrator_t) :: saved_si
         type(field_can_t) :: saved_field
@@ -342,13 +362,16 @@ contains
                 x_previous = [1.0_dp, 2.0_dp, 3.0_dp]
                 kt = 7_int64
                 hold_streak = 0
+                recovery = rk_recovery_state_t(failures=1, symplectic_steps=1)
                 if (wall_path == 0) then
                     call macrostep(local_orbit, z, kt, step_error, 1, &
-                             hold_streak=hold_streak, numerical_hold_any=numerical_hold)
+                           hold_streak=hold_streak, numerical_hold_any=numerical_hold, &
+                                   rk_recovery=recovery)
                 else
                     call macrostep_with_wall_check(local_orbit, z, kt, &
                                 step_error, 1, 1, x_previous, hold_streak=hold_streak, &
-                                                   numerical_hold_any=numerical_hold)
+                                                   numerical_hold_any=numerical_hold, &
+                                                   rk_recovery=recovery)
                 end if
                 if (successful_drift_calls /= 1) &
                     error stop 'Collision caller fixture did not complete its drift'
@@ -361,6 +384,8 @@ contains
                     error stop 'Collision failure committed drift or elapsed time'
                 if (hold_streak /= 0 .or. numerical_hold) &
                     error stop 'Collision failure was consumed as warning hold'
+                if (recovery%symplectic_steps /= 0 .or. recovery%failures /= 1) &
+                    error stop 'Collision rejection lost provisional-probe history'
                 if (any(local_orbit%si%z /= saved_si%z) .or. &
                     local_orbit%si%pabs /= saved_si%pabs .or. &
                     local_orbit%f%H /= saved_field%H .or. &
@@ -554,6 +579,93 @@ contains
             error stop 'edge recovery did not resume after moving inward'
         end if
     end subroutine test_rk_recovery_regions
+
+    subroutine test_recovery_backoff_after_probe
+        use parmot_mod, only: ro0
+        use reference_coordinates, only: ref_coords
+        use libneo_coordinates, only: coordinate_system_t
+        use cartesian_coordinates, only: cartesian_coordinate_system_t
+        use params, only: wall_query_rho_lcfs
+        type(tracer_t) :: local_orbit
+        type(rk_recovery_state_t) :: recovery
+        class(coordinate_system_t), allocatable :: saved_ref_coords
+        real(dp), parameter :: initial(5) = [0.5_dp, 1.0_dp, 0.2_dp, &
+                                             1.0_dp, 0.0_dp]
+        real(dp) :: z(5), x_previous(3), saved_ro0, saved_wall_gate
+        integer(int64) :: kt
+        integer :: wall_path, step_error, step
+
+        saved_ro0 = ro0
+        ro0 = 1.0_dp
+        saved_wall_gate = wall_query_rho_lcfs
+        wall_query_rho_lcfs = huge(1.0_dp)
+        call move_alloc(ref_coords, saved_ref_coords)
+        allocate (cartesian_coordinate_system_t :: ref_coords)
+        swcoll = .false.
+        orbit_model = ORBIT_GC
+        integmode = 3
+        injected_radial_drift = 0.0_dp
+        do wall_path = 0, 1
+            local_orbit = norb
+            z = initial
+            call init_sympl(local_orbit%si, local_orbit%f, z, &
+                            1.0e-3_dp, 1.0e-3_dp, 1.0e-12_dp, 3)
+            orbit_timestep_sympl => successful_drift_step
+            call activate_rk_recovery(recovery, z, 1.0_dp)
+            recovery%active = .false.
+            recovery%safe_steps = 256
+            kt = 0_int64
+            x_previous = 0.0_dp
+            if (wall_path == 0) then
+                call macrostep(local_orbit, z, kt, step_error, 1, &
+                               rk_recovery=recovery)
+            else
+                call macrostep_with_wall_check(local_orbit, z, kt, &
+                                               step_error, 1, 1, x_previous, &
+                                               rk_recovery=recovery)
+            end if
+            if (step_error /= 0 .or. kt /= 1_int64) &
+                error stop 'successful recovery probe did not advance'
+            if (recovery%has_momentum_reference) &
+                error stop 'successful probe retained stale recovery momentum'
+            if (recovery%failures /= 1) &
+                error stop 'first successful probe erased recovery backoff'
+            call activate_rk_recovery(recovery, z, 1.0_dp)
+            recovery%safe_steps = 511
+            if (should_resume_symplectic(recovery, z)) &
+                error stop 'brief successful probe erased recovery backoff'
+            recovery%safe_steps = 512
+            if (.not. should_resume_symplectic(recovery, z)) &
+                error stop 'brief successful probe prevented later resumption'
+            recovery%active = .false.
+            do step = 1, 2
+                if (wall_path == 0) then
+                    call macrostep(local_orbit, z, kt, step_error, 1, &
+                                   rk_recovery=recovery)
+                else
+                    call macrostep_with_wall_check(local_orbit, z, kt, &
+                                                   step_error, 1, 1, x_previous, &
+                                                   rk_recovery=recovery)
+                end if
+                if (step_error /= 0) &
+                    error stop 'stable symplectic recovery probe failed'
+                if (step == 1 .and. recovery%failures /= 2) &
+                    error stop 'first accepted continuation erased recovery backoff'
+                if (step == 2 .and. recovery%failures /= 0) &
+                    error stop 'second accepted continuation retained old backoff'
+            end do
+            call activate_rk_recovery(recovery, z, 1.0_dp)
+            recovery%safe_steps = 256
+            if (.not. should_resume_symplectic(recovery, z)) &
+                error stop 'stable symplectic streak retained old backoff'
+            recovery = rk_recovery_state_t()
+        end do
+        injected_radial_drift = 0.01_dp
+        wall_query_rho_lcfs = saved_wall_gate
+        deallocate (ref_coords)
+        call move_alloc(saved_ref_coords, ref_coords)
+        ro0 = saved_ro0
+    end subroutine test_recovery_backoff_after_probe
 
     subroutine test_reseed_momentum_reference
         real(dp) :: z(5)
