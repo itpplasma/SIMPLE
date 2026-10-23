@@ -62,7 +62,9 @@ program test_magfie_refcoords_splines
     call init_reference_coordinates('wout_ncsx.nc')
 
     call create_coils_field('coils.simple', raw_coils)
-    call create_splined_field(raw_coils, ref_coords, f, n_r=16, n_th=17, n_phi=16)
+    ! Resolve curl(h) near the axis: 16 radial samples introduce a spurious
+    ! B_parallel_star zero just outside the default reconstruction disc.
+    call create_splined_field(raw_coils, ref_coords, f, n_r=64, n_th=17, n_phi=16)
 
     call set_magfie_refcoords_field(f)
     call init_magfie(REFCOORDS)
@@ -249,7 +251,7 @@ contains
         integer, parameter :: n_sub = 40
 
         call init_params(orbit, 2, 4, 3.5e6_dp, 256, 1, 1.0e-10_dp)
-        dtau = 0.2_dp*orbit%dtau
+        dtau = orbit%dtau
         do irho = 1, size(rho0)
             do ipitch = 1, size(pitch)
                 z = [rho0(irho), 0.4_dp, 0.1_dp, 1.0_dp, pitch(ipitch)]
