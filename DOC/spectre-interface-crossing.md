@@ -108,7 +108,7 @@ from `times_lost.dat` (column 2, $0 < t <$ `trace_time`); FO loss counters
 cover only FO phases. The FO settings are applied during shared SPECTRE
 field initialization, identically for `simple.x` and `simple_api`/`pysimple`.
 
-Warning-mode recovery can retain the last valid state for an unresolved time
+Symplectic SPECTRE warning-mode recovery can retain the last valid state for an unresolved time
 interval and continue tracing. Such holds do not establish a resolved physical
 trajectory. From the first affected macrostep, the marker is excluded from the
 resolved confined fraction and included in `unresolved_fraction.dat`. Its public
@@ -122,3 +122,4 @@ reporting are unchanged. A hold count measures unresolved intervals, not Newton
 iterations, output samples or full-orbit attempts; repeated identical failures
 can bypass the complete recovery cascade. The integration and recovery policy
 is unchanged by this reporting distinction.
+The legacy SPECTRE RK45 warning-hold path is outside this reporting change.
