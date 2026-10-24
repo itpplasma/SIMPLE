@@ -669,6 +669,7 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
             ${CMAKE_CURRENT_SOURCE_DIR}/test_class_scores_driver.py
             $<TARGET_FILE:simple.x>
             ${WOUT_FILE}
+            $<TARGET_FILE:test_continuous_classifier_scores.x>
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(test_class_scores_driver PROPERTIES
         LABELS "integration;system"
