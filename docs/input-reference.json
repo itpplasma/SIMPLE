@@ -313,7 +313,7 @@
           "default_value": "0",
           "documentation": "",
           "source": "libneo/src/vmec_support/canonical_coordinates_mod.f90",
-          "source_line": 119
+          "source_line": 122
         },
         {
           "name": "generate_start_only",
@@ -1025,7 +1025,7 @@
           "default_value": ".True.",
           "documentation": "DEPRECATED boolean switches (use axis_healing). Kept for back-compat and mapped to a mode with a deprecation warning; the next SIMPLE release will remove them and default axis_healing to 'polyfit'.",
           "source": "libneo/src/vmec_support/canonical_coordinates_mod.f90",
-          "source_line": 54
+          "source_line": 57
         },
         {
           "name": "old_axis_healing_boundary",
@@ -1038,7 +1038,7 @@
           "default_value": ".True.",
           "documentation": "",
           "source": "libneo/src/vmec_support/canonical_coordinates_mod.f90",
-          "source_line": 55
+          "source_line": 58
         },
         {
           "name": "axis_healing_power_law",
@@ -1051,7 +1051,7 @@
           "default_value": ".False.",
           "documentation": "",
           "source": "libneo/src/vmec_support/canonical_coordinates_mod.f90",
-          "source_line": 56
+          "source_line": 59
         },
         {
           "name": "rho_axis_heal",
@@ -1064,7 +1064,7 @@
           "default_value": "-1.0d0",
           "documentation": "deprecated; use s_axis_heal",
           "source": "libneo/src/vmec_support/canonical_coordinates_mod.f90",
-          "source_line": 48
+          "source_line": 51
         },
         {
           "name": "axis_healing",
@@ -1077,7 +1077,7 @@
           "default_value": "''",
           "documentation": "Near-axis healing of the VMEC harmonics. Preferred selector: axis_healing = 'legacy'          - old default: discard min(|m|,4) surfaces and extrapolate. 'legacy_adaptive' - old adaptive boundary from determine_nheal_for_axis. 'powerlaw'        - rho**|m| continuation below s_axis_heal. 'polyfit'         - rho**|m| * least-squares poly(s) below s_axis_heal. Recommended. The empty string means \"unset\": deprecated logical switches below are mapped to a mode with a warning (see resolve_axis_healing_mode).",
           "source": "libneo/src/vmec_support/canonical_coordinates_mod.f90",
-          "source_line": 46,
+          "source_line": 49,
           "validation": {
             "choices": [
               "",
@@ -1099,7 +1099,7 @@
           "default_value": "1.0d-2",
           "documentation": "anchor flux for powerlaw/polyfit",
           "source": "libneo/src/vmec_support/canonical_coordinates_mod.f90",
-          "source_line": 47
+          "source_line": 50
         },
         {
           "name": "axis_healing_polyfit_degree",
@@ -1112,7 +1112,7 @@
           "default_value": "3",
           "documentation": "polyfit polynomial degree in s",
           "source": "libneo/src/vmec_support/canonical_coordinates_mod.f90",
-          "source_line": 49
+          "source_line": 52
         },
         {
           "name": "am1",
