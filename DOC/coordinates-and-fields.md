@@ -325,6 +325,12 @@ during initialisation and read-only during tracing.
 | SPECTRE | `src/field/field_can_spectre.f90` | $\rho_g$ | Meiss per volume (section 6) |
 | test | `src/field/field_can_test.f90` | $r$ | analytic circular tokamak |
 
+The pinned libneo dependency uses checked hybrid construction for VMEC
+Boozer tables and checked contour construction for the IMAS equilibrium
+converter. Equilibria that fail the construction's quality checks are rejected
+before orbit tracing. These defaults can change fields and orbit results for
+an existing input; SIMPLE does not supply a poor-equilibrium override.
+
 For Boozer chartmaps the Boozer splines come from the chartmap
 (`load_boozer_from_chartmap`) and `integ_to_ref_boozer_chartmap` maps
 $s \to \rho = \sqrt s$. The RK45 GPU path evaluates the same Boozer splines

@@ -85,6 +85,12 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
             ${CMAKE_SOURCE_DIR}/test/python/test_verification_report.py -q)
     set_tests_properties(test_verification_report PROPERTIES
         LABELS "unit;python" TIMEOUT 30)
+    add_test(NAME test_imas_equilibrium_converter
+        COMMAND ${Python3_EXECUTABLE} -m pytest
+            ${CMAKE_SOURCE_DIR}/test/python/test_imas_equilibrium_converter.py -q)
+    set_tests_properties(test_imas_equilibrium_converter PROPERTIES
+        LABELS "python;imas;slow" TIMEOUT 600
+        ENVIRONMENT "PYTHONPATH=${CMAKE_SOURCE_DIR}/python;SIMPLE_TEST_LIBNEO_SOURCE_DIR=${libneo_SOURCE_DIR};OMP_NUM_THREADS=1;MPLBACKEND=Agg")
 endif()
 
 add_test(

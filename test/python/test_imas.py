@@ -9,6 +9,8 @@ from pysimple.imas import (Markers, plasma_profiles, read_markers, run,
                           run_entry, write_markers)
 from pysimple.imas._common import initialize
 from pysimple.imas.equilibrium import _geqdsk_input, equilibrium_to_chartmap
+from imas_equilibrium_fixture import (expected_rho, normalized_radius,
+                                      solovev_equilibrium, toroidal_flux)
 
 
 def circular_equilibrium(version="4.1.1", *, sign=1, field=1, aspect=10):
@@ -55,9 +57,10 @@ def circular_equilibrium(version="4.1.1", *, sign=1, field=1, aspect=10):
     return eq
 
 
-def source(*, rate=False, version="4.1.1"):
-    p = Markers(np.array([[10.5, .3, 0, 1e4, .8],
-                          [10.6, -.7, 0, 2e4, -.6]]),
+def source(*, rate=False, version="4.1.1", positions=None):
+    if positions is None:
+        positions = [[10.5, .3, 0, 1e4, .8], [10.6, -.7, 0, 2e4, -.6]]
+    p = Markers(np.array(positions),
                 np.array([2., 3.]), 2, 1, 1, rate=rate)
     return write_markers([p], dd_version=version)
 
@@ -143,47 +146,48 @@ def test_bulk_profiles_no_fitting_or_species_loss():
 @pytest.mark.parametrize("sign", [1, -1])
 @pytest.mark.parametrize("version", ["3.42.2", "4.1.1"])
 def test_chartmap_extent_all_flux_directions(tmp_path, version, sign, field):
-    """libneo's scan stops at a signed flux; a reversed sign gives ~3 mm."""
+    """The checked contour construction reaches the LCFS for every polarity."""
     netCDF4 = pytest.importorskip("netCDF4")
     pytest.importorskip("_efit_to_boozer")
     path = equilibrium_to_chartmap(
-        circular_equilibrium(version, sign=sign, field=field), tmp_path/"c.nc",
+        solovev_equilibrium(version, sign=sign, field=field, schema=True), tmp_path/"c.nc",
         nstep=360, nlabel=32, ntheta_int=64, nsurfmax=400, nsurf=64, nrho=24,
         ntheta=48)
     with netCDF4.Dataset(path) as ds:
         x, y, z = [np.asarray(ds.variables[n][:]) for n in "xyz"]
         torflux = float(ds.torflux)
-    minor = np.sqrt((np.hypot(x, y)*.01-10)**2+(z*.01)**2)
-    assert .98 < minor.max() < 1.01
-    # Toroidal flux per radian of the unit disc at R*B_phi=20 T m, in G cm^2;
-    # SIMPLE's chartmap convention gives it the sign opposite to B_phi.
-    np.testing.assert_allclose(torflux, -field*20*(10-np.sqrt(99))*1e8, rtol=.01)
+    radius = normalized_radius(np.hypot(x, y)*.01, z*.01)
+    assert .98 < radius.max() < 1.01
+    # SIMPLE's CGS chartmap flux has the sign opposite to B_phi.
+    np.testing.assert_allclose(torflux, -toroidal_flux(field=field)*1e8, rtol=.01)
+
 
 
 @pytest.fixture(scope="module", params=[1, -1])
-def circular_chartmap(tmp_path_factory, request):
+def solovev_chartmap(tmp_path_factory, request):
     pytest.importorskip("_efit_to_boozer")
-    path = tmp_path_factory.mktemp("imas-field")/"circular.nc"
-    equilibrium_to_chartmap(circular_equilibrium(sign=request.param), path, nstep=360,
+    path = tmp_path_factory.mktemp("imas-field")/"solovev.nc"
+    equilibrium_to_chartmap(solovev_equilibrium(sign=request.param, schema=True), path, nstep=360,
         nlabel=32, ntheta_int=64, nsurfmax=400, nsurf=64, nrho=24, ntheta=48)
     return path
 
 
-def test_native_physical_coordinate_roundtrip(circular_chartmap):
+def test_native_physical_coordinate_roundtrip(solovev_chartmap):
     import pysimple
-    pysimple.init(circular_chartmap, ntestpart=2, trace_time=1e-6)
-    cylindrical = np.array([[10.5, .3, 0], [10.3, -.7, .4]]).T
+    pysimple.init(solovev_chartmap, ntestpart=2, trace_time=1e-6)
+    cylindrical = np.array([[1.8, .3, 0], [1.9, -.7, .1]]).T
     reference = pysimple.cylindrical_to_reference(cylindrical)
-    expected_rho = np.sqrt((10-np.sqrt(100-.25))/(10-np.sqrt(99)))
-    np.testing.assert_allclose(reference[0], expected_rho, atol=5e-3, rtol=0)
+    expected = [expected_rho(r, z) for r, _, z in cylindrical.T]
+    np.testing.assert_allclose(reference[0], expected, atol=5e-3, rtol=0)
     result = pysimple.reference_to_cylindrical(reference)
     np.testing.assert_allclose(result, cylindrical, atol=2e-7)
     with pytest.raises(ValueError, match="inverse failed"):
         pysimple.cylindrical_to_reference([-1, 0, 0])
 
 
-def test_native_actor_particle_and_energy_totals(circular_chartmap, tmp_path):
-    output = run(source(rate=True), field=circular_chartmap,
+def test_native_actor_particle_and_energy_totals(solovev_chartmap, tmp_path):
+    markers = [[1.8, .3, 0, 1e4, .8], [1.9, -.7, 0, 2e4, -.6]]
+    output = run(source(rate=True, positions=markers), field=solovev_chartmap,
                  duration=1e-6, source_interval=.2, workdir=tmp_path)
     output.validate()
     d = output.distribution[0]
@@ -201,7 +205,7 @@ def test_native_actor_particle_and_energy_totals(circular_chartmap, tmp_path):
                                   d.markers[1].positions)
 
 
-def test_actor_rejects_invalid_resolved_native_output(circular_chartmap, monkeypatch):
+def test_actor_rejects_invalid_resolved_native_output(solovev_chartmap, monkeypatch):
     import pysimple
     native_trace = pysimple.trace_parallel
 
@@ -213,15 +217,17 @@ def test_actor_rejects_invalid_resolved_native_output(circular_chartmap, monkeyp
 
     monkeypatch.setattr(pysimple, "trace_parallel", corrupt_final_state)
     with pytest.raises(RuntimeError, match="Invalid final states"):
-        run(source(), field=circular_chartmap, duration=1e-6)
+        markers = [[1.8, .3, 0, 1e4, .8], [1.9, -.7, 0, 2e4, -.6]]
+        run(source(positions=markers), field=solovev_chartmap, duration=1e-6)
 
 
 def test_database_actor_and_core_profiles(tmp_path):
     input_path, output_path = tmp_path/"input.nc", tmp_path/"output.nc"
-    alpha = read_markers(source(rate=True))[0]
+    markers = [[1.8, .3, 0, 1e4, .8], [1.9, -.7, 0, 2e4, -.6]]
+    alpha = read_markers(source(rate=True, positions=markers))[0]
     alpha.mass_number, alpha.nuclear_charge, alpha.charge = 4, 2, 2
     with imas.DBEntry(str(input_path), "w", dd_version="4.1.1") as entry:
-        for ids in [circular_equilibrium(), write_markers([alpha]), core_profiles()]:
+        for ids in [solovev_equilibrium(schema=True), write_markers([alpha]), core_profiles()]:
             entry.put(ids)
     output = run_entry(input_path, output_path, core_profiles=True,
         duration=1e-7, source_interval=.2, deterministic=True, workdir=tmp_path,

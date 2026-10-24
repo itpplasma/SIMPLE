@@ -5,6 +5,7 @@ compared to earlier versions.
 
 | Differing behavior | commit hash / tag and timestamp | Summary |
 | ---------------- | ------------------------------- | ------- |
+| Y | 2026-10-24 | Pin libneo defaults to checked hybrid VMEC Boozer tables and checked EFIT contour conversion for the optional IMAS interface. Fields and orbit results may change, and equilibria that fail quality checks are rejected before tracing. |
 | Y | 2026-10-20 | Accelerate the standalone full-orbit Gauss-2 energy/oracle evaluator with exact coefficient sparsity, shared recurrent Fourier phases and FortSym-generated field/Hessian contractions. The algebraically equivalent factored Hessian can change roundoff; orbit length, seeds, step policy, tolerances and energy checks are unchanged. |
 | Y | 2026-10-20 | Keep classifier surface Bmin/Bmax per particle. Multi-surface OpenMP classification plots now retain the serial trapped-passing boundary in `fort.20000`; particle classification and loss accounting are unchanged. |
 | N | 2026-10-16 | SIMPLE no longer imports the IEEE intrinsic modules; `finite_check` provides `is_finite` and `quiet_nan`. gfortran saved and restored the floating-point environment in every procedure with a local `USE` of a module whose dependencies imported IEEE, including `velo_can` and `integ_to_ref_albert` in the tracing loop. Albert-coordinate tracing is about 1.2x faster; outputs are byte-identical. |

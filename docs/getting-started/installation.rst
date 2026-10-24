@@ -68,7 +68,7 @@ Option                             Default        Effect
 ``SIMPLE_ENABLE_CUDA``             ``OFF``        native CUDA tracing; :doc:`/user-guide/gpu`
 ``SIMPLE_DETERMINISTIC_FP``        ``OFF``        no fast-math, bitwise reproducible
                                                   (``make build-deterministic``)
-``LIBNEO_REF``                     automatic      libneo branch, tag or commit
+``LIBNEO_REF``                     pinned         libneo branch, tag or commit
                                                   (``make LIBNEO_REF=...``)
 ``LIBNEO_SOURCE_DIR``              unset          local libneo checkout (``make LIBNEO_PATH=...``)
 =================================  =============  ================================================

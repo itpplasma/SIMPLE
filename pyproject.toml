@@ -9,7 +9,7 @@ dependencies = ["numpy", "f90wrap==0.3.0"]
 optional-dependencies.plotting = ["matplotlib>=3.9", "netCDF4>=1.7"]
 optional-dependencies.imas = ["imas-python>=2.3,<3", "imas-data-dictionaries>=4.1.1",
                               "netCDF4>=1.7", "scipy>=1.15",
-                              "libneo @ git+https://github.com/itpplasma/libneo.git@151f58b413077fca1a902855db1e334bfaab7197"]
+                              "libneo @ git+https://github.com/itpplasma/libneo.git@3c44110badf7a7cf715d40cc2a83942592db9d3e"]
 classifiers = [
     "License :: OSI Approved :: MIT License",
 ]
