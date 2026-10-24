@@ -669,6 +669,7 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
             ${CMAKE_CURRENT_SOURCE_DIR}/test_class_scores_driver.py
             $<TARGET_FILE:simple.x>
             ${WOUT_FILE}
+            $<TARGET_FILE:test_continuous_classifier_scores.x>
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(test_class_scores_driver PROPERTIES
         LABELS "integration;system"
@@ -1306,7 +1307,17 @@ add_executable(test_orbit_netcdf_output.x test_orbit_netcdf_output.f90)
 target_link_libraries(test_orbit_netcdf_output.x simple)
 
 # Create symlink to wout.nc in example directory
-file(CREATE_LINK "${WOUT_FILE}" "${CMAKE_SOURCE_DIR}/examples/orbit_output_test/wout.nc" SYMBOLIC)
+include(${CMAKE_CURRENT_SOURCE_DIR}/ensure_orbit_wout_link.cmake)
+simple_ensure_orbit_wout_link(
+    "${WOUT_FILE}" "${CMAKE_SOURCE_DIR}/examples/orbit_output_test/wout.nc")
+
+add_test(NAME test_orbit_wout_link_configuration
+    COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_orbit_wout_link_configuration.py
+        --cmake ${CMAKE_COMMAND}
+        --helper ${CMAKE_CURRENT_SOURCE_DIR}/ensure_orbit_wout_link.cmake)
+set_tests_properties(test_orbit_wout_link_configuration PROPERTIES
+    LABELS "unit;cmake" TIMEOUT 60)
 
 # System test: Run SIMPLE to generate orbits.nc, then verify
 add_test(

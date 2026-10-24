@@ -1,10 +1,17 @@
 program test_continuous_classifier_scores
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_value, ieee_quiet_nan
-    use check_orbit_type_sub, only: compute_continuous_tip_scores
+    use check_orbit_type_sub, only: check_orbit_type, compute_continuous_tip_scores
+    use detect_oneline_mod, only: jpar_variation_rate, &
+                                  rotation_number_drift, precession_turns, &
+                                  jpar_sample_count, rotation_half_count, &
+                                  tip_count, jpar_spread, jpar_ref, &
+                                  topology_margin, score_status
     implicit none
 
-    integer :: errors
+    integer :: errors, k
+    real(dp) :: legacy_scores(12, 3), legacy_parts(6, 3)
+    character(len=32) :: argument
 
     errors = 0
     call test_constant_drift_rate(errors)
@@ -12,14 +19,71 @@ program test_continuous_classifier_scores
     call test_unresolved_reference(errors)
     call test_nonfinite_tip(errors)
     call test_too_few_tips(errors)
+    call test_regular_tip_maps(errors, legacy_scores, legacy_parts)
 
     if (errors > 0) then
         print *, "ERROR:", errors, "continuous classifier score checks failed"
         stop 1
     end if
     print *, "Continuous classifier score checks passed"
+    if (command_argument_count() == 1) then
+        call get_command_argument(1, argument)
+        if (trim(argument) /= '--legacy-controls') error stop 'unknown argument'
+        do k = 1, 3
+            write (*, '(a,12(1x,es25.16e3))') 'legacy_score', legacy_scores(:, k)
+            write (*, '(a,6(1x,es25.16e3))') 'legacy_parts', legacy_parts(:, k)
+        end do
+    end if
 
 contains
+
+    subroutine test_regular_tip_maps(errors, scores, parts)
+        integer, intent(inout) :: errors
+        real(dp), intent(out) :: scores(12, 3), parts(6, 3)
+        real(dp), parameter :: step = 0.1_dp, twopi = 2.0_dp*acos(-1.0_dp)
+        real(dp), parameter :: spreads(3) = [0.0_dp, 15.0_dp, 16.0_dp]
+        integer, parameter :: expected_classes(3) = [1, 1, 2]
+        integer, parameter :: turns = 4, max_tips = ceiling(turns*twopi/step) + 2
+        real(dp) :: tip(3)
+        integer :: control, nfp, ideal, jpar, status, k
+
+        ! A rigid rotation on one invariant circle has return intervals of
+        ! 62 or 63 tips, well above the early-stochastic cutoff of ten.
+        ! Four recurrences preserve their angular order, so topology is regular.
+        ! Constant J is regular. Exact spreads at and above the unchanged 15 cm
+        ! threshold test its strict comparison without a sampled trajectory.
+        do control = 1, 3
+            nfp = 0
+            ideal = 0
+            jpar = 0
+            do k = 1, max_tips
+                tip = [0.3_dp, modulo(real(k - 1, dp)*step, twopi), 20.0_dp]
+                if (k >= 3) tip(3) = tip(3) + spreads(control)
+                call check_orbit_type(turns, nfp, tip, ideal, jpar, status)
+                if (score_status /= 0) exit
+            end do
+            call assert_equal('controlled topology', ideal, 1, errors)
+            call assert_equal('controlled J_parallel', jpar, &
+                              expected_classes(control), errors)
+            call assert_equal('controlled score status', score_status, 1, errors)
+            call assert_equal('controlled resolved tips', tip_count, &
+                              ceiling(turns*twopi/step) + 1, errors)
+            call assert_close('controlled J_parallel spread', jpar_spread, &
+                              spreads(control), errors)
+            if (topology_margin <= 0.0_dp) then
+                print *, 'FAIL: controlled topology margin is not positive'
+                errors = errors + 1
+            end if
+            scores(:, control) = [real(control, dp), &
+                                  jpar_variation_rate, rotation_number_drift, &
+                                  precession_turns, real(jpar_sample_count, dp), &
+                                  real(rotation_half_count, dp), &
+                                  real(tip_count, dp), jpar_spread, jpar_ref, &
+                                  topology_margin, real(score_status, dp), 1.0_dp]
+            parts(:, control) = [real(control, dp), tip(1), 0.0_dp, &
+                                 real(jpar, dp), real(ideal, dp), 0.0_dp]
+        end do
+    end subroutine test_regular_tip_maps
 
     subroutine test_constant_drift_rate(errors)
         integer, intent(inout) :: errors

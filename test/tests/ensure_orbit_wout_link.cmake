@@ -1,0 +1,10 @@
+# Keep a matching source link unchanged during repeated configuration.
+function(simple_ensure_orbit_wout_link target link)
+    if(IS_SYMLINK "${link}")
+        file(READ_SYMLINK "${link}" current_target)
+        if(current_target STREQUAL "${target}")
+            return()
+        endif()
+    endif()
+    file(CREATE_LINK "${target}" "${link}" SYMBOLIC)
+endfunction()

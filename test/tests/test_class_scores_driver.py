@@ -3,12 +3,14 @@
 
 The independent numerical oracle for the score formulas is the analytic
 ``test_continuous_classifier_scores`` unit test. This driver verifies that a
-real trace writes those scores with their resolution metadata, while retaining
-the legacy margins solely for published-classifier compatibility checks.
+real trace writes those scores with their resolution metadata. Controlled
+native tip maps guarantee legacy threshold and topology-margin coverage,
+which a finite trace of randomly sampled QA markers cannot guarantee.
 """
 
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -16,6 +18,7 @@ from simple_driver import run_simple_case
 
 NTESTPART = 32
 TOL_PERPINV = 15.0
+LEGACY_CLASSES = (1, 1, 2)
 
 CONFIG = """
 &config
@@ -50,9 +53,34 @@ def read_rows(path: Path) -> list[list[float]]:
 
 
 def main() -> int:
-    if len(sys.argv) != 3:
-        print("usage: test_class_scores_driver.py SIMPLE_X WOUT_FILE", file=sys.stderr)
+    if len(sys.argv) != 4:
+        print(
+            "usage: test_class_scores_driver.py SIMPLE_X WOUT_FILE SCORE_TEST",
+            file=sys.stderr,
+        )
         return 2
+
+    controls = subprocess.run(
+        [str(Path(sys.argv[3]).resolve()), "--legacy-controls"],
+        text=True, capture_output=True, timeout=90, check=False,
+    )
+    if controls.returncode != 0:
+        raise AssertionError(
+            f"native legacy controls failed:\n{controls.stdout}{controls.stderr}"
+        )
+    control_scores = []
+    control_parts = []
+    for line in controls.stdout.splitlines():
+        fields = line.split()
+        if fields and fields[0] == "legacy_score":
+            control_scores.append([float(value) for value in fields[1:]])
+        if fields and fields[0] == "legacy_parts":
+            control_parts.append([float(value) for value in fields[1:]])
+    if (len(control_scores) != len(LEGACY_CLASSES)
+            or len(control_parts) != len(LEGACY_CLASSES)):
+        raise AssertionError(
+            f"native legacy controls did not emit three pairs:\n{controls.stdout}"
+        )
 
     case = run_simple_case(
         Path(sys.argv[1]).resolve(), Path(sys.argv[2]).resolve(), "class_scores", CONFIG
@@ -70,7 +98,8 @@ def main() -> int:
     jpar_scores = 0
     margins = 0
     rotation_scores = 0
-    for score, part in zip(scores, parts):
+    rows = zip(scores + control_scores, parts + control_parts)
+    for row, (score, part) in enumerate(rows):
         (index, jpar_rate, rotation_drift, turns, jpar_samples,
          rotation_samples, tip_count, spread, reference, margin, status,
          trap_par) = score
@@ -95,10 +124,21 @@ def main() -> int:
             expected_rotation_samples = 0
         if int(rotation_samples) != expected_rotation_samples:
             raise AssertionError(f"particle {index}: rotation sample count mismatch")
-        if int(jpar_samples) > 0:
+        if row < NTESTPART and int(jpar_samples) > 0:
             jpar_scores += 1
-        if int(rotation_samples) > 0:
+        if row < NTESTPART and int(rotation_samples) > 0:
             rotation_scores += 1
+
+        if row >= NTESTPART:
+            expected_class = LEGACY_CLASSES[row - NTESTPART]
+            if int(status) != 1 or int(part[3]) != expected_class or int(part[4]) != 1:
+                raise AssertionError(
+                    f"native legacy control {expected_class}: {score}, {part}"
+                )
+            if margin <= 0.0:
+                raise AssertionError(
+                    f"native legacy control has no positive topology margin: {score}"
+                )
 
         # Status 2 never reaches the margin code at all.
         if int(status) not in (1, 3):
@@ -126,16 +166,18 @@ def main() -> int:
 
     if checked == 0 or jpar_scores == 0 or rotation_scores == 0:
         raise AssertionError(
-            "the trace did not resolve both continuous scores and a legacy class"
+            f"missing score coverage: QA J_parallel={jpar_scores}, "
+            f"QA rotation={rotation_scores}, legacy={checked}"
         )
-    # Margin coverage is opportunistic: status 1 needs an orbit the recurrence
-    # test calls one-line with a non-empty monotonicity interval, which this
-    # field and surface do not reliably produce. The J_parallel comparison is
-    # the load-bearing one here.
+    if margins < len(LEGACY_CLASSES):
+        raise AssertionError(
+            f"the native controls did not exercise all topology margins: {margins}"
+        )
     print(
         f"continuous J_parallel score on {jpar_scores} orbits; "
         f"rotation drift on {rotation_scores}; legacy threshold agreement on "
-        f"{checked}; topology margin exercised on {margins}"
+        f"{checked} rows including three native controls; "
+        f"topology margin exercised on {margins}"
     )
     return 0
 
