@@ -182,6 +182,29 @@ main() {
             ;;
     esac
 
+    # Keep raw runs intact. The reporting baseline applies only to the exact
+    # independently qualified source, built dependency and fixture context.
+    local decoded_case
+    for decoded_case in $TEST_CASES; do
+        [ "$decoded_case" = "albert_coils" ] || continue
+        if python3 "$SCRIPT_DIR/qualified_decoded_reporting.py" \
+               "$PROJECT_ROOT_REF" "$PROJECT_ROOT_REF/build" "$CURRENT_BUILD_DIR" \
+               "$RUN_DIR_REF/albert_coils" "$RUN_DIR_CUR/albert_coils"; then
+            local decoded_reference="$RUN_DIR_CUR.reference" case_name
+            if [ "$comparison_ref" != "$decoded_reference" ]; then
+                for case_name in $TEST_CASES; do
+                    mkdir -p "$decoded_reference/$case_name"
+                    cp -asf "$comparison_ref/$case_name/." "$decoded_reference/$case_name/"
+                done
+            fi
+            comparison_ref="$decoded_reference"
+            cp --remove-destination \
+                "$SCRIPT_DIR/baselines/decoded_lcfs_reporting/albert_coils/"*.dat \
+                "$comparison_ref/albert_coils/"
+            echo "Using independently qualified decoded LCFS reporting for Albert coils"
+        fi
+    done
+
     # Compare results
     "$SCRIPT_DIR/compare_golden_results.sh" "$comparison_ref" "$RUN_DIR_CUR" "$TEST_CASES"
     comparison_result=$?
