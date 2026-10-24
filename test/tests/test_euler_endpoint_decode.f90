@@ -55,7 +55,7 @@ program test_euler_endpoint_decode
     use euler_endpoint_witness
     use simple, only: tracer_t, decode_symplectic_state
     use simple_main, only: to_standard_z_coordinates, validate_rk_state, &
-                           validate_symplectic_endpoint
+                           validate_symplectic_endpoint, symplectic_recovery_start
     use field_can_mod, only: evaluate
     use orbit_symplectic, only: orbit_sympl_init, orbit_timestep_sympl
     use orbit_symplectic_base, only: symplectic_integrator_t, &
@@ -119,6 +119,7 @@ contains
         type(tracer_t) :: anorb
         type(symplectic_integrator_t) :: initial_si, saved_si
         real(dp) :: saved_f(107), decoded(5), wrapped(5), checked(5)
+        real(dp) :: recovery(5), stage_p
         real(dp) :: expected_r, expected_pth, expected_stage, fraction
         integer :: ierr
         logical :: boundary
@@ -160,6 +161,25 @@ contains
                                           checked, fraction, ierr, boundary)
         if (ierr /= 0 .or. boundary) &
             error stop 'Valid reconstructed Euler endpoint was rejected'
+        call assert_unchanged(anorb, saved_si, saved_f)
+
+        ! RK recovery and reseeding restart from the mixed-stage state the map
+        ! carries (stage radius, advanced angles, pitch from the cached field),
+        ! not from the decoded endpoint, and always with the reference momentum.
+        call symplectic_recovery_start(anorb%si, anorb%f, decoded, .true., &
+                                       recovery)
+        stage_p = sqrt(anorb%f%mu*anorb%f%Bmod + 0.5_dp*anorb%f%vpar**2)
+        if (any(recovery(1:3) /= saved_si%z(1:3)) .or. &
+            abs(recovery(1) - expected_stage) > TOL .or. &
+            abs(recovery(1) - decoded(1)) <= 1.0e3_dp*TOL .or. &
+            recovery(4) /= anorb%si%pabs .or. &
+            abs(recovery(5) - anorb%f%vpar/(sqrt(2.0_dp)*stage_p)) > TOL) &
+            error stop 'RK recovery does not start from the mixed-stage state'
+        call symplectic_recovery_start(anorb%si, anorb%f, decoded, .false., &
+                                       recovery)
+        if (any(recovery([1, 2, 3, 5]) /= decoded([1, 2, 3, 5])) .or. &
+            recovery(4) /= anorb%si%pabs) &
+            error stop 'RK recovery changed a state not decoded from the map'
         call assert_unchanged(anorb, saved_si, saved_f)
 
         ! An actual wrong-energy canonical state must still be rejected.
