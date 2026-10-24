@@ -2613,6 +2613,51 @@ contains
         end if
     end subroutine validate_symplectic_endpoint
 
+    subroutine validate_decoded_symplectic_endpoint(si_start, f_start, anorb, &
+                         z_start, start_decoded, z_candidate, z, event_fraction, ierr, &
+                                                    reference_boundary)
+        type(symplectic_integrator_t), intent(in) :: si_start
+        type(field_can_t), intent(in) :: f_start
+        type(tracer_t), intent(in) :: anorb
+        real(dp), intent(in) :: z_start(5), z_candidate(5)
+        logical, intent(in) :: start_decoded
+        real(dp), intent(inout) :: z(5)
+        real(dp), intent(out) :: event_fraction
+        integer, intent(out) :: ierr
+        logical, intent(out) :: reference_boundary
+        real(dp) :: mixed_start(5), mixed_end(5), checked(5), mixed_fraction
+        logical :: mixed_boundary
+
+        ! Energy acceptance and RK recovery retain the state carried by the
+        ! map before endpoint decoding. In particular, keep the energy check
+        ! at the legacy interpolated boundary when that state crosses it.
+        call symplectic_recovery_start(si_start, f_start, z_start, &
+                                       start_decoded, mixed_start)
+        if (start_decoded) mixed_start(4) = &
+            sqrt(f_start%mu*f_start%Bmod + 0.5_dp*f_start%vpar**2)
+        call symplectic_recovery_start(anorb%si, anorb%f, z_candidate, &
+                                       .true., mixed_end)
+        mixed_end(4) = sqrt(anorb%f%mu*anorb%f%Bmod + &
+                            0.5_dp*anorb%f%vpar**2)
+        checked = mixed_end
+        call validate_symplectic_endpoint(si_start, anorb, mixed_start, &
+                               mixed_end, checked, mixed_fraction, ierr, mixed_boundary)
+        reference_boundary = .false.
+        event_fraction = 0.0_dp
+        if (ierr /= 0) then
+            if (.not. mixed_boundary .or. ierr /= 1) then
+                z = z_start
+                return
+            end if
+        end if
+
+        ! Only the LCFS event and public endpoint use decoded coordinates.
+        ierr = 0
+        call validate_rk_step_or_reference_boundary(z_start, z_candidate, &
+                            anorb%fper, z=z, event_fraction=event_fraction, ierr=ierr, &
+                                                  reference_boundary=reference_boundary)
+    end subroutine validate_decoded_symplectic_endpoint
+
     subroutine macrostep(anorb, z, kt, ierr_orbit, ntau_local, exit_step, &
                          hold_streak, numerical_hold_any, rk_recovery, z_decoded)
         use alpha_lifetime_sub, only: orbit_timestep_axis
@@ -2761,9 +2806,11 @@ contains
                     z_decoded_local = ierr_orbit == 0
                     z_step_end = z
                     if (ierr_orbit == 0) &
-                        call validate_symplectic_endpoint(si_step_start, anorb, &
-                               z_step_start, z_step_end, z, loss_fraction, ierr_orbit, &
-                                                      reference_boundary)
+                        call validate_decoded_symplectic_endpoint( &
+                        si_step_start, f_step_start, anorb, &
+                        z_step_start, step_start_decoded, z_step_end, z, &
+                        loss_fraction, ierr_orbit, &
+                        reference_boundary)
                     if (reference_boundary .and. ierr_orbit == 1) then
                         call integ_to_ref(z(1:3), u_event)
                         anorb%si%last_step_fraction = loss_fraction
@@ -3130,9 +3177,11 @@ contains
                     z_decoded_local = ierr_orbit == 0
                     z_step_end = z
                     if (ierr_orbit == 0) &
-                        call validate_symplectic_endpoint(si_step_start, anorb, &
-                           z_step_start, z_step_end, z, boundary_fraction, ierr_orbit, &
-                                                      reference_boundary)
+                        call validate_decoded_symplectic_endpoint( &
+                        si_step_start, f_step_start, anorb, &
+                        z_step_start, step_start_decoded, z_step_end, z, &
+                        boundary_fraction, ierr_orbit, &
+                        reference_boundary)
                     if (reference_boundary .and. ierr_orbit == 1) then
                         anorb%si%last_step_fraction = boundary_fraction
                         anorb%si%last_event_fraction_width = 1.d0
