@@ -1986,7 +1986,7 @@ contains
         integer :: it, ierr_orbit, it_final, it_f
         integer :: first_unresolved_it, hold_streak
         integer(8) :: kt
-        logical :: passing, faulted, numerical_hold, physical_exit
+        logical :: passing, faulted, numerical_hold, physical_exit, z_decoded
         logical :: numerically_confined
         type(rk_recovery_state_t) :: rk_recovery
         type(classification_result_t) :: class_result
@@ -1998,6 +1998,7 @@ contains
         first_unresolved_it = 0
         hold_streak = 0
         rk_recovery = rk_recovery_state_t()
+        z_decoded = .false.
         exit_step = -1d0
         orbit_traj = quiet_nan()
         orbit_times = quiet_nan()
@@ -2069,12 +2070,12 @@ contains
                         ntau_macro(it), ipart, x_prev_m, exit_step, &
                         hold_streak=hold_streak, &
                         numerical_hold_any=numerical_hold, &
-                        rk_recovery=rk_recovery)
+                                           rk_recovery=rk_recovery, z_decoded=z_decoded)
                 else
                     call macrostep(anorb, z, kt, ierr_orbit, ntau_macro(it), &
                         exit_step, hold_streak=hold_streak, &
                         numerical_hold_any=numerical_hold, &
-                        rk_recovery=rk_recovery)
+                                   rk_recovery=rk_recovery, z_decoded=z_decoded)
                 end if
             end if
 
@@ -2613,7 +2614,7 @@ contains
     end subroutine validate_symplectic_endpoint
 
     subroutine macrostep(anorb, z, kt, ierr_orbit, ntau_local, exit_step, &
-            hold_streak, numerical_hold_any, rk_recovery)
+                         hold_streak, numerical_hold_any, rk_recovery, z_decoded)
         use alpha_lifetime_sub, only: orbit_timestep_axis
         use orbit_fo_boris, only: fo_state_t
         use orbit_symplectic, only: advance_symplectic_with_retry, &
@@ -2628,6 +2629,9 @@ contains
         integer, intent(inout), optional :: hold_streak
         logical, intent(out), optional :: numerical_hold_any
         type(rk_recovery_state_t), intent(inout), optional :: rk_recovery
+        ! True when z is the decoded endpoint of the carried symplectic state
+        ! anorb%si/anorb%f rather than an RK, reseed or initial state.
+        logical, intent(inout), optional :: z_decoded
 
         integer :: hold_streak_local, ktau, recovery_method, symplectic_status
         integer :: ierr_coll, collision_hold_start
@@ -2636,6 +2640,8 @@ contains
         logical :: numerical_hold, numerical_hold_any_local
         logical :: reference_boundary, symplectic_accepted
         type(rk_recovery_state_t) :: rk_recovery_local
+        real(dp) :: z_recovery_start(5)
+        logical :: z_decoded_local, step_start_decoded
         type(symplectic_integrator_t) :: si_step_start
         type(field_can_t) :: f_step_start
         type(symplectic_integrator_t) :: collision_si_start
@@ -2649,12 +2655,15 @@ contains
         numerical_hold_any_local = .false.
         rk_recovery_local = rk_recovery_state_t()
         if (present(rk_recovery)) rk_recovery_local = rk_recovery
+        z_decoded_local = .false.
+        if (present(z_decoded)) z_decoded_local = z_decoded
 
         do ktau = 1, ntau_local
             numerical_hold = .false.
             reference_boundary = .false.
             symplectic_accepted = .false.
             z_step_start = z
+            step_start_decoded = z_decoded_local
             if (swcoll) then
                 collision_si_start = anorb%si
                 collision_field_start = anorb%f
@@ -2689,6 +2698,7 @@ contains
                 cycle
             end if
             if (integmode <= 0 .or. rk_recovery_local%active) then
+                z_decoded_local = .false.
                 if (rk_recovery_local%active) then
                     call orbit_timestep_recovery(anorb%fo, z, dtaumin, relerr, &
                         merge(rk_recovery_local%momentum_reference, &
@@ -2748,6 +2758,7 @@ contains
                     symplectic_status = ierr_orbit
                     ierr_orbit = 0
                     call to_standard_z_coordinates(anorb, z, ierr_orbit)
+                    z_decoded_local = ierr_orbit == 0
                     z_step_end = z
                     if (ierr_orbit == 0) &
                         call validate_symplectic_endpoint(si_step_start, anorb, &
@@ -2763,6 +2774,7 @@ contains
                     else if (ierr_orbit /= 0) then
                         ierr_orbit = SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
                         z = z_step_start
+                        z_decoded_local = step_start_decoded
                         anorb%si = si_step_start
                         anorb%f = f_step_start
                     else if (symplectic_status == SYMPLECTIC_STEP_BOUNDARY) then
@@ -2787,16 +2799,24 @@ contains
                     ! z(4) of the symplectic state, so that RK, validation and
                     ! LCFS interpolation share one start state.
                     z_step_start(4) = si_step_start%pabs
-                    z = z_step_start
+                    ! Two step-start states are kept on purpose. z_step_start
+                    ! is the decoded physical endpoint and serves the LCFS
+                    ! decision and the reported endpoint. RK recovery, its
+                    ! validation and the reseed restart from the mixed-stage
+                    ! state that the symplectic map carries, as before the
+                    ! endpoint decode was introduced.
+                    call symplectic_recovery_start(si_step_start, f_step_start, &
+                                     z_step_start, step_start_decoded, z_recovery_start)
+                    z = z_recovery_start
                     call orbit_timestep_recovery(anorb%fo, z, dtaumin, relerr, &
                         si_step_start%pabs, ierr_orbit, recovery_method)
                     z_step_end = z
-                    call validate_rk_step_or_reference_boundary(z_step_start, &
+                    call validate_rk_step_or_reference_boundary(z_recovery_start, &
                         z_step_end, anorb%fper, si_step_start%pabs, z, &
                         loss_fraction, ierr_orbit, reference_boundary)
                     if (ierr_orbit == 1 .and. .not. reference_boundary) then
                         z_step_end = z
-                        call locate_validated_lcfs(z_step_start, z_step_end, &
+                        call locate_validated_lcfs(z_recovery_start, z_step_end, &
                             anorb%fper, z, loss_fraction, ierr_orbit)
                     end if
                     if (ierr_orbit == 0) then
@@ -2804,8 +2824,9 @@ contains
                             si_step_start%pabs)
                         call count_event(EVT_SYMPLECTIC_RK_RECOVERY)
                         call activate_rk_recovery(rk_recovery_local, &
-                            z_step_start, si_step_start%pabs)
+                                                  z_recovery_start, si_step_start%pabs)
                         hold_streak_local = 0
+                        z_decoded_local = .false.
                     else if (ierr_orbit == 1) then
                         anorb%si%last_step_fraction = loss_fraction
                         if (reference_boundary) then
@@ -2825,6 +2846,7 @@ contains
                         z = z_step_start
                         anorb%si = si_step_start
                         anorb%f = f_step_start
+                        z_decoded_local = step_start_decoded
                         call hold_isolated_warning_failure(z, z_step_start, &
                             ierr_orbit, hold_streak_local, numerical_hold, &
                             numerical_hold_any_local)
@@ -2869,6 +2891,7 @@ contains
                     rk_recovery_local = collision_recovery_start
                     rk_recovery_local%symplectic_steps = 0
                     hold_streak_local = collision_hold_start
+                    z_decoded_local = step_start_decoded
                     ierr_orbit = SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
                     exit
                 end if
@@ -2884,6 +2907,7 @@ contains
         if (present(numerical_hold_any)) &
             numerical_hold_any = numerical_hold_any_local
         if (present(rk_recovery)) rk_recovery = rk_recovery_local
+        if (present(z_decoded)) z_decoded = z_decoded_local
     end subroutine macrostep
 
     subroutine hold_isolated_warning_failure(z, z_step_start, ierr_orbit, &
@@ -2974,7 +2998,7 @@ contains
 
     subroutine macrostep_with_wall_check(anorb, z, kt, ierr_orbit, ntau_local, &
             ipart, x_prev_m, exit_step, hold_streak, numerical_hold_any, &
-            rk_recovery)
+                                         rk_recovery, z_decoded)
         use alpha_lifetime_sub, only: orbit_timestep_axis
         use orbit_fo_boris, only: fo_state_t
         use orbit_symplectic, only: advance_symplectic_with_retry, &
@@ -2991,6 +3015,9 @@ contains
         integer, intent(inout), optional :: hold_streak
         logical, intent(out), optional :: numerical_hold_any
         type(rk_recovery_state_t), intent(inout), optional :: rk_recovery
+        ! True when z is the decoded endpoint of the carried symplectic state
+        ! anorb%si/anorb%f rather than an RK, reseed or initial state.
+        logical, intent(inout), optional :: z_decoded
 
         integer :: hold_streak_local, ktau, recovery_method, symplectic_status
         integer :: ierr_coll, collision_hold_start
@@ -3001,6 +3028,8 @@ contains
         logical :: hit, numerical_hold, numerical_hold_any_local
         logical :: reference_boundary, symplectic_accepted
         type(rk_recovery_state_t) :: rk_recovery_local
+        real(dp) :: z_recovery_start(5)
+        logical :: z_decoded_local, step_start_decoded
         type(symplectic_integrator_t) :: si_step_start
         type(field_can_t) :: f_step_start
         type(symplectic_integrator_t) :: collision_si_start
@@ -3015,12 +3044,15 @@ contains
         numerical_hold_any_local = .false.
         rk_recovery_local = rk_recovery_state_t()
         if (present(rk_recovery)) rk_recovery_local = rk_recovery
+        z_decoded_local = .false.
+        if (present(z_decoded)) z_decoded_local = z_decoded
         do ktau = 1, ntau_local
             numerical_hold = .false.
             reference_boundary = .false.
             symplectic_accepted = .false.
             segment_duration = 1.0_dp
             z_step_start = z
+            step_start_decoded = z_decoded_local
             if (swcoll) then
                 collision_si_start = anorb%si
                 collision_field_start = anorb%f
@@ -3029,6 +3061,7 @@ contains
                 collision_hold_start = hold_streak_local
             end if
             if (integmode <= 0 .or. rk_recovery_local%active) then
+                z_decoded_local = .false.
                 if (rk_recovery_local%active) then
                     call orbit_timestep_recovery(anorb%fo, z, dtaumin, relerr, &
                         merge(rk_recovery_local%momentum_reference, &
@@ -3094,6 +3127,7 @@ contains
                     symplectic_status = ierr_orbit
                     ierr_orbit = 0
                     call to_standard_z_coordinates(anorb, z, ierr_orbit)
+                    z_decoded_local = ierr_orbit == 0
                     z_step_end = z
                     if (ierr_orbit == 0) &
                         call validate_symplectic_endpoint(si_step_start, anorb, &
@@ -3106,6 +3140,7 @@ contains
                     else if (ierr_orbit /= 0) then
                         ierr_orbit = SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
                         z = z_step_start
+                        z_decoded_local = step_start_decoded
                         anorb%si = si_step_start
                         anorb%f = f_step_start
                     else if (symplectic_status == SYMPLECTIC_STEP_BOUNDARY) then
@@ -3142,16 +3177,24 @@ contains
                     ! z(4) of the symplectic state, so that RK, validation and
                     ! LCFS interpolation share one start state.
                     z_step_start(4) = si_step_start%pabs
-                    z = z_step_start
+                    ! Two step-start states are kept on purpose. z_step_start
+                    ! is the decoded physical endpoint and serves the LCFS
+                    ! decision and the reported endpoint. RK recovery, its
+                    ! validation and the reseed restart from the mixed-stage
+                    ! state that the symplectic map carries, as before the
+                    ! endpoint decode was introduced.
+                    call symplectic_recovery_start(si_step_start, f_step_start, &
+                                     z_step_start, step_start_decoded, z_recovery_start)
+                    z = z_recovery_start
                     call orbit_timestep_recovery(anorb%fo, z, dtaumin, relerr, &
                         si_step_start%pabs, ierr_orbit, recovery_method)
                     z_step_end = z
-                    call validate_rk_step_or_reference_boundary(z_step_start, &
+                    call validate_rk_step_or_reference_boundary(z_recovery_start, &
                         z_step_end, anorb%fper, si_step_start%pabs, z, &
                         boundary_fraction, ierr_orbit, reference_boundary)
                     if (ierr_orbit == 1 .and. .not. reference_boundary) then
                         z_step_end = z
-                        call locate_validated_lcfs(z_step_start, z_step_end, &
+                        call locate_validated_lcfs(z_recovery_start, z_step_end, &
                             anorb%fper, z, boundary_fraction, ierr_orbit)
                     end if
                     if (ierr_orbit == 0) then
@@ -3159,14 +3202,15 @@ contains
                             si_step_start%pabs)
                         call count_event(EVT_SYMPLECTIC_RK_RECOVERY)
                         call activate_rk_recovery(rk_recovery_local, &
-                            z_step_start, si_step_start%pabs)
+                                                  z_recovery_start, si_step_start%pabs)
                         hold_streak_local = 0
+                        z_decoded_local = .false.
                     else if (ierr_orbit == 1) then
                         call integ_to_ref(z(1:3), u_ref_cur)
                         call ref_coords%evaluate_cart(u_ref_cur, x_cur)
                         x_cur_m = x_cur*chartmap_cart_scale_to_m
                         z_step_end = z
-                        call locate_wall_segment(z, z_step_start, z_step_end, &
+                        call locate_wall_segment(z, z_recovery_start, z_step_end, &
                             ipart, &
                             x_prev_m, u_ref_prev, x_cur_m, u_ref_cur, anorb%fper, &
                             real(kt, dp), boundary_fraction, hit, wall_exit_step)
@@ -3190,6 +3234,7 @@ contains
                         z = z_step_start
                         anorb%si = si_step_start
                         anorb%f = f_step_start
+                        z_decoded_local = step_start_decoded
                         call hold_isolated_warning_failure(z, z_step_start, &
                             ierr_orbit, hold_streak_local, numerical_hold, &
                             numerical_hold_any_local)
@@ -3231,6 +3276,7 @@ contains
                     rk_recovery_local = collision_recovery_start
                     rk_recovery_local%symplectic_steps = 0
                     hold_streak_local = collision_hold_start
+                    z_decoded_local = step_start_decoded
                     ierr_orbit = SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
                     exit
                 end if
@@ -3265,6 +3311,7 @@ contains
         if (present(numerical_hold_any)) &
             numerical_hold_any = numerical_hold_any_local
         if (present(rk_recovery)) rk_recovery = rk_recovery_local
+        if (present(z_decoded)) z_decoded = z_decoded_local
     end subroutine macrostep_with_wall_check
 
     subroutine to_standard_z_coordinates(anorb, z, ierr)
@@ -3277,6 +3324,32 @@ contains
                                      z, decode_status)
         if (present(ierr)) ierr = decode_status
     end subroutine to_standard_z_coordinates
+
+    subroutine symplectic_recovery_start(si_step_start, f_step_start, &
+                                         z_step_start, step_start_decoded, z_start)
+        !> Start state for RK recovery and reseeding after a failed symplectic
+        !> step. If z_step_start was decoded from the carried symplectic state,
+        !> recovery restarts from the mixed-stage state of that map, i.e. the
+        !> carried coordinates si%z(1:3) with pitch from the field cache, as
+        !> before decode_symplectic_state existed. The decoded endpoint is kept
+        !> for the LCFS decision and the reported endpoint only. Otherwise
+        !> (initial, RK or reseeded state) z_step_start is the carried state.
+        !> The momentum is the reference momentum si%pabs in both cases.
+        type(symplectic_integrator_t), intent(in) :: si_step_start
+        type(field_can_t), intent(in) :: f_step_start
+        real(dp), intent(in) :: z_step_start(5)
+        logical, intent(in) :: step_start_decoded
+        real(dp), intent(out) :: z_start(5)
+
+        z_start = z_step_start
+        if (step_start_decoded) then
+            z_start(1:3) = si_step_start%z(1:3)
+            z_start(4) = dsqrt(f_step_start%mu*f_step_start%Bmod + &
+                               0.5d0*f_step_start%vpar**2)
+            z_start(5) = f_step_start%vpar/(z_start(4)*sqrt2)
+        end if
+        z_start(4) = si_step_start%pabs
+    end subroutine symplectic_recovery_start
 
     subroutine increase_confined_count(it, passing)
         integer, intent(in) :: it
