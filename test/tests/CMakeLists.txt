@@ -1200,6 +1200,17 @@ set_tests_properties(test_result_accounting PROPERTIES
     RESOURCE_LOCK simple_result_files
     TIMEOUT 15)
 
+add_executable(test_spectre_warning_history.x test_spectre_warning_history.f90)
+target_link_libraries(test_spectre_warning_history.x simple)
+add_test(NAME test_spectre_warning_history
+    COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_spectre_warning_history.py
+        $<TARGET_FILE:test_spectre_warning_history.x>)
+set_tests_properties(test_spectre_warning_history PROPERTIES
+    LABELS "unit;python"
+    ENVIRONMENT "OMP_NUM_THREADS=4;OPENBLAS_NUM_THREADS=1"
+    TIMEOUT 45)
+
 # Restart integration test (TEST field, deterministic)
 add_test(NAME test_restart_integration
     COMMAND ${Python3_EXECUTABLE}
