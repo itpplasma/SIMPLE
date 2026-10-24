@@ -186,6 +186,7 @@ contains
         swcoll = .false.
         orbit_model = ORBIT_GC
         orbit_timestep_sympl => locate_lcfs_step
+        norb%integmode = 3 ! This mock supplies an already physical endpoint.
         z = [0.9_dp, 0.1_dp, 0.2_dp, 1.0_dp, 0.0_dp]
         kt = 0_int64
         call macrostep(norb, z, kt, step_error, 1, exit_step)
@@ -346,6 +347,7 @@ contains
             symplectic_newton_warning_mode = warning == 1
             do wall_path = 0, 1
                 local_orbit = norb
+                local_orbit%integmode = 3
                 call init_sympl(local_orbit%si, local_orbit%f, initial, &
                                 1.0e-3_dp, 1.0e-3_dp, 1.0e-12_dp, 3)
                 if (.not. all(is_finite(local_orbit%si%z)) .or. &
@@ -426,6 +428,7 @@ contains
         saved_wall_gate = wall_query_rho_lcfs
         wall_query_rho_lcfs = 1.0_dp
         local_orbit = norb
+        local_orbit%integmode = 3
         saved_ro0 = ro0
         ro0 = 1.0_dp ! Normalized TEST-field charge-to-mass scale.
         symplectic_newton_warning_mode = .false.
@@ -607,6 +610,7 @@ contains
         injected_radial_drift = 0.0_dp
         do wall_path = 0, 1
             local_orbit = norb
+            local_orbit%integmode = 3
             z = initial
             call init_sympl(local_orbit%si, local_orbit%f, z, &
                             1.0e-3_dp, 1.0e-3_dp, 1.0e-12_dp, 3)
