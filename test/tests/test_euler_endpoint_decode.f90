@@ -55,7 +55,8 @@ program test_euler_endpoint_decode
     use euler_endpoint_witness
     use simple, only: tracer_t, decode_symplectic_state
     use simple_main, only: to_standard_z_coordinates, validate_rk_state, &
-                           validate_symplectic_endpoint, symplectic_recovery_start
+                           validate_symplectic_endpoint, symplectic_recovery_start, &
+                           validate_decoded_symplectic_endpoint
     use field_can_mod, only: evaluate
     use orbit_symplectic, only: orbit_sympl_init, orbit_timestep_sympl
     use orbit_symplectic_base, only: symplectic_integrator_t, &
@@ -81,6 +82,7 @@ program test_euler_endpoint_decode
         if (error(2) <= 0.0_dp .or. error(1)/error(2) < 3.9_dp) &
             error stop 'Reconstructed Euler endpoint failed timestep convergence'
     end do
+    call check_validation_policy()
     call check_midpoint()
     call check_failures()
 
@@ -192,6 +194,43 @@ contains
         if (ierr == 0 .or. any(checked /= zstart)) &
             error stop 'Endpoint validator accepted a true energy violation'
     end subroutine check_euler
+
+    subroutine check_validation_policy()
+        type(tracer_t) :: anorb
+        type(symplectic_integrator_t) :: initial_si
+        type(field_can_t) :: initial_f
+        real(dp) :: decoded(5), checked(5), fraction, dt
+        integer :: method, level, ierr
+        logical :: boundary
+
+        do method = EXPL_IMPL_EULER, IMPL_EXPL_EULER
+            do level = 1, 2
+                dt = 0.1_dp/2**(level - 1)
+                call initialize(anorb, method, dt)
+                initial_si = anorb%si
+                initial_f = anorb%f
+                call orbit_timestep_sympl(anorb%si, anorb%f, ierr)
+                if (ierr /= 0) error stop 'Validation witness map failed'
+                call decode_symplectic_state(anorb%si, anorb%f, method, &
+                                             decoded, ierr)
+                if (ierr /= 0) error stop 'Validation witness decode failed'
+                checked = decoded
+                call validate_decoded_symplectic_endpoint(initial_si, &
+                                  initial_f, anorb, zstart, .false., decoded, checked, &
+                                                          fraction, ierr, boundary)
+                ! At dt=.1 the mixed-stage energy differs by over 0.5 percent
+                ! in momentum, while the decoded energy is within that limit.
+                if (level == 1) then
+                    if (ierr == 0 .or. any(checked /= zstart)) &
+                        error stop 'Decoded energy changed legacy acceptance'
+                else
+                    if (ierr /= 0 .or. boundary .or. &
+                        any(checked /= decoded)) &
+                        error stop 'Accepted step did not report decoded endpoint'
+                end if
+            end do
+        end do
+    end subroutine check_validation_policy
 
     subroutine check_midpoint()
         type(tracer_t) :: anorb
