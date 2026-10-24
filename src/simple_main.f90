@@ -42,6 +42,8 @@ module simple_main
                       ORBIT_EXIT_NUMERICAL_MAXITER, ORBIT_EXIT_NUMERICAL_LINEAR, &
                       ORBIT_EXIT_NUMERICAL_EVENT, ORBIT_EXIT_NUMERICAL_FULL_ORBIT
     use params, only: radial_electric_potential_slope
+    use params, only: orbit_warning_hold_count, orbit_first_warning_step, &
+                      orbit_terminal_exit_code, orbit_terminal_time
     use params, only: canonical_grid_nr, canonical_grid_ntheta, &
                       canonical_grid_nphi, canonical_ode_relerr
     use diag_counters, only: diag_counters_init, count_event, &
@@ -2049,6 +2051,7 @@ contains
             if (integmode > 0) then
                 call trace_orbit_spectre_sympl(anorb, ipart, z, passing, &
                                                orbit_traj, orbit_times)
+                call finalize_spectre_warning_holds(ipart)
             else
                 call trace_orbit_spectre(ipart, z, passing, orbit_traj, orbit_times)
             end if
@@ -2168,6 +2171,30 @@ contains
         !$omp end critical
     end subroutine trace_orbit
 
+    subroutine record_spectre_warning_holds(ipart, hold_count, it, first_unresolved_it)
+        ! Each tracing worker owns one marker slot; global fractions remain atomic.
+        integer, intent(in) :: ipart, hold_count, it
+        integer, intent(inout) :: first_unresolved_it
+
+        orbit_warning_hold_count(ipart) = hold_count
+        if (hold_count == 0) return
+        if (orbit_first_warning_step(ipart) == 0) orbit_first_warning_step(ipart) = it
+        if (first_unresolved_it == 0) first_unresolved_it = it
+    end subroutine record_spectre_warning_holds
+
+    subroutine finalize_spectre_warning_holds(ipart)
+        ! Preserve the terminal event, but do not accept unresolved history as a
+        ! resolved trajectory, even if it later reaches a physical boundary.
+        use finite_check, only: quiet_nan
+        integer, intent(in) :: ipart
+
+        orbit_terminal_exit_code(ipart) = orbit_exit_code(ipart)
+        orbit_terminal_time(ipart) = times_lost(ipart)
+        if (orbit_warning_hold_count(ipart) == 0) return
+        orbit_exit_code(ipart) = ORBIT_EXIT_NUMERICAL_EVENT
+        times_lost(ipart) = quiet_nan()
+    end subroutine finalize_spectre_warning_holds
+
     subroutine trace_orbit_spectre_sympl(anorb, ipart, z, passing, orbit_traj, &
                                          orbit_times)
         !> Per-volume guiding centres switch to full orbit at interior sheets.
@@ -2194,6 +2221,8 @@ contains
 
         call sympl_spectre_reset(state, anorb%si, spectre_mvol, integmode, &
                                  crossing_level)
+        orbit_warning_hold_count(ipart) = 0
+        orbit_first_warning_step(ipart) = 0
 
         kt = 0
         it_final = 0
@@ -2211,6 +2240,8 @@ contains
                 end do
             end if
 
+            call record_spectre_warning_holds(ipart, state%warning_hold_count, &
+                                              it, first_unresolved_it)
             if (ierr_orbit /= SYMPL_SPECTRE_OK) then
                 it_final = it
                 select case (ierr_orbit)
@@ -3473,6 +3504,18 @@ contains
                 boundary_event_time_width(i)
         end do
         close (unit)
+
+        if (allocated(orbit_warning_hold_count)) then
+            open (newunit=unit, file='orbit_warning_holds.dat', status='replace', &
+                  action='write')
+            do i = 1, ntestpart
+                if (orbit_warning_hold_count(i) == 0) cycle
+                write (unit, *) i, orbit_warning_hold_count(i), &
+                    orbit_first_warning_step(i), orbit_terminal_exit_code(i), &
+                    orbit_terminal_time(i)
+            end do
+            close (unit)
+        end if
 
         open (newunit=unit, file='avg_inverse_t_lost.dat', status='replace', &
               action='write', recl=1024)

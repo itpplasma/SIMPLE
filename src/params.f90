@@ -44,6 +44,9 @@ module params
     real(dp), dimension(:), allocatable :: boundary_event_radial_residual
     real(dp), dimension(:), allocatable :: boundary_event_time_width
     integer, dimension(:), allocatable :: orbit_exit_code
+    integer, allocatable :: orbit_warning_hold_count(:), orbit_first_warning_step(:)
+    integer, allocatable :: orbit_terminal_exit_code(:)
+    real(dp), allocatable :: orbit_terminal_time(:)
     integer, parameter :: ORBIT_EXIT_COMPLETED = 0
     integer, parameter :: ORBIT_EXIT_LCFS = 1
     integer, parameter :: ORBIT_EXIT_WALL = 2
@@ -752,6 +755,10 @@ contains
             deallocate (boundary_event_radial_residual)
         if (allocated(boundary_event_time_width)) deallocate (boundary_event_time_width)
         if (allocated(orbit_exit_code)) deallocate (orbit_exit_code)
+        if (allocated(orbit_warning_hold_count)) deallocate (orbit_warning_hold_count)
+        if (allocated(orbit_first_warning_step)) deallocate (orbit_first_warning_step)
+        if (allocated(orbit_terminal_exit_code)) deallocate (orbit_terminal_exit_code)
+        if (allocated(orbit_terminal_time)) deallocate (orbit_terminal_time)
         if (allocated(trap_par)) deallocate (trap_par)
         if (allocated(perp_inv)) deallocate (perp_inv)
         if (allocated(iclass)) deallocate (iclass)
@@ -776,6 +783,9 @@ contains
         allocate (boundary_event_radial_residual(ntestpart), &
                   boundary_event_time_width(ntestpart))
         allocate (orbit_exit_code(ntestpart))
+        allocate (orbit_warning_hold_count(ntestpart), &
+                  orbit_first_warning_step(ntestpart), &
+                  orbit_terminal_exit_code(ntestpart), orbit_terminal_time(ntestpart))
         allocate (xstart(3, npoi), bstart(npoi), volstart(npoi))
         allocate (confpart_trap(ntimstep), confpart_pass(ntimstep))
         allocate (unresolved_orbits(ntimstep))
@@ -793,6 +803,10 @@ contains
         boundary_event_radial_residual = -1d0
         boundary_event_time_width = -1d0
         orbit_exit_code = 0
+        orbit_warning_hold_count = 0
+        orbit_first_warning_step = 0
+        orbit_terminal_exit_code = ORBIT_EXIT_SKIPPED
+        orbit_terminal_time = -1.0_dp
         trap_par = 0.0d0
         perp_inv = 0.0d0
         iclass = 0
