@@ -545,9 +545,15 @@ jobs:
             libopenmpi-dev
 
       - name: Configure SIMPLE with VMEC++
+        env:
+          LIBNEO_DISPATCH_REF: ${{ inputs.libneo_ref }}
         run: |
+          libneo_args=()
+          if [ -n "$LIBNEO_DISPATCH_REF" ]; then
+            libneo_args+=("-DLIBNEO_REF=$LIBNEO_DISPATCH_REF")
+          fi
           cmake -S . -B build -GNinja -DCMAKE_BUILD_TYPE=Release \
-            -DSIMPLE_ENABLE_VMECPP=ON
+            -DSIMPLE_ENABLE_VMECPP=ON "${libneo_args[@]}"
 
       - name: Build SIMPLE with VMEC++
         run: cmake --build build --config Release
