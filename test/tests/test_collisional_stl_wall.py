@@ -200,9 +200,10 @@ def main() -> None:
                          collisions=False, density=2.5e20)
     hit_ref = check_hits(reference, "collisionless")
     # Stored Fast-build reference; allow small platform-dependent orbit shifts.
-    assert abs(np.count_nonzero(hit_ref) - 21) <= 2, "collisionless hit-count drift"
+    # Regenerated for the physical-direction field representation (#622).
+    assert abs(np.count_nonzero(hit_ref) - 20) <= 2, "collisionless hit-count drift"
     np.testing.assert_allclose(np.mean(reference["times_lost"][hit_ref]),
-                               2.3755234756525815e-4, rtol=0.03, atol=0)
+                               2.685751588869773e-4, rtol=0.03, atol=0)
     # Resolve the Cartesian segment interpolation independently of the stored
     # reference. Use known hits so this inexpensive subset covers real impacts.
     indices = np.flatnonzero(hit_ref)[:32]
