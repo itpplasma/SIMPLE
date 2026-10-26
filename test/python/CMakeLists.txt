@@ -33,6 +33,8 @@ add_pytest(test_golden_orbit_results "golden" 120)
 add_pytest(test_golden_collision_results "golden;collisions" 120)
 add_pytest(test_step_convergence "tools" 120)
 add_pytest(test_imas "imas;slow" 600 -s)
+set_property(TEST test_imas APPEND PROPERTY ENVIRONMENT
+    "SIMPLE_TEST_LIBNEO_SOURCE_DIR=${libneo_SOURCE_DIR}")
 
 add_pytest(test_triangle_heat_load "engineering;wall" 120)
 if(SIMPLE_ENABLE_CGAL)

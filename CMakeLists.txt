@@ -324,7 +324,7 @@ set(_dependency_versions_file "${CMAKE_CURRENT_SOURCE_DIR}/cmake/dependency_vers
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${_dependency_versions_file}")
 file(READ "${_dependency_versions_file}" _dependency_versions)
-foreach(_dependency IN ITEMS fortnum fortplot)
+foreach(_dependency IN ITEMS fortnum fortplot libneo)
     string(TOUPPER "${_dependency}" _dependency_upper)
     if(NOT DEFINED ${_dependency_upper}_REF)
         string(JSON ${_dependency_upper}_REF GET "${_dependency_versions}" ${_dependency})

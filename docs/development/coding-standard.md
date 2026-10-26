@@ -176,7 +176,6 @@ Python code is the `pysimple` package (`python/pysimple/`), the tools in
 - New tests are registered with `add_test` and carry labels (`unit`,
   `integration`, `system`, `python`, `slow`, `regression`) so that the `make`
   test targets select them.
-- `cmake/dependency_versions.json` pins fortnum, fortplot and the golden-record
-  libneo revision. Normal libneo builds select the matching branch, falling
-  back to `main`, unless `LIBNEO_REF` or `LIBNEO_PATH` is supplied. Dependency
-  changes are tier T4.
+- `cmake/dependency_versions.json` pins fortnum, fortplot, libneo and the
+  golden-record libneo revision. Normal builds use the libneo pin unless
+  `LIBNEO_REF` or `LIBNEO_PATH` is supplied. Dependency changes are tier T4.
