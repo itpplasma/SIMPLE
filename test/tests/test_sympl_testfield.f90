@@ -173,6 +173,7 @@ program test_sympl_testfield
     call test_symplectic_step_validation
     call test_recovery_state_validation
     call test_reseed_momentum_reference
+    call test_recovery_preserves_magnetic_moment
 
     print *, 'TEST field symplectic step succeeded'
 
@@ -666,6 +667,87 @@ contains
         call move_alloc(saved_ref_coords, ref_coords)
         ro0 = saved_ro0
     end subroutine test_recovery_backoff_after_probe
+
+    subroutine test_recovery_preserves_magnetic_moment
+        use parmot_mod, only: ro0, rmu
+        use reference_coordinates, only: ref_coords
+        use libneo_coordinates, only: coordinate_system_t
+        use cartesian_coordinates, only: cartesian_coordinate_system_t
+        use params, only: dtaumin, relerr, wall_query_rho_lcfs
+        use simple_main, only: to_standard_z_coordinates
+        type(tracer_t) :: local_orbit
+        type(rk_recovery_state_t) :: recovery
+        class(coordinate_system_t), allocatable :: saved_ref_coords
+        real(dp) :: initial(5), z(5), x_previous(3), initial_mu
+        real(dp) :: saved_ro0, saved_rmu, saved_dt, saved_tol, saved_wall_gate
+        integer(int64) :: kt
+        integer :: wall_path, resume, step_error
+
+        saved_ro0 = ro0
+        saved_rmu = rmu
+        saved_dt = dtaumin
+        saved_tol = relerr
+        saved_wall_gate = wall_query_rho_lcfs
+        ro0 = 1.0_dp
+        rmu = 1.0e8_dp
+        dtaumin = 1.0e-3_dp
+        relerr = 1.0e-12_dp
+        wall_query_rho_lcfs = huge(1.0_dp)
+        call move_alloc(ref_coords, saved_ref_coords)
+        allocate (cartesian_coordinate_system_t :: ref_coords)
+        orbit_model = ORBIT_GC
+        integmode = 3
+        swcoll = .false.
+        symplectic_newton_warning_mode = .true.
+        do resume = 0, 1
+            do wall_path = 0, 1
+                local_orbit = norb
+                initial = [0.2_dp, 1.0_dp, 0.2_dp, 1.004_dp, 0.25_dp]
+                call init_sympl(local_orbit%si, local_orbit%f, initial, &
+                                dtaumin, dtaumin, relerr, integmode)
+                initial_mu = local_orbit%f%mu
+                ! An accepted endpoint can differ from the fixed reference by 0.4%.
+                local_orbit%si%pabs = 1.0_dp
+                recovery = rk_recovery_state_t()
+                if (resume == 0) then
+                    ! Euler caches need not describe the carried canonical endpoint.
+                    local_orbit%f%vpar = 1.01_dp*local_orbit%f%vpar
+                    call to_standard_z_coordinates(local_orbit, z)
+                    orbit_timestep_sympl => fail_symplectic_step
+                else
+                    z = initial
+                    call activate_rk_recovery(recovery, z, 1.0_dp)
+                    recovery%safe_steps = 255
+                end if
+                kt = 0_int64
+                x_previous = z(1:3)
+                if (wall_path == 0) then
+                    call macrostep(local_orbit, z, kt, step_error, 1, &
+                                   rk_recovery=recovery)
+                else
+                    call macrostep_with_wall_check(local_orbit, z, kt, &
+                                     step_error, 1, 1, x_previous, rk_recovery=recovery)
+                end if
+                if (step_error /= 0 .or. kt /= 1_int64) &
+                    error stop 'Magnetic-moment recovery fixture did not advance'
+                if (recovery%active .neqv. (resume == 0)) &
+                    error stop 'Magnetic-moment fixture missed recovery transition'
+                if (abs(local_orbit%f%mu/initial_mu - 1.0_dp) > 1.0e-9_dp) &
+                    error stop 'Collisionless recovery changed magnetic moment'
+                if (local_orbit%si%pabs /= 1.0_dp) &
+                 error stop 'Invariant-preserving recovery ratcheted momentum reference'
+                if (abs(z(4)/initial(4) - 1.0_dp) > 1.0e-9_dp) &
+                    error stop 'Recovery projected the physical kinetic momentum'
+            end do
+        end do
+        deallocate (ref_coords)
+        call move_alloc(saved_ref_coords, ref_coords)
+        ro0 = saved_ro0
+        rmu = saved_rmu
+        dtaumin = saved_dt
+        relerr = saved_tol
+        wall_query_rho_lcfs = saved_wall_gate
+    end subroutine test_recovery_preserves_magnetic_moment
 
     subroutine test_reseed_momentum_reference
         real(dp) :: z(5)

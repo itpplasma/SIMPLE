@@ -2613,7 +2613,7 @@ contains
 
         integer :: hold_streak_local, ktau, recovery_method, symplectic_status
         integer :: ierr_coll, collision_hold_start
-        real(dp) :: z_step_start(5), z_step_end(5), loss_fraction
+        real(dp) :: z_step_start(5), z_step_end(5), z_recovery_start(5), loss_fraction
         real(dp) :: u_event(3)
         logical :: numerical_hold, numerical_hold_any_local
         logical :: reference_boundary, symplectic_accepted
@@ -2765,28 +2765,28 @@ contains
                     ! symplectic state. Keep this marker on RK while it remains
                     ! in the failing axis/edge region; generic failures use an
                     ! exponentially backed-off probe interval.
-                    ! Recover from the reference momentum, not the H-derived
-                    ! z(4) of the symplectic state, so that RK, validation and
-                    ! LCFS interpolation share one start state.
-                    z_step_start(4) = si_step_start%pabs
-                    z = z_step_start
+                    ! A fresh physical seed preserves magnetic moment across
+                    ! the switch; projecting its momentum onto the reference does not.
+                    call symplectic_recovery_coordinates(si_step_start, &
+                                                         f_step_start, z_recovery_start)
+                    z = z_recovery_start
                     call orbit_timestep_recovery(anorb%fo, z, dtaumin, relerr, &
                         si_step_start%pabs, ierr_orbit, recovery_method)
                     z_step_end = z
-                    call validate_rk_step_or_reference_boundary(z_step_start, &
+                    call validate_rk_step_or_reference_boundary(z_recovery_start, &
                         z_step_end, anorb%fper, si_step_start%pabs, z, &
                         loss_fraction, ierr_orbit, reference_boundary)
                     if (ierr_orbit == 1 .and. .not. reference_boundary) then
                         z_step_end = z
-                        call locate_validated_lcfs(z_step_start, z_step_end, &
+                        call locate_validated_lcfs(z_recovery_start, z_step_end, &
                             anorb%fper, z, loss_fraction, ierr_orbit)
                     end if
                     if (ierr_orbit == 0) then
-                        call reseed_sympl(anorb%si, anorb%f, z, &
+                        call reseed_recovery_sympl(anorb%si, anorb%f, z, &
                             si_step_start%pabs)
                         call count_event(EVT_SYMPLECTIC_RK_RECOVERY)
                         call activate_rk_recovery(rk_recovery_local, &
-                            z_step_start, si_step_start%pabs)
+                                                  z_recovery_start, si_step_start%pabs)
                         hold_streak_local = 0
                     else if (ierr_orbit == 1) then
                         anorb%si%last_step_fraction = loss_fraction
@@ -2829,7 +2829,7 @@ contains
                     recovery_method)
                 if (should_resume_symplectic(rk_recovery_local, z)) then
                     if (rk_recovery_local%has_momentum_reference) then
-                        call reseed_sympl(anorb%si, anorb%f, z, &
+                        call reseed_recovery_sympl(anorb%si, anorb%f, z, &
                             rk_recovery_local%momentum_reference)
                     else
                         call reseed_sympl(anorb%si, anorb%f, z)
@@ -2978,7 +2978,7 @@ contains
         integer :: hold_streak_local, ktau, recovery_method, symplectic_status
         integer :: ierr_coll, collision_hold_start
         real(dp) :: u_ref_prev(3), u_ref_cur(3), x_cur(3), x_cur_m(3)
-        real(dp) :: z_step_start(5), z_step_end(5), segment_duration
+       real(dp) :: z_step_start(5), z_step_end(5), z_recovery_start(5), segment_duration
         real(dp) :: boundary_fraction
         real(dp) :: wall_exit_step
         logical :: hit, numerical_hold, numerical_hold_any_local
@@ -3121,35 +3121,35 @@ contains
                 end if
                 if (ierr_orbit .ne. 0 .and. &
                     symplectic_newton_warning_mode) then
-                    ! Recover from the reference momentum, not the H-derived
-                    ! z(4) of the symplectic state, so that RK, validation and
-                    ! LCFS interpolation share one start state.
-                    z_step_start(4) = si_step_start%pabs
-                    z = z_step_start
+                    ! A fresh physical seed preserves magnetic moment across
+                    ! the switch; projecting its momentum onto the reference does not.
+                    call symplectic_recovery_coordinates(si_step_start, &
+                                                         f_step_start, z_recovery_start)
+                    z = z_recovery_start
                     call orbit_timestep_recovery(anorb%fo, z, dtaumin, relerr, &
                         si_step_start%pabs, ierr_orbit, recovery_method)
                     z_step_end = z
-                    call validate_rk_step_or_reference_boundary(z_step_start, &
+                    call validate_rk_step_or_reference_boundary(z_recovery_start, &
                         z_step_end, anorb%fper, si_step_start%pabs, z, &
                         boundary_fraction, ierr_orbit, reference_boundary)
                     if (ierr_orbit == 1 .and. .not. reference_boundary) then
                         z_step_end = z
-                        call locate_validated_lcfs(z_step_start, z_step_end, &
+                        call locate_validated_lcfs(z_recovery_start, z_step_end, &
                             anorb%fper, z, boundary_fraction, ierr_orbit)
                     end if
                     if (ierr_orbit == 0) then
-                        call reseed_sympl(anorb%si, anorb%f, z, &
+                        call reseed_recovery_sympl(anorb%si, anorb%f, z, &
                             si_step_start%pabs)
                         call count_event(EVT_SYMPLECTIC_RK_RECOVERY)
                         call activate_rk_recovery(rk_recovery_local, &
-                            z_step_start, si_step_start%pabs)
+                                                  z_recovery_start, si_step_start%pabs)
                         hold_streak_local = 0
                     else if (ierr_orbit == 1) then
                         call integ_to_ref(z(1:3), u_ref_cur)
                         call ref_coords%evaluate_cart(u_ref_cur, x_cur)
                         x_cur_m = x_cur*chartmap_cart_scale_to_m
                         z_step_end = z
-                        call locate_wall_segment(z, z_step_start, z_step_end, &
+                        call locate_wall_segment(z, z_recovery_start, z_step_end, &
                             ipart, &
                             x_prev_m, u_ref_prev, x_cur_m, u_ref_cur, anorb%fper, &
                             real(kt, dp), boundary_fraction, hit, wall_exit_step)
@@ -3231,7 +3231,7 @@ contains
                     recovery_method)
                 if (should_resume_symplectic(rk_recovery_local, z)) then
                     if (rk_recovery_local%has_momentum_reference) then
-                        call reseed_sympl(anorb%si, anorb%f, z, &
+                        call reseed_recovery_sympl(anorb%si, anorb%f, z, &
                             rk_recovery_local%momentum_reference)
                     else
                         call reseed_sympl(anorb%si, anorb%f, z)
@@ -3250,6 +3250,32 @@ contains
             numerical_hold_any = numerical_hold_any_local
         if (present(rk_recovery)) rk_recovery = rk_recovery_local
     end subroutine macrostep_with_wall_check
+
+    subroutine symplectic_recovery_coordinates(si, f, z)
+        use field_can_mod, only: get_val
+        type(symplectic_integrator_t), intent(in) :: si
+        type(field_can_t), intent(in) :: f
+        real(dp), intent(out) :: z(5)
+        type(field_can_t) :: physical_field
+
+        physical_field = f
+        z(1:3) = si%z(1:3)
+        call evaluate_field(physical_field, z(1), z(2), z(3), 0)
+        call get_val(physical_field, si%z(4))
+        z(4) = sqrt(physical_field%mu*physical_field%Bmod + &
+                    0.5_dp*physical_field%vpar**2)
+        z(5) = physical_field%vpar/(sqrt2*z(4))
+    end subroutine symplectic_recovery_coordinates
+
+    subroutine reseed_recovery_sympl(si, f, z, momentum_reference)
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        real(dp), intent(in) :: z(5), momentum_reference
+
+        ! The sanity-check reference is not the physical momentum of the seed.
+        call reseed_sympl(si, f, z)
+        si%pabs = momentum_reference
+    end subroutine reseed_recovery_sympl
 
     subroutine to_standard_z_coordinates(anorb, z)
         type(tracer_t), intent(in) :: anorb
