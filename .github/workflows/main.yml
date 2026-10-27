@@ -121,8 +121,16 @@ jobs:
           esac
           echo "tier: $tier"
           export TMPDIR=$RUNNER_TEMP
+          if [ "$tier" = full ]; then rm -f "$SCI_OUT/full-status.txt"; fi
           SCI_TIER=$tier ci/bundle.sh "$RUNNER_TEMP/bundle.tar.zst"
           sci-dispatch "$tier" "$RUNNER_TEMP/bundle.tar.zst"
+          if [ "$tier" = full ]; then
+            if [ ! -s "$SCI_OUT/full-status.txt" ] ||
+               ! grep -qx 'Correctness gate: exit 0 (authoritative)' "$SCI_OUT/full-status.txt"; then
+              echo 'Full cluster correctness gate did not complete successfully.' >&2
+              exit 1
+            fi
+          fi
 
       - name: Summarize sCluster gate and coverage
         id: cluster-results

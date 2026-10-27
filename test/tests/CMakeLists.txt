@@ -509,6 +509,11 @@ add_test(NAME test_input_validation
 set_tests_properties(test_input_validation PROPERTIES LABELS "unit;python"
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
+add_test(NAME test_cluster_dispatch_result
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_cluster_dispatch_result.py)
+set_tests_properties(test_cluster_dispatch_result PROPERTIES LABELS "unit;python"
+    TIMEOUT 30)
+
 add_executable(test_finite_check.x test_finite_check.f90)
 target_link_libraries(test_finite_check.x simple)
 add_test(NAME test_finite_check COMMAND test_finite_check.x)
