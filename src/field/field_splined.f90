@@ -137,6 +137,9 @@ contains
             select type (scaling => self%direction_scaling)
             type is (sqrt_s_scaling_t)
                 second(1) = 2.0_dp
+            type is (identity_scaling_t)
+            class default
+                error stop 'splined_evaluate_with_der: unsupported direction scaling'
             end select
             call self%coords%covariant_basis_with_der(u, basis, dbasis)
             call scale_basis_der(jacobian, second, basis, dbasis, scaled, dscaled)
