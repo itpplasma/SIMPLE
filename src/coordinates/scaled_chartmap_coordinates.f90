@@ -14,6 +14,7 @@ module scaled_chartmap_coordinates
         procedure :: evaluate_cart => scaled_chartmap_evaluate_cart
         procedure :: evaluate_cyl => scaled_chartmap_evaluate_cyl
         procedure :: covariant_basis => scaled_chartmap_covariant_basis
+        procedure :: covariant_basis_with_der => scaled_chartmap_basis_der
         procedure :: metric_tensor => scaled_chartmap_metric_tensor
         procedure :: from_cyl => scaled_chartmap_from_cyl
         procedure :: from_cart => scaled_chartmap_from_cart
@@ -75,6 +76,17 @@ contains
         call self%chartmap_coordinate_system_t%covariant_basis(u, e_cov)
         e_cov = self%cart_scale*e_cov
     end subroutine scaled_chartmap_covariant_basis
+
+    subroutine scaled_chartmap_basis_der(self, u, basis, dbasis)
+        class(scaled_chartmap_coordinate_system_t), intent(in) :: self
+        real(dp), intent(in) :: u(3)
+        real(dp), intent(out) :: basis(3, 3), dbasis(3, 3, 3)
+
+        call self%chartmap_coordinate_system_t%covariant_basis_with_der(u, basis, &
+                                                                         dbasis)
+        basis = self%cart_scale*basis
+        dbasis = self%cart_scale*dbasis
+    end subroutine scaled_chartmap_basis_der
 
     subroutine scaled_chartmap_metric_tensor(self, u, g, ginv, sqrtg)
         class(scaled_chartmap_coordinate_system_t), intent(in) :: self
