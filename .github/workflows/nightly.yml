@@ -1,0 +1,110 @@
+name: nightly
+
+# The slow tier once a night on main: the full sCluster suite (fast, slow and
+# regression tests with coverage) and the VMEC++ direct-geometry tests. The
+# merge queue runs only the fast tier. When a job fails, a triage job bisects
+# that job's command (ci/nightly-jobs.json) between the last green nightly and
+# this commit and files or updates one issue labelled nightly-failure; the
+# next green nightly closes it. Each triage job runs on the runner its jobs need.
+
+on:
+  schedule:
+    - cron: "7 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  full:
+    name: Build and Test (full)
+    runs-on: [self-hosted, itp-dispatch]
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - run: python3 ci/nightly_triage.py run "Build and Test (full)"
+      - name: Summarize the sCluster gate and coverage
+        if: always()
+        run: |
+          result=$RUNNER_TEMP/sci-out
+          for status in full-status gate-status coverage-status coverage-summary; do
+            if [ -f "$result/$status.txt" ]; then cat "$result/$status.txt"; fi
+          done | tee -a "$GITHUB_STEP_SUMMARY"
+
+  vmecpp:
+    name: VMEC++ Direct Geometry
+    runs-on: [self-hosted, itp-ubuntu24, itp-mem16]
+    timeout-minutes: 60
+    env:
+      OMP_NUM_THREADS: 1
+      OPENBLAS_NUM_THREADS: 1
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/vmecpp-setup
+      - run: python3 ci/nightly_triage.py run "VMEC++ Direct Geometry"
+
+  triage-full:
+    name: Bisect the full suite and report
+    needs: [full, vmecpp]
+    if: failure() && needs.full.result == 'failure'
+    runs-on: [self-hosted, itp-dispatch]
+    timeout-minutes: 600
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Bisect and file or update the nightly-failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 ci/nightly_triage.py failure --jobs "Build and Test (full)"
+
+  triage-vmecpp:
+    name: Bisect VMEC++ and report
+    needs: [full, vmecpp, triage-full]
+    if: always() && needs.vmecpp.result == 'failure'
+    runs-on: [self-hosted, itp-ubuntu24, itp-mem16]
+    timeout-minutes: 600
+    env:
+      OMP_NUM_THREADS: 1
+      OPENBLAS_NUM_THREADS: 1
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/vmecpp-setup
+      - name: Bisect and file or update the nightly-failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 ci/nightly_triage.py failure --jobs "VMEC++ Direct Geometry"
+
+  close:
+    name: Close the nightly-failure issue
+    needs: [full, vmecpp]
+    runs-on: [self-hosted, itp-light]
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Close the issue once the nightly is green
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 ci/nightly_triage.py success

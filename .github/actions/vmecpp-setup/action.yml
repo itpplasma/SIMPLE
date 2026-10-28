@@ -1,0 +1,31 @@
+name: VMEC++ setup
+description: >-
+  Python and the system packages the VMEC++ direct-geometry build needs; shared
+  by the CI job, the nightly job and its bisection.
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v6
+      with:
+        python-version: "3.12"
+    - name: Install system dependencies
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          gfortran \
+          g++ \
+          git-lfs \
+          cmake \
+          ninja-build \
+          pkg-config \
+          zlib1g-dev \
+          libgsl-dev \
+          libhdf5-dev \
+          libfftw3-dev \
+          libnetcdf-dev \
+          libnetcdff-dev \
+          libopenblas-dev \
+          liblapack-dev \
+          openmpi-bin \
+          libopenmpi-dev
