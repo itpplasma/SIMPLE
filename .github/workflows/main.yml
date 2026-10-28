@@ -80,13 +80,16 @@ jobs:
       - name: Test the changed-line checker
         run: python -m unittest discover -s test/python -p test_changed_line_lint.py -v
 
+      - name: Check the nightly triage
+        run: python ci/test_nightly_triage.py
+
       - name: Check changed lines
         run: >-
           python tools/check_changed_lines.py --base "${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || format('{0}^', github.sha) }}"
 
   # Ordinary PR events skip without allocating a runner. Explicit PR validation
-  # uses the isolated owned Ubuntu runner. The merge queue runs the full suite
-  # on sCluster; dispatch selects either owned capacity.
+  # uses the isolated owned Ubuntu runner. The merge queue runs the fast suite
+  # on sCluster, the nightly the full one; dispatch selects either owned capacity.
   test:
     name: Build and Test
     runs-on: >-
@@ -115,8 +118,10 @@ jobs:
           SCI_LIBNEO_REF: ${{ inputs.libneo_ref }}
           SCI_OUT: ${{ runner.temp }}/sci-out
         run: |
+          # The merge queue runs the fast tier; nightly.yml runs the full tier.
           case $EVENT in
           workflow_dispatch) [ "$FULL_INPUT" = true ] && tier=full || tier=smoke ;;
+          merge_group) tier=fast ;;
           *) tier=full ;;
           esac
           echo "tier: $tier"
@@ -513,8 +518,9 @@ jobs:
       - self-hosted
       - itp-ubuntu24
       - itp-mem16
+    # About 16 minutes, so it runs nightly (nightly.yml), not in the merge queue.
     if: >-
-      (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]')) && ((github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)) && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')))
+      github.event_name == 'workflow_dispatch'
 
     timeout-minutes: 60
     env:
@@ -526,31 +532,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            gfortran \
-            g++ \
-            git-lfs \
-            cmake \
-            ninja-build \
-            pkg-config \
-            zlib1g-dev \
-            libgsl-dev \
-            libhdf5-dev \
-            libfftw3-dev \
-            libnetcdf-dev \
-            libnetcdff-dev \
-            libopenblas-dev \
-            liblapack-dev \
-            openmpi-bin \
-            libopenmpi-dev
+      - uses: ./.github/actions/vmecpp-setup
 
       - name: Configure SIMPLE with VMEC++
         run: |

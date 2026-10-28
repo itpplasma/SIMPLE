@@ -1,0 +1,4 @@
+{
+  "Build and Test (full)": "export TMPDIR=\"$RUNNER_TEMP\" SCI_OUT=\"$RUNNER_TEMP/sci-out\" SCI_HEAD_REF=\"$GITHUB_REF_NAME\"; rm -f \"$SCI_OUT/full-status.txt\"; SCI_TIER=full ci/bundle.sh \"$RUNNER_TEMP/bundle.tar.zst\"; sci-dispatch full \"$RUNNER_TEMP/bundle.tar.zst\"; grep -qx 'Correctness gate: exit 0 (authoritative)' \"$SCI_OUT/full-status.txt\"",
+  "VMEC++ Direct Geometry": "cmake -S . -B build -GNinja -DCMAKE_BUILD_TYPE=Release -DSIMPLE_ENABLE_VMECPP=ON && cmake --build build --config Release && ctest --test-dir build/test -R vmecpp --output-on-failure"
+}
