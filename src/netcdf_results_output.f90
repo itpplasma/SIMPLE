@@ -34,37 +34,41 @@ contains
         end if
     end subroutine check_nc
 
-    subroutine write_results_netcdf(filename, wall_facet_count)
+    subroutine write_results_netcdf(filename, wall_facet_count, marker_weights)
         !> Write all particle results to NetCDF file.
         !>
         !> Computes Cartesian positions from reference coordinates and writes
         !> complete results including config attributes.
 
         use params, only: ntestpart, trace_time, zstart, zend, times_lost, &
-                          orbit_exit_code, boundary_event_radial_residual, &
-                          boundary_event_time_width, trap_par, perp_inv, iclass, &
-                          class_lost, &
-                          facE_al, particle_energy_eV, &
-                          particle_energy_eV_effective, n_d, n_e, v0, &
-                          collision_model, nu_star_standard, &
-                          lorentz_major_radius_cm, lorentz_iota, lorentz_nu, &
-                          radial_electric_potential_slope, &
-                          integmode, relerr, npoiper, npoiper2, &
-                          boundary_event_fraction_tolerance, &
-                          boundary_event_radial_tolerance, &
-                          canonical_grid_nr, canonical_grid_ntheta, &
-                          canonical_grid_nphi, canonical_ode_relerr, &
-                          ntimstep, startmode, num_surf, sbeg, &
-                          contr_pp, notrace_passing, &
-                          isw_field_type, swcoll, deterministic, ran_seed, &
-                          max_consecutive_warning_holds, &
-                          netcdffile, field_input, coord_input, &
+            orbit_exit_code, boundary_event_radial_residual, &
+            boundary_event_time_width, trap_par, perp_inv, iclass, &
+            class_lost, &
+            facE_al, particle_energy_eV, &
+            particle_energy_eV_effective, n_d, n_e, v0, &
+            collision_model, nu_star_standard, &
+            lorentz_major_radius_cm, lorentz_iota, lorentz_nu, &
+            radial_electric_potential_slope, &
+            integmode, relerr, npoiper, npoiper2, &
+            boundary_event_fraction_tolerance, &
+            boundary_event_radial_tolerance, &
+            canonical_grid_nr, canonical_grid_ntheta, &
+            canonical_grid_nphi, canonical_ode_relerr, &
+            ntimstep, startmode, num_surf, sbeg, &
+            contr_pp, notrace_passing, &
+            isw_field_type, swcoll, deterministic, ran_seed, &
+            max_consecutive_warning_holds, &
+            netcdffile, field_input, coord_input, &
             wall_input, wall_units, wall_hit, wall_hit_triangle, &
             wall_hit_cart, &
             wall_query_rho_lcfs, &
             chart_boundary_kind, chart_boundary_kind_effective, &
-                          wall_hit_normal_cart, wall_hit_cos_incidence, &
-                          wall_hit_angle_rad
+            wall_hit_normal_cart, wall_hit_cos_incidence, &
+            wall_hit_angle_rad
+        use generated_event_energy, only: event_energy
+        use simple_profiles, only: export_profile_configuration
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+        use params, only: am1, am2, Z1, Z2, profile_label_file
         use new_vmec_stuff_mod, only: multharm
         use chartmap_metadata, only: chartmap_metadata_t, read_chartmap_metadata
         use libneo_coordinates, only: chartmap_coordinate_system_t
@@ -76,6 +80,7 @@ contains
 
         character(len=*), intent(in) :: filename
         integer, intent(in), optional :: wall_facet_count
+        real(dp), intent(in), optional :: marker_weights(:)
 
         integer :: event_id, ncid, status
         character(:), allocatable :: diagnostic_name
@@ -86,7 +91,10 @@ contains
         integer :: var_iclass, var_class_lost, var_wall_hit, var_wall_hit_cart
         integer :: var_wall_hit_normal_cart, var_wall_hit_cos_incidence
         integer :: var_wall_hit_angle_rad, var_wall_hit_triangle
-        integer :: i
+        integer :: i, nvars, var_energy, var_weight
+        integer :: dim_profile, dim_column, var_profile
+        real(dp), allocatable :: kinetic_energy(:), weights(:), profile_table(:, :)
+        character(:), allocatable :: profile_configuration
         real(dp), allocatable :: xstart_cart(:, :), xend_cart(:, :)
         integer(int8), allocatable :: class_lost_i8(:)
         character(len=32) :: coord_type
@@ -95,6 +103,25 @@ contains
         character(len=8) :: date_str
         character(len=10) :: time_str
         character(len=64) :: timestamp
+
+        allocate (kinetic_energy(ntestpart), weights(ntestpart))
+        do i = 1, ntestpart
+            call event_energy(particle_energy_eV_effective, zend(4, i), &
+                kinetic_energy(i))
+        end do
+        weights = 1.0_dp
+        if (present(marker_weights)) then
+            if (size(marker_weights) /= ntestpart) &
+                error stop 'marker_weights must contain one relative weight per marker'
+            if (.not. all(ieee_is_finite(marker_weights))) &
+                error stop 'marker_weights must be finite'
+            if (any(marker_weights < 0.0_dp)) &
+                error stop 'marker_weights must be nonnegative'
+            if (maxval(marker_weights) <= 0.0_dp) &
+                error stop 'marker_weights must include a positive weight'
+            weights = marker_weights
+        end if
+        call export_profile_configuration(profile_configuration, profile_table)
 
         ! Allocate working arrays
         allocate (xstart_cart(3, ntestpart))
@@ -149,7 +176,7 @@ contains
 
         ! Define variables with full attribute error checking
         status = nf90_def_var(ncid, 'times_lost', nf90_double, &
-                              [dim_particle], var_times_lost)
+            [dim_particle], var_times_lost)
         call check_nc(status, 'def_var times_lost')
         status = nf90_put_att(ncid, var_times_lost, 'units', 's')
         call check_nc(status, 'put_att times_lost units')
@@ -180,92 +207,92 @@ contains
         call check_nc(status, 'put_att boundary_event_time_width units')
 
         status = nf90_def_var(ncid, 'trap_par', nf90_double, &
-                              [dim_particle], var_trap_par)
+            [dim_particle], var_trap_par)
         call check_nc(status, 'def_var trap_par')
         status = nf90_put_att(ncid, var_trap_par, 'units', 'dimensionless')
         call check_nc(status, 'put_att trap_par units')
         status = nf90_put_att(ncid, var_trap_par, 'description', &
-                              'Trapping parameter (mu*B_max/E - 1)*B_min/' // &
-                              '(B_max - B_min) on the start surface: ' // &
-                              '<0 passing, 0 trapped-passing boundary, ' // &
-                              '1 reflecting at B_min')
+            'Trapping parameter (mu*B_max/E - 1)*B_min/' // &
+            '(B_max - B_min) on the start surface: ' // &
+            '<0 passing, 0 trapped-passing boundary, ' // &
+            '1 reflecting at B_min')
         call check_nc(status, 'put_att trap_par description')
 
         status = nf90_def_var(ncid, 'perp_inv', nf90_double, &
-                              [dim_particle], var_perp_inv)
+            [dim_particle], var_perp_inv)
         call check_nc(status, 'def_var perp_inv')
         status = nf90_put_att(ncid, var_perp_inv, 'units', 'cm^2*G')
         call check_nc(status, 'put_att perp_inv units')
         status = nf90_put_att(ncid, var_perp_inv, 'description', &
-                              'Perpendicular adiabatic invariant J_perp = mu*B')
+            'Perpendicular adiabatic invariant J_perp = mu*B')
         call check_nc(status, 'put_att perp_inv description')
 
         status = nf90_def_var(ncid, 'zstart', nf90_double, &
-                              [dim_phase, dim_particle], var_zstart)
+            [dim_phase, dim_particle], var_zstart)
         call check_nc(status, 'def_var zstart')
         status = nf90_put_att(ncid, var_zstart, 'description', &
-                              'Initial phase space in reference coordinates')
+            'Initial phase space in reference coordinates')
         call check_nc(status, 'put_att zstart description')
         status = nf90_put_att(ncid, var_zstart, 'components', &
-                              's (flux), theta (rad), zeta (rad), p (v/v0), v_par/v')
+            's (flux), theta (rad), zeta (rad), p (v/v0), v_par/v')
         call check_nc(status, 'put_att zstart components')
         status = nf90_put_att(ncid, var_zstart, 'coordinate_note', &
-                              'See coordinate_type attribute for VMEC vs chartmap')
+            'See coordinate_type attribute for VMEC vs chartmap')
         call check_nc(status, 'put_att zstart coordinate_note')
 
         status = nf90_def_var(ncid, 'zend', nf90_double, &
-                              [dim_phase, dim_particle], var_zend)
+            [dim_phase, dim_particle], var_zend)
         call check_nc(status, 'def_var zend')
         status = nf90_put_att(ncid, var_zend, 'description', &
-                              'Final phase space in ref coords (0 if not traced)')
+            'Final phase space in ref coords (0 if not traced)')
         call check_nc(status, 'put_att zend description')
         status = nf90_put_att(ncid, var_zend, 'components', &
-                              's (flux), theta (rad), zeta (rad), p (v/v0), v_par/v')
+            's (flux), theta (rad), zeta (rad), p (v/v0), v_par/v')
         call check_nc(status, 'put_att zend components')
 
         status = nf90_def_var(ncid, 'xstart_cart', nf90_double, &
-                              [dim_xyz, dim_particle], var_xstart_cart)
+            [dim_xyz, dim_particle], var_xstart_cart)
         call check_nc(status, 'def_var xstart_cart')
         status = nf90_put_att(ncid, var_xstart_cart, 'units', trim(cart_units))
         call check_nc(status, 'put_att xstart_cart units')
         status = nf90_put_att(ncid, var_xstart_cart, 'description', &
-                              'Initial Cartesian position (x, y, z)')
+            'Initial Cartesian position (x, y, z)')
         call check_nc(status, 'put_att xstart_cart description')
 
         status = nf90_def_var(ncid, 'xend_cart', nf90_double, &
-                              [dim_xyz, dim_particle], var_xend_cart)
+            [dim_xyz, dim_particle], var_xend_cart)
         call check_nc(status, 'def_var xend_cart')
         status = nf90_put_att(ncid, var_xend_cart, 'units', trim(cart_units))
         call check_nc(status, 'put_att xend_cart units')
         status = nf90_put_att(ncid, var_xend_cart, 'description', &
-                              'Final Cartesian position (= xstart if not traced)')
+            'Final Cartesian position (= xstart if not traced)')
         call check_nc(status, 'put_att xend_cart description')
 
         status = nf90_def_var(ncid, 'iclass', nf90_int, &
-                              [dim_iclass, dim_particle], var_iclass)
+            [dim_iclass, dim_particle], var_iclass)
         call check_nc(status, 'def_var iclass')
         status = nf90_put_att(ncid, var_iclass, 'description', &
-                              'Classification: [J_par, topology, fractal] '// &
-                              '(0=unclassified)')
+            'Classification: [J_par, topology, fractal] '// &
+            '(0=unclassified)')
         call check_nc(status, 'put_att iclass description')
 
         status = nf90_def_var(ncid, 'class_lost', nf90_byte, &
-                              [dim_particle], var_class_lost)
+            [dim_particle], var_class_lost)
         call check_nc(status, 'def_var class_lost')
         status = nf90_put_att(ncid, var_class_lost, 'description', &
-                              'Lost flag (1=lost, 0=confined)')
+            'Lost flag (1=lost, 0=confined)')
         call check_nc(status, 'put_att class_lost description')
 
         status = nf90_def_var(ncid, 'wall_hit', nf90_byte, &
-                              [dim_particle], var_wall_hit)
+            [dim_particle], var_wall_hit)
         call check_nc(status, 'def_var wall_hit')
         status = nf90_put_att(ncid, var_wall_hit, 'description', &
-                              'Wall hit flag (1=hit wall_input STL, 0=no hit)')
+            'Wall hit flag (1=hit wall_input STL, 0=no hit)')
         call check_nc(status, 'put_att wall_hit description')
 
         if (len_trim(wall_input) > 0) then
             status = nf90_def_var(ncid, 'wall_hit_triangle', nf90_int, &
-                                  [dim_particle], var_wall_hit_triangle)
+                [dim_particle], var_wall_hit_triangle)
             call check_nc(status, 'def_var wall_hit_triangle')
             status = nf90_put_att(ncid, var_wall_hit_triangle, 'description', &
                 'STL facet index in file order; -1 means no wall hit')
@@ -273,57 +300,129 @@ contains
             status = nf90_put_att(ncid, var_wall_hit_triangle, 'start_index', 0)
             call check_nc(status, 'put_att wall_hit_triangle start_index')
             status = nf90_put_att(ncid, var_wall_hit_triangle, 'stl_file', &
-                                  trim(wall_input))
+                trim(wall_input))
             call check_nc(status, 'put_att wall_hit_triangle stl_file')
             if (.not. present(wall_facet_count)) &
                 error stop 'STL output requires the initialized wall facet count'
             status = nf90_put_att(ncid, var_wall_hit_triangle, &
-                                  'stl_facet_count', wall_facet_count)
+                'stl_facet_count', wall_facet_count)
             call check_nc(status, 'put_att wall_hit_triangle stl_facet_count')
         end if
 
         status = nf90_def_var(ncid, 'wall_hit_cart', nf90_double, &
-                              [dim_xyz, dim_particle], var_wall_hit_cart)
+            [dim_xyz, dim_particle], var_wall_hit_cart)
         call check_nc(status, 'def_var wall_hit_cart')
         status = nf90_put_att(ncid, var_wall_hit_cart, 'units', trim(cart_units))
         call check_nc(status, 'put_att wall_hit_cart units')
         status = nf90_put_att(ncid, var_wall_hit_cart, 'description', &
-                              'First-hit Cartesian wall intersection point (x, y, z)')
+            'First-hit Cartesian wall intersection point (x, y, z)')
         call check_nc(status, 'put_att wall_hit_cart description')
 
         status = nf90_def_var(ncid, 'wall_hit_normal_cart', nf90_double, &
-                              [dim_xyz, dim_particle], var_wall_hit_normal_cart)
+            [dim_xyz, dim_particle], var_wall_hit_normal_cart)
         call check_nc(status, 'def_var wall_hit_normal_cart')
         status = nf90_put_att(ncid, var_wall_hit_normal_cart, 'units', '1')
         call check_nc(status, 'put_att wall_hit_normal_cart units')
         status = nf90_put_att(ncid, var_wall_hit_normal_cart, 'description', &
-                              'Unit surface normal at wall hit (x, y, z)')
+            'Unit surface normal at wall hit (x, y, z)')
         call check_nc(status, 'put_att wall_hit_normal_cart description')
 
         status = nf90_def_var(ncid, 'wall_hit_cos_incidence', nf90_double, &
-                              [dim_particle], var_wall_hit_cos_incidence)
+            [dim_particle], var_wall_hit_cos_incidence)
         call check_nc(status, 'def_var wall_hit_cos_incidence')
         status = nf90_put_att(ncid, var_wall_hit_cos_incidence, 'units', '1')
         call check_nc(status, 'put_att wall_hit_cos_incidence units')
         status = nf90_put_att(ncid, var_wall_hit_cos_incidence, 'description', &
-                              'Absolute cosine of incidence angle at wall hit')
+            'Absolute cosine between guiding-centre chord and wall facet normal')
         call check_nc(status, 'put_att wall_hit_cos_incidence description')
 
         status = nf90_def_var(ncid, 'wall_hit_angle_rad', nf90_double, &
-                              [dim_particle], var_wall_hit_angle_rad)
+            [dim_particle], var_wall_hit_angle_rad)
         call check_nc(status, 'def_var wall_hit_angle_rad')
         status = nf90_put_att(ncid, var_wall_hit_angle_rad, 'units', 'rad')
         call check_nc(status, 'put_att wall_hit_angle_rad units')
         status = nf90_put_att(ncid, var_wall_hit_angle_rad, 'description', &
-                              'Incidence angle at wall hit (0 = normal incidence)')
+            'Guiding-centre chord incidence angle (0 = normal incidence)')
         call check_nc(status, 'put_att wall_hit_angle_rad description')
+
+        status = nf90_def_var(ncid, 'kinetic_energy_eV', nf90_double, &
+            [dim_particle], var_energy)
+        call check_nc(status, 'def_var kinetic_energy_eV')
+        status = nf90_put_att(ncid, var_energy, 'units', 'eV')
+        call check_nc(status, 'energy units')
+        status = nf90_put_att(ncid, var_energy, 'description', &
+            'Final kinetic energy = particle_energy_eV*zend(p)^2; '// &
+            'select wall_hit=1 and orbit_exit_code=2 for impacts')
+        call check_nc(status, 'energy description')
+        status = nf90_def_var(ncid, 'marker_weight', nf90_double, &
+            [dim_particle], var_weight)
+        call check_nc(status, 'def_var marker_weight')
+        status = nf90_put_att(ncid, var_weight, 'units', '1')
+        call check_nc(status, 'weight units')
+        status = nf90_put_att(ncid, var_weight, 'description', &
+            'Relative source marker weights; normalize over ALL '// &
+            'source markers; no particle rate or power normalization')
+        call check_nc(status, 'weight description')
+        if (present(marker_weights)) then
+            status = nf90_put_att(ncid, var_weight, 'source', &
+                'supplied_relative_weights')
+        else
+            status = nf90_put_att(ncid, var_weight, 'source', &
+                'equal_marker_default; source sampling weights unknown; '// &
+                'external weights may override')
+        end if
+        call check_nc(status, 'weight source')
+        if (size(profile_table, 2) > 0) then
+            status = nf90_def_dim(ncid, 'profile_sample', &
+                size(profile_table, 2), dim_profile)
+            call check_nc(status, 'profile sample dimension')
+            status = nf90_def_dim(ncid, 'profile_column', 6, dim_column)
+            call check_nc(status, 'profile column dimension')
+            status = nf90_def_var(ncid, 'collision_profile_table', nf90_double, &
+                [dim_column, dim_profile], var_profile)
+            call check_nc(status, 'profile table')
+            status = nf90_put_att(ncid, var_profile, 'columns', &
+                's (normalized toroidal flux), Te (eV), Ti1 (eV), Ti2 '// &
+                '(eV), ni1 (m^-3), ni2 (m^-3)')
+            call check_nc(status, 'profile table columns')
+        end if
+        status = nf90_put_att(ncid, nf90_global, 'results_schema_version', &
+            '1.1')
+        call check_nc(status, 'put_att results_schema_version')
+        status = nf90_put_att(ncid, nf90_global, 'cartesian_frame', &
+            'Right-handed Cartesian frame shared with field/chart and wall mesh')
+        call check_nc(status, 'put_att cartesian_frame')
+        status = nf90_put_att(ncid, nf90_global, 'particle_index_convention', &
+            'All particle arrays preserve the source marker order; '// &
+            'array indices are not marker IDs')
+        call check_nc(status, 'put_att particle_index_convention')
+        status = nf90_put_att(ncid, nf90_global, 'velocity_representation', &
+            'Guiding-centre p=v/v0 and pitch=v_parallel/v; '// &
+            'gyrophase and physical impact velocity are not recorded')
+        call check_nc(status, 'put_att velocity_representation')
+        status = nf90_put_att(ncid, nf90_global, 'wall_incidence_representation', &
+            'Absolute angle between guiding-centre microstep chord '// &
+            'and facet normal; not gyrophase-resolved')
+        call check_nc(status, 'put_att wall_incidence_representation')
+        status = nf90_put_att(ncid, nf90_global, 'profile_configuration', &
+            profile_configuration)
+        call check_nc(status, 'put_att profile_configuration')
+        status = nf90_put_att(ncid, nf90_global, 'profile_label_file', &
+            trim(profile_label_file))
+        call check_nc(status, 'put_att profile_label_file')
+        status = nf90_put_att(ncid, nf90_global, 'background_ion_mass_number', &
+            [am1, am2])
+        call check_nc(status, 'put_att background_ion_mass_number')
+        status = nf90_put_att(ncid, nf90_global, 'background_ion_charge_number', &
+            [Z1, Z2])
+        call check_nc(status, 'put_att background_ion_charge_number')
 
         ! Global attributes - simulation config
         status = nf90_put_att(ncid, nf90_global, 'title', &
-                              'SIMPLE particle tracing results')
+            'SIMPLE particle tracing results')
         call check_nc(status, 'put_att title')
         status = nf90_put_att(ncid, nf90_global, 'simple_version', &
-                              trim(simple_version))
+            trim(simple_version))
         call check_nc(status, 'put_att simple_version')
         status = nf90_put_att(ncid, nf90_global, 'cart_units', trim(cart_units))
         call check_nc(status, 'put_att cart_units')
@@ -336,10 +435,10 @@ contains
         status = nf90_put_att(ncid, nf90_global, 'facE_al', facE_al)
         call check_nc(status, 'put_att facE_al')
         status = nf90_put_att(ncid, nf90_global, 'particle_energy_eV_input', &
-                              particle_energy_eV)
+            particle_energy_eV)
         call check_nc(status, 'put_att particle_energy_eV_input')
         status = nf90_put_att(ncid, nf90_global, 'particle_energy_eV', &
-                              particle_energy_eV_effective)
+            particle_energy_eV_effective)
         call check_nc(status, 'put_att particle_energy_eV')
         status = nf90_put_att(ncid, nf90_global, 'particle_mass_number', n_d)
         call check_nc(status, 'put_att particle_mass_number')
@@ -348,20 +447,20 @@ contains
         status = nf90_put_att(ncid, nf90_global, 'v0', v0)
         call check_nc(status, 'put_att v0')
         status = nf90_put_att(ncid, nf90_global, 'collision_model', &
-                              trim(collision_model))
+            trim(collision_model))
         call check_nc(status, 'put_att collision_model')
         status = nf90_put_att(ncid, nf90_global, 'nu_star_standard', &
-                              nu_star_standard)
+            nu_star_standard)
         call check_nc(status, 'put_att nu_star_standard')
         status = nf90_put_att(ncid, nf90_global, 'lorentz_major_radius_cm', &
-                              lorentz_major_radius_cm)
+            lorentz_major_radius_cm)
         call check_nc(status, 'put_att lorentz_major_radius_cm')
         status = nf90_put_att(ncid, nf90_global, 'lorentz_iota', lorentz_iota)
         call check_nc(status, 'put_att lorentz_iota')
         status = nf90_put_att(ncid, nf90_global, 'lorentz_nu_s-1', lorentz_nu)
         call check_nc(status, 'put_att lorentz_nu_s-1')
         status = nf90_put_att(ncid, nf90_global, &
-                     'radial_electric_potential_slope', radial_electric_potential_slope)
+            'radial_electric_potential_slope', radial_electric_potential_slope)
         call check_nc(status, 'put_att radial_electric_potential_slope')
         status = nf90_put_att(ncid, nf90_global, 'integmode', integmode)
         call check_nc(status, 'put_att integmode')
@@ -376,24 +475,24 @@ contains
             symplectic_spectre_newton_warning_factor)
         call check_nc(status, 'put_att symplectic_spectre_newton_warning_factor')
         status = nf90_put_att(ncid, nf90_global, &
-                              'boundary_event_fraction_tolerance', &
-                              boundary_event_fraction_tolerance)
+            'boundary_event_fraction_tolerance', &
+            boundary_event_fraction_tolerance)
         call check_nc(status, 'put_att boundary_event_fraction_tolerance')
         status = nf90_put_att(ncid, nf90_global, &
-                              'boundary_event_radial_tolerance', &
-                              boundary_event_radial_tolerance)
+            'boundary_event_radial_tolerance', &
+            boundary_event_radial_tolerance)
         call check_nc(status, 'put_att boundary_event_radial_tolerance')
         status = nf90_put_att(ncid, nf90_global, 'canonical_grid_nr', &
-                              canonical_grid_nr)
+            canonical_grid_nr)
         call check_nc(status, 'put_att canonical_grid_nr')
         status = nf90_put_att(ncid, nf90_global, 'canonical_grid_ntheta', &
-                              canonical_grid_ntheta)
+            canonical_grid_ntheta)
         call check_nc(status, 'put_att canonical_grid_ntheta')
         status = nf90_put_att(ncid, nf90_global, 'canonical_grid_nphi', &
-                              canonical_grid_nphi)
+            canonical_grid_nphi)
         call check_nc(status, 'put_att canonical_grid_nphi')
         status = nf90_put_att(ncid, nf90_global, 'canonical_ode_relerr', &
-                              canonical_ode_relerr)
+            canonical_ode_relerr)
         call check_nc(status, 'put_att canonical_ode_relerr')
         status = nf90_put_att(ncid, nf90_global, 'multharm', multharm)
         call check_nc(status, 'put_att multharm')
@@ -412,14 +511,14 @@ contains
         status = nf90_put_att(ncid, nf90_global, 'contr_pp', contr_pp)
         call check_nc(status, 'put_att contr_pp')
         status = nf90_put_att(ncid, nf90_global, 'notrace_passing', &
-                              notrace_passing)
+            notrace_passing)
         call check_nc(status, 'put_att notrace_passing')
         status = nf90_put_att(ncid, nf90_global, 'isw_field_type', isw_field_type)
         call check_nc(status, 'put_att isw_field_type')
         status = nf90_put_att(ncid, nf90_global, 'swcoll', merge(1, 0, swcoll))
         call check_nc(status, 'put_att swcoll')
         status = nf90_put_att(ncid, nf90_global, 'deterministic', &
-                              merge(1, 0, deterministic))
+            merge(1, 0, deterministic))
         call check_nc(status, 'put_att deterministic')
         status = nf90_put_att(ncid, nf90_global, 'ran_seed', ran_seed)
         call check_nc(status, 'put_att ran_seed')
@@ -456,6 +555,13 @@ contains
         end do
 
         ! End define mode
+        nvars = var_weight
+        if (size(profile_table, 2) > 0) nvars = var_profile
+        do i = 1, nvars
+            status = nf90_def_var_deflate(ncid, i, shuffle=1, &
+                deflate=1, deflate_level=2)
+            call check_nc(status, 'lossless variable compression')
+        end do
         status = nf90_enddef(ncid)
         call check_nc(status, 'enddef')
 
@@ -482,6 +588,15 @@ contains
 
         status = nf90_put_var(ncid, var_zstart, zstart)
         call check_nc(status, 'put_var zstart')
+
+        status = nf90_put_var(ncid, var_energy, kinetic_energy)
+        call check_nc(status, 'put energy')
+        status = nf90_put_var(ncid, var_weight, weights)
+        call check_nc(status, 'put weights')
+        if (size(profile_table, 2) > 0) then
+            status = nf90_put_var(ncid, var_profile, profile_table)
+            call check_nc(status, 'put profile table')
+        end if
 
         status = nf90_put_var(ncid, var_zend, zend)
         call check_nc(status, 'put_var zend')

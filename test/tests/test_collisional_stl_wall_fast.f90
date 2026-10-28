@@ -5,9 +5,11 @@ program test_collisional_stl_wall_fast
     use, intrinsic :: iso_c_binding, only: c_char, c_int, c_null_char
     use simple, only: tracer_t
     use simple_main, only: load_config, init_run, init_sampling_field, &
-                           init_collisions, sample_start, init_tracing_field, &
-                           init_counters, trace_parallel, write_output
-    use params, only: params_init, swcoll
+        init_collisions, sample_start, init_tracing_field, &
+        init_counters, trace_parallel, write_output
+    use params, only: params_init, swcoll, ntestpart
+    use simple_main, only: wall
+    use netcdf_results_output, only: write_results_netcdf
     use diag_counters, only: diag_counters_init
     use timing, only: init_timer, get_wtime
     implicit none
@@ -24,6 +26,7 @@ program test_collisional_stl_wall_fast
     character(len=4096) :: directory
     integer :: i
     real(dp) :: start
+    real(dp), allocatable :: weights(:)
 
     call init_timer
     call load_config('simple.in')
@@ -43,6 +46,11 @@ program test_collisional_stl_wall_fast
         call diag_counters_init
         call trace_parallel(tracer)
         call write_output
+        if (allocated(weights)) deallocate (weights)
+        allocate (weights(ntestpart))
+        weights = 1.0_dp
+        weights(1) = 2.0_dp
+        call write_results_netcdf('weighted-results.nc', wall%facet_count, weights)
         print *, 'Case ', trim(directory), ' tracing/output seconds: ', &
             get_wtime() - start
     end do

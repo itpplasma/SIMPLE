@@ -19,15 +19,15 @@ module simple_profiles
     real(dp) :: ni2_scale = 0.5d20
 
     real(dp) :: Te_coef(MAX_POWER_SERIES) = [1.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0, &
-                                             0.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0]
+        0.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0]
     real(dp) :: Ti1_coef(MAX_POWER_SERIES) = [1.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0, &
-                                              0.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0]
+        0.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0]
     real(dp) :: Ti2_coef(MAX_POWER_SERIES) = [1.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0, &
-                                              0.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0]
+        0.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0]
     real(dp) :: ni1_coef(MAX_POWER_SERIES) = [1.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0, &
-                                              0.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0]
+        0.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0]
     real(dp) :: ni2_coef(MAX_POWER_SERIES) = [1.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0, &
-                                              0.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0]
+        0.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0]
 
     real(dp) :: Te_p1 = 1.0d0, Te_p2 = 0.0d0
     real(dp) :: Ti1_p1 = 1.0d0, Ti1_p2 = 0.0d0
@@ -42,6 +42,32 @@ module simple_profiles
         ni1_p1, ni1_p2, ni2_p1, ni2_p2
 
 contains
+
+    subroutine export_profile_configuration(configuration, table)
+        character(:), allocatable, intent(out) :: configuration
+        real(dp), allocatable, intent(out) :: table(:, :)
+        character(4096) :: record
+        integer :: unit, status
+
+        open (newunit=unit, status='scratch', form='formatted')
+        write (unit, nml=profiles)
+        rewind (unit)
+        configuration = ''
+        do
+            read (unit, '(a)', iostat=status) record
+            if (status < 0) exit
+            if (status /= 0) error stop 'Cannot export profile configuration'
+            configuration = configuration//trim(record)//new_line('a')
+        end do
+        close (unit)
+        allocate (table(6, 0))
+        if (allocated(table_radius)) then
+            deallocate (table)
+            allocate (table(6, size(table_radius)))
+            table(1, :) = table_radius
+            table(2:6, :) = table_values
+        end if
+    end subroutine export_profile_configuration
 
     subroutine read_profiles(config_file)
         character(len=*), intent(in) :: config_file

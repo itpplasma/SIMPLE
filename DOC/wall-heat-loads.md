@@ -118,3 +118,40 @@ loss time is interpolated linearly along the intersecting chord
 - C. G. Albert et al., Symplectic methods for optimization of wall heat loads
   by fusion alpha particles in stellarator reactors, Nucl. Mater. Energy 48,
   102200 (2026), [doi:10.1016/j.nme.2026.102200](https://doi.org/10.1016/j.nme.2026.102200).
+
+
+### Structured event output
+
+`results.nc` schema 1.1 adds `kinetic_energy_eV` for every final marker state,
+using the run's effective reference energy times `zend` momentum squared.
+For first wall events select both `wall_hit == 1` and `orbit_exit_code == 2`;
+`times_lost` is the event time in seconds. Other final states are not impacts; untraced markers retain the sentinel state
+from `zend`, so their stored energy is not a physical impact energy.
+The existing position variables carry their length units; Cartesian positions
+and facet normals share the right-handed field/chart and STL mesh frame.
+Facet indices are zero-based in STL file order, with -1 for no hit. Particle
+arrays retain source order, without claiming a globally unique marker ID.
+
+`marker_weight` contains dimensionless relative source weights. By default all
+weights are one and its `source` attribute explicitly says that sampling weights
+are unknown. This default is appropriate for equal-marker summaries, and does
+not establish a physical NBI source normalization. Callers of the Fortran
+`write_results_netcdf` routine may supply `marker_weights`; post-processors may
+instead supply the original external weights. Normalize over the complete
+source population, including confined markers, and supply physical source power
+or particle rate separately.
+
+Pitch remains `v_parallel/v`, with speed normalized by the global `v0`.
+Incidence is the absolute angle between the guiding-centre integration chord
+and the wall facet normal. Neither gyrophase nor a physical impact velocity
+vector is recorded, and pitch does not determine that vector. Finite Larmor
+radius impact displacement and instrument/thermal response are not represented.
+
+The output stores background ion masses and charges, the complete configured
+`profiles` namelist and `profile_label_file`. When a tabulated profile is active,
+`collision_profile_table` stores its actual samples, including tables supplied
+through the library API. Temperatures are in eV and densities in m^-3. Analytic
+profiles use the scales and coefficients in the namelist. External field,
+chart, wall and profile-label files still need to be archived with the run;
+filenames are not content identities. Numeric arrays use lossless NetCDF4
+shuffle/deflate compression, without changing their floating-point precision.

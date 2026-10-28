@@ -3,7 +3,7 @@ program test_profiles
     use simple_profiles
     use collis_alp
     use params, only: facE_al, particle_energy_eV, resolve_particle_energy, &
-                      deterministic, ran_seed, reset_seed_if_deterministic
+        deterministic, ran_seed, reset_seed_if_deterministic
     implicit none
 
     logical :: all_passed
@@ -163,7 +163,7 @@ contains
         nu = nustar*abs(iota)*vref/radius
         p1_exact = lambda0*exp(-nu*real(nstep, dp)*dt)
         p2_exact = 0.5_dp*(3.0_dp*lambda0**2 - 1.0_dp) &
-                   *exp(-3.0_dp*nu*real(nstep, dp)*dt)
+            *exp(-3.0_dp*nu*real(nstep, dp)*dt)
         if (abs(p1_mean - p1_exact) > moment_tolerance .or. &
             abs(p2_mean - p2_exact) > moment_tolerance) then
             print *, '  FAIL: moments numerical/exact', p1_mean, p1_exact, &
@@ -198,7 +198,7 @@ contains
         if (abs(ni2/1e18_dp - 0.5_dp) > 1e-14_dp) &
             error stop 'Exterior impurity density was clamped to LCFS'
         call init_collision_profiles(1.0_dp, 12.0_dp, 1.0_dp, 6.0_dp, &
-                                     55000.0_dp, 1.0_dp)
+            55000.0_dp, 1.0_dp)
         call get_local_coeffs(1.0_dp, edge, vr, er)
         call get_local_coeffs(1.5_dp, ef, vr, er)
         if (any(ef >= edge) .or. any(ef <= 0)) &
@@ -207,7 +207,7 @@ contains
         if (any(ef /= 0)) error stop 'Exterior vacuum was not retained'
         call reset_profiles()
         call init_collision_profiles(1.0_dp, 12.0_dp, 1.0_dp, 6.0_dp, &
-                                     55000.0_dp, 1.0_dp)
+            55000.0_dp, 1.0_dp)
         if (collision_s_max /= 1) error stop 'Profile reset retained exterior grid'
         open (newunit=unit, file='test-plasma.dat', status='old')
         close (unit, status='delete')
@@ -217,6 +217,8 @@ contains
 
     subroutine test_tabulated_profiles()
         real(dp) :: table(6, 3), te, ti1, ti2, ni1, ni2
+        real(dp), allocatable :: snapshot(:, :)
+        character(:), allocatable :: configuration
         integer :: status
 
         call reset_profiles()
@@ -228,6 +230,11 @@ contains
         table(6, :) = 2e19_dp
         call set_profile_table(3, table, status)
         if (status /= 0) error stop 'Valid tabulated profiles rejected'
+        call export_profile_configuration(configuration, snapshot)
+        if (any(shape(snapshot) /= shape(table))) error stop 'Profile snapshot shape'
+        if (any(snapshot /= table)) error stop 'Profile snapshot changed values'
+        if (index(configuration, 'TE_SCALE') == 0) &
+            error stop 'Profile snapshot omitted analytic configuration'
         call get_plasma_params(0.5_dp, te, ti1, ti2, ni1, ni2)
         if (abs(te - 3000.0_dp) > 1e-9_dp) error stop 'Profile interpolation'
         if (abs(ni1/1e19_dp - 3.0_dp) > 1e-12_dp) error stop 'Density units'
@@ -237,6 +244,8 @@ contains
         call reset_profiles()
         call get_plasma_params(0.0_dp, te, ti1, ti2, ni1, ni2)
         if (abs(te - 1e4_dp) > 1e-9_dp) error stop 'Profile reset retained IDS table'
+        call export_profile_configuration(configuration, snapshot)
+        if (size(snapshot, 2) /= 0) error stop 'Profile snapshot retained reset table'
     end subroutine test_tabulated_profiles
 
     ! Flat profiles reproduce the scalar collision operator up to floating-point
@@ -417,7 +426,7 @@ contains
         ealpha = 3.5d6
 
         call loacol_alpha(am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, tempe, &
-                          ealpha, v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
+            ealpha, v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
         efcolf_scalar = efcolf
         velrat_scalar = velrat
         enrat_scalar = enrat
@@ -492,7 +501,7 @@ contains
         ealpha = 3.5d6
 
         call loacol_alpha(am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, tempe, &
-                          ealpha, v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
+            ealpha, v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
 
         profile_type = "two_power"
         active_profile = TWO_POWER
@@ -559,7 +568,7 @@ contains
         tempi1 = Ti1_scale; tempi2 = Ti2_scale; tempe = Te_scale
 
         call loacol_alpha(am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, tempe, &
-                          ealpha, v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
+            ealpha, v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
         efs = efcolf; vrs = velrat; ers = enrat
 
         call set_flat_two_power()
@@ -640,7 +649,7 @@ contains
         tempi1 = Ti1_scale; tempi2 = Ti2_scale; tempe = Te_scale
 
         call loacol_alpha(am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, tempe, &
-                          ealpha, v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
+            ealpha, v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
         call set_flat_two_power()
 
         dbin = (phi - plo)/dble(nbin)
@@ -748,7 +757,7 @@ contains
         tempi1 = Ti1_scale; tempi2 = Ti2_scale; tempe = Te_scale
 
         call loacol_alpha(am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, tempe, &
-                          ealpha, v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
+            ealpha, v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
         call set_flat_two_power()
 
         call coleff(1.0d0, dpp, dhh, fpeff)
@@ -807,7 +816,7 @@ contains
         densi1 = ni1_scale*1.0d-6; densi2 = ni2_scale*1.0d-6
 
         call loacol_alpha(am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, tempe, &
-                          ealpha, v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
+            ealpha, v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
         call set_flat_two_power()
         call init_collision_profiles(am1, am2, Z1, Z2, ealpha, v0)
 
@@ -869,7 +878,7 @@ contains
         do ib = 1, nbin
             if (h_init(ib) > 0.05d0) then
                 reldev_shape = max(reldev_shape, &
-                                   abs(h_final(ib) - h_init(ib))/h_init(ib))
+                    abs(h_final(ib) - h_init(ib))/h_init(ib))
                 reldev_ana = max(reldev_ana, abs(h_final(ib) - h_ana(ib))/h_ana(ib))
             end if
         end do
@@ -1015,7 +1024,7 @@ contains
         tempe = Te_scale
 
         call loacol_alpha(am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, tempe, &
-                          ealpha, v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
+            ealpha, v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
         efcolf_onaxis = efcolf(1)
 
         call init_collision_profiles(am1, am2, Z1, Z2, ealpha, v0)
