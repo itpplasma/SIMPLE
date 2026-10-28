@@ -1512,7 +1512,8 @@ contains
         use samplers, only: sample, START_FILE, sample_grid, &
                             sample_read_integration, &
                         sample_surface_fieldline, sample_surface_fieldline_from_integ, &
-                            sample_fusion_birth
+                            sample_fusion_birth, load_marker_weights
+        use params, only: marker_weight_file, marker_weights_input
 
         logical, intent(in), optional :: xstart_is_integ_coords
         logical :: convert_surface_starts
@@ -1575,6 +1576,12 @@ contains
 
         else
             print *, 'Unknown startmode: ', startmode
+        end if
+
+        if (allocated(marker_weights_input)) deallocate (marker_weights_input)
+        if (len_trim(marker_weight_file) > 0) then
+            allocate (marker_weights_input(size(zstart, 2)))
+            call load_marker_weights(marker_weights_input, trim(marker_weight_file))
         end if
     end subroutine sample_particles
 
@@ -3367,7 +3374,7 @@ contains
     subroutine write_output
         use field_can_base, only: n_field_evaluations, n_field_evaluations_d1, &
                                   n_field_evaluations_d2
-        use params, only: output_results_netcdf
+        use params, only: output_results_netcdf, marker_weights_input
         use netcdf_results_output, only: write_results_netcdf
 
         integer(8) :: total_field_evaluations
@@ -3398,7 +3405,12 @@ contains
         call write_results
 
         if (output_results_netcdf) then
-            call write_results_netcdf('results.nc', wall%facet_count)
+            if (allocated(marker_weights_input)) then
+                call write_results_netcdf('results.nc', wall%facet_count, &
+                                          marker_weights_input)
+            else
+                call write_results_netcdf('results.nc', wall%facet_count)
+            end if
         end if
     end subroutine write_output
 
