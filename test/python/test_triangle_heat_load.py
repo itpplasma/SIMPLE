@@ -37,7 +37,7 @@ def write_stl(path, triangles=TRIANGLES, binary=False):
 
 
 def write_results(path, *, index=(1, 0, 1, -1), momentum=(1, 1, 1, 1),
-                  weights=None, phase_first=False, units='m'):
+                  weights=None, phase_first=False, units='m', birth=None):
     with nc.Dataset(path, 'w') as ds:
         ds.createDimension('particle', len(index))
         ds.createDimension('phase', 5)
@@ -57,6 +57,11 @@ def write_results(path, *, index=(1, 0, 1, -1), momentum=(1, 1, 1, 1),
         v[:] = z if phase_first else z.T
         if weights is not None:
             ds.createVariable('marker_weight', 'f8', ('particle',))[:] = weights
+        if birth is not None:
+            v = ds.createVariable('zstart', 'f8', shape)
+            z = np.zeros((5, len(index)))
+            z[3] = birth
+            v[:] = z if phase_first else z.T
 
 
 @pytest.fixture
@@ -103,6 +108,28 @@ def test_malformed_ascii_facet(inputs, facet):
     results, stl = inputs
     stl.write_text('solid fixture\nfacet normal 0 0 1 outer loop ' + facet)
     with pytest.raises(ValueError):
+        TriangleHeatLoad.from_netcdf(results, stl, 1)
+
+
+@pytest.mark.parametrize('phase_first', [False, True])
+def test_mixed_birth_energies_conserve_source_power(inputs, phase_first):
+    results, stl = inputs
+    # Collisionless 55 and 18.33 keV births, all markers deposited: the walls
+    # receive exactly the source power. Normalizing by the marker count
+    # instead would give (1 + 1/3)/2 of it.
+    birth = np.array([1, 1, 3 ** -0.5, 3 ** -0.5])
+    write_results(results, index=[0, 1, 1, 0], momentum=birth, birth=birth,
+                  phase_first=phase_first)
+    load = TriangleHeatLoad.from_netcdf(results, stl, 2.0)
+    assert load.deposited_power_W == pytest.approx(2e6, rel=1e-14)
+    np.testing.assert_allclose(load.power_W, [1e6, 1e6], rtol=1e-14)
+
+
+@pytest.mark.parametrize('birth', [[1, 1, 0, 1], [1, np.nan, 1, 1]])
+def test_invalid_birth_momentum(inputs, birth):
+    results, stl = inputs
+    write_results(results, birth=birth)
+    with pytest.raises(ValueError, match='birth momentum'):
         TriangleHeatLoad.from_netcdf(results, stl, 1)
 
 

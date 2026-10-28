@@ -76,9 +76,10 @@ def _particle_array(ds, name: str) -> np.ndarray:
 class TriangleHeatLoad:
     """Unsmoothened facet powers and fluxes. Geometry is in m, power in W.
 
-    Construct with ``from_netcdf``. Marker weights describe the *whole* source
-    population and are normalized by their sum, including markers with no hit.
-    ``zend`` momentum squared supplies the final energy fraction E/E0.
+    Construct with ``from_netcdf``. Marker weights are relative numbers of
+    source particles for the *whole* population, including markers with no
+    hit. The source power is normalized by sum(w * p0**2) with birth momentum
+    p0 from ``zstart``; ``zend`` momentum squared gives the impact energy.
     """
 
     triangles_m: np.ndarray
@@ -153,6 +154,19 @@ class TriangleHeatLoad:
             if (not np.isfinite(angles).all() or np.any(angles < 0)
                     or np.any(angles > np.pi / 2)):
                 raise ValueError('incidence angles must be in [0, pi/2] radians')
+            # Birth momentum p0 = zstart(4) gives each marker's source energy
+            # E0*p0^2; results without zstart are treated as monoenergetic.
+            birth = np.ones(n)
+            if 'zstart' in ds.variables:
+                zstart = ds.variables['zstart']
+                if set(zstart.dimensions) != {'phase', 'particle'}:
+                    raise ValueError('zstart must have phase and particle dimensions')
+                birth = np.take(zstart[:], 3, axis=zstart.dimensions.index('phase'))
+                if birth.shape != (n,) or np.ma.is_masked(birth):
+                    raise ValueError('invalid birth momentum')
+                birth = np.asarray(birth, dtype=float)
+                if not np.isfinite(birth).all() or np.any(birth <= 0):
+                    raise ValueError('birth momentum must be finite and positive')
             if marker_weights is None:
                 marker_weights = (_particle_array(ds, 'marker_weight')
                                   if 'marker_weight' in ds.variables
@@ -170,7 +184,8 @@ class TriangleHeatLoad:
             raise ValueError('STL contains nonfinite triangle areas')
         if np.any(area[index[hit]] == 0):
             raise ValueError('recorded hit on a degenerate STL triangle')
-        fractions = weights[hit] / weights.sum() * momentum[hit] ** 2
+        source_energy = np.sum(weights * birth ** 2)
+        fractions = weights[hit] / source_energy * momentum[hit] ** 2
         total_W = float(total_alpha_power_MW) * 1e6
         count = np.bincount(index[hit], minlength=len(area))
         fraction = np.bincount(index[hit], weights=fractions, minlength=len(area))
