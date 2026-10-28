@@ -32,12 +32,12 @@ contains
         if (cart_scale <= 0.0_dp) error stop "chartmap cart_scale must be positive"
 
         select type (base => coords)
-        type is (scaled_chartmap_coordinate_system_t)
+            type is (scaled_chartmap_coordinate_system_t)
             base%cart_scale = base%cart_scale*cart_scale
-        type is (chartmap_coordinate_system_t)
+            type is (chartmap_coordinate_system_t)
             allocate (scaled_chartmap_coordinate_system_t :: wrapped)
             select type (scaled => wrapped)
-            type is (scaled_chartmap_coordinate_system_t)
+                type is (scaled_chartmap_coordinate_system_t)
                 scaled%chartmap_coordinate_system_t = base
                 scaled%cart_scale = cart_scale
             class default
@@ -82,8 +82,8 @@ contains
         real(dp), intent(in) :: u(3)
         real(dp), intent(out) :: basis(3, 3), dbasis(3, 3, 3)
 
-        call self%chartmap_coordinate_system_t%covariant_basis_with_der(u, basis, &
-                                                                         dbasis)
+        call self%chartmap_coordinate_system_t%covariant_basis_with_der( &
+            u, basis, dbasis)
         basis = self%cart_scale*basis
         dbasis = self%cart_scale*dbasis
     end subroutine scaled_chartmap_basis_der
