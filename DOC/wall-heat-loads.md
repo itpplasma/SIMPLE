@@ -22,8 +22,16 @@ $$
 
 Without collisions $p_i = 1$. With collisions the energy given to the
 background before the exit is not deposited on the wall; $p_i < 1$ on average,
-but energy diffusion can raise individual markers above $p_i = 1$. Mixed
-birth energies need a separate source convention and are not handled.
+but energy diffusion can raise individual markers above $p_i = 1$.
+
+Mixed birth energies (for example the full, half and third energy components
+of a neutral beam) start with $p_{0,i} = $ `zstart(4)` $\neq 1$. The STL facet
+estimator below then treats $w_i$ as relative numbers of source particles and
+normalizes by the source energy, $\sum_k w_k p_{0,k}^2$, so that a
+collisionless run in which every marker reaches the wall deposits exactly the
+source power. For monoenergetic sources ($p_{0,k}=1$) this reduces to
+$\sum_k w_k$. The flux-surface bin estimator still assumes a monoenergetic
+source.
 
 The particle and energy loss fractions and the lost power are
 
@@ -70,13 +78,14 @@ A marker with `wall_hit == 1` deposits on its facet $j$ = `wall_hit_triangle`.
 For facet area $A_j$ (m²)
 
 $$
-P_j = P_\alpha\,\frac{\sum_{i:\,\text{hit}(i)=j} w_i\, p_i^2}{\sum_{k=1}^{N} w_k},
+P_j = P_\alpha\,\frac{\sum_{i:\,\text{hit}(i)=j} w_i\, p_i^2}{\sum_{k=1}^{N} w_k\, p_{0,k}^2},
 \qquad q_j = \frac{P_j}{A_j}.
 $$
 
 The denominator runs over **all** source markers, including confined markers
-and losses that did not reach the STL. $\sum_j P_j$ is the deposited part of
-$P_\alpha$. No incidence cosine is applied: the power lands on the actual
+and losses that did not reach the STL; $p_{0,k}$ = `zstart(4)` is one when
+`results.nc` has no `zstart`. $\sum_j P_j$ is the deposited part of the source
+power $P_\alpha$. No incidence cosine is applied: the power lands on the actual
 facet area, not a projected one. Weights come from `marker_weights`, else
 from a `marker_weight(particle)` variable in `results.nc` (SIMPLE does not
 write one), else all ones. Facets of zero area keep their index, receive no
