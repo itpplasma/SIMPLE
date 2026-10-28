@@ -91,6 +91,55 @@ Lubich and Wanner 2006); with early classification, loss computations cost
 about one order of magnitude less than with adaptive Runge–Kutta (Albert,
 Kasilov and Kernbichler 2020, JPP).
 
+Cartesian canonical chart (``canonical_chart = 'cartesian'``)
+-------------------------------------------------------------
+
+The polar schemes above are singular at the magnetic axis, where
+:math:`(r,\vartheta)` is not a chart: steps that pass the axis closer than
+about one step length have no solution in :math:`(r,\vartheta)`, and the
+axis flip and the recovery path take over. With ``canonical_chart =
+'cartesian'`` midpoint and Gauss (``integmode`` 3–7) step instead in the
+global Darboux chart
+
+.. math::
+
+   X = \sqrt{2\kappa}\,x, \qquad Y = \sigma\sqrt{2\kappa}\,y, \qquad
+   \kappa = \frac{\sigma p_\vartheta}{s}, \qquad
+   (x, y) = \sqrt s\,(\cos\vartheta, \sin\vartheta),
+
+with :math:`\sigma = \operatorname{sign}(p_\vartheta/s)`. Then
+:math:`X^2 + Y^2 = 2\sigma p_\vartheta` and :math:`dX\wedge dY = dp_\vartheta
+\wedge d\vartheta`, so :math:`(X, Y, \varphi, p_\varphi)` are canonical and
+one chart covers the axis :math:`X = Y = 0`. For a field that is regular in
+:math:`(x, y)` (the libneo regular Boozer field of :doc:`coordinates`, or the
+analytic test field) :math:`\kappa` is regular and positive, and so is the
+Hamiltonian :math:`K(X, Y, \varphi, p_\varphi)`, including the configured
+radial electric potential in Boozer coordinates. Midpoint is Gauss-1; for
+:math:`s` stages the unknowns are the stage points :math:`W_i` and their
+field points :math:`u_i = (x_i, y_i)`:
+
+.. math::
+
+   W_i = w^n + h\sum_j a_{ij}\,\mathbb J\nabla K(W_j), \qquad
+   C(u_i, \varphi_i, p_{\varphi,i}) = (X_i, Y_i),
+
+where :math:`C` is the chart map above and :math:`\nabla K` follows from
+:math:`\nabla H` at :math:`u_i` by implicit differentiation of :math:`C`.
+This is the Gauss method for :math:`\dot w = \mathbb J\nabla K(w)` and
+therefore symplectic, with no radius floor, axis flip, chart handoff or
+recovery: a step either converges or ends the marker with exit code 102 or
+103. Newton's first iteration uses the second field derivatives; the chord
+iterations reuse that Jacobian with first derivatives. The end point
+:math:`w^{n+1} = w^n + \sum_i d_i (W_i - w^n)`, :math:`d = b^\top A^{-1}`, is
+mapped back to :math:`(s, \vartheta)` for output, loss and wall checks.
+A collision kick changes :math:`p_\varphi` and :math:`\mu` at fixed
+:math:`(s, \vartheta, \varphi)`; the next step re-encodes :math:`(X, Y)`.
+The pointwise algebra (:math:`\kappa`, :math:`H`, :math:`C`, the vector field
+and the stage Jacobian blocks) is generated with FortSym by
+``gen/gen_darboux_chart.f90`` into ``src/generated/``; the step is
+``src/orbit_symplectic_darboux.f90``. SPECTRE, canonical flux, Meiss and
+Albert fields and the GPU paths are not supported.
+
 Adaptive Runge–Kutta (``integmode = 0``)
 ----------------------------------------
 

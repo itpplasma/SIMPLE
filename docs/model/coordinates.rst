@@ -97,6 +97,19 @@ and one-dimensional splines of :math:`A_\varphi`, :math:`B_\vartheta` and
 :math:`r = s`; a chartmap stores :math:`\rho = \sqrt s`
 (``field_can_boozer.f90``).
 
+These splines are polar in :math:`(\sqrt s, \vartheta_B)` and not smooth
+at the axis: the axis value of :math:`B` varies with :math:`\vartheta_B`
+by up to :math:`3\times10^{-4}` on the QA test equilibrium, and
+:math:`h_\vartheta` does not vanish there. For ``canonical_chart =
+'cartesian'`` libneo also builds a regular representation in
+:math:`X = \sqrt s\cos\vartheta_B`, :math:`Y = \sqrt s\sin\vartheta_B`:
+:math:`B = F_0 + XF_{1c} + YF_{1s} + \dots + \rho^3R` with axis functions
+of :math:`\varphi_B`, :math:`B_\vartheta = s\,i(\rho)`, :math:`B_\varphi =
+G_0 + s\,g(\rho)`, :math:`A_\varphi = A_0 + s\,a(\rho)` and
+:math:`A_\vartheta = \psi_\text{tor}s`. It is :math:`C^2` through the axis,
+so :math:`p_\vartheta/s` is regular and of one sign near the axis
+(``boozer_regular`` in libneo, :doc:`integrators`).
+
 Meiss coordinates (``integ_coords = 3``)
 ----------------------------------------
 

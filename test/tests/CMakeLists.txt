@@ -890,6 +890,20 @@ set_tests_properties(test_continuous_classifier_scores PROPERTIES LABELS "unit")
             LABELS "unit;wall" FIXTURES_SETUP stl_wall_hits)
     endif()
 
+# Cartesian (Darboux) canonical chart on the analytic tokamak: leaves vs
+# independent oracles, step properties, axis-grazing markers.
+add_executable(test_darboux_chart.x test_darboux_chart.f90)
+target_link_libraries(test_darboux_chart.x simple)
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(test_darboux_chart.x PRIVATE -ffpe-trap=invalid,zero,overflow)
+endif()
+foreach(_darboux_part IN ITEMS leaves step axis lu electric negative boundary boozer mode)
+    add_test(NAME test_darboux_chart_${_darboux_part}
+        COMMAND test_darboux_chart.x ${_darboux_part})
+    set_tests_properties(test_darboux_chart_${_darboux_part} PROPERTIES
+        LABELS "unit" TIMEOUT 600)
+endforeach()
+
 add_executable(test_sorting.x test_sorting.f90)
 target_link_libraries(test_sorting.x simple)
 add_test(NAME test_sorting COMMAND test_sorting.x)
@@ -930,6 +944,41 @@ set_tests_properties(
     test_boundary_event_config_radial_nan
     test_chart_boundary_config_invalid
     PROPERTIES WILL_FAIL TRUE)
+
+# canonical_chart = 'cartesian' input validation.
+add_executable(test_canonical_chart_config.x test_canonical_chart_config.f90)
+target_link_libraries(test_canonical_chart_config.x simple)
+foreach(_chart_case IN ITEMS polar_euler midpoint gauss4_test)
+    add_test(NAME test_canonical_chart_config_${_chart_case}
+        COMMAND test_canonical_chart_config.x ${_chart_case})
+    set_tests_properties(test_canonical_chart_config_${_chart_case} PROPERTIES
+        LABELS "unit"
+        PASS_REGULAR_EXPRESSION "canonical chart configuration accepted")
+endforeach()
+foreach(_chart_case IN ITEMS euler rk lobatto)
+    add_test(NAME test_canonical_chart_config_${_chart_case}
+        COMMAND test_canonical_chart_config.x ${_chart_case})
+    set_tests_properties(test_canonical_chart_config_${_chart_case} PROPERTIES
+        LABELS "unit" PASS_REGULAR_EXPRESSION "requires integmode 3")
+endforeach()
+foreach(_chart_case IN ITEMS canflux meiss albert spectre)
+    add_test(NAME test_canonical_chart_config_${_chart_case}
+        COMMAND test_canonical_chart_config.x ${_chart_case})
+    set_tests_properties(test_canonical_chart_config_${_chart_case} PROPERTIES
+        LABELS "unit" PASS_REGULAR_EXPRESSION "SPECTRE, canonical")
+endforeach()
+add_test(NAME test_canonical_chart_config_full_orbit
+    COMMAND test_canonical_chart_config.x full_orbit)
+add_test(NAME test_canonical_chart_config_gpu
+    COMMAND test_canonical_chart_config.x gpu)
+add_test(NAME test_canonical_chart_config_unknown
+    COMMAND test_canonical_chart_config.x unknown)
+set_tests_properties(test_canonical_chart_config_full_orbit PROPERTIES
+    LABELS "unit" PASS_REGULAR_EXPRESSION "requires the guiding-centre model")
+set_tests_properties(test_canonical_chart_config_gpu PROPERTIES
+    LABELS "unit" PASS_REGULAR_EXPRESSION "has no GPU implementation")
+set_tests_properties(test_canonical_chart_config_unknown PROPERTIES
+    LABELS "unit" PASS_REGULAR_EXPRESSION "must be 'polar' or 'cartesian'")
 
 add_executable(test_ntcut_overflow.x test_ntcut_overflow.f90)
 target_link_libraries(test_ntcut_overflow.x simple)

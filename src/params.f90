@@ -13,7 +13,7 @@ module params
     use field_can_mod, only: eval_field => evaluate, field_can_t
     use field_can_base, only: set_radial_electric_potential_slope
     use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
-                                     EXPL_IMPL_EULER, &
+                                     EXPL_IMPL_EULER, MIDPOINT, GAUSS4, &
                                      CASH_KARP, DORMAND_PRINCE, &
                                      boundary_event_fraction_tolerance, &
                                      boundary_event_radial_tolerance, &
@@ -73,6 +73,13 @@ module params
 	    integer(8), allocatable :: kt_macro(:)
 
     integer :: integmode = EXPL_IMPL_EULER
+
+    ! Canonical chart of the symplectic guiding-centre step. 'polar' steps in
+    ! (r, theta, phi, p_phi). 'cartesian' steps in the global Darboux chart
+    ! X, Y = sqrt(2 |p_theta|) (cos theta, sigma sin theta), phi, p_phi, which
+    ! is regular at the magnetic axis; it needs integmode 3-7 (midpoint,
+    ! Gauss1-4) and a Boozer (VMEC or Boozer chartmap) or test field.
+    character(16) :: canonical_chart = 'polar'
 
     ! GPU execution is configured in the same namelist as the CPU run. Native
     ! CUDA with tuned DOPRI is the default production path. The legacy
@@ -245,7 +252,8 @@ module params
         facE_al, particle_energy_eV, npoiper2, n_e, n_d, netcdffile, &
         ns_s, ns_tp, multharm, &
         isw_field_type, generate_start_only, startmode, fusion_grid, grid_density, &
-        special_ants_file, integmode, orbit_model, orbit_coord, relerr, &
+        special_ants_file, integmode, canonical_chart, orbit_model, orbit_coord, &
+        relerr, &
         gpu_mode, gpu_backend, gpu_method, gpu_start_coordinates, &
         gpu_landreman, gpu_compact_init, gpu_work_order, gpu_num_devices, &
         gpu_t_block, gpu_loss_tau, gpu_maxloss, gpu_min_timestep, &
@@ -326,6 +334,7 @@ contains
         gpu_method = to_lower(trim(gpu_method))
         gpu_start_coordinates = to_lower(trim(gpu_start_coordinates))
         collision_model = to_lower(trim(collision_model))
+        canonical_chart = to_lower(trim(canonical_chart))
 
         call reset_seed_if_deterministic
 
@@ -370,7 +379,31 @@ contains
         call set_radial_electric_potential_slope(radial_electric_potential_slope)
 
         call validate_gpu_config
+        call validate_canonical_chart
     end subroutine finalize_config
+
+    subroutine validate_canonical_chart
+        select case (trim(canonical_chart))
+        case ('polar')
+            return
+        case ('cartesian')
+            continue
+        case default
+            error stop "canonical_chart must be 'polar' or 'cartesian'"
+        end select
+        if (integmode < MIDPOINT .or. integmode > GAUSS4) error stop &
+            "canonical_chart = 'cartesian' requires integmode 3 (midpoint) "// &
+            "or 4-7 (Gauss1-4)"
+        if (isw_field_type /= BOOZER .and. isw_field_type /= TEST) error stop &
+            "canonical_chart = 'cartesian' requires integ_coords = 2 (Boozer: "// &
+            "VMEC or Boozer chartmap) or -1 (test field); SPECTRE, canonical "// &
+            "flux, Meiss and Albert coordinates are not supported"
+        if (orbit_model /= ORBIT_GC) error stop &
+            "canonical_chart = 'cartesian' requires the guiding-centre model"
+        if (trim(gpu_mode) /= 'off') error stop &
+            "canonical_chart = 'cartesian' has no GPU implementation; "// &
+            "set gpu_mode = 'off'"
+    end subroutine validate_canonical_chart
 
     subroutine warn_removed_config_keys
         if (.not. local) print *, 'WARNING: removed &config key local is ignored; ', &
