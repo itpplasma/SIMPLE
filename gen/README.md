@@ -49,3 +49,26 @@ Independent verification belongs in the consuming tests: pull back the same
 smooth translated/rotating Cartesian vector field through q=R² and q=R,
 including nonzero translation, and compare to its analytic Cartesian RHS.
 Symbolic differentiation and generation alone are not that behavioral oracle.
+
+Event energy generator
+----------------------
+
+The same generator CMake project also builds `generate_event_energy`.
+Run it with `src/generated` as the argument, then format
+`src/generated/generated_event_energy.f90` with the repository formatter.
+The emitted scalar conversion is E = E0*p^2, where E0 is the effective reference
+kinetic energy in eV and p is speed divided by the reference speed. It does not
+supply source normalization or change the orbit state.
+
+For a compatible existing FortSym build:
+
+```sh
+gfortran -I/path/to/fortsym/build/include gen/generate_event_energy.f90 \
+  -L/path/to/fortsym/build/lib -Wl,-rpath,/path/to/fortsym/build/lib \
+  -lfortsym -o /scratch/generate_event_energy
+/scratch/generate_event_energy src/generated
+fo fmt src/generated/generated_event_energy.f90
+```
+
+For reproducibility, regenerate in an empty directory, format the result and
+compare it with the checked-in file. Ordinary SIMPLE builds need no CAS.

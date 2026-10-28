@@ -82,6 +82,33 @@ class TestNetCDFResultsOutput:
                 assert np.all(event_residual[lcfs] >= 0.0)
                 assert np.all(event_width[lcfs] >= 0.0)
 
+                energy = ds.variables['kinetic_energy_eV']
+                assert energy.units == 'eV'
+                np.testing.assert_allclose(
+                    energy[:], ds.particle_energy_eV * ds['zend'][:, 3] ** 2,
+                    rtol=2e-15, atol=0)
+                weights = ds['marker_weight']
+                np.testing.assert_array_equal(weights[:], np.ones(8))
+                assert weights.units == '1'
+                assert weights.source.startswith('equal_marker_default;')
+                assert ds.results_schema_version == '1.1'
+                assert 'gyrophase' in ds.velocity_representation
+                assert '&PROFILES' in ds.profile_configuration.upper()
+                assert 'TE_SCALE' in ds.profile_configuration.upper()
+                # A decompressed copy must preserve every stored numeric value.
+                with nc.Dataset(tmp_path / 'roundtrip.nc', 'w') as copy:
+                    for name, dimension in ds.dimensions.items():
+                        copy.createDimension(name, len(dimension))
+                    for name, variable in ds.variables.items():
+                        assert variable.filters()['zlib']
+                        assert variable.filters()['complevel'] == 2
+                        restored = copy.createVariable(
+                            name, variable.dtype, variable.dimensions)
+                        restored[:] = variable[:]
+                with nc.Dataset(tmp_path / 'roundtrip.nc') as copy:
+                    for name, variable in ds.variables.items():
+                        np.testing.assert_array_equal(copy[name][:], variable[:])
+
                 assert 'ntestpart' in ds.ncattrs()
                 assert 'trace_time' in ds.ncattrs()
                 assert ds.ntestpart == 8

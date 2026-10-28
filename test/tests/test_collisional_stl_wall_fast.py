@@ -13,6 +13,9 @@ import numpy as np
 
 import test_collisional_stl_wall as full
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'python'))
+from pysimple.wall_heat_load import TriangleHeatLoad
+
 
 def check_hits(result, name):
     hit = result["wall_hit"] == 1
@@ -152,6 +155,32 @@ def main():
     for work in workdirs:
         with Dataset(work / "results.nc") as ds:
             result = {key: np.asarray(ds[key][:]) for key in full.RESULT_VARS}
+            energy = ds['kinetic_energy_eV']
+            assert energy.units == 'eV'
+            np.testing.assert_allclose(
+                energy[:], ds.particle_energy_eV * result['zend'][:, 3] ** 2,
+                rtol=2e-15, atol=0)
+            assert energy.filters()['zlib']
+            np.testing.assert_array_equal(ds['marker_weight'][:], 1)
+            assert ds['marker_weight'].source.startswith('equal_marker_default;')
+            assert 'chord' in ds.wall_incidence_representation
+            assert ds['wall_hit_triangle'].start_index == 0
+            assert 'NI1_SCALE' in ds.profile_configuration.upper()
+            np.testing.assert_array_equal(ds.background_ion_charge_number, [1, 1])
+
+        with Dataset(work / 'weighted-results.nc') as weighted:
+            weights = np.ones(len(result['wall_hit']))
+            weights[0] = 2
+            np.testing.assert_array_equal(weighted['marker_weight'][:], weights)
+            assert weighted['marker_weight'].source == 'supplied_relative_weights'
+        hit = result['wall_hit'] == 1
+        for filename, source_weights in (
+                ('results.nc', np.ones(len(hit))),
+                ('weighted-results.nc', weights)):
+            loads = TriangleHeatLoad.from_netcdf(work / filename, work / 'wall.stl', 1)
+            expected = np.sum(source_weights[hit] * result['zend'][hit, 3] ** 2)
+            expected *= 1e6 / np.sum(source_weights)
+            np.testing.assert_allclose(loads.deposited_power_W, expected, rtol=2e-15)
         assert not np.any(result["orbit_exit_code"] == 3), str(work)
         assert np.all(result["orbit_exit_code"] < 100), str(work)
         results.append(result)
