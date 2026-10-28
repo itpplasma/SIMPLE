@@ -28,7 +28,7 @@ def workflow_step():
 
 
 class ClusterDispatchResult(unittest.TestCase):
-    def run_step(self, outcome, event="merge_group", full="false", stale=False):
+    def run_step(self, outcome, event="push", full="false", stale=False):
         with tempfile.TemporaryDirectory(prefix="cluster-result-") as tmp:
             root = Path(tmp)
             for directory in ("ci", "bin", "sci-out"):
@@ -79,6 +79,11 @@ class ClusterDispatchResult(unittest.TestCase):
     def test_manual_smoke_does_not_require_full_results(self):
         result = self.run_step("missing", event="workflow_dispatch")
         self.assertEqual(result.returncode, 0, result.stdout)
+
+    def test_merge_queue_runs_the_fast_tier(self):
+        result = self.run_step("missing", event="merge_group")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("tier: fast", result.stdout)
 
     def test_manual_full_requires_completed_results(self):
         result = self.run_step("missing", event="workflow_dispatch", full="true")
