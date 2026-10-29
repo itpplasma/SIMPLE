@@ -63,6 +63,24 @@ contains
         close (1)
     end subroutine load_starting_points
 
+    subroutine load_marker_weights(weights, filename)
+        real(dp), intent(out) :: weights(:)
+        character(len=*), intent(in) :: filename
+        integer :: ipart, status, unit
+        real(dp) :: extra
+
+        open (newunit=unit, file=filename, status='old', action='read', &
+              iostat=status)
+        if (status /= 0) error stop 'Cannot open marker_weight_file'
+        do ipart = 1, size(weights)
+            read (unit, *, iostat=status) weights(ipart)
+            if (status /= 0) error stop 'marker_weight_file: too few rows'
+        end do
+        read (unit, *, iostat=status) extra
+        close (unit)
+        if (status == 0) error stop 'marker_weight_file: too many rows'
+    end subroutine load_marker_weights
+
     subroutine save_starting_points(zstart)
         real(dp), dimension(:, :), intent(in) :: zstart
         integer :: ipart
@@ -145,7 +163,7 @@ contains
 
     subroutine sample_fusion_birth(zstart, s_inner, s_outer, integration_coords)
         use params, only: fusion_grid, num_surf, facE_al, n_d, n_e, &
-            am1, am2, Z1, Z2, sbeg
+                          am1, am2, Z1, Z2, sbeg
         use fusion_source, only: build_birth_cdf, draw_birth, alpha_energy_joule
         use field_can_mod, only: integ_to_ref
         real(dp), intent(out) :: zstart(:, :)
@@ -389,10 +407,10 @@ contains
         if (allocated(trap_par)) deallocate (trap_par)
         if (allocated(perp_inv)) deallocate (perp_inv)
         if (allocated(iclass)) deallocate (iclass)
-        allocate(times_lost(ntestpart), orbit_exit_code(ntestpart), &
-                 boundary_event_radial_residual(ntestpart), &
-                 boundary_event_time_width(ntestpart), &
-                 trap_par(ntestpart), perp_inv(ntestpart), iclass(3,ntestpart))
+        allocate (times_lost(ntestpart), orbit_exit_code(ntestpart), &
+                  boundary_event_radial_residual(ntestpart), &
+                  boundary_event_time_width(ntestpart), &
+                  trap_par(ntestpart), perp_inv(ntestpart), iclass(3, ntestpart))
         orbit_exit_code = 0
         boundary_event_radial_residual = -1d0
         boundary_event_time_width = -1d0

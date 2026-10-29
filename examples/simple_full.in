@@ -68,6 +68,8 @@ coord_input = ''                 ! reference coordinate file: VMEC wout or chart
 !                                  '' = netcdffile, then field_input
 profile_label_file = ''          ! netCDF label s(R,phi,Z) as &profiles radius for
 !                                  integ_coords = 5 (src/profile_label.f90); '' = chart radius
+marker_weight_file = ''          ! one relative source weight per start.dat row (startmode
+!                                  2 or 6), written to results.nc; '' = equal weights
 netcdffile = ''                  ! VMEC wout file; deprecated fallback for field_input and
 !                                  coord_input; '' = 'wout.nc' where a VMEC file is required
 radial_electric_potential_slope = 0d0 ! Boozer integration: Phi(s) = slope*s added to H; 0 = off

@@ -66,11 +66,11 @@ module params
     real(dp) :: grid_density = 0d0
     logical          :: special_ants_file = .False.
 
-	    integer :: ntau ! number of dtaumin in dtau
-	    integer(8) :: n_microsteps_total = 0_8
-	    character(16) :: macrostep_time_grid = 'linear'
-	    integer, allocatable :: ntau_macro(:)
-	    integer(8), allocatable :: kt_macro(:)
+    integer :: ntau ! number of dtaumin in dtau
+    integer(8) :: n_microsteps_total = 0_8
+    character(16) :: macrostep_time_grid = 'linear'
+    integer, allocatable :: ntau_macro(:)
+    integer(8), allocatable :: kt_macro(:)
 
     integer :: integmode = EXPL_IMPL_EULER
 
@@ -200,6 +200,10 @@ module params
     !> with integ_coords = REFCOORDS (format: src/profile_label.f90).
     character(1000) :: profile_label_file = ''
     character(1000) :: wall_input = ''
+    !> Optional file with one relative source weight per start.dat row
+    !> (startmode 2 or 6), written to results.nc marker_weight.
+    character(1000) :: marker_weight_file = ''
+    real(dp), allocatable :: marker_weights_input(:)
     character(16) :: wall_units = 'm'
     !> Radial threshold for querying an external STL wall. A negative value
     !> means that no external-wall query gate is active for this run.
@@ -264,7 +268,7 @@ module params
         am1, am2, Z1, Z2, &
         densi1, densi2, tempi1, tempi2, tempe, &
         batch_size, ran_seed, particle_index_offset, reuse_batch, &
-        field_input, coord_input, profile_label_file, &
+        field_input, coord_input, profile_label_file, marker_weight_file, &
         wall_input, wall_units, chart_boundary_kind, integ_coords, crossing_level, &
         spectre_fo_entry_larmor, spectre_fo_tolerance, spectre_fo_grid, &
         spectre_sbeg_is_toroidal_flux, spectre_ncon_r, spectre_ncon_th, &
@@ -337,12 +341,13 @@ contains
 
         call validate_boundary_event_tolerances
         call validate_chart_boundary_kind
+        call validate_marker_weight_file
         if (min(canonical_grid_nr, canonical_grid_ntheta, &
-            canonical_grid_nphi) < 6) then
+                canonical_grid_nphi) < 6) then
             error stop 'canonical map grid dimensions must be at least 6'
         end if
         if (max(canonical_grid_nr, canonical_grid_ntheta, &
-            canonical_grid_nphi) > 512) then
+                canonical_grid_nphi) > 512) then
             error stop 'canonical map grid dimensions must not exceed 512'
         end if
         if (int(canonical_grid_nr, int64)*int(canonical_grid_ntheta, int64)* &
@@ -371,6 +376,15 @@ contains
 
         call validate_gpu_config
     end subroutine finalize_config
+
+    subroutine validate_marker_weight_file
+        ! Rows must align with start.dat; batch subsetting would reorder them.
+        if (len_trim(marker_weight_file) == 0) return
+        if (startmode /= 2 .and. startmode /= 6) &
+            error stop 'marker_weight_file requires startmode 2 or 6'
+        if (ntestpart > batch_size) &
+            error stop 'marker_weight_file does not support batch subsets'
+    end subroutine validate_marker_weight_file
 
     subroutine warn_removed_config_keys
         if (.not. local) print *, 'WARNING: removed &config key local is ignored; ', &
@@ -494,38 +508,38 @@ contains
         if (.not. config_value_is_finite(boundary_event_fraction_tolerance) .or. &
             (boundary_event_fraction_tolerance /= -1d0 .and. &
              boundary_event_fraction_tolerance <= 0d0)) then
-            error stop 'boundary_event_fraction_tolerance must be finite and positive or -1'
+        error stop 'boundary_event_fraction_tolerance must be finite and positive or -1'
         end if
         if (.not. config_value_is_finite(boundary_event_radial_tolerance) .or. &
             (boundary_event_radial_tolerance /= -1d0 .and. &
              boundary_event_radial_tolerance <= 0d0)) then
-            error stop 'boundary_event_radial_tolerance must be finite and positive or -1'
+          error stop 'boundary_event_radial_tolerance must be finite and positive or -1'
         end if
     end subroutine validate_boundary_event_tolerances
 
     pure logical function config_value_is_finite(value)
         real(dp), intent(in) :: value
         integer(int64), parameter :: exponent_mask = &
-            int(z'7ff0000000000000', int64)
+                                     int(z'7ff0000000000000', int64)
         integer(int64) :: bits
 
         bits = transfer(value, bits)
         config_value_is_finite = iand(bits, exponent_mask) /= exponent_mask
     end function config_value_is_finite
 
-	    subroutine params_init
-	        real(dp) :: E_alpha
+    subroutine params_init
+        real(dp) :: E_alpha
         integer :: energy_status
-	        integer :: L1i
-	        real(dp) :: weight_sum, cumul_weight, w
-	        integer :: i, nintv
-	        integer(8) :: kt_target, kt_prev
-	        character(16) :: grid_kind
+        integer :: L1i
+        real(dp) :: weight_sum, cumul_weight, w
+        integer :: i, nintv
+        integer(8) :: kt_target, kt_prev
+        character(16) :: grid_kind
         call resolve_particle_energy(E_alpha, energy_status)
         if (energy_status /= 0) error stop 'Invalid particle energy configuration'
         particle_energy_eV_effective = E_alpha
 
-	        if (isw_field_type == TEST) then
+        if (isw_field_type == TEST) then
             ! TEST field uses normalized units: B0=1, R0=1, a=0.5
             ! Use normalized parameters for orbit integration
             v0 = 1.0d0          ! Normalized velocity
@@ -533,15 +547,15 @@ contains
             ro0 = 1.0d0         ! Normalized ro0 = mc/e * v0
             rmu = 1d8           ! Large inverse relativistic temperature
             tau = trace_time    ! Already in normalized units
-	            dtau = tau/dble(ntimstep - 1)
+            dtau = tau/dble(ntimstep - 1)
             L1i = 1             ! One field period (full torus)
             rbig = 1.0d0        ! Major radius R0=1
             dphi = 2.d0*pi/(L1i*npoiper)
-	            dtaumin = 2.d0*pi*rbig/npoiper2
-	            ntau = ceiling(dtau/dtaumin)
-	            dtaumin = dtau/ntau
-	            fper = 2d0*pi       ! Full torus
-	        else
+            dtaumin = 2.d0*pi*rbig/npoiper2
+            ntau = ceiling(dtau/dtaumin)
+            dtaumin = dtau/ntau
+            fper = 2d0*pi       ! Full torus
+        else
             ! set alpha energy, velocity, and Larmor radius
             v0 = sqrt(2.d0*E_alpha*ev/(n_d*p_mass))
             rlarm = v0*n_d*p_mass*c/(n_e*e_charge)
@@ -550,69 +564,69 @@ contains
             rmu = 1d8
             ! normalized slowing down time:
             tau = trace_time*v0
-	            ! normalized time step:
-	            dtau = tau/dble(ntimstep - 1)
+            ! normalized time step:
+            dtau = tau/dble(ntimstep - 1)
             ! parameters for the vacuum chamber:
             call stevvo(RT0, R0i, L1i, cbfi, bz0i, bf0)
             rbig = rt0
             ! field line integration step step over phi (to check chamber wall crossing)
             dphi = 2.d0*pi/(L1i*npoiper)
-	            ! orbit integration time step (to check chamber wall crossing)
-	            dtaumin = 2.d0*pi*rbig/npoiper2
-	            ntau = ceiling(dtau/dtaumin)
-	            dtaumin = dtau/ntau
-	            fper = 2d0*pi/dble(L1i)
-	        end if
+            ! orbit integration time step (to check chamber wall crossing)
+            dtaumin = 2.d0*pi*rbig/npoiper2
+            ntau = ceiling(dtau/dtaumin)
+            dtaumin = dtau/ntau
+            fper = 2d0*pi/dble(L1i)
+        end if
 
-	        ! Macrostep schedule (number of microsteps per macrostep).
-	        ! - Default is linear: constant ntau per macrostep.
-	        ! - Log schedule: macrosteps are distributed logarithmically in time
-	        !   while keeping the microstep resolution dtaumin. The total number
-	        !   of microsteps is preserved as (ntimstep-1)*ntau.
-	        nintv = max(1, ntimstep - 1)
-	        n_microsteps_total = int(nintv, kind=8) * int(ntau, kind=8)
-	        if (allocated(ntau_macro)) deallocate(ntau_macro)
-	        if (allocated(kt_macro)) deallocate(kt_macro)
-	        allocate (ntau_macro(ntimstep))
-	        allocate (kt_macro(ntimstep))
-	        ntau_macro = 0
-	        kt_macro = 0_8
+        ! Macrostep schedule (number of microsteps per macrostep).
+        ! - Default is linear: constant ntau per macrostep.
+        ! - Log schedule: macrosteps are distributed logarithmically in time
+        !   while keeping the microstep resolution dtaumin. The total number
+        !   of microsteps is preserved as (ntimstep-1)*ntau.
+        nintv = max(1, ntimstep - 1)
+        n_microsteps_total = int(nintv, kind=8)*int(ntau, kind=8)
+        if (allocated(ntau_macro)) deallocate (ntau_macro)
+        if (allocated(kt_macro)) deallocate (kt_macro)
+        allocate (ntau_macro(ntimstep))
+        allocate (kt_macro(ntimstep))
+        ntau_macro = 0
+        kt_macro = 0_8
 
-	        grid_kind = to_lower(macrostep_time_grid)
-	        if (trim(grid_kind) == 'log') then
-	            ! Logarithmic macrostep grid: timesteps appear equally spaced
-	            ! on a log10 plot of time. Weight for interval i is 10^((i-1)/(N-1)),
-	            ! giving a 10:1 ratio between last and first intervals.
-	            ! Uses cumulative rounding to guarantee exact total microsteps.
+        grid_kind = to_lower(macrostep_time_grid)
+        if (trim(grid_kind) == 'log') then
+            ! Logarithmic macrostep grid: timesteps appear equally spaced
+            ! on a log10 plot of time. Weight for interval i is 10^((i-1)/(N-1)),
+            ! giving a 10:1 ratio between last and first intervals.
+            ! Uses cumulative rounding to guarantee exact total microsteps.
 
-	            ! First pass: compute total weight
-	            weight_sum = 0.0d0
-	            do i = 1, nintv
-	                weight_sum = weight_sum + 10.0d0 ** (dble(i - 1) / dble(max(1, nintv - 1)))
-	            end do
+            ! First pass: compute total weight
+            weight_sum = 0.0d0
+            do i = 1, nintv
+                weight_sum = weight_sum + 10.0d0**(dble(i - 1)/dble(max(1, nintv - 1)))
+            end do
 
-	            ! Second pass: distribute microsteps via cumulative rounding
-	            ! Guarantee at least 1 microstep per interval to avoid empty loops
-	            cumul_weight = 0.0d0
-	            kt_prev = 0_8
-	            do i = 1, nintv
-	                w = 10.0d0 ** (dble(i - 1) / dble(max(1, nintv - 1)))
-	                cumul_weight = cumul_weight + w
-	                kt_target = nint(cumul_weight / weight_sum * dble(n_microsteps_total), kind=8)
-	                ntau_macro(i + 1) = max(1, int(kt_target - kt_prev))
-	                kt_macro(i + 1) = kt_prev + int(ntau_macro(i + 1), kind=8)
-	                kt_prev = kt_macro(i + 1)
-	            end do
-	        else
-	            do i = 2, ntimstep
-	                ntau_macro(i) = ntau
-	                kt_macro(i) = kt_macro(i - 1) + int(ntau, kind=8)
-	            end do
-	        end if
+            ! Second pass: distribute microsteps via cumulative rounding
+            ! Guarantee at least 1 microstep per interval to avoid empty loops
+            cumul_weight = 0.0d0
+            kt_prev = 0_8
+            do i = 1, nintv
+                w = 10.0d0**(dble(i - 1)/dble(max(1, nintv - 1)))
+                cumul_weight = cumul_weight + w
+              kt_target = nint(cumul_weight/weight_sum*dble(n_microsteps_total), kind=8)
+                ntau_macro(i + 1) = max(1, int(kt_target - kt_prev))
+                kt_macro(i + 1) = kt_prev + int(ntau_macro(i + 1), kind=8)
+                kt_prev = kt_macro(i + 1)
+            end do
+        else
+            do i = 2, ntimstep
+                ntau_macro(i) = ntau
+                kt_macro(i) = kt_macro(i - 1) + int(ntau, kind=8)
+            end do
+        end if
 
-	        ntcut = microstep_cut_index(ntimstep, ntau, tcut, trace_time)
-	        norbper = ceiling(1d0*ntau*ntimstep/(L1i*npoiper2))
-	        nfp = L1i*norbper
+        ntcut = microstep_cut_index(ntimstep, ntau, tcut, trace_time)
+        norbper = ceiling(1d0*ntau*ntimstep/(L1i*npoiper2))
+        nfp = L1i*norbper
 
         zerolam = 0.d0
         nplagr = 4
@@ -621,10 +635,10 @@ contains
 
         call init_batch
         call reallocate_arrays
-	    end subroutine params_init
+    end subroutine params_init
 
     pure function microstep_cut_index(ntimstep_in, ntau_in, tcut_in, &
-            trace_time_in) result(ntcut_out)
+                                      trace_time_in) result(ntcut_out)
         ! Microstep index of the classification cut time tcut; <=0 disables it.
         ! ntimstep*ntau reaches ~1e10 for second-scale traces and overflows a
         ! 32-bit product, flipping the sign and spuriously enabling classification,
@@ -635,25 +649,25 @@ contains
 
         if (tcut_in > 0d0 .and. trace_time_in > 0d0) then
             ntcut_out = ceiling( &
-                real(ntimstep_in, dp)*real(ntau_in, dp)*tcut_in/trace_time_in, &
-                kind=8)
+                        real(ntimstep_in, dp)*real(ntau_in, dp)*tcut_in/trace_time_in, &
+                        kind=8)
         else
             ntcut_out = -1_8
         end if
     end function microstep_cut_index
 
-	    pure function to_lower(s) result(out)
-	        character(*), intent(in) :: s
-	        character(len(s)) :: out
-	        integer :: i, c
-	        out = s
-	        do i = 1, len(s)
-	            c = iachar(out(i:i))
-	            if (c >= iachar('A') .and. c <= iachar('Z')) then
-	                out(i:i) = achar(c + 32)
-	            end if
-	        end do
-	    end function to_lower
+    pure function to_lower(s) result(out)
+        character(*), intent(in) :: s
+        character(len(s)) :: out
+        integer :: i, c
+        out = s
+        do i = 1, len(s)
+            c = iachar(out(i:i))
+            if (c >= iachar('A') .and. c <= iachar('Z')) then
+                out(i:i) = achar(c + 32)
+            end if
+        end do
+    end function to_lower
 
     subroutine init_batch
         integer :: unit, status, source_index, selected, source_count, seedsize

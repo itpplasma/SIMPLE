@@ -85,6 +85,14 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
             ${CMAKE_SOURCE_DIR}/test/python/test_verification_report.py -q)
     set_tests_properties(test_verification_report PROPERTIES
         LABELS "unit;python" TIMEOUT 30)
+
+    add_test(NAME test_marker_weight_input
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_marker_weight_input.py
+            $<TARGET_FILE:simple.x> ${WOUT_FILE}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(test_marker_weight_input PROPERTIES
+        LABELS "integration;python" TIMEOUT 300)
 endif()
 
 add_test(

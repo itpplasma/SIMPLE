@@ -87,8 +87,7 @@ and losses that did not reach the STL; $p_{0,k}$ = `zstart(4)` is one when
 `results.nc` has no `zstart`. $\sum_j P_j$ is the deposited part of the source
 power $P_\alpha$. No incidence cosine is applied: the power lands on the actual
 facet area, not a projected one. Weights come from `marker_weights`, else
-from a `marker_weight(particle)` variable in `results.nc` (SIMPLE does not
-write one), else all ones. Facets of zero area keep their index, receive no
+from the `marker_weight(particle)` variable in `results.nc`, else all ones. Facets of zero area keep their index, receive no
 power and add no area; a recorded hit on one is an error.
 Implementation: `TriangleHeatLoad.from_netcdf` in `python/pysimple/wall_heat_load.py`.
 
@@ -143,7 +142,10 @@ arrays retain source order, without claiming a globally unique marker ID.
 
 `marker_weight` contains dimensionless relative source weights. By default all
 weights are one and its `source` attribute explicitly says that sampling weights
-are unknown. This default is appropriate for equal-marker summaries, and does
+are unknown. With `startmode = 2` or `6`, `&config marker_weight_file` names a
+text file with one nonnegative weight per `start.dat` row; `simple.x` then writes
+these weights with `source = 'supplied_relative_weights'` and rejects a file
+whose row count differs from `ntestpart`. This default is appropriate for equal-marker summaries, and does
 not establish a physical NBI source normalization. Callers of the Fortran
 `write_results_netcdf` routine may supply `marker_weights`; post-processors may
 instead supply the original external weights. Normalize over the complete

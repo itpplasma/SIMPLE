@@ -25,7 +25,7 @@ and ``DOC/config.md`` for additional usage, units and option interactions.
 &config
 -------
 
-Source: ``src/params.f90:243``.
+Source: ``src/params.f90:247``.
 
 .. list-table::
    :header-rows: 1
@@ -571,6 +571,12 @@ Source: ``src/params.f90:243``.
      - ``scalar``
      - ``''``
      - Optional netCDF profile label s(R, phi, Z) for the collision profiles with integ_coords = REFCOORDS (format: src/profile_label.f90).
+   * - ``marker_weight_file``
+     - ``character(len=1000)``
+     - ``default``
+     - ``scalar``
+     - ``''``
+     - Optional file with one relative source weight per start.dat row (startmode 2 or 6), written to results.nc marker_weight.
    * - ``wall_input``
      - ``character(len=1000)``
      - ``default``
