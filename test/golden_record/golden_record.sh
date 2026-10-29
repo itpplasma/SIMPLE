@@ -29,7 +29,7 @@ CURRENT_BUILD_DIR=${GOLDEN_RECORD_CUR_BUILD_DIR:-"$PROJECT_ROOT_CUR/build"}
 RUN_DIR_REF="$GOLDEN_RECORD_BASE_DIR/runs/run_$REF_VER"
 RUN_DIR_CUR="$GOLDEN_RECORD_BASE_DIR/runs/run_$CUR_VER"
 TEST_DATA_DIR="$GOLDEN_RECORD_BASE_DIR/test_data"
-GOLDEN_LIBNEO_REF=${GOLDEN_LIBNEO_REF:-266f0a3c844315522d8b620fa4b96b69aedfeafc}
+GOLDEN_LIBNEO_REF=${GOLDEN_LIBNEO_REF:-7db0217309f7350dcd1e1ff24627101cb5129aba}
 
 # Find test cases - they should be copied by CMake to the golden_record directory
 if [ -n "$SINGLE_CASE" ]; then
@@ -164,23 +164,36 @@ main() {
     # These historical references predate physical endpoint momentum validation.
     # Preserve their raw runs; compare coil orbits with the qualified #560
     # records instead. Other cases, diagnostics and tolerances are unchanged.
-    local comparison_ref="$RUN_DIR_REF" reference_revision
+    local comparison_ref="$RUN_DIR_REF" reference_revision baseline_set=""
     reference_revision=$(git -C "$PROJECT_ROOT_REF" rev-parse HEAD)
     case "$reference_revision" in
         9ec87fda7d42864b85121eb901375183aa2ba34c|9a6697e192f37c73a4acd2eda2b6a6a8b6e31092)
-            comparison_ref="$RUN_DIR_CUR.reference"
-            local case_name baseline
-            for case_name in $TEST_CASES; do
-                mkdir -p "$comparison_ref/$case_name"
-                cp -asf "$RUN_DIR_REF/$case_name/." "$comparison_ref/$case_name/"
-                baseline="$SCRIPT_DIR/baselines/physical_momentum/$case_name"
-                if [ -d "$baseline" ]; then
-                    cp --remove-destination "$baseline/"*.dat "$comparison_ref/$case_name/"
-                    echo "Using qualified #560 orbit records for $case_name"
-                fi
-            done
+            baseline_set=physical_momentum
             ;;
     esac
+    # A reference that predates the physical-direction coil field (#622) is
+    # compared through the records of that corrected field, only for a
+    # candidate that contains it.
+    local direction_marker=src/field/field_splined.f90
+    if [ -z "$baseline_set" ] && \
+       grep -q regular_cartesian_direction "$PROJECT_ROOT_CUR/$direction_marker" && \
+       ! grep -q regular_cartesian_direction "$PROJECT_ROOT_REF/$direction_marker" \
+           2>/dev/null; then
+        baseline_set=physical_direction
+    fi
+    if [ -n "$baseline_set" ]; then
+        comparison_ref="$RUN_DIR_CUR.reference"
+        local case_name baseline
+        for case_name in $TEST_CASES; do
+            mkdir -p "$comparison_ref/$case_name"
+            cp -asf "$RUN_DIR_REF/$case_name/." "$comparison_ref/$case_name/"
+            baseline="$SCRIPT_DIR/baselines/$baseline_set/$case_name"
+            if [ -d "$baseline" ]; then
+                cp --remove-destination "$baseline/"*.dat "$comparison_ref/$case_name/"
+                echo "Using qualified $baseline_set orbit records for $case_name"
+            fi
+        done
+    fi
 
     # Compare results
     "$SCRIPT_DIR/compare_golden_results.sh" "$comparison_ref" "$RUN_DIR_CUR" "$TEST_CASES"

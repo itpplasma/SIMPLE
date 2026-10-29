@@ -23,6 +23,7 @@ program test_chartmap_scaling
     real(dp) :: Bmod_can, B_r_can, dBmod_can(3), dB_r_can(3), d2Bmod_can(6), d2B_r_can(6)
     real(dp) :: u_back(3), x_scaled_input(3)
     real(dp) :: flux_scale
+    real(dp) :: basis(3, 3), jet_basis(3, 3), dbasis(3, 3, 3)
     character(len=*), parameter :: filename = 'test_boozer_chartmap.nc'
     integer :: ierr, nfail
 
@@ -119,6 +120,13 @@ program test_chartmap_scaling
             nfail = nfail + 1
         else if (maxval(abs(u_back - u)) > 1.0e-10_dp) then
             print *, 'FAIL: scaled chartmap from_cart roundtrip mismatch'
+            nfail = nfail + 1
+        end if
+        ! The physical-direction splined field differentiates through this route.
+        call cs%covariant_basis(u, basis)
+        call cs%covariant_basis_with_der(u, jet_basis, dbasis)
+        if (maxval(abs(jet_basis - basis)) > tol*maxval(abs(basis))) then
+            print *, 'FAIL: scaled chartmap basis derivative route is unscaled'
             nfail = nfail + 1
         end if
     class default
