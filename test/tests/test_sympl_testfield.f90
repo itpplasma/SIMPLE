@@ -83,7 +83,7 @@ contains
 end module failed_symplectic_step_backend
 
 program test_sympl_testfield
-    use, intrinsic :: iso_fortran_env, only : dp => real64, int64
+    use, intrinsic :: iso_fortran_env, only: dp => real64, int64
     use failed_symplectic_step_backend, only: fail_symplectic_step, &
                          locate_lcfs_step, successful_drift_step, successful_drift_calls
     use failed_symplectic_step_backend, only: wrong_energy_step, injected_status, &
@@ -92,27 +92,27 @@ program test_sympl_testfield
                                               injected_radial_drift
     use simple_main, only: update_momentum
     use classification, only: classify_classifier_exit
-    use simple_main, only : classify_orbit_exit, init_field, locate_linear_lcfs, &
-        locate_validated_lcfs, macrostep, macrostep_with_wall_check, &
-        recovery_state_has_valid_phase_space, recovery_state_is_physical, &
-        rk_recovery_state_t, validate_rk_state, &
-        validate_rk_step_or_reference_boundary, &
-        activate_rk_recovery, should_resume_symplectic, &
-        normalized_flux_from_reference_radial, &
-        should_classify_numerically_confined
-    use simple, only : tracer_t, init_sympl, reseed_sympl, ORBIT_FO_LOSS, &
-        ORBIT_FO_NUMERICAL
-    use params, only : isw_field_type, field_input, coord_input, integmode, &
-        swcoll, orbit_model, ORBIT_GC, ORBIT_FULL_ORBIT, ORBIT_EXIT_LCFS, &
-        ORBIT_EXIT_WALL, ORBIT_EXIT_NUMERICAL_DOMAIN, &
-        ORBIT_EXIT_NUMERICAL_MAXITER, ORBIT_EXIT_NUMERICAL_EVENT, &
-        ORBIT_EXIT_NUMERICAL_FULL_ORBIT
-    use magfie_sub, only : TEST, init_magfie
-    use field_can_mod, only : evaluate
-    use orbit_symplectic, only : orbit_timestep_sympl
+    use simple_main, only: classify_orbit_exit, init_field, locate_linear_lcfs, &
+                          locate_validated_lcfs, macrostep, macrostep_with_wall_check, &
+                     recovery_state_has_valid_phase_space, recovery_state_is_physical, &
+                           rk_recovery_state_t, validate_rk_state, &
+                           validate_rk_step_or_reference_boundary, &
+                           activate_rk_recovery, should_resume_symplectic, &
+                           normalized_flux_from_reference_radial, &
+                           should_classify_numerically_confined
+    use simple, only: tracer_t, init_sympl, reseed_sympl, ORBIT_FO_LOSS, &
+                      ORBIT_FO_NUMERICAL
+    use params, only: isw_field_type, field_input, coord_input, integmode, &
+                     swcoll, orbit_model, ORBIT_GC, ORBIT_FULL_ORBIT, ORBIT_EXIT_LCFS, &
+                      ORBIT_EXIT_WALL, ORBIT_EXIT_NUMERICAL_DOMAIN, &
+                      ORBIT_EXIT_NUMERICAL_MAXITER, ORBIT_EXIT_NUMERICAL_EVENT, &
+                      ORBIT_EXIT_NUMERICAL_FULL_ORBIT
+    use magfie_sub, only: TEST, init_magfie
+    use field_can_mod, only: evaluate
+    use orbit_symplectic, only: orbit_timestep_sympl
     use orbit_symplectic_base, only: SYMPLECTIC_STEP_BOUNDARY, &
-        SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_MAXITER, &
-        symplectic_newton_warning_mode
+                                     SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_MAXITER, &
+                                     symplectic_newton_warning_mode
 
     implicit none
 
@@ -147,7 +147,7 @@ program test_sympl_testfield
     norb%dtau = 1.0e-3_dp
 
     call init_sympl(norb%si, norb%f, (/0.2_dp, 1.0_dp, 0.0_dp, 1.0_dp, 0.0_dp/), &
-        norb%dtau, norb%dtaumin, norb%relerr, 1)
+                    norb%dtau, norb%dtaumin, norb%relerr, 1)
 
     ierr = 0
     initial_si_z = norb%si%z
@@ -174,6 +174,7 @@ program test_sympl_testfield
     call test_recovery_state_validation
     call test_reseed_momentum_reference
     call test_recovery_preserves_magnetic_moment
+    call test_collision_momentum_uses_current_field
 
     print *, 'TEST field symplectic step succeeded'
 
@@ -201,7 +202,7 @@ contains
 
     subroutine test_failed_step_preserves_state
         real(dp), parameter :: initial_state(5) = [0.2_dp, 1.0_dp, 2.0_dp, &
-            1.0_dp, 0.25_dp]
+                                                   1.0_dp, 0.25_dp]
         real(dp) :: z(5)
         real(dp) :: x_previous(3)
         integer(int64) :: kt
@@ -761,7 +762,7 @@ contains
             error stop 'reseed did not project onto the reference energy shell'
         end if
         if (abs(norb%f%vpar/sqrt(2.0_dp) - 0.25_dp) > &
-                100.0_dp*epsilon(1.0_dp)) then
+            100.0_dp*epsilon(1.0_dp)) then
             error stop 'momentum-shell projection changed the pitch coordinate'
         end if
     end subroutine test_reseed_momentum_reference
@@ -771,17 +772,17 @@ contains
         integer :: classifier_exit
 
         if (classify_orbit_exit(SYMPLECTIC_STEP_BOUNDARY, ORBIT_GC, 3, &
-            ORBIT_EXIT_LCFS) /= &
+                                ORBIT_EXIT_LCFS) /= &
             ORBIT_EXIT_LCFS) then
             error stop 'converged LCFS event was not classified as physical'
         end if
         if (classify_orbit_exit(SYMPLECTIC_STEP_BOUNDARY, ORBIT_GC, 3, &
-            ORBIT_EXIT_NUMERICAL_DOMAIN) /= &
+                                ORBIT_EXIT_NUMERICAL_DOMAIN) /= &
             ORBIT_EXIT_NUMERICAL_DOMAIN) then
             error stop 'extended map boundary was classified as physical LCFS'
         end if
         if (classify_orbit_exit(SYMPLECTIC_STEP_BOUNDARY, ORBIT_GC, 3, &
-            ORBIT_EXIT_WALL) /= ORBIT_EXIT_WALL) then
+                                ORBIT_EXIT_WALL) /= ORBIT_EXIT_WALL) then
             error stop 'coordinate wall was not classified as physical'
         end if
         if (classify_orbit_exit(77, ORBIT_GC, 3, ORBIT_EXIT_LCFS) /= &
@@ -797,17 +798,17 @@ contains
             error stop 'exterior Newton iterate was classified as physical'
         end if
         if (classify_orbit_exit(ORBIT_FO_LOSS, ORBIT_FULL_ORBIT, 3, &
-            ORBIT_EXIT_LCFS) /= &
+                                ORBIT_EXIT_LCFS) /= &
             ORBIT_EXIT_LCFS) then
             error stop 'full-orbit LCFS exit was not classified as physical'
         end if
         if (classify_orbit_exit(ORBIT_FO_LOSS, ORBIT_FULL_ORBIT, 3, &
-            ORBIT_EXIT_NUMERICAL_DOMAIN) /= &
+                                ORBIT_EXIT_NUMERICAL_DOMAIN) /= &
             ORBIT_EXIT_NUMERICAL_DOMAIN) then
             error stop 'extended full-orbit map boundary was classified as physical'
         end if
         if (classify_orbit_exit(ORBIT_FO_NUMERICAL, ORBIT_FULL_ORBIT, 3, &
-            ORBIT_EXIT_LCFS) /= &
+                                ORBIT_EXIT_LCFS) /= &
             ORBIT_EXIT_NUMERICAL_FULL_ORBIT) then
             error stop 'full-orbit locate failure was classified as physical'
         end if
@@ -816,7 +817,7 @@ contains
             error stop 'RK LCFS exit was classified as numerical'
         end if
         if (classify_orbit_exit(1, ORBIT_GC, 0, &
-            ORBIT_EXIT_NUMERICAL_DOMAIN) /= &
+                                ORBIT_EXIT_NUMERICAL_DOMAIN) /= &
             ORBIT_EXIT_NUMERICAL_DOMAIN) then
             error stop 'RK extended-map boundary was classified as physical'
         end if
@@ -826,12 +827,12 @@ contains
         end if
 
         call classify_classifier_exit(SYMPLECTIC_STEP_MAXITER, 3, &
-            classifier_lost, classifier_exit)
+                                      classifier_lost, classifier_exit)
         if (classifier_lost .or. classifier_exit /= ORBIT_EXIT_NUMERICAL_MAXITER) then
             error stop 'classifier mode promoted Newton maxiter to a physical loss'
         end if
         call classify_classifier_exit(SYMPLECTIC_STEP_BOUNDARY, 3, &
-            classifier_lost, classifier_exit)
+                                      classifier_lost, classifier_exit)
         if (.not. classifier_lost .or. classifier_exit /= ORBIT_EXIT_LCFS) then
             error stop 'classifier mode lost its physical boundary classification'
         end if
@@ -850,45 +851,45 @@ contains
             error stop 'VMEC normalized flux s was incorrectly rescaled'
         end if
         if (.not. should_classify_numerically_confined( &
-                ORBIT_EXIT_NUMERICAL_MAXITER, ORBIT_GC, 1, .true., .false., &
-                .true., 0.0099_dp)) then
+            ORBIT_EXIT_NUMERICAL_MAXITER, ORBIT_GC, 1, .true., .false., &
+            .true., 0.0099_dp)) then
             error stop 'eligible core recovery failure was not classified confined'
         end if
         if (should_classify_numerically_confined(ORBIT_EXIT_NUMERICAL_MAXITER, &
-                ORBIT_GC, 1, .true., .false., .true., 0.01_dp)) then
+                                    ORBIT_GC, 1, .true., .false., .true., 0.01_dp)) then
             error stop 'axis fallback included its outer radial boundary'
         end if
         if (should_classify_numerically_confined(ORBIT_EXIT_NUMERICAL_MAXITER, &
-                ORBIT_GC, 1, .true., .true., .true., 0.01_dp)) then
+                                     ORBIT_GC, 1, .true., .true., .true., 0.01_dp)) then
             error stop 'collisional marker was classified numerically confined'
         end if
         if (should_classify_numerically_confined(ORBIT_EXIT_NUMERICAL_MAXITER, &
-                ORBIT_GC, 1, .false., .false., .true., 0.01_dp)) then
+                                   ORBIT_GC, 1, .false., .false., .true., 0.01_dp)) then
             error stop 'strict-mode marker was classified numerically confined'
         end if
         if (should_classify_numerically_confined(ORBIT_EXIT_NUMERICAL_MAXITER, &
-                ORBIT_GC, 1, .true., .false., .false., 0.01_dp)) then
+                                   ORBIT_GC, 1, .true., .false., .false., 0.01_dp)) then
             error stop 'failure without exhausted recovery was classified confined'
         end if
         if (should_classify_numerically_confined(ORBIT_EXIT_NUMERICAL_MAXITER, &
-                ORBIT_FULL_ORBIT, 1, .true., .false., .true., 0.01_dp)) then
+                            ORBIT_FULL_ORBIT, 1, .true., .false., .true., 0.01_dp)) then
             error stop 'full-orbit marker was classified numerically confined'
         end if
         if (should_classify_numerically_confined(ORBIT_EXIT_NUMERICAL_MAXITER, &
-                ORBIT_GC, 0, .true., .false., .true., 0.01_dp)) then
+                                    ORBIT_GC, 0, .true., .false., .true., 0.01_dp)) then
             error stop 'non-symplectic marker was classified numerically confined'
         end if
         if (should_classify_numerically_confined(ORBIT_EXIT_NUMERICAL_DOMAIN, &
-                ORBIT_GC, 1, .true., .false., .true., 0.01_dp)) then
+                                    ORBIT_GC, 1, .true., .false., .true., 0.01_dp)) then
             error stop 'domain failure was classified numerically confined'
         end if
     end subroutine test_numerically_confined_classification
 
     subroutine test_fo_lcfs_location
         real(dp), parameter :: z_before(5) = [0.9_dp, 6.2_dp, 3.0_dp, 1.0_dp, &
-            -0.5_dp]
+                                              -0.5_dp]
         real(dp), parameter :: z_after(5) = [1.1_dp, 0.1_dp, -3.0_dp, 2.0_dp, &
-            0.5_dp]
+                                             0.5_dp]
         real(dp), parameter :: tolerance = 32.0_dp*epsilon(1.0_dp)
         real(dp) :: z_event(5), event_fraction
 
@@ -902,7 +903,7 @@ contains
             error stop 'full-orbit phase-space state is inconsistent with event time'
         end if
         if (abs(z_event(2) - (6.2_dp + 0.5_dp*(0.1_dp - 6.2_dp + &
-            2.0_dp*acos(-1.0_dp)))) > tolerance) then
+                                               2.0_dp*acos(-1.0_dp)))) > tolerance) then
             error stop 'full-orbit poloidal seam was not interpolated periodically'
         end if
         if (abs(z_event(3) - 3.0_dp) > tolerance) then
@@ -912,20 +913,20 @@ contains
 
     subroutine test_validated_rk_lcfs_location
         real(dp), parameter :: z_before(5) = [0.9_dp, 0.2_dp, 0.3_dp, 1.0_dp, &
-            -0.5_dp]
+                                              -0.5_dp]
         real(dp), parameter :: z_after(5) = [1.1_dp, 0.4_dp, 0.5_dp, 1.004_dp, &
-            0.5_dp]
+                                             0.5_dp]
         real(dp), parameter :: z_no_crossing(5) = [0.8_dp, 0.4_dp, 0.5_dp, &
-            2.0_dp, 0.5_dp]
+                                                   2.0_dp, 0.5_dp]
         real(dp), parameter :: z_invalid_event(5) = [1.1_dp, 0.4_dp, 0.5_dp, &
-            1.0_dp, 4.0_dp]
+                                                     1.0_dp, 4.0_dp]
         real(dp), parameter :: tolerance = 32.0_dp*epsilon(1.0_dp)
         real(dp) :: z_event(5), event_fraction
         integer :: step_error
 
         step_error = 1
         call locate_validated_lcfs(z_before, z_after, 6.0_dp, z_event, &
-            event_fraction, step_error)
+                                   event_fraction, step_error)
         if (step_error /= 1 .or. abs(event_fraction - 0.5_dp) > tolerance .or. &
             abs(z_event(1) - 1.0_dp) > tolerance) then
             error stop 'valid adaptive-RK LCFS crossing was rejected'
@@ -933,7 +934,7 @@ contains
 
         step_error = 1
         call locate_validated_lcfs(z_before, z_no_crossing, 6.0_dp, z_event, &
-            event_fraction, step_error)
+                                   event_fraction, step_error)
         if (step_error /= 2 .or. event_fraction /= 0.0_dp .or. &
             any(z_event /= z_before)) then
             error stop 'adaptive-RK chamber flag without a crossing became a loss'
@@ -941,7 +942,7 @@ contains
 
         step_error = 1
         call locate_validated_lcfs(z_before, z_invalid_event, 6.0_dp, z_event, &
-            event_fraction, step_error)
+                                   event_fraction, step_error)
         if (step_error /= 2 .or. event_fraction /= 0.0_dp .or. &
             any(z_event /= z_before)) then
             error stop 'unphysical adaptive-RK chamber event became a loss'
@@ -950,7 +951,7 @@ contains
 
     subroutine test_rk_state_validation
         real(dp), parameter :: z_before(5) = [0.2_dp, 0.2_dp, 0.3_dp, 1.0_dp, &
-            -0.5_dp]
+                                              -0.5_dp]
         real(dp) :: z_after(5)
         integer :: step_error
 
@@ -964,12 +965,12 @@ contains
         call validate_rk_state(z_before, z_after, step_error, 1.0_dp)
         if (step_error /= 2 .or. any(z_after /= z_before)) then
             error stop 'wrong-energy adaptive-RK branch was committed'
-        endif
+        end if
 
         z_after = [0.21_dp, 0.4_dp, 0.5_dp, 1.004_dp, 0.5_dp]
         step_error = 0
         call validate_rk_state(z_before, z_after, step_error, 1.0_dp)
-        if (step_error /= 0) error stop 'bounded adaptive-RK momentum drift was rejected'
+       if (step_error /= 0) error stop 'bounded adaptive-RK momentum drift was rejected'
 
         z_after = [0.21_dp, 0.4_dp, 0.5_dp, 1.006_dp, 0.5_dp]
         step_error = 0
@@ -988,7 +989,7 @@ contains
 
     subroutine test_symplectic_step_validation
         real(dp), parameter :: z_before(5) = [0.2_dp, 0.2_dp, 0.3_dp, 1.0_dp, &
-            -0.5_dp]
+                                              -0.5_dp]
         real(dp) :: z_after(5), z(5), event_fraction
         integer :: step_error
         logical :: reference_boundary
@@ -1005,15 +1006,15 @@ contains
         z_after(4) = 1.015_dp
         step_error = 0
         call validate_rk_step_or_reference_boundary(z_before, z_after, &
-            1.0_dp, 1.0_dp, z, event_fraction, step_error, reference_boundary)
+                      1.0_dp, 1.0_dp, z, event_fraction, step_error, reference_boundary)
         if (step_error /= 2) &
             error stop 'excessive symplectic momentum drift was accepted'
 
         z_after(5) = 2.0_dp
         step_error = 0
         call validate_rk_step_or_reference_boundary(z_before, z_after, &
-            1.0_dp, z=z, event_fraction=event_fraction, ierr=step_error, &
-            reference_boundary=reference_boundary)
+                          1.0_dp, z=z, event_fraction=event_fraction, ierr=step_error, &
+                                                  reference_boundary=reference_boundary)
         if (step_error /= 2 .or. any(z /= z_before)) &
             error stop 'invalid symplectic phase space was committed'
     end subroutine test_symplectic_step_validation
@@ -1043,5 +1044,43 @@ contains
             error stop 'excessive recovery momentum drift was accepted'
         end if
     end subroutine test_recovery_state_validation
+
+    subroutine test_collision_momentum_uses_current_field
+        ! Euler's field cache describes the step's old angles or an
+        ! extrapolation, not the carried position; a collision kick must be
+        ! encoded with the field at that position, as init_sympl does.
+        use parmot_mod, only: ro0, rmu
+        use simple_main, only: to_standard_z_coordinates
+        use field_can_base, only: field_can_t
+        use orbit_symplectic, only: get_val
+        type(tracer_t) :: local_orbit
+        type(field_can_t) :: fresh
+        real(dp) :: start(5), kicked(5), z(5), saved_ro0, saved_rmu
+
+        saved_ro0 = ro0
+        saved_rmu = rmu
+        ro0 = 1.0_dp
+        rmu = 1.0e8_dp
+        start = [0.2_dp, 1.0_dp, 0.2_dp, 1.0_dp, 0.25_dp]
+        local_orbit = norb
+        call init_sympl(local_orbit%si, local_orbit%f, start, 1.0e-3_dp, &
+                        1.0e-3_dp, 1.0e-12_dp, 1)
+        call evaluate(local_orbit%f, 0.3_dp, 1.4_dp, 0.5_dp, 0)
+        kicked = [start(1:3), 0.9_dp, -0.3_dp]
+        call update_momentum(local_orbit, kicked)
+
+        fresh = local_orbit%f
+        call evaluate(fresh, local_orbit%si%z(1), local_orbit%si%z(2), &
+                      local_orbit%si%z(3), 0)
+        call get_val(fresh, local_orbit%si%z(4))
+        local_orbit%f = fresh
+        call to_standard_z_coordinates(local_orbit, z)
+        ro0 = saved_ro0
+        rmu = saved_rmu
+        if (.not. all(abs(z(4:5) - kicked(4:5)) <= 1.0e-12_dp)) &
+            error stop 'Collision kick was encoded with a stale field'
+        if (.not. abs(local_orbit%si%pthold - fresh%pth) <= 1.0e-12_dp) &
+            error stop 'Collision kick left a stale poloidal momentum'
+    end subroutine test_collision_momentum_uses_current_field
 
 end program test_sympl_testfield
