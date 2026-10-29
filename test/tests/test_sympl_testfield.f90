@@ -737,8 +737,10 @@ contains
                     error stop 'Collisionless recovery changed magnetic moment'
                 if (local_orbit%si%pabs /= 1.0_dp) &
                  error stop 'Invariant-preserving recovery ratcheted momentum reference'
-                if (abs(z(4)/initial(4) - 1.0_dp) > 1.0e-9_dp) &
-                    error stop 'Recovery projected the physical kinetic momentum'
+                ! Seeding with the decoded 1.004 random-walks energy over many
+                ! recoveries (#639); the reference momentum is the invariant.
+                if (abs(z(4) - 1.0_dp) > 1.0e-9_dp) &
+                error stop 'Recovery kept the decoded instead of the reference momentum'
             end do
         end do
         deallocate (ref_coords)

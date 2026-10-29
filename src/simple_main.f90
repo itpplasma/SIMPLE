@@ -2772,8 +2772,8 @@ contains
                     ! symplectic state. Keep this marker on RK while it remains
                     ! in the failing axis/edge region; generic failures use an
                     ! exponentially backed-off probe interval.
-                    ! A fresh physical seed preserves magnetic moment across
-                    ! the switch; projecting its momentum onto the reference does not.
+                    ! Seed RK with both collisionless invariants: the carried
+                    ! magnetic moment and the reference momentum (#639).
                     call symplectic_recovery_coordinates(si_step_start, &
                                                          f_step_start, z_recovery_start)
                     z = z_recovery_start
@@ -3128,8 +3128,8 @@ contains
                 end if
                 if (ierr_orbit .ne. 0 .and. &
                     symplectic_newton_warning_mode) then
-                    ! A fresh physical seed preserves magnetic moment across
-                    ! the switch; projecting its momentum onto the reference does not.
+                    ! Seed RK with both collisionless invariants: the carried
+                    ! magnetic moment and the reference momentum (#639).
                     call symplectic_recovery_coordinates(si_step_start, &
                                                          f_step_start, z_recovery_start)
                     z = z_recovery_start
@@ -3272,16 +3272,29 @@ contains
         z(4) = sqrt(physical_field%mu*physical_field%Bmod + &
                     0.5_dp*physical_field%vpar**2)
         z(5) = physical_field%vpar/(sqrt2*z(4))
+        ! The decoded Euler energy carries the map's bounded per-step error;
+        ! seeding RK with it lets repeated recoveries random-walk the energy.
+        call project_momentum_keep_mu(physical_field%mu, physical_field%Bmod, &
+                                      si%pabs, z)
     end subroutine symplectic_recovery_coordinates
+
+    pure subroutine project_momentum_keep_mu(mu, bmod, momentum, z)
+        real(dp), intent(in) :: mu, bmod, momentum
+        real(dp), intent(inout) :: z(5)
+
+        z(4) = momentum
+        z(5) = sign(sqrt(max(0.0_dp, 1.0_dp - mu*bmod/momentum**2)), z(5))
+    end subroutine project_momentum_keep_mu
 
     subroutine reseed_recovery_sympl(si, f, z, momentum_reference)
         type(symplectic_integrator_t), intent(inout) :: si
         type(field_can_t), intent(inout) :: f
-        real(dp), intent(in) :: z(5), momentum_reference
+        real(dp), intent(inout) :: z(5)
+        real(dp), intent(in) :: momentum_reference
 
-        ! The sanity-check reference is not the physical momentum of the seed.
         call reseed_sympl(si, f, z)
-        si%pabs = momentum_reference
+        call project_momentum_keep_mu(f%mu, f%Bmod, momentum_reference, z)
+        call reseed_sympl(si, f, z)
     end subroutine reseed_recovery_sympl
 
     subroutine to_standard_z_coordinates(anorb, z)
