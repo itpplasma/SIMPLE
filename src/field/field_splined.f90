@@ -297,6 +297,10 @@ contains
             block
                 real(dp) :: rho_min, rho_max, rho_max_safe, h_rho
 
+                ! Chart sampling must not depend on an initialized VMEC field.
+                if (.not. present(xmax_in)) &
+                    xmax(3) = twopi/real(cs%num_field_periods, dp)
+
                 if (cs%has_spl_rz) then
                     rho_min = cs%spl_rz%x_min(1)
                     rho_max = cs%spl_rz%x_min(1) + cs%spl_rz%h_step(1) * &

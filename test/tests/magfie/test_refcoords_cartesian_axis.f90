@@ -4,6 +4,8 @@ module analytic_cartesian_axis_field
     implicit none
     type, extends(magnetic_field_t) :: analytic_field_t
         real(dp) :: current = 0.0_dp
+        real(dp) :: ripple = 0.0_dp
+        integer :: harmonic = 1
     contains
         procedure :: evaluate => analytic_evaluate
     end type analytic_field_t
@@ -13,13 +15,14 @@ contains
         real(dp), intent(in) :: x(3)
         real(dp), intent(out) :: Acov(3), hcov(3), Bmod
         real(dp), intent(out), optional :: sqgBctr(3)
-        real(dp) :: b(3)
+        real(dp) :: b(3), axial
 
         ! curl(A) = (-c*y, c*x, 1); c=0 is a uniform vacuum field.
         if (.not. allocated(self%coords)) error stop 'missing source coordinates'
-        Acov = [-0.5_dp*x(2), 0.5_dp*x(1), &
+        axial = 1.0_dp + self%ripple*cos(self%harmonic*atan2(x(2), x(1)))
+        Acov = [-0.5_dp*x(2)*axial, 0.5_dp*x(1)*axial, &
                 -0.5_dp*self%current*(x(1)**2 + x(2)**2)]
-        b = [-self%current*x(2), self%current*x(1), 1.0_dp]
+        b = [-self%current*x(2), self%current*x(1), axial]
         Bmod = sqrt(sum(b*b))
         hcov = b/Bmod
         if (present(sqgBctr)) sqgBctr = b
@@ -93,8 +96,43 @@ print *, 'geometry',geometry,'case',kind,'rho',x(1),'direction_error',direction_
             end do
         end do
     end do
+    call check_chart_period(failures)
     if (failures /= 0) error stop 'Cartesian direction lost near-axis regularity'
 contains
+    subroutine check_chart_period(failures)
+        integer, intent(inout) :: failures
+        type(analytic_field_t) :: periodic_source
+        type(splined_field_t) :: periodic_field
+        real(dp) :: point(3), position(3), a(3), h(3), bm, direct(3), expected
+        real(dp) :: da(3, 3), dh(3, 3), db(3), bm_der
+        integer :: saved_nper, i
+
+        call init_reference_coordinates('wout_ncsx.chartmap.nc')
+        saved_nper = nper
+        allocate (cartesian_coordinate_system_t :: periodic_source%coords)
+        select type (coords => ref_coords)
+        class is (chartmap_coordinate_system_t)
+            periodic_source%harmonic = 2*coords%num_field_periods
+        end select
+        periodic_source%ripple = 0.25_dp
+        ! Coil-only callers need no VMEC initialization; stale VMEC state is valid.
+        nper = 1
+        call create_splined_field(periodic_source, ref_coords, periodic_field, &
+                                  n_r=8, n_th=9, n_phi=32)
+        nper = saved_nper
+        do i = 1, 40
+            point = [0.4_dp, 0.7_dp, &
+                     (i - 0.37_dp)*2.0_dp*acos(-1.0_dp)/40.0_dp]
+            call ref_coords%evaluate_cart(point, position)
+            call periodic_source%evaluate(position, a, direct, expected)
+            call periodic_field%evaluate(point, a, h, bm)
+            call periodic_field%evaluate_with_der(point, a, h, bm_der, da, dh, db)
+            print *, 'chart period phi, B, analytic B:', point(3), bm, expected
+            if (abs(bm - expected) > 1.0e-6_dp) failures = failures + 1
+            if (abs(bm_der - expected) > 1.0e-6_dp) failures = failures + 1
+        end do
+    end subroutine check_chart_period
+
     subroutine check_derivative_contract(f, point, failures)
         type(splined_field_t), intent(in) :: f
         real(dp), intent(in) :: point(3)

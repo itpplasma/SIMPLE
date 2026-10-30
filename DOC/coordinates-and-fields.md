@@ -189,6 +189,12 @@ ending in `.coils`), which it wraps in a splined field on `ref_coords`.
 `sqgBctr` is inconsistent across types
 ([#290](https://github.com/itpplasma/SIMPLE/issues/290)).
 
+Chart-reference field splines use the chart's `num_field_periods`, independently
+of VMEC initialization. Their default toroidal grid resolves one chart field
+period; explicit spline bounds still take precedence. Coil inputs supply a
+vacuum field only; a chart extending beyond the last closed flux surface does
+not add the plasma contribution to that field.
+
 `coils_field_t` evaluates Biot–Savart from libneo `neo_biotsavart`;
 `create_coils_field` converts coil positions from m to cm and currents from A
 to statA ($\times 2.99792458\times 10^{9}$).
