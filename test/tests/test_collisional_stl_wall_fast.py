@@ -119,9 +119,9 @@ def main():
     )
     ref_indices = np.linspace(0, full.NMARKERS - 1, 32, dtype=int)
     coll_indices = np.linspace(0, full.NMARKERS - 1, 64, dtype=int)
-    # Stored collisionless impacts in the 32-marker subset; replay all four
+    # Stored collisionless impacts in the 32-marker subset; replay all three
     # at doubled segment resolution.
-    fine_indices = np.array([43, 98, 117, 172])
+    fine_indices = np.array([98, 117, 172])
     cases = (
         ("collisionless", starts[ref_indices], False, 64),
         ("dilute", starts[ref_indices], True, 64),
@@ -189,10 +189,12 @@ def main():
     hit_coll = check_hits(collisional, "collisional")
     # Numerical drift budgets are unchanged; the stored mean is recomputed for
     # this exact deterministic subset, rather than widened for a smaller sample.
-    assert abs(np.count_nonzero(hit_ref) - 4) <= 2, "collisionless hit-count drift"
+    # Regenerated for the doubled chart toroidal grid; doubling it again
+    # changes the mean by 0.2 %.
+    assert abs(np.count_nonzero(hit_ref) - 3) <= 2, "collisionless hit-count drift"
     np.testing.assert_allclose(
         np.mean(reference["times_lost"][hit_ref]),
-        2.6501175863660834e-4,
+        2.443281401763228e-4,
         rtol=0.03,
         atol=0,
     )
