@@ -282,7 +282,7 @@ contains
         class is (chartmap_coordinate_system_t)
             if (.not. present(n_r_in)) n_r = cs%nrho
             if (.not. present(n_th_in)) n_th = cs%ntheta
-            if (.not. present(n_phi_in)) n_phi = cs%nzeta
+            if (.not. present(n_phi_in)) n_phi = 2*cs%nzeta - 1
         class default
             continue
         end select
@@ -296,6 +296,10 @@ contains
         class is (chartmap_coordinate_system_t)
             block
                 real(dp) :: rho_min, rho_max, rho_max_safe, h_rho
+
+                ! Chart sampling must not depend on an initialized VMEC field.
+                if (.not. present(xmax_in)) &
+                    xmax(3) = twopi/real(cs%num_field_periods, dp)
 
                 if (cs%has_spl_rz) then
                     rho_min = cs%spl_rz%x_min(1)
