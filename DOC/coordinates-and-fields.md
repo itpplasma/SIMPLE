@@ -191,7 +191,8 @@ ending in `.coils`), which it wraps in a splined field on `ref_coords`.
 
 Chart-reference field splines use the chart's `num_field_periods`, independently
 of VMEC initialization. Their default toroidal grid resolves one chart field
-period; explicit spline bounds still take precedence. Coil inputs supply a
+period with twice the chart toroidal sampling intervals, so the field need not
+share the geometry's bandwidth. Explicit grid sizes and bounds take precedence. Coil inputs supply a
 vacuum field only; a chart extending beyond the last closed flux surface does
 not add the plasma contribution to that field.
 

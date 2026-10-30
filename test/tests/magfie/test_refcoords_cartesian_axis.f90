@@ -17,7 +17,7 @@ contains
         real(dp), intent(out), optional :: sqgBctr(3)
         real(dp) :: b(3), axial
 
-        ! curl(A) = (-c*y, c*x, 1); c=0 is a uniform vacuum field.
+        ! The angular ripple is independent of radius, so curl(A) = b.
         if (.not. allocated(self%coords)) error stop 'missing source coordinates'
         axial = 1.0_dp + self%ripple*cos(self%harmonic*atan2(x(2), x(1)))
         Acov = [-0.5_dp*x(2)*axial, 0.5_dp*x(1)*axial, &
@@ -118,7 +118,7 @@ contains
         ! Coil-only callers need no VMEC initialization; stale VMEC state is valid.
         nper = 1
         call create_splined_field(periodic_source, ref_coords, periodic_field, &
-                                  n_r=8, n_th=9, n_phi=32)
+                                  n_r=8, n_th=9)
         nper = saved_nper
         do i = 1, 40
             point = [0.4_dp, 0.7_dp, &

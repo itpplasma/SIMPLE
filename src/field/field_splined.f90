@@ -282,7 +282,7 @@ contains
         class is (chartmap_coordinate_system_t)
             if (.not. present(n_r_in)) n_r = cs%nrho
             if (.not. present(n_th_in)) n_th = cs%ntheta
-            if (.not. present(n_phi_in)) n_phi = cs%nzeta
+            if (.not. present(n_phi_in)) n_phi = 2*cs%nzeta - 1
         class default
             continue
         end select
