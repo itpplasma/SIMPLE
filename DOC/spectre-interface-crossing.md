@@ -107,3 +107,19 @@ symplectic and can drift in energy over long FO phases. Losses are read
 from `times_lost.dat` (column 2, $0 < t <$ `trace_time`); FO loss counters
 cover only FO phases. The FO settings are applied during shared SPECTRE
 field initialization, identically for `simple.x` and `simple_api`/`pysimple`.
+
+Symplectic SPECTRE warning-mode recovery can retain the last valid state for an unresolved time
+interval and continue tracing. Such holds do not establish a resolved physical
+trajectory. From the first affected macrostep, the marker is excluded from the
+resolved confined fraction and included in `unresolved_fraction.dat`. Its public
+exit code is 104 (numerical event) and its `times_lost` value is NaN, even if it
+later reaches a physical boundary. A sparse `orbit_warning_holds.dat` preserves
+one row per affected marker: marker index, cumulative held-interval count, first
+affected macrostep (one-based), terminal native exit code and terminal native
+time in seconds. The terminal label is evidence of the final event, not
+acceptance of its prior trajectory. No-hold completion and physical-loss
+reporting are unchanged. A hold count measures unresolved intervals, not Newton
+iterations, output samples or full-orbit attempts; repeated identical failures
+can bypass the complete recovery cascade. The integration and recovery policy
+is unchanged by this reporting distinction.
+The legacy SPECTRE RK45 warning-hold path is outside this reporting change.
