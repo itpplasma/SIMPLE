@@ -83,7 +83,7 @@ contains
         integer :: ierr
         real(dp), dimension(5) :: z, z_step_start
         real(dp) :: bmod,sqrtg
-        real(dp) :: surf_bmin, surf_bmax
+        real(dp) :: surf_bmin, surf_bmax, boundary_x(3)
         real(dp), dimension(3) :: bder, hcovar, hctrvr, hcurl
         integer :: first_unresolved_it, hold_streak, it, ktau, it_f
         integer(8) :: kt
@@ -126,20 +126,6 @@ contains
         !  open(unit=20000+ipart, iostat=stat, status='old')
         !  if (stat == 0) close(20000+ipart, status='delete')
 
-        ! Write out trapped-passing boundary at the classification cut:
-        if(class_plot) then
-            if(ipart.eq.1) then
-                z(1)=zstart(1,ipart)
-                z(3)=cut_in_per*fper
-                do kt=0,1000
-                    z(2)=1d-3*twopi*dble(kt)
-                    call magfie(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
-                    write(iaaa_bou,*) z(2),sqrt(1.d0-bmod/bmax)
-                enddo
-            endif
-        endif
-        ! End write out trapped-passing boundary at the classification cut
-        !
         z = zstart(:, ipart)
         r=z(1)
         theta_vmec=z(2)
@@ -160,9 +146,8 @@ contains
 
         if (integmode>0) call init_sympl(anorb%si, anorb%f, z, dtaumin, dtaumin, relerr, integmode)
 
-        call magfie(z(1:3),bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
-
-        ! Keep surface extrema per particle; the boundary plot reads shared bmax.
+        ! The mirror threshold uses extrema of the active tracing field over
+        ! this starting surface, for both the particle and its boundary plot.
         !$omp critical
         if(num_surf > 1) then
             call get_bminmax(z(1), surf_bmin, surf_bmax)
@@ -170,6 +155,22 @@ contains
             surf_bmin = bmin
             surf_bmax = bmax
         endif
+        !$omp end critical
+
+        ! Write out trapped-passing boundary at the classification cut:
+        if (class_plot) then
+            if (ipart .eq. 1) then
+                do kt = 0, 1000
+                    boundary_x = [z(1), 1d-3*twopi*dble(kt), z(3)]
+                    call magfie(boundary_x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+                    write (iaaa_bou, *) boundary_x(2), sqrt(1.d0 - bmod/surf_bmax)
+                end do
+            end if
+        end if
+        ! End write out trapped-passing boundary at the classification cut
+        !
+        call magfie(z(1:3), bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+        !$omp critical
         passing = z(5)**2 .gt. 1.d0 - bmod/surf_bmax
         trap_par(ipart) = ((1.d0 - z(5)**2)*surf_bmax/bmod - 1.d0)*surf_bmin &
                           /(surf_bmax - surf_bmin)

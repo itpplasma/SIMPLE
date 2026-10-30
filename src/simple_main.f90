@@ -464,6 +464,7 @@ contains
     !> Select the integration field and the bmin/bmax cache for tracing.
     subroutine init_tracing_field
         use magfie_sub, only: TEST, init_magfie, spectre_field
+        use find_bminmax_sub, only: find_bminmax
         use timing, only: print_phase_time
 
         ! Library callers can activate tracing after sampling-only initialization.
@@ -479,6 +480,11 @@ contains
         if ((isw_field_type /= TEST) .and. needs_bminmax_cache()) then
             call init_bminmax
             call print_phase_time('Bmin/Bmax initialization completed')
+        else if (isw_field_type /= TEST) then
+            ! Sampling extrema are not mirror thresholds: a short field-line
+            ! sample can miss the maximum, and uses a different representation.
+            ! Use surface extrema of the active tracing field for all consumers.
+            call find_bminmax(zstart(1, 1), bmin, bmax)
         end if
     end subroutine init_tracing_field
 
@@ -1643,8 +1649,8 @@ contains
         use find_bminmax_sub, only: init_bminmax_arrays
 
         ! Populate bminmax arrays with the active tracing magfie backend.
-        ! init_starting_surf supplies bmin/bmax for a single sampled surface;
-        ! this cache is only needed when particles span multiple surfaces.
+        ! Single-surface runs refine their extrema directly in init_tracing_field;
+        ! this radial cache is needed when particles span multiple surfaces.
         call init_bminmax_arrays
     end subroutine init_bminmax
 
@@ -3326,15 +3332,19 @@ contains
         logical, intent(out) :: passing
         real(dp), intent(out) :: trap_par_, perp_inv_
 
-        real(dp) :: bmod
+        real(dp) :: bmod, surf_bmin, surf_bmax
 
         !$omp critical
         bmod = compute_bmod(z(1:3))
         if (num_surf /= 1) then
-            call get_bminmax(z(1), bmin, bmax)
+            call get_bminmax(z(1), surf_bmin, surf_bmax)
+        else
+            surf_bmin = bmin
+            surf_bmax = bmax
         end if
-        passing = z(5)**2 .gt. 1.d0 - bmod/bmax
-        trap_par_ = ((1.d0 - z(5)**2)*bmax/bmod - 1.d0)*bmin/(bmax - bmin)
+        passing = z(5)**2 .gt. 1.d0 - bmod/surf_bmax
+        trap_par_ = ((1.d0 - z(5)**2)*surf_bmax/bmod - 1.d0)*surf_bmin &
+                    /(surf_bmax - surf_bmin)
         perp_inv_ = z(4)**2*(1.d0 - z(5)**2)/bmod
         !$omp end critical
     end subroutine compute_pitch_angle_params

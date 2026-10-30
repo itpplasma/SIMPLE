@@ -5,6 +5,7 @@ module test_bminmax_backend
     use magfie_sub, only: dp
     use new_vmec_stuff_mod, only: nper
     implicit none
+    real(dp) :: amp_phi = 0.05_dp
 
 contains
 
@@ -14,7 +15,6 @@ contains
         real(dp), intent(out) :: bder(3), hcovar(3), hctrvr(3), hcurl(3)
 
         real(dp), parameter :: amp_theta = 0.1_dp
-        real(dp), parameter :: amp_phi = 0.05_dp
         real(dp), parameter :: theta0 = 0.2_dp
         real(dp), parameter :: phi0 = 0.4_dp
         real(dp) :: phase_theta, phase_phi, kphi
@@ -42,7 +42,7 @@ program test_bminmax_lifecycle
     use new_vmec_stuff_mod, only: nper
     use params, only: class_plot, fast_class, ntcut, num_surf
     use simple_main, only: needs_bminmax_cache
-    use test_bminmax_backend, only: test_magfie_backend
+    use test_bminmax_backend, only: test_magfie_backend, amp_phi
     use test_utils, only: check, check_close
 
     implicit none
@@ -120,6 +120,15 @@ contains
         call check_close(real(bmax, kind(1.0d0)), 2.55d0, 1.0d-7, &
             "bminmax cache did not use the active test magfie backend for bmax", errors)
 
+        ! The newly shared refinement must also handle a flat toroidal direction.
+        amp_phi = 0.0_dp
+        prop = .true.
+        call get_bminmax(0.4357_dp, bmin, bmax)
+        call check_close(bmin, 2.3357_dp, 1.0d-10, &
+                         "axisymmetric surface minimum", errors)
+        call check_close(bmax, 2.5357_dp, 1.0d-10, &
+                         "axisymmetric surface maximum", errors)
+        amp_phi = 0.05_dp
         prop = .true.
     end subroutine test_active_backend_cache
 
