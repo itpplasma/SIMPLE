@@ -667,17 +667,14 @@ recursive subroutine newton1(si, f, x, maxit, xlast, status)
   tolref(2) = dabs(1d1*torflux/f%ro0)
 
   do kit = 1, maxit
-    if (x(1) > sympl_rmax) then
+            if (abs(x(1)) > sympl_rmax) then
       status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
       return
     end if
-    ! Transient guard: in s = rho^2 coordinates the Hamiltonian is not
-    ! smooth at the axis (sqrt(s) behavior), so there is no consistent
-    ! field extension to s < 0 for the solver itself. Intermediate
-    ! negative iterates are floored as before; a converged negative
-    ! solution is committed as an axis crossing by the caller (#370).
-    if (x(1) < 0d0) x(1) = 0.01d0
-
+    ! A negative radial label is the axis continuation (#370): the field
+    ! evaluation maps it to the physical point (|s|, theta+pi), so the
+    ! Newton may step through the magnetic axis and the caller commits the
+    ! chart switch on the converged solution.
     call eval_field(f, x(1), si%z(2), si%z(3), 2)
     call get_derivatives2(f, x(2))
     call sympl_euler1_newton_iter(si, f, x, tolref, xlast, converged, &
@@ -688,7 +685,7 @@ recursive subroutine newton1(si, f, x, maxit, xlast, status)
       status = SYMPLECTIC_STEP_LINEAR_SOLVE
       return
     end if
-    if (x(1) > sympl_rmax) then
+            if (abs(x(1)) > sympl_rmax) then
       status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
       return
     end if
@@ -736,13 +733,13 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast, status)
   boundary_limited = .false.
 
   do kit = 1, maxit
-    if(x(1) > sympl_rmax) then
+            if (abs(x(1)) > sympl_rmax) then
       status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
       return
     end if
-    ! Transient guard for intermediate iterates; the converged-negative
-    ! case is handled by the caller via a chart switch (#370).
-    if(x(1) < 0.0) x(1) = 0.01
+    ! A negative radial label is the axis continuation (#370); the field
+    ! evaluation maps it to (|s|, theta+pi) and the caller commits the
+    ! chart switch on the converged solution.
     call f_sympl_euler2(si, f, n, x, fvec, 1)
     fabs = dabs(fvec)
     call jac_sympl_euler2(si, f, x, fjac)
@@ -909,14 +906,13 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
   tolref(5) = 1d0
 
   do kit = 1, maxit
-    if(x(1) > sympl_rmax .or. x(5) > sympl_rmax) then
+            if (abs(x(1)) > sympl_rmax .or. abs(x(5)) > sympl_rmax) then
       status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
       return
     end if
-    ! Transient guards for intermediate iterates; the converged-negative
-    ! case is handled by the caller via a chart switch (#370).
-    if(x(1) < 0.0) x(1) = 0.01
-    if(x(5) < 0.0) x(5) = 0.01
+    ! A negative radial label (endpoint or midpoint) is the axis
+    ! continuation (#370); the field evaluation maps it to (|s|, theta+pi)
+    ! and the caller commits the chart switch on the converged solution.
     call f_midpoint_part1(si, f, n, x, fvec)
     call jac_midpoint_part1(si, f, x, fjac)
     fmid = f
@@ -936,7 +932,7 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
       boundary_limited = boundary_limited .or. step_limited
       x = x - step_scale*fvec
     end if
-    if (any(x(radial_indices) > sympl_rmax)) then
+    if (any(abs(x(radial_indices)) > sympl_rmax)) then
       status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
       return
     end if
@@ -1033,13 +1029,12 @@ recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast, sta
 
     ! Check if radius left the boundary
     do ks = 1, s
-      if (x(4*ks-3) > sympl_rmax) then
+                if (abs(x(4*ks - 3)) > sympl_rmax) then
         status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
         return
       end if
-      ! Transient guard for intermediate iterates; the converged-negative
-      ! case is handled by the caller via a chart switch (#370).
-      if (x(4*ks-3) < 0.0) x(4*ks-3) = 0.01d0
+      ! A negative stage radius is the axis continuation (#370); the
+      ! field evaluation maps it to (|s|, theta+pi).
     end do
 
     call f_rk_gauss(si, fs, s, x, fvec)
@@ -1126,10 +1121,9 @@ recursive subroutine fixpoint_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
 
     ! Check if radius left the boundary
     do ks = 1, s
-      if (x(4*ks-3) > sympl_rmax) return
-      ! Transient guard for intermediate iterates; the converged-negative
-      ! case is handled by the caller via a chart switch (#370).
-      if (x(4*ks-3) < 0.0) x(4*ks-3) = 0.01d0
+                if (abs(x(4*ks - 3)) > sympl_rmax) return
+                ! A negative stage radius is the axis continuation (#370); the
+                ! field evaluation maps it to (|s|, theta+pi).
     end do
 
     call f_rk_gauss(si, fs, s, x, fvec)
@@ -1335,19 +1329,17 @@ subroutine guard_lobatto_stage_radii(x, s, status)
   integer :: ks, radius_index
 
   status = SYMPLECTIC_STEP_OK
-  if (x(1) > sympl_rmax) then
+        if (abs(x(1)) > sympl_rmax) then
     status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
     return
   end if
-  if (x(1) < 0d0) x(1) = 0.01d0
 
   do ks = 2, s
     radius_index = 4*ks - 5
-    if (x(radius_index) > sympl_rmax) then
+            if (abs(x(radius_index)) > sympl_rmax) then
       status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
       return
     end if
-    if (x(radius_index) < 0d0) x(radius_index) = 0.01d0
   end do
 end subroutine guard_lobatto_stage_radii
 
@@ -1716,7 +1708,7 @@ recursive subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
       return
     end if
 
-    if (x(1) > sympl_rmax) then
+            if (abs(x(1)) > sympl_rmax) then
       si = accepted_integrator
       f = accepted_field
       ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
@@ -1785,7 +1777,7 @@ recursive subroutine orbit_timestep_sympl_impl_expl_euler(si, f, ierr)
       return
     end if
 
-    if (x(1) > sympl_rmax) then
+            if (abs(x(1)) > sympl_rmax) then
       si = accepted_integrator
       f = accepted_field
       ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
@@ -2023,7 +2015,7 @@ recursive subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
         ierr = step_status
         return
       end if
-      if (x(1) > sympl_rmax) then
+                if (abs(x(1)) > sympl_rmax) then
         ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
         return
       end if

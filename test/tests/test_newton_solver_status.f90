@@ -225,9 +225,10 @@ program test_newton_solver_status
   lobatto_state(1) = -0.2_dp
   lobatto_state(3) = -0.4_dp
   lobatto_state(7) = 0.7_dp
+  ! Negative stage radii are the axis continuation (#370): the guard leaves
+  ! them for the field evaluation to map to (|s|, theta+pi), so only the
+  ! domain bound applies.
   expected_lobatto_state = lobatto_state
-  expected_lobatto_state(1) = 0.01_dp
-  expected_lobatto_state(3) = 0.01_dp
   call guard_lobatto_stage_radii(lobatto_state, 3, status)
   if (status /= SYMPLECTIC_STEP_OK) then
     error stop 'valid Lobatto stage radii reported a domain failure'
