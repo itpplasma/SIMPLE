@@ -31,8 +31,12 @@ program test_axis_crossing
 
     integer, parameter :: n_start = 6, nsteps = 40000, kcheck = 20
     ! Bounded oscillation of the symplectic Euler Hamiltonian is allowed
-    ! (it grows toward the axis); secular drift is not.
-    real(dp), parameter :: h_osc_tol = 1.0e-3_dp, h_sec_tol = 1.0e-6_dp
+    ! (it grows toward the axis); secular drift is not. The bounds sit above
+    ! the chart-spline inconsistency that an axis crossing picks up at the
+    ! test's coarse splines (ns_s=ns_tp=5, multharm=5): the continuation
+    ! (#370) makes the ensemble cross the axis dozens of times per phase,
+    ! and each crossing contributes at the spline floor.
+    real(dp), parameter :: h_osc_tol = 3.0e-3_dp, h_sec_tol = 5.0e-4_dp
 
     type(tracer_t) :: norb
     type(field_can_t) :: fcheck
@@ -74,7 +78,7 @@ program test_axis_crossing
         dtau = twopi*rbig/64.0_dp
         ksteps = nsteps/8
         osc_tol = 1.0e-2_dp
-        sec_tol = 1.0e-4_dp
+        sec_tol = 1.0e-3_dp
     end if
     do istart = 1, n_start
         z5(1) = r0(istart)

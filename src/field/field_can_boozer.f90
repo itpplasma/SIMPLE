@@ -59,7 +59,13 @@ contains
         integer, intent(in) :: mode_secders
 
         call eval_field_booz(f, r, th_c, ph_c, mode_secders)
-        call apply_radial_electric_potential(f, r)
+        call apply_radial_electric_potential(f, abs(r))
+        if (r < 0.0_dp) then
+            ! Axis continuation (#370): the potential is a flux function, so
+            ! its value lives at |s|, while its radial derivative carries the
+            ! sign of the signed label.
+            f%dPhie(1) = -f%dPhie(1)
+        end if
 
         call count_field_evaluation(mode_secders)
     end subroutine evaluate_boozer
@@ -115,6 +121,8 @@ contains
         double precision :: Bctr_vartheta, Bctr_varphi, bmod2, sqg, &
             d3Aphdr3, dummy, dummy3(3), dummy6(6), &
             Bth, Bph, dBth, dBph, d2Bth, d2Bph
+        double precision :: r_cont, th_cont
+        logical :: crossed
 
         ! Count evaluations for profiling
 
@@ -130,12 +138,36 @@ contains
         f%d2hph = 0d0
         f%d2Bmod = 0d0
 
-        call splint_boozer_coord(r, th_c, ph_c, mode_secders, &
+        ! Axis continuation (#370): a negative radial label s denotes the
+        ! physical point (|s|, theta+pi) on the opposite ray. Evaluate the
+        ! field there and fold the sign of the signed label into the odd
+        ! radial derivatives, so the extended Hamiltonian is consistent
+        ! through the axis and Newton iterates may cross it like any other
+        ! point.
+        crossed = r < 0.0_dp
+        if (crossed) then
+            r_cont = -r
+            th_cont = th_c + 0.5_dp*twopi
+        else
+            r_cont = r
+            th_cont = th_c
+        end if
+
+        call splint_boozer_coord(r_cont, th_cont, ph_c, mode_secders, &
                                  f%Ath, f%Aph, f%dAth(1), f%dAph(1), f%d2Aph(1), &
                                  d3Aphdr3, &
                                  Bth, dBth, d2Bth, &
                                  Bph, dBph, d2Bph, &
                                  f%Bmod, f%dBmod, f%d2Bmod, dummy, dummy3, dummy6)
+
+        if (crossed) then
+            f%dAth(1) = -f%dAth(1)
+            f%dAph(1) = -f%dAph(1)
+            dBth = -dBth
+            dBph = -dBph
+            f%dBmod(1) = -f%dBmod(1)
+            f%d2Bmod(2:3) = -f%d2Bmod(2:3)
+        end if
 
         bmod2 = f%Bmod**2
         sqg = (-f%dAph(1)/f%dAth(1)*Bth + Bph)/bmod2*boozer_state%torflux
@@ -192,6 +224,8 @@ contains
         real(dp) :: bmod2, &
             d3Aphdr3, dummy, dummy3(3), dummy6(6), &
             Bth, Bph, dBth, dBph, d2Bth, d2Bph
+        real(dp) :: r_cont, th_cont
+        logical :: crossed
 
         f%dAth = 0.0_dp
         f%dAph = 0.0_dp
@@ -207,12 +241,32 @@ contains
             f%d2hph = 0.0_dp
         end if
 
-        call splint_boozer_coord_device(r, th_c, ph_c, mode_secders, &
+        ! Axis continuation (#370), mirroring eval_field_booz: a negative
+        ! radial label denotes the physical point (|s|, theta+pi).
+        crossed = r < 0.0_dp
+        if (crossed) then
+            r_cont = -r
+            th_cont = th_c + 0.5_dp*twopi
+        else
+            r_cont = r
+            th_cont = th_c
+        end if
+
+        call splint_boozer_coord_device(r_cont, th_cont, ph_c, mode_secders, &
                                         f%Ath, f%Aph, f%dAth(1), f%dAph(1), &
                                         f%d2Aph(1), d3Aphdr3, &
                                         Bth, dBth, d2Bth, Bph, dBph, d2Bph, &
                                         f%Bmod, f%dBmod, f%d2Bmod, &
                                         dummy, dummy3, dummy6)
+
+        if (crossed) then
+            f%dAth(1) = -f%dAth(1)
+            f%dAph(1) = -f%dAph(1)
+            dBth = -dBth
+            dBph = -dBph
+            f%dBmod(1) = -f%dBmod(1)
+            f%d2Bmod(2:3) = -f%d2Bmod(2:3)
+        end if
 
         bmod2 = f%Bmod**2
         f%hth = Bth/f%Bmod
