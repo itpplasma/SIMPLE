@@ -198,6 +198,21 @@ if(SIMPLE_ENABLE_CUDA)
         CUDA_SEPARABLE_COMPILATION OFF
         LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
+    add_library(simple_cuda_euler STATIC
+        src/simple_cuda_euler.cu
+        src/simple_cuda_euler.h
+        src/generated/cuda_euler1_boozer.cuh)
+    target_include_directories(simple_cuda_euler PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(simple_cuda_euler PUBLIC CUDA::cudart)
+    target_compile_options(simple_cuda_euler PRIVATE
+        $<$<COMPILE_LANGUAGE:CUDA>:-O3;--generate-line-info;-Xptxas=-v>)
+    set_target_properties(simple_cuda_euler PROPERTIES
+        CUDA_STANDARD 17
+        CUDA_STANDARD_REQUIRED ON
+        CUDA_SEPARABLE_COMPILATION OFF
+        POSITION_INDEPENDENT_CODE ON)
+
     add_library(simple_cuda_native_rk54 SHARED
         src/simple_cuda_native_rk54.cu
         src/simple_cuda_native_rk54.h)

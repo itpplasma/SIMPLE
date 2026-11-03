@@ -99,12 +99,14 @@ the CPU build and the OpenACC device code share them. The Runge-Kutta
 coefficients stay arguments, supplied by `coeff_rk_gauss` and
 `coeff_rk_lobatto`.
 
-For a compatible existing FortSym build:
+For a compatible existing FortSym build, which also provides FortGen:
 
 ```sh
-gfortran -I/path/to/fortsym/build/include gen/generate_orbit_systems.f90 \
+gfortran -I/path/to/fortsym/build/include \
+  -I/path/to/fortsym/build/_deps/fortgen-build/include \
+  gen/generate_orbit_systems.f90 \
   -L/path/to/fortsym/build/lib -Wl,-rpath,/path/to/fortsym/build/lib \
-  -lfortsym -o /scratch/generate_orbit_systems
+  -lfortsym -lfortgen -o /scratch/generate_orbit_systems
 /scratch/generate_orbit_systems src/generated <fortsym revision>
 ```
 
@@ -125,6 +127,20 @@ hand-written: the same kernel emitted for CUDA ran about 2 % slower there.
 `emit_field_derivatives` can also emit `get_val`, `get_derivatives` and
 `get_derivatives2`; the CPU chain stays hand-written because a different
 rounding changes the chaotic orbits of the golden-record classifier cases.
+
+The same run writes `src/generated/cuda_euler1_boozer.cuh`, the device code
+of the direct-CUDA Euler step (`simple_cuda_euler.cu`). FortGen's Horner
+emitter gives the quintic spline cell kernels in libneo's coefficient layout.
+`euler1_boozer_system` takes the raw spline values of A_phi(s),
+B_vartheta(rho), B_varphi(rho) and |B|(rho, vartheta, varphi) with
+s = sigma r and rho = sqrt(s), where sigma = -1 is the axis continuation, and
+returns the Euler residual, its Jacobian and the field quantities of the angle
+advance. h = B/|B|, v_par, H and p_theta are chain intermediates, the residual
+is the statement shared with `euler1_residual`, and its Jacobian is the chain
+derivative. `euler1_boozer_advance` moves p_theta and the field quantities of
+the last Newton evaluation to the converged point to first order and advances
+the angles, as `sympl_euler1_extrapolate_field` and
+`sympl_euler1_advance_angles` do on the CPU.
 
 The optional second argument records the FortSym revision in the banner of
 every kernel. The emitted files are committed unformatted, so regenerating into

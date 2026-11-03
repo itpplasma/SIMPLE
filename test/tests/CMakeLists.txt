@@ -1198,6 +1198,20 @@ set_tests_properties(test_gpu_orbit_bench PROPERTIES
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gpu_orbit_bench
     TIMEOUT 120)
 
+if(SIMPLE_ENABLE_CUDA)
+    # The same run checks the generated direct-CUDA Euler path: its Newton
+    # system against the host field and Euler kernels (start states and their
+    # images across the axis), and its traces against the CPU and OpenACC ones.
+    add_test(NAME test_cuda_euler_bench
+        COMMAND $<TARGET_FILE:simple.x> test_gpu_orbit_bench.in
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gpu_orbit_bench)
+    set_tests_properties(test_cuda_euler_bench PROPERTIES
+        LABELS "unit;gpu;cuda"
+        PASS_REGULAR_EXPRESSION "CUDA loss-step mismatches = *0"
+        FAIL_REGULAR_EXPRESSION "Euler system relative error = +[1-9][0-9.]*E([+]|-0[0-9]|-1[01]);z_cuda\\| \\(final state\\) = +[1-9][0-9.]*E([+]|-0[0-9]|-10)"
+        TIMEOUT 120)
+endif()
+
 add_test(NAME test_gpu_midpoint_bench
     COMMAND $<TARGET_FILE:simple.x>
         test_gpu_midpoint_bench.in
