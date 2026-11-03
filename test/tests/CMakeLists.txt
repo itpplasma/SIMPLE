@@ -411,6 +411,16 @@ if (ENABLE_OPENMP)
     set_tests_properties(test_sympl_stell_full PROPERTIES
         LABELS "integration;slow" TIMEOUT 120
         PROCESSORS 1 ENVIRONMENT "OMP_NUM_THREADS=1")
+    add_executable (test_quasi_gauss_threads.x test_quasi_gauss_threads.f90)
+    target_link_libraries(test_quasi_gauss_threads.x simple)
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/quasi_gauss_threads)
+    file(CREATE_LINK ${WOUT_FILE}
+        ${CMAKE_CURRENT_BINARY_DIR}/quasi_gauss_threads/wout.nc SYMBOLIC)
+    add_test(NAME test_quasi_gauss_threads COMMAND test_quasi_gauss_threads.x
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/quasi_gauss_threads)
+    set_tests_properties(test_quasi_gauss_threads PROPERTIES
+        LABELS "integration" TIMEOUT 120 PROCESSORS 4
+        ENVIRONMENT "OMP_DYNAMIC=FALSE")
     # Field-evaluation cost ratio between mode_secders=0 and mode_secders=2.
     # Built but deliberately not registered with ctest: it is a timing
     # measurement, so its result is hardware-dependent and must not gate CI.

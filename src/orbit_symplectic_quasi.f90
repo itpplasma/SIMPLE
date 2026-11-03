@@ -18,12 +18,19 @@ integer, parameter :: dp = kind(1.0d0)
 save
 
 logical, parameter :: exact_steps = .False.
-integer, parameter :: S_MAX_GAUSS = 3
+! Largest stage count coeff_rk_gauss has coefficients for.
+    integer, parameter :: S_MAX_GAUSS = 4
 
 type(field_can_t) :: f
-type(field_can_t) :: fs(S_MAX_GAUSS)
 type(symplectic_integrator_t) :: si
   !$omp threadprivate(f, si)
+
+! Stage fields of one implicit Runge-Kutta solve. They reach the residual
+! through ctx and live on the solving thread's stack, so concurrent particles
+! cannot overwrite each other's stages.
+    type :: stage_fields_t
+        type(field_can_t), pointer :: fs(:) => null()
+    end type stage_fields_t
 
 procedure(orbit_timestep_quasi_i), pointer :: orbit_timestep_quasi => null()
 
@@ -210,10 +217,23 @@ end subroutine f_midpoint_quasi
 
 
 subroutine f_rk_gauss_quasi(x, fvec, ctx)
+        real(dp), intent(in) :: x(:)
+        real(dp), intent(out) :: fvec(:)
+        class(*), intent(in), optional :: ctx
 
+        select type (ctx)
+        type is (stage_fields_t)
+            call rk_gauss_quasi_residual(ctx%fs, x, fvec)
+        class default
+            error stop 'f_rk_gauss_quasi: ctx must carry the stage fields'
+        end select
+    end subroutine f_rk_gauss_quasi
+
+    subroutine rk_gauss_quasi_residual(fs, x, fvec)
+
+        type(field_can_t), intent(inout) :: fs(:)
   real(dp), intent(in) :: x(:)  ! = (rend, thend, phend, pphend, rmid)
   real(dp), intent(out) :: fvec(:)
-  class(*), intent(in), optional :: ctx
 
   integer :: n
   real(dp) :: a(size(x)/4,size(x)/4), b(size(x)/4), c(size(x)/4), Hprime(size(x)/4)
@@ -245,7 +265,7 @@ subroutine f_rk_gauss_quasi(x, fvec, ctx)
     end do
   end do
 
-end subroutine f_rk_gauss_quasi
+    end subroutine rk_gauss_quasi_residual
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
@@ -257,7 +277,12 @@ subroutine f_rk_lobatto_quasi(x, fvec, ctx)
   real(dp), intent(out) :: fvec(:)
   class(*), intent(in), optional :: ctx
 
-  call f_rk_lobatto(si, fs, (size(x)+2)/4, x, fvec, 0)
+        select type (ctx)
+        type is (stage_fields_t)
+            call f_rk_lobatto(si, ctx%fs, (size(x) + 2)/4, x, fvec, 0)
+        class default
+            error stop 'f_rk_lobatto_quasi: ctx must carry the stage fields'
+        end select
 
   end subroutine f_rk_lobatto_quasi
 
@@ -480,10 +505,16 @@ subroutine timestep_rk_gauss_quasi(s, ierr)
   integer :: ktau, k, l
 
   real(dp) :: a(s,s), b(s), c(s), Hprime(s)
+        type(field_can_t), target :: fs(s)
+        type(stage_fields_t) :: stages
+
+        if (s < 1 .or. s > S_MAX_GAUSS) &
+            error stop 'timestep_rk_gauss_quasi: no Gauss coefficients for this s'
 
   do k = 1,s
     fs(k) = f
   end do
+        stages%fs => fs
 
   ierr = 0
   ktau = 0
@@ -495,7 +526,7 @@ subroutine timestep_rk_gauss_quasi(s, ierr)
     end do
 
     call multiroot_hybrids(f_rk_gauss_quasi, 4*s, x0, x, status, &
-      xtol=si%rtol, ftol=si%rtol)
+                                   xtol=si%rtol, ftol=si%rtol, ctx=stages)
 
     if (x(1) > sympl_rmax) then
       ierr = 1
@@ -545,10 +576,13 @@ subroutine timestep_rk_lobatto_quasi(s, ierr)
   integer :: ktau, k, l
 
   real(dp) :: a(s,s), ahat(s,s), b(s), c(s), Hprime(s)
+        type(field_can_t), target :: fs(s)
+        type(stage_fields_t) :: stages
 
   do k = 1,s
     fs(k) = f
   end do
+        stages%fs => fs
 
   ierr = 0
   ktau = 0
@@ -586,7 +620,7 @@ subroutine timestep_rk_lobatto_quasi(s, ierr)
     ! x x x 0 0
 
     call multiroot_hybrids(f_rk_lobatto_quasi, 4*s-2, x0, x, status, &
-      xtol=si%rtol, ftol=si%rtol)
+                                   xtol=si%rtol, ftol=si%rtol, ctx=stages)
 
     call coeff_rk_lobatto(s, a, ahat, b, c)
 
