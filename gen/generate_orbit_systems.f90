@@ -3,13 +3,20 @@ program generate_orbit_systems
     ! schemes from one symbolic statement each. Every field quantity is an
     ! opaque applied function of the stage state; its partial derivatives bind
     ! to the members of field_can_t, and each Jacobian is the symbolic
-    ! derivative of its residual.
+    ! derivative of its residual. The same file states v_par, H and p_theta
+    ! once and generates their derivatives up to second order, and the
+    ! guiding-centre rates of a Boozer field for OpenACC.
     use fortsym_arena, only: arena_t
-    use fortsym_expr, only: expr_t, sym, num, func, operator(+), operator(-), &
-                            operator(*), operator(/)
+    use fortsym_expr, only: expr_t, sym, num, func, func_in, operator(+), &
+                            operator(-), operator(*), operator(/), operator(**)
     use fortsym_diff, only: diff, partial_derivative
+    use fortsym_subs, only: subs_many
+    use fortsym_chain, only: chain_t, fold_numbers
     use fortsym_kernel, only: kernel_spec_t, kernel_binding_t, emit_kernel, &
                               KERNEL_SUBROUTINE
+    use fortsym_kernel_ir, only: kernel_ir_t, lower_kernel_ir
+    use fortsym_kernel_emit, only: kernel_emit_spec_t, emit_fortran_kernel_ir, &
+                                   TARGET_FORTRAN_OPENACC
     use fortsym_string, only: str_t, str, chars
     implicit none
 
@@ -54,6 +61,14 @@ program generate_orbit_systems
     call emit_lobatto(unit, 3)
     call emit_rates_canonical(unit)
     close (unit)
+
+    open (newunit=unit, file=trim(output_dir)//'/gpu_derivatives2_radial_mixed.inc', &
+          status='replace', action='write')
+    first_in_file = .true.
+    call emit_field_derivatives(unit, 'gpu_radial_mixed_second_derivatives', 2, .true.)
+    close (unit)
+
+    call emit_rates_boozer(output_dir)
 
     open (newunit=unit, file=trim(output_dir)//'/orbit_systems_generated.f90', &
           status='replace', action='write')
@@ -381,6 +396,301 @@ contains
                         '('//itoa(s)//', '//itoa(s)//')', '('//itoa(4*s - 2)//')'], &
                        stages=s)
     end subroutine emit_lobatto
+
+    !> v_par, H and p_theta of field_can_t at (r, theta, phi, p_phi) and their
+    !> derivatives through `order`. v_par = (p_phi - A_phi/ro0)/h_phi is a
+    !> named intermediate, so every derivative reuses v_par and the lower
+    !> derivatives of v_par instead of re-expanding it. `radial_mixed` emits
+    !> only the second derivatives with a radial or p_phi index, which the
+    !> two-variable Euler Newton system reads, from the values and gradients
+    !> that get_derivatives already stored in f, and drops d2Phie: SIMPLE's
+    !> electric potential is linear in s. Reading them back from f, as the
+    !> hand-written device code did, keeps the OpenACC Euler kernel at its
+    !> register count.
+    subroutine emit_field_derivatives(unit, name, order, radial_mixed)
+        integer, intent(in) :: unit, order
+        character(*), intent(in) :: name
+        logical, intent(in) :: radial_mixed
+        character(4), parameter :: quantity(3) = ['vpar', 'H   ', 'pth ']
+        type(chain_t) :: c
+        type(expr_t) :: x(4), aph, ath, hth, hph, bmod, phie, mu, ro0, q(3), e
+        type(expr_t), allocatable :: roots(:), old(:), new(:), defs(:)
+        type(str_t), allocatable :: refs(:)
+        integer, allocatable :: needed(:)
+        logical, allocatable :: keep(:)
+        integer :: i, j, m, k
+
+        call reset()
+        x = [sym(arena, 'r_'), sym(arena, 'th_'), sym(arena, 'ph_'), sym(arena, 'pphi')]
+        aph = field_function('Aph', x(1:3))
+        ath = field_function('Ath', x(1:3))
+        hth = field_function('hth', x(1:3))
+        hph = field_function('hph', x(1:3))
+        bmod = field_function('Bmod', x(1:3))
+        phie = field_function('Phie', x(1:3))
+        mu = func_in(arena, 'mu')
+        ro0 = func_in(arena, 'ro0')
+        call add_binding('mu', [integer ::], 'f%mu')
+        call add_binding('ro0', [integer ::], 'f%ro0')
+
+        call c%init(x)
+        q(1) = c%let('vpar', (x(4) - aph/ro0)/hph)
+        q(2) = q(1)**2/2 + mu*bmod + phie
+        q(3) = hth*q(1) + ath/ro0
+        allocate (roots(0), refs(0))
+        do m = 1, 3
+            call add_root(roots, refs, q(m), 'f%'//trim(quantity(m)))
+        end do
+        if (order >= 1 .and. .not. radial_mixed) then
+            do m = 1, 3
+                do i = 1, 4
+                    call add_root(roots, refs, c%d(q(m), i), &
+                                  'f%d'//trim(quantity(m))//'('//itoa(i)//')')
+                end do
+            end do
+        end if
+        if (order >= 2) then
+            do m = 1, 3
+                do i = 1, 4
+                    do j = i, 4
+                        if (i == 4 .and. j == 4) cycle
+                        if (radial_mixed .and. i /= 1 .and. j /= 4) cycle
+                        e = c%d(c%d(q(m), i), j)
+                        call add_root(roots, refs, e, 'f%d2'//trim(quantity(m))//'('// &
+                                      itoa(packed(i, j))//')')
+                    end do
+                end do
+            end do
+        end if
+        if (radial_mixed) then
+            ! Values and gradients come from f; the first three roots are
+            ! the values themselves and are not assigned again.
+            roots = roots(4:)
+            refs = refs(4:)
+            allocate (old(0), new(0))
+            do i = 1, 3
+                do j = i, 3
+                    old = [old, partial_derivative(partial_derivative(phie, i), j)]
+                    new = [new, num(arena, 0)]
+                end do
+            end do
+            old = [old, q(1)]
+            new = [new, stored('vpar_f', 'f%vpar')]
+            do i = 1, 4
+                e = c%d(q(1), i)
+                if (c%index_of(e) == 0) cycle
+                old = [old, e]
+                new = [new, stored('dvpar_f'//itoa(i), 'f%dvpar('//itoa(i)//')')]
+            end do
+            do k = 1, size(roots)
+                roots(k) = fold_numbers(subs_many(roots(k), old, new))
+            end do
+            needed = c%needed(roots)
+            keep = [(.not. any(old%id == c%names(needed(k))%id), k=1, size(needed))]
+            needed = pack(needed, keep)
+            allocate (defs(size(needed)))
+            do k = 1, size(needed)
+                defs(k) = fold_numbers(subs_many(c%defs(needed(k)), old, new))
+            end do
+            call emit_with_locals(unit, name, c, needed, roots, refs, defs)
+            return
+        end if
+        needed = c%needed(roots)
+        call emit_with_locals(unit, name, c, needed, roots, refs, c%defs(needed))
+    end subroutine emit_field_derivatives
+
+    !> A value that an earlier kernel stored in field_can_t: an opaque
+    !> application bound to its member.
+    function stored(head, member) result(e)
+        character(*), intent(in) :: head, member
+        type(expr_t) :: e
+
+        e = func_in(arena, head)
+        call add_binding(head, [integer ::], member)
+    end function stored
+
+    subroutine add_root(roots, refs, e, ref)
+        type(expr_t), allocatable, intent(inout) :: roots(:)
+        type(str_t), allocatable, intent(inout) :: refs(:)
+        type(expr_t), intent(in) :: e
+        character(*), intent(in) :: ref
+        roots = [roots, e]
+        refs = [refs, str(ref)]
+    end subroutine add_root
+
+    !> A field_can_t quantity of (r, theta, phi) with its value, gradient
+    !> and packed Hessian bound to the members f%<head>, f%d<head>, f%d2<head>.
+    function field_function(head, x3) result(e)
+        character(*), intent(in) :: head
+        type(expr_t), intent(in) :: x3(3)
+        type(expr_t) :: e
+        integer :: a, b
+
+        e = func(head, x3)
+        call add_binding(head, [integer ::], 'f%'//head)
+        do a = 1, 3
+            call add_binding(head, [a], 'f%d'//head//'('//itoa(a)//')')
+            do b = a, 3
+                call add_binding(head, [a, b], &
+                                 'f%d2'//head//'('//itoa(packed(a, b))//')')
+            end do
+        end do
+    end function field_function
+
+    !> A kernel (f, pphi) that assigns the chain intermediates as locals and
+    !> the roots to the members of the inout field_can_t f.
+    subroutine emit_with_locals(unit, name, c, needed, roots, refs, defs)
+        integer, intent(in) :: unit
+        character(*), intent(in) :: name
+        type(chain_t), intent(in) :: c
+        integer, intent(in) :: needed(:)
+        type(expr_t), intent(in) :: roots(:), defs(:)
+        type(str_t), intent(in) :: refs(:)
+        type(kernel_spec_t) :: spec
+        type(str_t) :: source
+        character(:), allocatable :: message
+        logical :: good
+        integer :: k
+
+        spec%name = str(name)
+        spec%mode = KERNEL_SUBROUTINE
+        if (reads(roots, 'pphi') .or. reads(defs, 'pphi')) then
+            spec%args = [str('f'), str('pphi')]
+            spec%arg_types = [str('type(field_can_t)'), str('real(dp)')]
+            spec%arg_intents = [str('inout'), str('in')]
+        else
+            spec%args = [str('f')]
+            spec%arg_types = [str('type(field_can_t)')]
+            spec%arg_intents = [str('inout')]
+        end if
+        allocate (spec%outputs(0))
+        spec%locals = [(c%names(needed(k))%name(), k=1, size(needed))]
+        spec%output_references = [spec%locals, refs]
+        spec%bindings = bindings
+        spec%temp_prefix = str('t')
+        spec%generator = str('gen/generate_orbit_systems.f90')
+        if (len_trim(fortsym_revision) > 0) &
+            spec%generator_revision = str('fortsym '//trim(fortsym_revision))
+        spec%regenerate_command = str('generate_orbit_systems src/generated '// &
+                                      trim(fortsym_revision))
+        spec%openacc_routine_seq = .true.
+        spec%reciprocal_temporaries = .true.
+        source = emit_kernel([defs, roots], spec, good, message=message)
+        if (.not. good) then
+            print *, 'emission of ', name, ' failed: ', message
+            error stop 1
+        end if
+        call write_source(unit, chars(source))
+    end subroutine emit_with_locals
+
+    !> Guiding-centre rates of a Boozer field: B(r, theta, phi) and the
+    !> profiles A_phi, B_theta, B_phi of r, with dA_theta/dr = torflux. They
+    !> follow gc_rates with h_theta = B_theta/B and h_phi = B_phi/B. Only
+    !> q = p_phi - A_phi/ro0 and v_par/B = q/B_phi are named: q is never
+    !> expanded, so v_par keeps its precision near v_par = 0, and with v_par
+    !> = B v_par/B written out, B cancels from p_theta and dp_theta/dphi
+    !> vanishes exactly.
+    subroutine emit_rates_boozer(output_dir)
+        character(*), intent(in) :: output_dir
+        type(chain_t) :: c
+        type(expr_t) :: x(4), mu, ro0, aphi, btheta, bphi, ath, bmod, vpar, h, pth
+        type(expr_t) :: dh(3), dpth(3), hth, hph, rates(4), hp
+        type(expr_t), allocatable :: old(:), new(:), locals(:), values(:)
+        type(kernel_ir_t) :: ir
+        type(kernel_emit_spec_t) :: spec
+        integer, allocatable :: needed(:)
+        character(:), allocatable :: message
+        type(str_t) :: source
+        logical :: good
+        integer :: k, unit
+
+        x = [sym(arena, 'r_'), sym(arena, 'th_'), sym(arena, 'ph_'), sym(arena, 'pph')]
+        mu = sym(arena, 'mu')
+        ro0 = sym(arena, 'ro0')
+        aphi = func('aphi', x(1:1))
+        btheta = func('btheta', x(1:1))
+        bphi = func('bphi', x(1:1))
+        ath = func('ath', x(1:1))
+        bmod = func('bmod', x(1:3))
+        call c%init(x)
+        hth = btheta/bmod
+        hph = bphi/bmod
+        vpar = bmod*c%let('vpar_over_b', c%let('q', x(4) - aphi/ro0)/bphi)
+        h = vpar**2/2 + mu*bmod
+        pth = hth*vpar + ath/ro0
+        do k = 1, 3
+            dh(k) = c%d(h, k)
+            dpth(k) = c%d(pth, k)
+        end do
+        hp = dh(1)/dpth(1)
+        rates(1) = -(dh(2) - hth/hph*dh(3))/dpth(1)
+        rates(2) = hp
+        rates(3) = (vpar - hp*hth)/hph
+        rates(4) = -(dh(3) - hp*dpth(3))
+
+        old = [aphi, partial_derivative(aphi, 1), btheta, &
+               partial_derivative(btheta, 1), bphi, partial_derivative(bphi, 1), &
+               bmod, partial_derivative(bmod, 1), partial_derivative(bmod, 2), &
+               partial_derivative(bmod, 3), partial_derivative(ath, 1)]
+        new = [sym(arena, 'aphi'), sym(arena, 'daphi'), sym(arena, 'btheta'), &
+               sym(arena, 'dbtheta'), sym(arena, 'bphi'), sym(arena, 'dbphi'), &
+               sym(arena, 'bmod'), sym(arena, 'dbmod_r'), sym(arena, 'dbmod_theta'), &
+               sym(arena, 'dbmod_phi'), sym(arena, 'torflux')]
+        do k = 1, 4
+            rates(k) = subs_many(fold_numbers(rates(k)), old, new)
+        end do
+        needed = c%needed(rates)
+        locals = c%names(needed)
+        values = c%defs(needed)
+        do k = 1, size(values)
+            values(k) = subs_many(values(k), old, new)
+        end do
+        call lower_kernel_ir(rates, ir, good, message, locals, values, &
+                             share_products=.true.)
+        if (.not. good) then
+            print *, 'lowering of gc_rates_boozer failed: ', message
+            error stop 1
+        end if
+
+        spec%name = str('gc_rates_boozer')
+        spec%args = [str('pph'), str('mu'), str('ro0'), str('torflux'), str('aphi'), &
+                     str('daphi'), str('btheta'), str('dbtheta'), str('bphi'), &
+                     str('dbphi'), str('bmod'), str('dbmod_r'), str('dbmod_theta'), &
+                     str('dbmod_phi')]
+        spec%outputs = [str('rdot'), str('thdot'), str('phdot'), str('pphdot')]
+        spec%temp_prefix = str('t')
+        spec%generator = str('gen/generate_orbit_systems.f90')
+        if (len_trim(fortsym_revision) > 0) &
+            spec%generator_revision = str('fortsym '//trim(fortsym_revision))
+        spec%regenerate_command = str('generate_orbit_systems src/generated '// &
+                                      trim(fortsym_revision))
+        spec%target = TARGET_FORTRAN_OPENACC
+        source = emit_fortran_kernel_ir(ir, spec, good, message)
+        if (.not. good) then
+            print *, 'Fortran emission of gc_rates_boozer failed: ', message
+            error stop 1
+        end if
+        open (newunit=unit, file=trim(output_dir)//'/gc_rates_boozer.inc', &
+              status='replace', action='write')
+        first_in_file = .true.
+        call write_source(unit, chars(source))
+        close (unit)
+    end subroutine emit_rates_boozer
+
+    subroutine write_source(unit, source)
+        integer, intent(in) :: unit
+        character(*), intent(in) :: source
+        character(:), allocatable :: text
+
+        text = source
+        do while (len(text) > 0)
+            if (text(len(text):len(text)) /= new_line('a')) exit
+            text = text(:len(text) - 1)
+        end do
+        if (.not. first_in_file) write (unit, '(a)') ''
+        first_in_file = .false.
+        write (unit, '(a)') text
+    end subroutine write_source
 
     subroutine reset()
         if (allocated(bindings)) deallocate (bindings)

@@ -56,6 +56,7 @@ module simple_gpu
     public :: trace_orbits_gpu_midpoint_range
     public :: trace_orbits_gpu_landreman
     public :: evaluate_rhs_gpu
+    public :: gpu_get_derivatives2_radial_mixed, gc_rates_boozer
 
 contains
 
@@ -85,32 +86,10 @@ contains
         real(dp), intent(in) :: pphi
 
         call get_derivatives(f, pphi)
-
-        f%d2vpar(1:3) = -f%d2Aph(1:3)/f%ro0 - f%d2hph(1:3)*f%vpar
-        f%d2vpar(1) = f%d2vpar(1) - 2.0_dp*f%dhph(1)*f%dvpar(1)
-        f%d2vpar(2) = f%d2vpar(2) - &
-            (f%dhph(1)*f%dvpar(2) + f%dhph(2)*f%dvpar(1))
-        f%d2vpar(3) = f%d2vpar(3) - &
-            (f%dhph(1)*f%dvpar(3) + f%dhph(3)*f%dvpar(1))
-        f%d2vpar(1:3) = f%d2vpar(1:3)/f%hph
-
-        f%d2H(1:3) = f%vpar*f%d2vpar(1:3) + f%mu*f%d2Bmod(1:3)
-        f%d2H(1) = f%d2H(1) + f%dvpar(1)**2
-        f%d2H(2) = f%d2H(2) + f%dvpar(1)*f%dvpar(2)
-        f%d2H(3) = f%d2H(3) + f%dvpar(1)*f%dvpar(3)
-
-        f%d2pth(1:3) = f%d2vpar(1:3)*f%hth + &
-            f%vpar*f%d2hth(1:3) + f%d2Ath(1:3)/f%ro0
-        f%d2pth(1) = f%d2pth(1) + 2.0_dp*f%dvpar(1)*f%dhth(1)
-        f%d2pth(2) = f%d2pth(2) + f%dvpar(1)*f%dhth(2) + &
-            f%dvpar(2)*f%dhth(1)
-        f%d2pth(3) = f%d2pth(3) + f%dvpar(1)*f%dhth(3) + &
-            f%dvpar(3)*f%dhth(1)
-
-        f%d2vpar(7:9) = -f%dhph/f%hph**2
-        f%d2H(7:9) = f%dvpar(1:3)/f%hph + f%vpar*f%d2vpar(7:9)
-        f%d2pth(7:9) = f%dhth/f%hph + f%hth*f%d2vpar(7:9)
+        call gpu_radial_mixed_second_derivatives(f)
     end subroutine gpu_get_derivatives2_radial_mixed
+
+    include 'generated/gpu_derivatives2_radial_mixed.inc'
 
     subroutine gpu_newton1(si, f, x, xlast, warning_mode, status, nfev)
         !$acc routine seq
@@ -514,14 +493,10 @@ contains
         real(dp), intent(in) :: mu, ro0
         real(dp), intent(out) :: dydt(4)
 
-        real(dp) :: aphi, daphi, btheta, dbtheta, bphi, dbphi, bmod
-        real(dp) :: dbmod(3), hth, hph, vpar, hprime
-        real(dp) :: inv_bmod, inv_bmod2, inv_hph, inv_dpth
-        real(dp) :: dhth_r, dhth_phi
-        real(dp) :: dhph_r, dhph_theta, dhph_phi
-        real(dp) :: dvpar_r, dvpar_theta, dvpar_phi
-        real(dp) :: dh_r, dh_theta, dh_phi, dpth_r, dpth_phi
+        real(dp) :: aphi, daphi, btheta, dbtheta, bphi, dbphi, bmod, dbmod(3)
+        real(dp) :: torflux
 
+        torflux = boozer_state%torflux
         if (rk_tables_ready) then
             call splint_boozer_rk_table_device(y(1), y(2), y(3), aphi, &
                 daphi, btheta, dbtheta, bphi, dbphi, bmod, dbmod)
@@ -529,33 +504,12 @@ contains
             call splint_boozer_rk_device(y(1), y(2), y(3), aphi, daphi, &
                 btheta, dbtheta, bphi, dbphi, bmod, dbmod)
         end if
-        inv_bmod = 1.0_dp/bmod
-        inv_bmod2 = inv_bmod*inv_bmod
-        hth = btheta*inv_bmod
-        hph = bphi*inv_bmod
-        dhth_r = dbtheta*inv_bmod - btheta*dbmod(1)*inv_bmod2
-        dhth_phi = -btheta*dbmod(3)*inv_bmod2
-        dhph_r = dbphi*inv_bmod - bphi*dbmod(1)*inv_bmod2
-        dhph_theta = -bphi*dbmod(2)*inv_bmod2
-        dhph_phi = -bphi*dbmod(3)*inv_bmod2
-        inv_hph = 1.0_dp/hph
-        vpar = (y(4) - aphi/ro0)*inv_hph
-        dvpar_r = -(daphi/ro0 + dhph_r*vpar)*inv_hph
-        dvpar_theta = -dhph_theta*vpar*inv_hph
-        dvpar_phi = -dhph_phi*vpar*inv_hph
-        dh_r = vpar*dvpar_r + mu*dbmod(1)
-        dh_theta = vpar*dvpar_theta + mu*dbmod(2)
-        dh_phi = vpar*dvpar_phi + mu*dbmod(3)
-        dpth_r = dvpar_r*hth + vpar*dhth_r + boozer_state%torflux/ro0
-        dpth_phi = dvpar_phi*hth + vpar*dhth_phi
-        inv_dpth = 1.0_dp/dpth_r
-        hprime = dh_r*inv_dpth
-
-        dydt(1) = -(dh_theta - hth*inv_hph*dh_phi)*inv_dpth
-        dydt(2) = hprime
-        dydt(3) = (vpar - hprime*hth)*inv_hph
-        dydt(4) = -(dh_phi - hprime*dpth_phi)
+        call gc_rates_boozer(y(4), mu, ro0, torflux, aphi, daphi, btheta, &
+                             dbtheta, bphi, dbphi, bmod, dbmod(1), dbmod(2), &
+                             dbmod(3), dydt(1), dydt(2), dydt(3), dydt(4))
     end subroutine gpu_rhs_canonical
+
+    include 'generated/gc_rates_boozer.inc'
 
     subroutine gpu_rhs_canonical_cartesian(y, mu, ro0, dydt)
         ! Integrate the radial Boozer plane as (s*cos(theta), s*sin(theta)).
