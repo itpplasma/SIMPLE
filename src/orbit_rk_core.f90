@@ -167,56 +167,61 @@ contains
   ! Device-portable dense LU solve A x = rhs with partial pivoting, in place on
   ! rhs. n <= 4*S_MAX (n <= 16 for s <= 4). info = 0 on success, else the failing
   ! pivot column. Replaces dgesv on CPU and device: thread-safe, no allocation.
-  pure subroutine rk_solve(n, A, rhs, info)
-    !$acc routine seq
-    integer, intent(in) :: n
-    real(dp), intent(inout) :: A(n,n), rhs(n)
-    integer, intent(out) :: info
-    integer :: i, j, k, ipiv
-    real(dp) :: piv, amax, factor, tmp
+    pure subroutine rk_solve(n, A, rhs, info)
+        !$acc routine seq
+        integer, intent(in) :: n
+        real(dp), intent(inout) :: A(n, n), rhs(n)
+        integer, intent(out) :: info
+        integer :: i, j, k, ipiv
+        real(dp) :: amax, akj, tmp
 
-    info = 0
-    do k = 1, n
-      ipiv = k
-      amax = abs(A(k,k))
-      do i = k+1, n
-        if (abs(A(i,k)) > amax) then
-          amax = abs(A(i,k))
-          ipiv = i
-        end if
-      end do
-      ! Singular column: amax = max|A(i,k)| >= 0, so .not.(amax > 0) means the
-      ! whole pivot column is zero. Phrased this way to avoid a real-equality
-      ! comparison (-Wcompare-reals).
-      if (.not. (amax > 0d0)) then
-        info = k
-        return
-      end if
-      if (ipiv /= k) then
-        do j = 1, n
-          tmp = A(k,j); A(k,j) = A(ipiv,j); A(ipiv,j) = tmp
+        ! Column-oriented loops: the innermost index runs down a column, which is
+        ! contiguous in Fortran storage.
+        info = 0
+        do k = 1, n
+            ipiv = k
+            amax = abs(A(k, k))
+            do i = k + 1, n
+                if (abs(A(i, k)) > amax) then
+                    amax = abs(A(i, k))
+                    ipiv = i
+                end if
+            end do
+            ! Singular column: amax = max|A(i,k)| >= 0, so .not.(amax > 0) means the
+            ! whole pivot column is zero. Phrased this way to avoid a real-equality
+            ! comparison (-Wcompare-reals).
+            if (.not. (amax > 0d0)) then
+                info = k
+                return
+            end if
+            if (ipiv /= k) then
+                do j = k, n
+                    tmp = A(k, j); A(k, j) = A(ipiv, j); A(ipiv, j) = tmp
+                end do
+                tmp = rhs(k); rhs(k) = rhs(ipiv); rhs(ipiv) = tmp
+            end if
+            tmp = 1d0/A(k, k)
+            do i = k + 1, n
+                A(i, k) = A(i, k)*tmp
+            end do
+            do j = k + 1, n
+                akj = A(k, j)
+                do i = k + 1, n
+                    A(i, j) = A(i, j) - A(i, k)*akj
+                end do
+            end do
+            do i = k + 1, n
+                rhs(i) = rhs(i) - A(i, k)*rhs(k)
+            end do
         end do
-        tmp = rhs(k); rhs(k) = rhs(ipiv); rhs(ipiv) = tmp
-      end if
-      piv = A(k,k)
-      do i = k+1, n
-        factor = A(i,k)/piv
-        A(i,k) = factor
-        do j = k+1, n
-          A(i,j) = A(i,j) - factor*A(k,j)
-        end do
-        rhs(i) = rhs(i) - factor*rhs(k)
-      end do
-    end do
 
-    do i = n, 1, -1
-      tmp = rhs(i)
-      do j = i+1, n
-        tmp = tmp - A(i,j)*rhs(j)
-      end do
-      rhs(i) = tmp/A(i,i)
-    end do
-  end subroutine rk_solve
+        do j = n, 1, -1
+            rhs(j) = rhs(j)/A(j, j)
+            do i = 1, j - 1
+                rhs(i) = rhs(i) - A(i, j)*rhs(j)
+            end do
+        end do
+    end subroutine rk_solve
 
   ! Device-callable Newton iteration for the Gauss step. Mirrors the
   ! newton_rk_gauss control flow (atol/rtol/tolref, boundary guards, maxit) with
