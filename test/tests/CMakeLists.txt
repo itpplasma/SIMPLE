@@ -1198,6 +1198,27 @@ set_tests_properties(test_gpu_orbit_bench PROPERTIES
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gpu_orbit_bench
     TIMEOUT 120)
 
+# Two devices must trace their shares against the same CPU reference; a host
+# with one visible device skips the test.
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gpu_two_devices)
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_gpu_two_devices.in
+    ${CMAKE_CURRENT_BINARY_DIR}/gpu_two_devices/test_gpu_two_devices.in
+    COPYONLY)
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_gpu_orbit_bench.start.txt
+    ${CMAKE_CURRENT_BINARY_DIR}/gpu_two_devices/start.dat
+    COPYONLY)
+add_test(NAME test_gpu_two_devices
+    COMMAND $<TARGET_FILE:simple.x> test_gpu_two_devices.in
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gpu_two_devices)
+set_tests_properties(test_gpu_two_devices PROPERTIES
+    LABELS "unit;gpu"
+    PASS_REGULAR_EXPRESSION "GPU devices = 2"
+    SKIP_REGULAR_EXPRESSION "GPU devices = 1"
+    FAIL_REGULAR_EXPRESSION "loss-step mismatches = *[1-9];final state\\) = +[1-9][0-9.]*E([+]|-0[0-8])"
+    TIMEOUT 120)
+
 add_test(NAME test_gpu_midpoint_bench
     COMMAND $<TARGET_FILE:simple.x>
         test_gpu_midpoint_bench.in

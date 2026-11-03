@@ -1,0 +1,12 @@
+&config
+trace_time = 1d-4
+ntimstep = 51
+ntestpart = 9
+sbeg = 0.3d0
+startmode = 2
+netcdffile = '../wout.nc'
+isw_field_type = 2
+integmode = 1
+gpu_mode = 'benchmark'
+gpu_num_devices = 2
+/

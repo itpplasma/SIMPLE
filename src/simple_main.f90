@@ -1000,7 +1000,8 @@ contains
         ! campaign (J_parallel and rotation only) and all unsupported physics.
         use finite_check, only: quiet_nan
         use simple, only: init_sympl
-        use simple_gpu, only: trace_orbits_gpu_landreman, trace_orbits_gpu_method
+        use simple_gpu, only: trace_orbits_gpu_landreman, trace_orbits_gpu_method, &
+                              gpu_device_count
         use field_can_boozer, only: eval_field_booz
         use field_can_mod, only: get_val
         use boozer_sub, only: boozer_rk_device_supported, sync_boozer_state
@@ -1009,6 +1010,7 @@ contains
                                          CASH_KARP, DORMAND_PRINCE
 #ifdef SIMPLE_ENABLE_CUDA_NATIVE
         use simple_cuda_native, only: trace_orbits_cuda_native_landreman, &
+                                      cuda_native_device_count, &
                           initialize_cuda_native_particle, evaluate_cuda_native_particle
 #endif
 
@@ -1225,6 +1227,15 @@ contains
         print '(a,i0)', ' integrator mode = ', method
         print '(a,a)', ' backend = ', trim(backend_name)
         print '(a,i0)', ' particles = ', ntestpart
+        if (cuda_native_backend) then
+#ifdef SIMPLE_ENABLE_CUDA_NATIVE
+            print '(a,i0)', ' GPU devices = ', &
+                cuda_native_device_count(ntestpart, gpu_maxloss)
+#endif
+        else
+            print '(a,i0)', ' GPU devices = ', &
+                merge(1, gpu_device_count(ntestpart), landreman_mode)
+        end if
         print '(a,a)', ' start coordinates = ', trim(start_coordinates)
         print '(a,f12.6,a)', ' initialization = ', t_init, ' s'
         print '(a,f12.6,a)', ' tracing        = ', t_trace, ' s'
@@ -1283,7 +1294,8 @@ contains
         use field_can_boozer, only: eval_field_booz
         use magfie_sub, only: BOOZER
         use boozer_sub, only: sync_boozer_state
-        use simple_gpu, only: evaluate_rhs_gpu, trace_orbits_gpu_method
+        use simple_gpu, only: evaluate_rhs_gpu, trace_orbits_gpu_method, &
+                              gpu_device_count
 
         type(tracer_t), intent(inout) :: norb
 
@@ -1401,6 +1413,7 @@ contains
         print *, '==================== GPU vs CPU tracing ===================='
         print '(a,i0,a,i0)', ' particles = ', ntestpart, '   timesteps = ', ntimstep
         print '(a,i0)', ' integrator mode = ', integmode
+        print '(a,i0)', ' GPU devices = ', gpu_device_count(ntestpart)
         print '(a,es12.4)', ' compact RHS relative error = ', rhs_error
         print '(a,es12.4)', ' max |z_cpu - z_gpu| (final state) = ', maxz
         print '(a,i0,a,i0)', ' loss-step mismatches = ', loss_mismatch, ' / ', ntestpart

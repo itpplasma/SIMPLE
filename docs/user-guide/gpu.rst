@@ -67,5 +67,9 @@ For loss fractions over the full ``trace_time``, set ``gpu_maxloss = 1``,
 which :math:`L \le 1` never exceeds. The stop rule is in
 ``src/simple_cuda_native_rk54.cu``.
 
-The run writes the usual :doc:`outputs` and uses one GPU per process. Tests
-(with CUDA): ``test_cuda_native_rk54``, ``test_cuda_native_bridge``.
+The run writes the usual :doc:`outputs`. With ``gpu_maxloss = 1`` it uses
+``gpu_num_devices`` GPUs (``0``: all visible), one host thread per GPU, with
+the markers dealt to them in turn; the output equals that of one GPU. A
+smaller threshold is decided per GPU for its own markers, so such a run uses
+one GPU. Tests (with CUDA): ``test_cuda_native_rk54``,
+``test_cuda_native_bridge``; with two GPUs: ``test_gpu_two_devices``.
