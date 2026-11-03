@@ -43,6 +43,7 @@ module simple_gpu
                                      sympl_stop_rule, sympl_stop_kappa
     use boozer_rk_tables, only: rk_tables_ready, splint_boozer_rk_table_device
     use params, only: gpu_num_devices, gpu_pilot_fraction, gpu_work_order
+    use simple_mpi, only: mpi_node_rank
 !$  use omp_lib, only: omp_get_thread_num, omp_in_parallel
 #ifdef _OPENACC
     use openacc, only: acc_get_num_devices, acc_set_device_num, acc_device_nvidia
@@ -1379,20 +1380,23 @@ contains
 #endif
     end function gpu_device_count
 
-    subroutine gpu_use_device(dev)
-        ! Select device dev for this host thread and give it its own copy of
-        ! the static device data: the Boozer spline descriptors and the
-        ! integrator controls. Coefficient arrays stay shared host-side
-        ! allocations that each device reads through its descriptor.
-        integer, intent(in) :: dev
+    subroutine gpu_use_device(dev, ngpu)
+        ! Select the dev-th of the ngpu devices of this rank for this host
+        ! thread and give it its own copy of the static device data: the Boozer
+        ! spline descriptors and the integrator controls. Coefficient arrays
+        ! stay shared host-side allocations that each device reads through its
+        ! descriptor. Ranks on one node start at different devices.
+        integer, intent(in) :: dev, ngpu
 
 #ifdef _OPENACC
-        call acc_set_device_num(dev, acc_device_nvidia)
+        call acc_set_device_num(mod(mpi_node_rank*ngpu + dev, &
+                                    max(1, acc_get_num_devices(acc_device_nvidia))), &
+                                acc_device_nvidia)
         call sync_boozer_state
         !$acc update device(sympl_rmax, sympl_predictor, sympl_stop_rule, &
         !$acc&              sympl_stop_kappa)
 #else
-        if (dev < 0) error stop 'gpu_use_device: invalid device'
+        if (dev < 0 .or. ngpu < 1) error stop 'gpu_use_device: invalid device'
 #endif
     end subroutine gpu_use_device
 
@@ -1593,7 +1597,7 @@ contains
 
         ngpu = gpu_device_count(npart)
         if (ngpu == 1) then
-            call gpu_use_device(0)
+            call gpu_use_device(0, 1)
             call trace_orbits_gpu_method_device(si, f, npart, ntimstep, &
                                    ntau_macro, method, loss_step, loss_time, zend, nfev)
             return
@@ -1603,7 +1607,7 @@ contains
         !$omp&   private(dev, n, si_d, f_d, loss_step_d, nfev_d, loss_time_d, zend_d)
         dev = 0
 !$      dev = omp_get_thread_num()
-        call gpu_use_device(dev)
+        call gpu_use_device(dev, ngpu)
         n = (npart - dev - 1)/ngpu + 1
         allocate (si_d(n), f_d(n), loss_step_d(n), nfev_d(n), loss_time_d(n), &
                   zend_d(4, n))

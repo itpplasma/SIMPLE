@@ -64,6 +64,10 @@ export CMAKE_BUILD_PARALLEL_LEVEL=$cpus
 make_args=()
 pip_args=()
 [ -n "${SCI_LIBNEO_REF:-}" ] && make_args+=("LIBNEO_REF=$SCI_LIBNEO_REF")
+# Build the MPI layer, and with it test_mpi_two_ranks, where MPI is installed.
+mpi_flags=""
+command -v mpif90 >/dev/null 2>&1 && mpi_flags="-DSIMPLE_ENABLE_MPI=ON"
+[ -n "$mpi_flags" ] && make_args+=("FLAGS=$mpi_flags")
 
 stamp "tier $tier, commit ${SCI_COMMIT:-unknown} on ${SCI_HEAD_REF:-?}, $cpus CPUs, $(hostname -s)"
 
@@ -140,7 +144,7 @@ coverage_suite() {
     # Separate environments keep editable Python installs from crossing builds.
     python_env "$root/venv-coverage" &&
         python -m pip install -q -r ci/coverage-requirements.txt || exit
-    make_args+=("CONFIG=Fast" "FLAGS=-DENABLE_COVERAGE=ON -DSIMPLE_TEST_MEMORY_GB=$cov_mem")
+    make_args+=("CONFIG=Fast" "FLAGS=-DENABLE_COVERAGE=ON -DSIMPLE_TEST_MEMORY_GB=$cov_mem $mpi_flags")
     pip_args+=("-Ccmake.define.ENABLE_COVERAGE=ON" "-Ccmake.build-type=Fast")
     fast_tests "$cov_cpus"; rc_tests=$?
     install_package; rc_package=$?
@@ -161,7 +165,7 @@ correctness_suite() {
     python_env || exit
     python -m pip install -q 'numpy==2.2.6' 'scipy==1.16.3' vtk \
         'git+https://github.com/itpplasma/map2disc.git@14da2f094ab2505a639b9cd04af57f5c0dbfaa54' || exit
-    make_args+=("CONFIG=Fast" "FLAGS=-DENABLE_COVERAGE=OFF -DSIMPLE_ENABLE_CGAL=ON -DFETCHCONTENT_SOURCE_DIR_CGAL=$root/cgal -DSIMPLE_TEST_MEMORY_GB=$fast_mem")
+    make_args+=("CONFIG=Fast" "FLAGS=-DENABLE_COVERAGE=OFF -DSIMPLE_ENABLE_CGAL=ON -DFETCHCONTENT_SOURCE_DIR_CGAL=$root/cgal -DSIMPLE_TEST_MEMORY_GB=$fast_mem $mpi_flags")
     pip_args+=("-Ccmake.define.ENABLE_COVERAGE=OFF" "-Ccmake.build-type=Fast")
     # Regression retains Release to match the golden reference's build contract.
     # Both gate trees and coverage get disjoint CPU/memory scheduling budgets.

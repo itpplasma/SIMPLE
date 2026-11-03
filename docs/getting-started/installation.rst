@@ -66,6 +66,7 @@ Option                             Default        Effect
 ``SIMPLE_ENABLE_CGAL``             ``OFF``        STL walls with CGAL (downloads CGAL, needs
                                                   Boost headers); :doc:`/user-guide/wall-heat-loads`
 ``SIMPLE_ENABLE_CUDA``             ``OFF``        native CUDA tracing; :doc:`/user-guide/gpu`
+``SIMPLE_ENABLE_MPI``              ``OFF``        markers over MPI ranks; :doc:`/hpc/index`
 ``SIMPLE_DETERMINISTIC_FP``        ``OFF``        no fast-math, bitwise reproducible
                                                   (``make build-deterministic``)
 ``LIBNEO_REF``                     automatic      libneo branch, tag or commit

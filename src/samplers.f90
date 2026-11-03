@@ -83,9 +83,11 @@ contains
     end subroutine load_marker_weights
 
     subroutine save_starting_points(zstart)
+        use simple_mpi, only: mpi_is_root
         real(dp), dimension(:, :), intent(in) :: zstart
         integer :: ipart
 
+        if (.not. mpi_is_root()) return
         open (1, file=START_FILE, recl=1024)
         do ipart = 1, size(zstart, 2)
             write (1, *) zstart(:, ipart)
@@ -167,6 +169,7 @@ contains
                           am1, am2, Z1, Z2, sbeg
         use fusion_source, only: build_birth_cdf, draw_birth, alpha_energy_joule
         use field_can_mod, only: integ_to_ref
+        use simple_mpi, only: mpi_is_root
         real(dp), intent(out) :: zstart(:, :)
         real(dp), value, intent(in) :: s_inner, s_outer
         logical, intent(in) :: integration_coords
@@ -192,6 +195,7 @@ contains
         num_surf = 2
         sbeg(1:2) = [s_inner, s_outer]
         call save_starting_points(zstart)
+        if (.not. mpi_is_root()) return
         open (newunit=unit, file='alpha_source.dat', status='replace')
         write (unit, '(a)') '# Equal-weight D-T births; rows of start.dat are markers.'
         write (unit, '(a)') '# Midpoint source cells, uniform positions within cells.'

@@ -1219,6 +1219,21 @@ set_tests_properties(test_gpu_two_devices PROPERTIES
     FAIL_REGULAR_EXPRESSION "loss-step mismatches = *[1-9];final state\\) = +[1-9][0-9.]*E([+]|-0[0-8])"
     TIMEOUT 120)
 
+if(SIMPLE_ENABLE_MPI)
+    add_test(NAME test_mpi_two_ranks
+        COMMAND ${CMAKE_COMMAND}
+            -DMPIEXEC=${MPIEXEC_EXECUTABLE}
+            -DNPFLAG=${MPIEXEC_NUMPROC_FLAG}
+            -DSIMPLE=$<TARGET_FILE:simple.x>
+            -DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/test_mpi_ranks.in
+            -DWOUT=${WOUT_FILE}
+            -DWORK=${CMAKE_CURRENT_BINARY_DIR}/mpi_two_ranks
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/test_mpi_ranks.cmake)
+    set_tests_properties(test_mpi_two_ranks PROPERTIES
+        LABELS "unit;mpi"
+        TIMEOUT 300)
+endif()
+
 add_test(NAME test_gpu_midpoint_bench
     COMMAND $<TARGET_FILE:simple.x>
         test_gpu_midpoint_bench.in

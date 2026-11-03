@@ -673,6 +673,7 @@ contains
     end function to_lower
 
     subroutine init_batch
+        use simple_mpi, only: mpi_is_root
         integer :: unit, status, source_index, selected, source_count, seedsize
         integer, allocatable :: batch_seed(:)
         real(dp) :: draw
@@ -717,11 +718,14 @@ contains
                     if (selected == batch_size) exit
                 end if
             end do
-            open (newunit=unit, file='batch.dat', status='replace', action='write')
-            do selected = 1, batch_size
-                write (unit, *) idx(selected)
-            end do
-            close (unit)
+            if (mpi_is_root()) then
+                open (newunit=unit, file='batch.dat', status='replace', &
+                      action='write')
+                do selected = 1, batch_size
+                    write (unit, *) idx(selected)
+                end do
+                close (unit)
+            end if
         end if
         ntestpart = batch_size
     end subroutine init_batch

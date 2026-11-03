@@ -13,6 +13,7 @@ module simple_cuda_native
         rk_num_points, rk_x_min, rk_inv_h_step, rk_period, rk_inv_period, &
         rk_tables_ready
     use params, only: gpu_num_devices
+    use simple_mpi, only: mpi_node_rank
 !$  use omp_lib, only: omp_get_thread_num, omp_in_parallel
 
     implicit none
@@ -147,8 +148,10 @@ contains
         real(dp) :: weight
         integer(int64) :: slots_d
         integer :: ndev, dev, n
+        integer(c_int) :: navail
 
         ndev = cuda_native_device_count(npart, maxloss)
+        if (cuda_get_device_count(navail) /= 0_c_int) navail = 1
         weight = 0.0_dp
         warp_nfev_slots = 0_int64
         profile_ms = 0.0_dp
@@ -157,8 +160,9 @@ contains
         !$omp&           observed_d, weight_d, profile_d, slots_d)
         dev = 0
 !$      dev = omp_get_thread_num()
-        if (cuda_set_device(int(dev, c_int)) /= 0_c_int) &
-            error stop 'native CUDA: cudaSetDevice failed'
+        ! Ranks on one node start at different devices.
+        if (cuda_set_device(int(mod(mpi_node_rank*ndev + dev, navail), c_int)) &
+            /= 0_c_int) error stop 'native CUDA: cudaSetDevice failed'
         n = (npart - dev - 1)/ndev + 1
         allocate (loss_step_d(n), nfev_d(n), loss_time_d(n), zend_d(4, n))
         call trace_cuda_native_slice(si(dev + 1:npart:ndev), &
