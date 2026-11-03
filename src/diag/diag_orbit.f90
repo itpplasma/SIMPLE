@@ -8,8 +8,7 @@ use params, only: dtaumin, ntestpart, ntimstep, ntau, zstart, &
     special_ants_file, reuse_batch, num_surf, sbeg, integmode, relerr, reset_seed_if_deterministic
     use field_can_mod, only: field_can_t, get_val, eval_field => evaluate, ref_to_integ
     use orbit_symplectic_base, only: symplectic_integrator_t, extrap_field
- use orbit_symplectic, only: f_midpoint_part1, f_midpoint_part2, &
-                                jac_midpoint_part1, jac_midpoint_part2
+    use orbit_symplectic, only: midpoint_system
     use simple, only: init_sympl
     use vector_potentail_mod, only: torflux
     use lapack_interfaces, only: dgesv
@@ -59,13 +58,9 @@ function newton_midpoint_count_iterations(si, f, x, atol, rtol, maxit, xlast, fi
             end if
             if (x(1) < 0.0) x(1) = 0.01
             if (x(5) < 0.0) x(5) = 0.01
-            call f_midpoint_part1(si, f, n, x, fvec)
-            call jac_midpoint_part1(si, f, x, fjac)
-            fmid = f
-            call f_midpoint_part2(si, f, n, x, fvec)
-            call jac_midpoint_part2(si, f, fmid, x, fjac)
+            call midpoint_system(si, f, fmid, x, fvec, fjac)
             ! Each Newton iteration involves multiple field evaluations
-            ! f_midpoint_part1 and f_midpoint_part2 each do field evaluations
+            ! midpoint_system evaluates the field at the midpoint and the end
             field_evals = field_evals + 2
             fabs = dabs(fvec)
             xlast = x

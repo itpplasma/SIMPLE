@@ -6,8 +6,8 @@ module orbit_rk_core
   ! already shares the symplectic-Euler residual/Jacobian/Newton between the
   ! CPU integrator and the OpenACC GPU kernel.
   !
-  ! The arithmetic is lifted byte-identically from the former f_rk_gauss /
-  ! jac_rk_gauss bodies in orbit_symplectic. coeff_rk_gauss stays in
+    ! The residual and Jacobian algebra is generated (src/generated/
+    ! orbit_systems_generated.f90). coeff_rk_gauss stays in
   ! orbit_symplectic_base (plain data) and is called inside the kernels. The
   ! Newton shell here uses the LU solve rk_solve, which the CPU symplectic
   ! integrators in orbit_symplectic also use (no LAPACK call per step).
@@ -15,6 +15,9 @@ module orbit_rk_core
   use util, only: twopi
   use field_can_mod, only: field_can_t, get_derivatives2, eval_field => evaluate
   use orbit_symplectic_base, only: symplectic_integrator_t, coeff_rk_gauss, sympl_rmax
+    use orbit_systems_generated, only: gauss1_residual, gauss2_residual, &
+                   gauss3_residual, gauss4_residual, gauss1_jacobian, gauss2_jacobian, &
+                                       gauss3_jacobian, gauss4_jacobian
 
   implicit none
   private
@@ -53,8 +56,8 @@ contains
     call gauss_canfield_jacobian(si, fs, s, jac)
   end subroutine rk_gauss_jacobian
 
-  ! Concrete residual kernel: layout x(4*k-3:4*k) = (r,theta,phi,pphi) per stage.
-  ! Body lifted verbatim from f_rk_gauss.
+    ! Residual: layout x(4*k-3:4*k) = (r,theta,phi,pphi) per stage. The
+    ! algebra is generated from gen/generate_orbit_systems.f90.
   subroutine gauss_canfield_residual(si, fs, s, x, fvec)
     !$acc routine seq
     type(symplectic_integrator_t), intent(inout) :: si
@@ -63,32 +66,29 @@ contains
     real(dp), intent(in) :: x(4*s)
     real(dp), intent(out) :: fvec(4*s)
 
-    real(dp) :: a(s,s), b(s), c(s), Hprime(s)
-    integer :: k, l
+        real(dp) :: a(s, s), b(s), c(s)
+        integer :: k
 
     call coeff_rk_gauss(s, a, b, c)
 
     do k = 1, s
       call eval_field(fs(k), x(4*k-3), x(4*k-2), x(4*k-1), 2)
       call get_derivatives2(fs(k), x(4*k))
-      Hprime(k) = fs(k)%dH(1)/fs(k)%dpth(1)
     end do
 
-    do k = 1, s
-      fvec(4*k-3) = fs(k)%pth - si%pthold
-      fvec(4*k-2) = x(4*k-2)  - si%z(2)
-      fvec(4*k-1) = x(4*k-1)  - si%z(3)
-      fvec(4*k)   = x(4*k)    - si%z(4)
-      do l = 1, s
-        fvec(4*k-3) = fvec(4*k-3) + si%dt*a(k,l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))        ! pthdot
-        fvec(4*k-2) = fvec(4*k-2) - si%dt*a(k,l)*Hprime(l)                                      ! thdot
-        fvec(4*k-1) = fvec(4*k-1) - si%dt*a(k,l)*(fs(l)%vpar  - Hprime(l)*fs(l)%hth)/fs(l)%hph  ! phdot
-        fvec(4*k)   = fvec(4*k)   + si%dt*a(k,l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))        ! pphdot
-      end do
-    end do
+        select case (s)
+        case (1)
+            call gauss1_residual(si%dt, si%pthold, si%z, a, x, fs, fvec)
+        case (2)
+            call gauss2_residual(si%dt, si%pthold, si%z, a, x, fs, fvec)
+        case (3)
+            call gauss3_residual(si%dt, si%pthold, si%z, a, x, fs, fvec)
+        case (4)
+            call gauss4_residual(si%dt, si%pthold, si%z, a, x, fs, fvec)
+        end select
   end subroutine gauss_canfield_residual
 
-  ! Concrete Jacobian kernel. Body lifted verbatim from jac_rk_gauss.
+    ! Jacobian, analytic from the 2nd derivatives of field_can_t.
   subroutine gauss_canfield_jacobian(si, fs, s, jac)
     !$acc routine seq
     type(symplectic_integrator_t), intent(in) :: si
@@ -96,72 +96,20 @@ contains
     type(field_can_t), intent(in) :: fs(:)
     real(dp), intent(out) :: jac(4*s, 4*s)
 
-    real(dp) :: a(s,s), b(s), c(s), Hprime(s), dHprime(4*s)
-    integer :: k, l, m
+        real(dp) :: a(s, s), b(s), c(s)
 
     call coeff_rk_gauss(s, a, b, c)
 
-    do k = 1, s
-      m = 4*k
-      Hprime(k)    = fs(k)%dH(1)/fs(k)%dpth(1)
-      dHprime(m-3) = (fs(k)%d2H(1) - Hprime(k)*fs(k)%d2pth(1))/fs(k)%dpth(1)  ! d/dr
-      dHprime(m-2) = (fs(k)%d2H(2) - Hprime(k)*fs(k)%d2pth(2))/fs(k)%dpth(1)  ! d/dth
-      dHprime(m-1) = (fs(k)%d2H(3) - Hprime(k)*fs(k)%d2pth(3))/fs(k)%dpth(1)  ! d/dph
-      dHprime(m)   = (fs(k)%d2H(7) - Hprime(k)*fs(k)%d2pth(7))/fs(k)%dpth(1)  ! d/dpph
-    end do
-
-    jac = 0d0
-
-    do k = 1, s
-      m = 4*k
-      jac(m-3, m-3) = fs(k)%dpth(1)
-      jac(m-3, m-2) = fs(k)%dpth(2)
-      jac(m-3, m-1) = fs(k)%dpth(3)
-      jac(m-3, m)   = fs(k)%dpth(4)
-      jac(m-2, m-2) = 1d0
-      jac(m-1, m-1) = 1d0
-      jac(m, m) = 1d0
-    end do
-
-    do l = 1, s
-      do k = 1, s
-          m = 4*k
-          jac(m-3, 4*l-3) = jac(m-3, 4*l-3) & ! d/dr
-            + si%dt*a(k,l)*(fs(l)%d2H(2) - fs(l)%d2pth(2)*Hprime(l) - fs(l)%dpth(2)*dHprime(4*l-3))
-          jac(m-3, 4*l-2) = jac(m-3, 4*l-2) & ! d/dth
-            + si%dt*a(k,l)*(fs(l)%d2H(4) - fs(l)%d2pth(4)*Hprime(l) - fs(l)%dpth(2)*dHprime(4*l-2))
-          jac(m-3, 4*l-1) = jac(m-3, 4*l-1) & ! d/dph
-            + si%dt*a(k,l)*(fs(l)%d2H(5) - fs(l)%d2pth(5)*Hprime(l) - fs(l)%dpth(2)*dHprime(4*l-1))
-          jac(m-3, 4*l) = jac(m-3, 4*l) & ! d/dpph
-            + si%dt*a(k,l)*(fs(l)%d2H(8) - fs(l)%d2pth(8)*Hprime(l) - fs(l)%dpth(2)*dHprime(4*l))
-
-        jac(m-2, 4*l-3)   = jac(m-2, 4*l-3)   - si%dt*a(k,l)*dHprime(4*l-3)   ! d/dr
-        jac(m-2, 4*l-2) = jac(m-2, 4*l-2) - si%dt*a(k,l)*dHprime(4*l-2) ! d/dth
-        jac(m-2, 4*l-1) = jac(m-2, 4*l-1) - si%dt*a(k,l)*dHprime(4*l-1) ! d/dph
-        jac(m-2, 4*l) = jac(m-2, 4*l) - si%dt*a(k,l)*dHprime(4*l) ! d/dpph
-
-        jac(m-1, 4*l-3) = jac(m-1, 4*l-3) & ! d/dr
-          - si%dt*a(k,l)*(-fs(l)%dhph(1)*(fs(l)%vpar - Hprime(l)*fs(l)%hth)/fs(l)%hph**2 &
-            + (fs(l)%dvpar(1) - dHprime(4*l-3)*fs(l)%hth - Hprime(l)*fs(l)%dhth(1))/fs(l)%hph)
-        jac(m-1, 4*l-2) = jac(m-1, 4*l-2) & ! d/dth
-          - si%dt*a(k,l)*(-fs(l)%dhph(2)*(fs(l)%vpar - Hprime(l)*fs(l)%hth)/fs(l)%hph**2 &
-            + (fs(l)%dvpar(2) - dHprime(4*l-2)*fs(l)%hth - Hprime(l)*fs(l)%dhth(2))/fs(l)%hph)
-        jac(m-1, 4*l-1) = jac(m-1, 4*l-1) & ! d/dph
-          - si%dt*a(k,l)*(-fs(l)%dhph(3)*(fs(l)%vpar - Hprime(l)*fs(l)%hth)/fs(l)%hph**2 &
-            + (fs(l)%dvpar(3) - dHprime(4*l-1)*fs(l)%hth - Hprime(l)*fs(l)%dhth(3))/fs(l)%hph)
-        jac(m-1, 4*l) = jac(m-1, 4*l) & ! d/dpph
-          - si%dt*a(k,l)*((fs(l)%dvpar(4) - dHprime(4*l)*fs(l)%hth)/fs(l)%hph)
-
-        jac(m, 4*l-3) = jac(m, 4*l-3) & ! d/dr
-          + si%dt*a(k,l)*(fs(l)%d2H(3) - fs(l)%d2pth(3)*Hprime(l) - fs(l)%dpth(3)*dHprime(4*l-3))
-        jac(m, 4*l-2) = jac(m, 4*l-2) & ! d/dth
-          + si%dt*a(k,l)*(fs(l)%d2H(5) - fs(l)%d2pth(5)*Hprime(l) - fs(l)%dpth(3)*dHprime(4*l-2))
-        jac(m, 4*l-1) = jac(m, 4*l-1) & ! d/dph
-          + si%dt*a(k,l)*(fs(l)%d2H(6) - fs(l)%d2pth(6)*Hprime(l) - fs(l)%dpth(3)*dHprime(4*l-1))
-        jac(m, 4*l) = jac(m, 4*l) & ! d/dpph
-          + si%dt*a(k,l)*(fs(l)%d2H(9) - fs(l)%d2pth(9)*Hprime(l) - fs(l)%dpth(3)*dHprime(4*l))
-      end do
-    end do
+        select case (s)
+        case (1)
+            call gauss1_jacobian(si%dt, a, fs, jac)
+        case (2)
+            call gauss2_jacobian(si%dt, a, fs, jac)
+        case (3)
+            call gauss3_jacobian(si%dt, a, fs, jac)
+        case (4)
+            call gauss4_jacobian(si%dt, a, fs, jac)
+        end select
   end subroutine gauss_canfield_jacobian
 
   ! Device-portable dense LU solve A x = rhs with partial pivoting, in place on

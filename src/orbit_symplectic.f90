@@ -25,6 +25,8 @@ use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_expl_impl_euler
 use orbit_symplectic_euler1, only: sympl_euler1_residual, sympl_euler1_jacobian, &
   sympl_euler1_newton_iter, sympl_euler1_extrapolate_field, &
   sympl_euler1_advance_angles
+    use orbit_systems_generated, only: euler2_residual, euler2_jacobian, &
+                                 midpoint_residual, midpoint_jacobian, lobatto3_jacobian
 use orbit_rk_core, only: rk_gauss_residual, rk_gauss_jacobian, rk_solve, MODEL_GC
 use vector_potentail_mod, only: torflux
 use diag_counters, only: count_event, EVT_NEWTON1_MAXIT, EVT_NEWTON2_MAXIT, &
@@ -510,10 +512,7 @@ recursive subroutine f_sympl_euler2(si, f, n, x, fvec, iflag)
 
   call eval_field(f, x(1), x(2), x(3), 2)
   call get_derivatives2(f, si%z(4))
-
-  fvec(1) = f%pth - si%pthold
-  fvec(2) = f%dpth(1)*(x(2) - si%z(2)) - si%dt*f%dH(1)
-  fvec(3) = f%dpth(1)*f%hph*(x(3) - si%z(3)) - si%dt*(f%dpth(1)*f%vpar - f%dH(1)*f%hth)
+        call euler2_residual(si%dt, si%pthold, si%z, x, f, fvec)
 
 end subroutine f_sympl_euler2
 
@@ -527,144 +526,30 @@ recursive subroutine jac_sympl_euler2(si, f, x, jac)
   real(dp), intent(in)  :: x(3)
   real(dp), intent(out) :: jac(3, 3)
 
-  jac(1,:) = f%dpth(1:3)
-  jac(2,:) = f%d2pth(1:3)*(x(2) - si%z(2)) - si%dt*f%d2H(1:3)
-  jac(2,2) = jac(2,2) + f%dpth(1)
-  jac(3,:) = (f%d2pth(1:3)*f%hph + f%dpth(1)*f%dhph)*(x(3) - si%z(3)) &
-    - si%dt*(f%d2pth(1:3)*f%vpar + f%dpth(1)*f%dvpar(1:3) - f%d2H(1:3)*f%hth - f%dH(1)*f%dhth)
-  jac(3,3) = jac(3,3) + f%dpth(1)*f%hph
+        call euler2_jacobian(si%dt, si%z, x, f, jac)
 
 end subroutine jac_sympl_euler2
 
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
-recursive subroutine f_midpoint_part1(si, f, n, x, fvec)
-  !
-    type(symplectic_integrator_t), intent(inout) :: si
-    type(field_can_t), intent(inout) :: f
-    integer, intent(in) :: n
-    real(dp), intent(in) :: x(n)  ! = (rend, thend, phend, pphend, rmid)
-    real(dp), intent(out) :: fvec(n)
+    recursive subroutine midpoint_system(si, f, fmid, x, fvec, jac)
+        ! Midpoint residual and Jacobian at x = (rend, thend, phend, pphend, rmid).
+        ! On return f holds the field at the end point, fmid at the midpoint.
+        type(symplectic_integrator_t), intent(in) :: si
+        type(field_can_t), intent(inout) :: f, fmid
+        real(dp), intent(in) :: x(5)
+        real(dp), intent(out) :: fvec(5), jac(5, 5)
 
-    ! evaluate at midpoint
-    call eval_field(f, x(5), 0.5d0*(x(2) + si%z(2)), 0.5d0*(x(3) + si%z(3)), 2)
-    call get_derivatives2(f, 0.5d0*(x(4) + si%z(4)))
+        call eval_field(f, x(5), 0.5d0*(x(2) + si%z(2)), 0.5d0*(x(3) + si%z(3)), 2)
+        call get_derivatives2(f, 0.5d0*(x(4) + si%z(4)))
+        fmid = f
+        call eval_field(f, x(1), x(2), x(3), 2)
+        call get_derivatives2(f, x(4))
+        call midpoint_residual(si%dt, si%pthold, si%z, x, fmid, f, fvec)
+        call midpoint_jacobian(si%dt, si%pthold, si%z, x, fmid, f, jac)
+    end subroutine midpoint_system
 
-    fvec(2) = f%dpth(1)*(x(2) - si%z(2)) - si%dt*f%dH(1)
-    fvec(3) = f%dpth(1)*f%hph*(x(3) - si%z(3)) - si%dt*(f%dpth(1)*f%vpar - f%dH(1)*f%hth)
-    fvec(4) = f%dpth(1)*(x(4) - si%z(4)) + si%dt*(f%dH(3)*f%dpth(1) - f%dH(1)*f%dpth(3))
-    fvec(5) = f%dpth(1)*(f%pth - si%pthold) + 0.5d0*si%dt*(f%dpth(1)*f%dH(2)-f%dpth(2)*f%dH(1))
-
-  end subroutine f_midpoint_part1
-
-  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-  !
-recursive subroutine f_midpoint_part2(si, f, n, x, fvec)
-  !
-    type(symplectic_integrator_t), intent(inout) :: si
-    type(field_can_t), intent(inout) :: f
-    integer, intent(in) :: n
-    real(dp), intent(in) :: x(n)  ! = (rend, thend, phend, pphend, rmid)
-    real(dp), intent(out) :: fvec(n)
-
-    real(dp) :: dpthmid, pthdotbar
-
-    ! save evaluation from midpoint
-    dpthmid = f%dpth(1)
-    pthdotbar = f%dpth(1)*f%dH(2) - f%dpth(2)*f%dH(1)
-
-    ! evaluate at endpoint
-    call eval_field(f, x(1), x(2), x(3), 2)
-    call get_derivatives2(f, x(4))
-    fvec(1) = dpthmid*(f%pth - si%pthold) + si%dt*pthdotbar
-
-  end subroutine f_midpoint_part2
-
-  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-  !
-recursive subroutine jac_midpoint_part1(si, f, x, jac)
-  !
-    type(symplectic_integrator_t), intent(in) :: si
-    type(field_can_t), intent(inout) :: f
-    real(dp), intent(in)  :: x(5)
-    real(dp), intent(out) :: jac(5, 5)
-
-    jac(2,1) = 0d0
-    jac(2,5) = f%d2pth(1)*(x(2) - si%z(2)) - si%dt*f%d2H(1)
-    jac(2,2:3) = 0.5d0*(f%d2pth(2:3)*(x(2) - si%z(2)) - si%dt*f%d2H(2:3))
-    jac(2,2) = jac(2,2) + f%dpth(1)
-    jac(2,4) = 0.5d0*(f%d2pth(7)*(x(2) - si%z(2)) - si%dt*f%d2H(7))
-
-    jac(3,1) = 0d0
-    jac(3,5) = (f%d2pth(1)*f%hph + f%dpth(1)*f%dhph(1))*(x(3) - si%z(3)) &
-      - si%dt*(f%d2pth(1)*f%vpar + f%dpth(1)*f%dvpar(1) &
-      - f%d2H(1)*f%hth - f%dH(1)*f%dhth(1))
-    jac(3,2:3) = 0.5d0*((f%d2pth(2:3)*f%hph + f%dpth(1)*f%dhph(2:3))*(x(3) - si%z(3)) &
-      - si%dt*(f%d2pth(2:3)*f%vpar + f%dpth(1)*f%dvpar(2:3) &
-      - f%d2H(2:3)*f%hth - f%dH(1)*f%dhth(2:3)))
-    jac(3,3) = jac(3,3) + f%dpth(1)*f%hph
-    jac(3,4) = 0.5d0*(f%d2pth(7)*f%hph*(x(3) - si%z(3)) &
-      - si%dt*(f%d2pth(7)*f%vpar + f%dpth(1)*f%dvpar(4) - f%d2H(7)*f%hth))
-
-    jac(4,1) = 0d0
-    jac(4,5) = f%d2pth(1)*(x(4) - si%z(4)) &
-      + si%dt*(f%d2H(3)*f%dpth(1) + f%dH(3)*f%d2pth(1) &
-      - f%d2H(1)*f%dpth(3) - f%dH(1)*f%d2pth(3))
-    jac(4,2) = 0.5d0*(f%d2pth(2)*(x(4) - si%z(4)) &
-      + si%dt*(f%d2H(5)*f%dpth(1) + f%dH(3)*f%d2pth(2) &
-      - f%d2H(2)*f%dpth(3) - f%dH(1)*f%d2pth(5)))
-    jac(4,3) = 0.5d0*(f%d2pth(3)*(x(4) - si%z(4)) &
-      + si%dt*(f%d2H(6)*f%dpth(1) + f%dH(3)*f%d2pth(3) &
-      - f%d2H(3)*f%dpth(3) - f%dH(1)*f%d2pth(6)))
-    jac(4,4) = 0.5d0*(f%d2pth(7)*(x(4) - si%z(4)) &
-      + si%dt*(f%dH(3)*f%d2pth(7) + f%d2H(9)*f%dpth(1)&
-      - f%d2H(7)*f%dpth(3) - f%dH(1)*f%d2pth(9)))
-    jac(4,4) = jac(4,4) + f%dpth(1)
-
-    jac(5,1) = 0d0
-    jac(5,5) = f%d2pth(1)*(f%pth - si%pthold) + f%dpth(1)*f%dpth(1)&
-      + si%dt/2.0d0*(f%d2pth(1)*f%dH(2) + f%dpth(1)*f%d2H(2) &
-      - f%d2pth(2)*f%dH(1) - f%dpth(2)*f%d2H(1))
-    jac(5,2) = 0.5d0*(f%d2pth(2)*(f%pth - si%pthold) + f%dpth(1)*f%dpth(2) &
-      + si%dt/2.0d0*(f%d2pth(2)*f%dH(2) + f%dpth(1)*f%d2H(4) &
-      - f%d2pth(4)*f%dH(1) - f%dpth(2)*f%d2H(2)))
-    jac(5,3) = 0.5d0*(f%d2pth(3)*(f%pth - si%pthold) + f%dpth(1)*f%dpth(3) &
-      + si%dt/2.0d0*(f%d2pth(3)*f%dH(2) + f%dpth(1)*f%d2H(5) &
-      - f%d2pth(5)*f%dH(1) - f%dpth(2)*f%d2H(3)))
-    jac(5,4) = 0.5d0*(f%d2pth(7)*(f%pth - si%pthold) + f%dpth(1)*f%dpth(4) &
-      + si%dt/2.0d0*(f%d2pth(7)*f%dH(2) + f%dpth(1)*f%d2H(8) &
-      - f%d2pth(8)*f%dH(1) - f%dpth(2)*f%d2H(7)))
-
-end subroutine jac_midpoint_part1
-
-  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-  !
-recursive subroutine jac_midpoint_part2(si, f, fmid, x, jac)
-  !
-    type(symplectic_integrator_t), intent(in) :: si
-    type(field_can_t), intent(inout) :: f
-    type(field_can_t), intent(inout) :: fmid
-    real(dp), intent(in)  :: x(5)
-    real(dp), intent(out) :: jac(5, 5)
-
-    ! fmid%dpth(1)*(f%pth - si%pthold) + si%dt*(fmid%dpth(1)*fmid%dH(2)-fmid%dpth(2)*fmid%dH(1))
-
-    jac(1,1) = fmid%dpth(1)*f%dpth(1)
-    jac(1,2) = 0.5d0*(fmid%d2pth(2)*(f%pth - si%pthold) &
-      + si%dt*(fmid%d2pth(2)*fmid%dH(2) + fmid%dpth(1)*fmid%d2H(4) &
-      - fmid%dpth(2)*fmid%d2H(2) - fmid%d2pth(4)*fmid%dH(1))) + fmid%dpth(1)*f%dpth(2)
-    jac(1,3) = 0.5d0*(fmid%d2pth(3)*(f%pth - si%pthold) &
-      + si%dt*(fmid%d2pth(3)*fmid%dH(2) + fmid%dpth(1)*fmid%d2H(5) &
-      - fmid%dpth(2)*fmid%d2H(3) - fmid%d2pth(5)*fmid%dH(1))) + fmid%dpth(1)*f%dpth(3)
-    jac(1,4) = 0.5d0*(fmid%d2pth(7)*(f%pth - si%pthold) &
-        + si%dt*(fmid%d2pth(7)*fmid%dH(2) + fmid%dpth(1)*fmid%d2H(8) &
-        - fmid%dpth(2)*fmid%d2H(7) - fmid%d2pth(8)*fmid%dH(1))) + fmid%dpth(1)*f%dpth(4)
-    jac(1,5) = fmid%d2pth(1)*(f%pth - si%pthold) &
-        + si%dt*(fmid%d2pth(1)*fmid%dH(2) + fmid%dpth(1)*fmid%d2H(2) &
-        - fmid%dpth(2)*fmid%d2H(1) - fmid%d2pth(2)*fmid%dH(1))
-
-end subroutine jac_midpoint_part2
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
@@ -949,11 +834,7 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
     ! A negative radial label (endpoint or midpoint) is the axis
     ! continuation (#370); the field evaluation maps it to (|s|, theta+pi)
     ! and the caller commits the chart switch on the converged solution.
-    call f_midpoint_part1(si, f, n, x, fvec)
-    call jac_midpoint_part1(si, f, x, fjac)
-    fmid = f
-    call f_midpoint_part2(si, f, n, x, fvec)
-    call jac_midpoint_part2(si, f, fmid, x, fjac)
+            call midpoint_system(si, f, fmid, x, fvec, fjac)
     fabs = dabs(fvec)
     xlast = x
     call solve_newton_system(fjac, fvec, status)
@@ -1232,139 +1113,12 @@ recursive subroutine jac_rk_lobatto(si, fs, s, jac)
   type(field_can_t), intent(in) :: fs(:)
   real(dp), intent(out) :: jac(4*s-2, 4*s-2)
 
-  real(dp) :: a(s,s), ahat(s,s), b(s), c(s), Hprime(s), dHprime(4*s-2)
-  integer :: k,l,m,n  ! counters
+        real(dp) :: a(s, s), ahat(s, s), b(s), c(s)
 
   call coeff_rk_lobatto(s, a, ahat, b, c)
-  jac = 0d0
-  dHprime = 0.0d0
-
-  Hprime = 0.0d0
-  Hprime(1) = fs(1)%dH(1)/fs(1)%dpth(1)
-  do k = 2, s
-    Hprime(k) = fs(k)%dH(1)/fs(k)%dpth(1)
-  end do
-  dHprime(1) = (fs(1)%d2H(1)-Hprime(1)*fs(1)%d2pth(1))/fs(1)%dpth(1)  ! d/dr
-  dHprime(2) = (fs(1)%d2H(7)-Hprime(1)*fs(1)%d2pth(7))/fs(1)%dpth(1)  ! d/dpph
-  do k = 2, s
-    m = 4*k-2
-    dHprime(m-3)=(fs(k)%d2H(1)-Hprime(k)*fs(k)%d2pth(1))/fs(k)%dpth(1)  ! d/dr
-    dHprime(m-2)=(fs(k)%d2H(2)-Hprime(k)*fs(k)%d2pth(2))/fs(k)%dpth(1)  ! d/dth
-    dHprime(m-1)=(fs(k)%d2H(3)-Hprime(k)*fs(k)%d2pth(3))/fs(k)%dpth(1)  ! d/dph
-    dHprime(m)  =(fs(k)%d2H(7)-Hprime(k)*fs(k)%d2pth(7))/fs(k)%dpth(1)  ! d/dpph
-  end do
-
-  ! evaluate first stage with only r and pph as unknowns
-  jac(1, 1) = fs(1)%dpth(1)
-  jac(1, 2) = fs(1)%dpth(4)
-  jac(2, 2) = 1d0
-
-  jac(1, 1) = jac(1, 1) + si%dt*ahat(1,1) * &
-    (fs(1)%d2H(2) - fs(1)%d2pth(2)*Hprime(1) - fs(1)%dpth(2)*dHprime(1))
-  jac(1, 2) = jac(1, 2) + si%dt*ahat(1,1)* &
-    (fs(1)%d2H(8) - fs(1)%d2pth(8)*Hprime(1) - fs(1)%dpth(2)*dHprime(2))
-  jac(2, 1) = jac(2, 1) + si%dt*ahat(1,1) * &
-    (fs(1)%d2H(3) - fs(1)%d2pth(3)*Hprime(1) - fs(1)%dpth(3)*dHprime(1))
-  jac(2, 2) = jac(2, 2) + si%dt*ahat(1,1) * &
-    (fs(1)%d2H(9) - fs(1)%d2pth(9)*Hprime(1) - fs(1)%dpth(3)*dHprime(2))
-
-  do l = 2, s
-    n = 4*l-2
-    jac(1, n-3) = jac(1, n-3) + si%dt*ahat(1,l) * &
-      (fs(l)%d2H(2) - fs(l)%d2pth(2)*Hprime(l) - fs(l)%dpth(2)*dHprime(n-3))
-    jac(1, n-2) = jac(1, n-2) + si%dt*ahat(1,l) * &
-      (fs(l)%d2H(4) - fs(l)%d2pth(4)*Hprime(l) - fs(l)%dpth(2)*dHprime(n-2))
-    jac(1, n-1) = jac(1, n-1) + si%dt*ahat(1,l)* &
-      (fs(l)%d2H(5) - fs(l)%d2pth(5)*Hprime(l) - fs(l)%dpth(2)*dHprime(n-1))
-    jac(1, n) = jac(1, n) + si%dt*ahat(1,l)* &
-      (fs(l)%d2H(8) - fs(l)%d2pth(8)*Hprime(l) - fs(l)%dpth(2)*dHprime(n))
-
-    jac(2, n-3) = jac(2, n-3) + si%dt*ahat(1,l) * &
-      (fs(l)%d2H(3) - fs(l)%d2pth(3)*Hprime(l) - fs(l)%dpth(3)*dHprime(n-3))
-    jac(2, n-2) = jac(2, n-2) + si%dt*ahat(1,l) * &
-      (fs(l)%d2H(5) - fs(l)%d2pth(5)*Hprime(l) - fs(l)%dpth(3)*dHprime(n-2))
-    jac(2, n-1) = jac(2, n-1) + si%dt*ahat(1,l) * &
-      (fs(l)%d2H(6) - fs(l)%d2pth(6)*Hprime(l) - fs(l)%dpth(3)*dHprime(n-1))
-    jac(2, n) = jac(2, n) + si%dt*ahat(1,l) * &
-      (fs(l)%d2H(9) - fs(l)%d2pth(9)*Hprime(l) - fs(l)%dpth(3)*dHprime(n))
-  end do
-
-  ! evaluate remaining stages with r, th, ph, pph as unknowns
-
-  do k = 2, s
-    m = 4*k-2
-    jac(m-3, m-3) = fs(k)%dpth(1)
-    jac(m-3, m-2) = fs(k)%dpth(2)
-    jac(m-3, m-1) = fs(k)%dpth(3)
-    jac(m-3, m)   = fs(k)%dpth(4)
-    jac(m-2, m-2) = 1d0
-    jac(m-1, m-1) = 1d0
-    jac(m, m) = 1d0
-  end do
-
-  l = 1
-  do k = 2, s
-    m = 4*k-2
-    jac(m-3, 1) = jac(m-3, 1) + si%dt*ahat(k,l) * &              ! d/dr
-      (fs(l)%d2H(2) - fs(l)%d2pth(2)*Hprime(l) - fs(l)%dpth(2)*dHprime(1))
-    jac(m-3, 2) = jac(m-3, 2) + si%dt*ahat(k,l)* &                   ! d/dpph
-      (fs(l)%d2H(8) - fs(l)%d2pth(8)*Hprime(l) - fs(l)%dpth(2)*dHprime(2))
-
-    jac(m-2, 1) = jac(m-2, 1) - si%dt*a(k,l)*dHprime(1)  ! d/dr
-    jac(m-2, 2) = jac(m-2, 2) - si%dt*a(k,l)*dHprime(2)  ! d/dpph
-
-    jac(m-1, 1) = jac(m-1, 1) - si%dt*a(k,l) * & ! d/dr
-      (-fs(l)%dhph(1)*(fs(l)%vpar - Hprime(l)*fs(l)%hth)/fs(l)%hph**2 &
-      +(fs(l)%dvpar(1)-dHprime(1)*fs(l)%hth-Hprime(l)*fs(l)%dhth(1))/fs(l)%hph)
-    jac(m-1, 2) = jac(m-1, 2) - si%dt*a(k,l) * & ! d/dpph
-      (fs(l)%dvpar(4)-dHprime(2)*fs(l)%hth)/fs(l)%hph
-
-    jac(m, 1) = jac(m, 1) + si%dt*ahat(k,l) * & ! d/dr
-      (fs(l)%d2H(3) - fs(l)%d2pth(3)*Hprime(l) - fs(l)%dpth(3)*dHprime(1))
-    jac(m, 2) = jac(m, 2) + si%dt*ahat(k,l) * & ! d/dpph
-      (fs(l)%d2H(9) - fs(l)%d2pth(9)*Hprime(l) - fs(l)%dpth(3)*dHprime(2))
-  end do
-
-  do l = 2, s
-    do k = 2, s
-      m = 4*k-2
-      n = 4*l-2
-      jac(m-3, n-3) = jac(m-3, n-3) + si%dt*ahat(k,l) * &              ! d/dr
-        (fs(l)%d2H(2) - fs(l)%d2pth(2)*Hprime(l) - fs(l)%dpth(2)*dHprime(n-3))
-      jac(m-3, n-2) = jac(m-3, n-2) + si%dt*ahat(k,l) * &              ! d/dth
-        (fs(l)%d2H(4) - fs(l)%d2pth(4)*Hprime(l) - fs(l)%dpth(2)*dHprime(n-2))
-      jac(m-3, n-1) = jac(m-3, n-1) + si%dt*ahat(k,l)* &               ! d/dph
-        (fs(l)%d2H(5) - fs(l)%d2pth(5)*Hprime(l) - fs(l)%dpth(2)*dHprime(n-1))
-      jac(m-3, n) = jac(m-3, n) + si%dt*ahat(k,l)* &                   ! d/dpph
-        (fs(l)%d2H(8) - fs(l)%d2pth(8)*Hprime(l) - fs(l)%dpth(2)*dHprime(n))
-
-      jac(m-2, n-3) = jac(m-2, n-3) - si%dt*a(k,l)*dHprime(n-3)
-      jac(m-2, n-2) = jac(m-2, n-2) - si%dt*a(k,l)*dHprime(n-2)
-      jac(m-2, n-1) = jac(m-2, n-1) - si%dt*a(k,l)*dHprime(n-1)
-      jac(m-2, n)   = jac(m-2, n)   - si%dt*a(k,l)*dHprime(n)
-
-      jac(m-1, n-3) = jac(m-1, n-3) - si%dt*a(k,l) * & ! d/dr
-        (-fs(l)%dhph(1)*(fs(l)%vpar - Hprime(l)*fs(l)%hth)/fs(l)%hph**2 &
-        +(fs(l)%dvpar(1)-dHprime(n-3)*fs(l)%hth-Hprime(l)*fs(l)%dhth(1))/fs(l)%hph)
-      jac(m-1, n-2) = jac(m-1, n-2) - si%dt*a(k,l) * & ! d/dth
-        (-fs(l)%dhph(2)*(fs(l)%vpar - Hprime(l)*fs(l)%hth)/fs(l)%hph**2 &
-        +(fs(l)%dvpar(2)-dHprime(n-2)*fs(l)%hth-Hprime(l)*fs(l)%dhth(2))/fs(l)%hph)
-      jac(m-1, n-1) = jac(m-1, n-1) - si%dt*a(k,l) * & ! d/dph
-        (-fs(l)%dhph(3)*(fs(l)%vpar - Hprime(l)*fs(l)%hth)/fs(l)%hph**2 &
-        +(fs(l)%dvpar(3)-dHprime(n-1)*fs(l)%hth-Hprime(l)*fs(l)%dhth(3))/fs(l)%hph)
-      jac(m-1, n) = jac(m-1, n) - si%dt*a(k,l) * & ! d/dpph
-        (fs(l)%dvpar(4)-dHprime(n)*fs(l)%hth)/fs(l)%hph
-
-      jac(m, n-3) = jac(m, n-3) + si%dt*ahat(k,l) * & ! d/dr
-        (fs(l)%d2H(3) - fs(l)%d2pth(3)*Hprime(l) - fs(l)%dpth(3)*dHprime(n-3))
-      jac(m, n-2) = jac(m, n-2) + si%dt*ahat(k,l) * & ! d/dth
-        (fs(l)%d2H(5) - fs(l)%d2pth(5)*Hprime(l) - fs(l)%dpth(3)*dHprime(n-2))
-      jac(m, n-1) = jac(m, n-1) + si%dt*ahat(k,l) * & ! d/dph
-        (fs(l)%d2H(6) - fs(l)%d2pth(6)*Hprime(l) - fs(l)%dpth(3)*dHprime(n-1))
-      jac(m, n) = jac(m, n) + si%dt*ahat(k,l) * & ! d/dpph
-        (fs(l)%d2H(9) - fs(l)%d2pth(9)*Hprime(l) - fs(l)%dpth(3)*dHprime(n))
-    end do
-  end do
+        ! coeff_rk_lobatto implements s = 3 only.
+        if (s /= 3) error stop 'jac_rk_lobatto: only s = 3 is implemented'
+        call lobatto3_jacobian(si%dt, a, ahat, fs, jac)
 end subroutine jac_rk_lobatto
 
 subroutine guard_lobatto_stage_radii(x, s, status)

@@ -10,8 +10,7 @@ module diag_newton
     use vector_potentail_mod, only: torflux
     use lapack_interfaces, only: dgesv
     use params, only: dtau
-    use orbit_symplectic, only: f_midpoint_part1, f_midpoint_part2, &
-                                jac_midpoint_part1, jac_midpoint_part2
+    use orbit_symplectic, only: midpoint_system
 
     implicit none
     private
@@ -54,11 +53,7 @@ contains
             if (x(1) > 1.0) return
             if (x(1) < 0.0) x(1) = 0.01
             if (x(5) < 0.0) x(5) = 0.01
-            call f_midpoint_part1(si, f, n, x, fvec)
-            call jac_midpoint_part1(si, f, x, fjac)
-            fmid = f
-            call f_midpoint_part2(si, f, n, x, fvec)
-            call jac_midpoint_part2(si, f, fmid, x, fjac)
+            call midpoint_system(si, f, fmid, x, fvec, fjac)
             fabs = dabs(fvec)
             xlast = x
             call dgesv(n, 1, fjac, n, pivot, fvec, n, info)

@@ -9,6 +9,9 @@ use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_
                                      SYMPLECTIC_STEP_LINEAR_SOLVE
     use orbit_symplectic_base, only: S_MAX, symplectic_newton_warning_mode, &
                                      EXPL_IMPL_EULER, IMPL_EXPL_EULER
+    use orbit_systems_generated, only: euler1_residual, euler2_residual, &
+                 midpoint_residual, gauss1_residual, gauss2_residual, gauss3_residual, &
+                                       gauss4_residual, gc_rates_canonical
 use fortnum_multiroot, only: multiroot_hybrids, multiroot_hybrids_warm_t
     use fortnum_status, only: fortnum_status_t, FORTNUM_OK, FORTNUM_DOMAIN_ERROR
     use vector_potentail_mod, only: torflux
@@ -185,10 +188,7 @@ subroutine f_euler1_quasi(x, fvec, ctx)
   call eval_field(f, x(1), si%z(2), si%z(3), 0)
   call get_derivatives(f, x(2))
 
-  fvec(1) = f%dpth(1)*(f%pth - si%pthold) &
-    + si%dt*(f%dH(2)*f%dpth(1) - f%dH(1)*f%dpth(2))
-  fvec(2) = f%dpth(1)*(x(2) - si%z(4)) &
-    + si%dt*(f%dH(3)*f%dpth(1) - f%dH(1)*f%dpth(3))
+        call euler1_residual(si%dt, si%pthold, si%z, x, f, fvec)
 
 end subroutine f_euler1_quasi
 
@@ -201,10 +201,7 @@ subroutine f_euler2_quasi(x, fvec, ctx)
   call eval_field(f, x(1), x(2), x(3), 0)
   call get_derivatives(f, si%z(4))
 
-  fvec(1) = f%pth - si%pthold
-  fvec(2) = f%dpth(1)*(x(2) - si%z(2)) - si%dt*f%dH(1)
-  fvec(3) = f%dpth(1)*f%hph*(x(3) - si%z(3)) &
-    - si%dt*(f%dpth(1)*f%vpar - f%dH(1)*f%hth)
+        call euler2_residual(si%dt, si%pthold, si%z, x, f, fvec)
 
 end subroutine f_euler2_quasi
 
@@ -214,27 +211,14 @@ subroutine f_midpoint_quasi(x, fvec, ctx)
     real(dp), intent(out) :: fvec(:)
     class(*), intent(in), optional :: ctx
 
-    real(dp) :: dpthmid, pthdotbar
+        type(field_can_t) :: fmid
 
-    call eval_field(f, x(5), 0.5*(x(2) + si%z(2)), 0.5*(x(3) + si%z(3)), 0)
-    call get_derivatives(f, 0.5*(x(4) + si%z(4)))
-
-    fvec(2) = f%dpth(1)*(x(2) - si%z(2)) - si%dt*f%dH(1)
-    fvec(3) = f%dpth(1)*f%hph*(x(3) - si%z(3)) &
-      - si%dt*(f%dpth(1)*f%vpar - f%dH(1)*f%hth)
-    fvec(4) = f%dpth(1)*(x(4) - si%z(4)) &
-      + si%dt*(f%dH(3)*f%dpth(1) - f%dH(1)*f%dpth(3))
-    fvec(5) = f%dpth(1)*(f%pth - si%pthold) &
-      + si%dt/2.0d0*(f%dpth(1)*f%dH(2)-f%dpth(2)*f%dH(1))
-
-    ! save evaluation from midpoint
-    dpthmid = f%dpth(1)
-    pthdotbar = f%dpth(1)*f%dH(2) - f%dpth(2)*f%dH(1)
-
-    ! evaluate at endpoint
+        fmid = f
+        call eval_field(fmid, x(5), 0.5*(x(2) + si%z(2)), 0.5*(x(3) + si%z(3)), 0)
+        call get_derivatives(fmid, 0.5*(x(4) + si%z(4)))
     call eval_field(f, x(1), x(2), x(3), 0)
     call get_derivatives(f, x(4))
-    fvec(1) = dpthmid*(f%pth - si%pthold) + si%dt*pthdotbar
+        call midpoint_residual(si%dt, si%pthold, si%z, x, fmid, f, fvec)
 
 end subroutine f_midpoint_quasi
 
@@ -258,35 +242,27 @@ subroutine f_rk_gauss_quasi(x, fvec, ctx)
   real(dp), intent(in) :: x(:)  ! = (rend, thend, phend, pphend, rmid)
   real(dp), intent(out) :: fvec(:)
 
-  integer :: n
-  real(dp) :: a(size(x)/4,size(x)/4), b(size(x)/4), c(size(x)/4), Hprime(size(x)/4)
-  integer :: k,l  ! counters
+        integer :: n, k
+        real(dp) :: a(size(x)/4, size(x)/4), b(size(x)/4), c(size(x)/4)
 
   n = size(x)
   call coeff_rk_gauss(n/4, a, b, c)  ! TODO: move this to preprocessing
 
-  ! evaluate stages
   do k = 1, n/4
     call eval_field(fs(k), x(4*k-3), x(4*k-2), x(4*k-1), 0)
     call get_derivatives(fs(k), x(4*k))
-    Hprime(k) = fs(k)%dH(1)/fs(k)%dpth(1)
   end do
 
-  do k = 1, n/4
-    fvec(4*k-3) = fs(k)%pth - si%pthold
-    fvec(4*k-2) = x(4*k-2)  - si%z(2)
-    fvec(4*k-1) = x(4*k-1)  - si%z(3)
-    fvec(4*k)   = x(4*k)    - si%z(4)
-    do l = 1, n/4
-      fvec(4*k-3) = fvec(4*k-3) &
-        + si%dt*a(k,l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))       ! pthdot
-      fvec(4*k-2) = fvec(4*k-2) - si%dt*a(k,l)*Hprime(l)             ! thdot
-      fvec(4*k-1) = fvec(4*k-1) &
-        - si%dt*a(k,l)*(fs(l)%vpar - Hprime(l)*fs(l)%hth)/fs(l)%hph  ! phdot
-      fvec(4*k)   = fvec(4*k) &
-        + si%dt*a(k,l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))       ! pphdot
-    end do
-  end do
+        select case (n/4)
+        case (1)
+            call gauss1_residual(si%dt, si%pthold, si%z, a, x, fs, fvec)
+        case (2)
+            call gauss2_residual(si%dt, si%pthold, si%z, a, x, fs, fvec)
+        case (3)
+            call gauss3_residual(si%dt, si%pthold, si%z, a, x, fs, fvec)
+        case (4)
+            call gauss4_residual(si%dt, si%pthold, si%z, a, x, fs, fvec)
+        end select
 
     end subroutine rk_gauss_quasi_residual
 
@@ -795,17 +771,10 @@ subroutine f_ode(tau, z, zdot)
   real(dp), intent(in)  :: tau
   real(dp), intent(in)  :: z(:)
   real(dp), intent(out) :: zdot(:)
-  real(dp) :: Hprime
 
   call eval_field(f, z(1), z(2), z(3), 0)
   call get_derivatives(f, z(4))
-
-  Hprime = f%dH(1)/f%dpth(1)
-
-  zdot(1) = -(f%dH(2) - f%hth/f%hph*f%dH(3))/f%dpth(1)
-  zdot(2) = Hprime
-  zdot(3) = (f%vpar-Hprime*f%hth)/f%hph
-  zdot(4) = -(f%dH(3) - Hprime*f%dpth(3))
+        call gc_rates_canonical(f, zdot)
 
 end subroutine f_ode
 

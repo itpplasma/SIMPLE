@@ -1556,6 +1556,12 @@ add_test(NAME test_gc_field_extrapolation COMMAND test_gc_field_extrapolation.x)
 set_tests_properties(test_gc_field_extrapolation PROPERTIES
     LABELS "unit;integrator" TIMEOUT 30 ENVIRONMENT "OMP_NUM_THREADS=1")
 
+add_executable(test_orbit_systems_generated.x test_orbit_systems_generated.f90)
+target_link_libraries(test_orbit_systems_generated.x simple)
+add_test(NAME test_orbit_systems_generated COMMAND test_orbit_systems_generated.x)
+set_tests_properties(test_orbit_systems_generated PROPERTIES
+    LABELS "unit;integrator" TIMEOUT 30 ENVIRONMENT "OMP_NUM_THREADS=1")
+
 add_executable(test_gc_gauss_endpoint.x test_gc_gauss_endpoint.f90)
 target_link_libraries(test_gc_gauss_endpoint.x simple)
 add_test(NAME test_gc_gauss_endpoint COMMAND test_gc_gauss_endpoint.x)
