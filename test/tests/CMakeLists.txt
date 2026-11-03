@@ -1202,9 +1202,12 @@ add_test(NAME test_gpu_midpoint_bench
     COMMAND $<TARGET_FILE:simple.x>
         test_gpu_midpoint_bench.in
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+# Start 9 passes the magnetic axis within one step; the full-step Newton
+# solve fails there and only the step-halving retry gets through.
 set_tests_properties(test_gpu_midpoint_bench PROPERTIES
     LABELS "unit;gpu"
     PASS_REGULAR_EXPRESSION "loss-step mismatches = *0"
+    FAIL_REGULAR_EXPRESSION "final state\\) = +[1-9][0-9.]*E([+]|-0[0-8])"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gpu_midpoint_bench
     TIMEOUT 120)
 

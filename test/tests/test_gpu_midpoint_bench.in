@@ -1,7 +1,7 @@
 &config
 trace_time = 1d-4
 ntimstep = 51
-ntestpart = 8
+ntestpart = 9
 sbeg = 0.3d0
 startmode = 2
 netcdffile = '../wout.nc'
