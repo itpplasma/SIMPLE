@@ -7,7 +7,8 @@ use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_
    orbit_timestep_quasi_i, coeff_rk_gauss, coeff_rk_lobatto, f_rk_lobatto, sympl_rmax, &
           SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN, SYMPLECTIC_STEP_MAXITER, &
                                      SYMPLECTIC_STEP_LINEAR_SOLVE
-    use orbit_symplectic_base, only: S_MAX, symplectic_newton_warning_mode
+    use orbit_symplectic_base, only: S_MAX, symplectic_newton_warning_mode, &
+                                     EXPL_IMPL_EULER, IMPL_EXPL_EULER
 use fortnum_multiroot, only: multiroot_hybrids, multiroot_hybrids_warm_t
     use fortnum_status, only: fortnum_status_t, FORTNUM_OK, FORTNUM_DOMAIN_ERROR
     use vector_potentail_mod, only: torflux
@@ -321,7 +322,7 @@ subroutine orbit_timestep_multi_quasi(mi, ierr)
 
     si = mi%stages(1)
     kwarm = 1
-    call orbit_timestep_quasi(ierr)
+        call timestep_stage_quasi(ierr)
         if (ierr /= 0) return
 
     do kstage = 2, 2*mi%s
@@ -329,7 +330,7 @@ subroutine orbit_timestep_multi_quasi(mi, ierr)
       mi%stages(kstage)%pthold = f%pth
       si = mi%stages(kstage)
       kwarm = kstage
-      call orbit_timestep_quasi(ierr)
+            call timestep_stage_quasi(ierr)
             if (ierr /= 0) then
                 kwarm = 1
                 return
@@ -340,6 +341,21 @@ subroutine orbit_timestep_multi_quasi(mi, ierr)
     mi%stages(1)%pthold = f%pth
 
   end subroutine orbit_timestep_multi_quasi
+
+! Composition stages alternate the Euler step and its adjoint, so each one
+! runs the method stored with it, not the global orbit_timestep_quasi.
+    subroutine timestep_stage_quasi(ierr)
+        integer, intent(out) :: ierr
+
+        select case (si%mode)
+        case (EXPL_IMPL_EULER)
+            call timestep_expl_impl_euler_quasi(ierr)
+        case (IMPL_EXPL_EULER)
+            call timestep_impl_expl_euler_quasi(ierr)
+        case default
+            error stop 'composition stage needs an Euler method'
+        end select
+    end subroutine timestep_stage_quasi
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !

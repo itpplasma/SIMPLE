@@ -258,6 +258,7 @@ recursive subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
         call reset_explicit_step_carry
         call reset_quasi_warm_start
 
+        si%mode = mode_init
   si%ntau = ntau
   si%dt = dt
   si%last_step_fraction = 1d0
@@ -1534,6 +1535,10 @@ end subroutine orbit_timestep_sympl_multi
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
 recursive subroutine orbit_sympl_init_multi(mi, f, z, dtau, ntau, rtol_init, alpha, beta)
+        !
+        ! Stage pair k runs euler1 over alpha(k)*dtau, then euler2 over beta(k)*dtau.
+        ! This is Hairer, Lubich & Wanner (2006) V.(3.1) with Phi* = euler1, so
+        ! alpha holds their beta and beta their alpha.
   !
   type(multistage_integrator_t), intent(inout) :: mi
   type(field_can_t), intent(inout) :: f
@@ -1555,8 +1560,33 @@ recursive subroutine orbit_sympl_init_multi(mi, f, z, dtau, ntau, rtol_init, alp
     call orbit_sympl_init(mi%stages(2*ks), f, z, &
       beta(ks)*dtau, ntau, rtol_init, 2)
   end do
+        orbit_timestep_sympl => orbit_timestep_sympl_stage
 end subroutine orbit_sympl_init_multi
 
+
+! One stage of a composition method, with the Euler variant its own
+! orbit_sympl_init chose rather than the one initialised last.
+    recursive subroutine orbit_timestep_sympl_stage(si, f, ierr)
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        integer, intent(out) :: ierr
+
+        procedure(orbit_timestep_sympl_i), pointer :: raw_step
+
+        select case (si%mode)
+        case (EXPL_IMPL_EULER)
+            raw_step => orbit_timestep_sympl_expl_impl_euler
+        case (IMPL_EXPL_EULER)
+            raw_step => orbit_timestep_sympl_impl_expl_euler
+        case default
+            error stop 'composition stage needs an Euler method'
+        end select
+        if (sympl_rmax <= 1d0) then
+            call advance_symplectic_with_boundary(si, f, raw_step, ierr)
+        else
+            call raw_step(si, f, ierr)
+        end if
+    end subroutine orbit_timestep_sympl_stage
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
@@ -1595,10 +1625,10 @@ recursive subroutine orbit_sympl_init_order4(mi, f, z, dtau, ntau, rtol_init)
     integer, intent(in) :: ntau
     real(dp), intent(in) :: rtol_init
 
-    real(dp) :: alpha(5), beta(5)
+        real(dp) :: alpha(3), beta(3)
 
     alpha(1) = 1d0/(2d0*(2d0 - 2d0**(1d0/3d0)))
-    alpha(2) = 2d0**(1d0/3d0)/(2d0*(2d0 - 2d0**(1d0/3d0)))
+        alpha(2) = -2d0**(1d0/3d0)/(2d0*(2d0 - 2d0**(1d0/3d0)))
     alpha(3) = alpha(1)
 
     beta = alpha
@@ -1624,17 +1654,17 @@ recursive subroutine orbit_sympl_init_mclachlan4(mi, f, z, dtau, ntau, rtol_init
 
     real(dp) :: alpha(5), beta(5)
 
-    alpha(1) = (146d0 + 5d0*dsqrt(19d0))/540d0
-    alpha(2) = (-2d0 + 10d0*dsqrt(19d0))/135d0
-    alpha(3) = 1d0/5d0
-    alpha(4) = (-23d0 + 20d0*dsqrt(19d0))/270d0
-    alpha(5) = (14d0 - dsqrt(19d0))/108d0
+        beta(1) = (146d0 + 5d0*dsqrt(19d0))/540d0
+        beta(2) = (-2d0 + 10d0*dsqrt(19d0))/135d0
+        beta(3) = 1d0/5d0
+        beta(4) = (-23d0 - 20d0*dsqrt(19d0))/270d0
+        beta(5) = (14d0 - dsqrt(19d0))/108d0
 
-    beta(5)  = alpha(1)
-    beta(4) = alpha(2)
-    beta(3) = alpha(3)
-    beta(2) = alpha(4)
-    beta(1) = alpha(5)
+        alpha(5) = beta(1)
+        alpha(4) = beta(2)
+        alpha(3) = beta(3)
+        alpha(2) = beta(4)
+        alpha(1) = beta(5)
 
     call orbit_sympl_init_multi(mi, f, z, dtau, ntau, rtol_init, alpha, beta)
   end subroutine orbit_sympl_init_mclachlan4
@@ -1658,19 +1688,19 @@ recursive subroutine orbit_sympl_init_blanes4(mi, f, z, dtau, ntau, rtol_init)
 
     real(dp) :: alpha(6), beta(6)
 
-    alpha(1) = 0.16231455076687d0
-    alpha(2) = 0.37087741497958d0
-    alpha(3) = 0.059762097006575d0
-    alpha(4) = 0.40993371990193d0
-    alpha(5) = 0.23399525073150d0
-    alpha(6) = 0.082984406417405d0
+        beta(1) = 0.16231455076687d0
+        beta(2) = 0.37087741497958d0
+        beta(3) = 0.059762097006575d0
+        beta(4) = -0.40993371990193d0
+        beta(5) = 0.23399525073150d0
+        beta(6) = 0.082984406417405d0
 
-    beta(6) = alpha(1)
-    beta(5) = alpha(2)
-    beta(4) = alpha(3)
-    beta(3) = alpha(4)
-    beta(2) = alpha(5)
-    beta(1) = alpha(6)
+        alpha(6) = beta(1)
+        alpha(5) = beta(2)
+        alpha(4) = beta(3)
+        alpha(3) = beta(4)
+        alpha(2) = beta(5)
+        alpha(1) = beta(6)
 
     call orbit_sympl_init_multi(mi, f, z, dtau, ntau, rtol_init, alpha, beta)
   end subroutine orbit_sympl_init_blanes4

@@ -78,6 +78,9 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
         real(dp) :: atol
         real(dp) :: rtol
         real(dp) :: warning_factor = symplectic_newton_warning_factor
+        ! Method from orbit_sympl_init; composition stages dispatch on it
+        ! because their Euler step and its adjoint alternate.
+        integer :: mode = -1
 
         ! Current phase-space coordinates z and old pth
         real(dp), dimension(4) :: z  ! z = (r, th, ph, pphi)
