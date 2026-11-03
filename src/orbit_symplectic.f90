@@ -1557,6 +1557,8 @@ recursive subroutine orbit_timestep_sympl_multi(mi, f, ierr)
 
   integer :: kstage
         logical :: chained
+        real(dp) :: z_entry(4), pthold_entry
+        type(field_can_t) :: f_entry
 
         ! Each stage starts where the previous one ended, so its history stays
         ! valid across the composition as long as nobody changed the state between
@@ -1566,14 +1568,26 @@ recursive subroutine orbit_timestep_sympl_multi(mi, f, ierr)
             if (.not. chained) mi%stages(kstage)%nhist = 0
         end do
         if (chained) mi%stages(1)%hist_z = mi%stages(1)%z
+        z_entry = mi%stages(1)%z
+        pthold_entry = mi%stages(1)%pthold
+        f_entry = f
   call orbit_timestep_sympl(mi%stages(1), f, ierr)
 
   do kstage = 2, 2*mi%s
+            ! A failed stage fails the whole composed step, which then restarts
+            ! from its entry state; later stages must not run from a stale one.
+            if (ierr /= 0) exit
     mi%stages(kstage)%z = mi%stages(kstage-1)%z
             if (chained) mi%stages(kstage)%hist_z = mi%stages(kstage)%z
     mi%stages(kstage)%pthold = f%pth
     call orbit_timestep_sympl(mi%stages(kstage), f, ierr)
   end do
+        if (ierr /= 0) then
+            mi%stages(1)%z = z_entry
+            mi%stages(1)%pthold = pthold_entry
+            f = f_entry
+            return
+        end if
 
   mi%stages(1)%z = mi%stages(2*mi%s)%z
   mi%stages(1)%pthold = f%pth

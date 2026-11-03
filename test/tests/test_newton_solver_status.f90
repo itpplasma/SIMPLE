@@ -130,6 +130,22 @@ contains
     si%last_event_fraction_width = 0.02_dp
     step_status = SYMPLECTIC_STEP_BOUNDARY
   end subroutine retryable_boundary_step
+    subroutine second_stage_fails_step(si, f, step_status)
+        ! Fails on the second composed stage and advances otherwise.
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        integer, intent(out) :: step_status
+
+        retry_calls = retry_calls + 1
+        if (retry_calls == 2) then
+            step_status = SYMPLECTIC_STEP_MAXITER
+            return
+        end if
+        si%z(1) = si%z(1) + si%dt
+        f%H = f%H + si%dt
+        f%pth = f%pth + si%dt
+        step_status = SYMPLECTIC_STEP_OK
+    end subroutine second_stage_fails_step
 end module linear_radial_field_backend
 
 program test_newton_solver_status
@@ -139,15 +155,17 @@ program test_newton_solver_status
   use field_can_mod, only: field_can_t, eval_field => evaluate
   use linear_radial_field_backend, only: basin_limited_step, &
     evaluate_linear_radial, failed_boundary_step, nonlinear_boundary_step, &
-    retryable_boundary_step, retryable_step, retry_calls, second_half_fails_step
+         retryable_boundary_step, retryable_step, retry_calls, second_half_fails_step, &
+                                           second_stage_fails_step
   use orbit_symplectic, only: guard_lobatto_stage_radii, boundary_event_converged, &
     advance_symplectic_with_boundary, advance_symplectic_with_retry, &
     newton_midpoint, orbit_sympl_init, &
     orbit_timestep_sympl, matrix3_near_singular, solve_newton_system, &
     get_boundary_event_tolerances, accept_warning_maxiter, &
     accept_warning_axis_crossing, &
-    limit_radial_newton_step
+                                limit_radial_newton_step, orbit_timestep_sympl_multi
   use orbit_symplectic_base, only: symplectic_integrator_t, sympl_rmax, &
+                                     multistage_integrator_t, &
     EXPL_IMPL_EULER, IMPL_EXPL_EULER, MIDPOINT, GAUSS1, GAUSS2, GAUSS3, &
     GAUSS4, LOBATTO3, &
     SYMPLECTIC_STEP_BOUNDARY, &
@@ -262,6 +280,7 @@ program test_newton_solver_status
   call test_newton_warning_mode
   call test_warning_radial_limiter
   call test_step_retry
+    call test_multistage_stage_failure
 
 contains
 
@@ -382,6 +401,34 @@ contains
       error stop 'strict mode accepted an axis max-iteration state'
     end if
   end subroutine test_newton_warning_mode
+
+    subroutine test_multistage_stage_failure
+        ! A composed step whose second stage fails must report the failure and
+        ! leave the state and field at the start of the step.
+        type(multistage_integrator_t) :: composed
+        type(field_can_t) :: stage_field
+        integer :: k, step_status
+
+        composed%s = 2
+        do k = 1, 4
+            composed%stages(k)%z = [0.1_dp, 0.0_dp, 0.0_dp, 0.0_dp]
+            composed%stages(k)%dt = 0.1_dp
+        end do
+        composed%stages(1)%pthold = 0.0_dp
+        stage_field%H = 0.0_dp
+        stage_field%pth = 0.0_dp
+        retry_calls = 0
+        orbit_timestep_sympl => second_stage_fails_step
+        call orbit_timestep_sympl_multi(composed, stage_field, step_status)
+        if (step_status == SYMPLECTIC_STEP_OK) &
+            error stop 'composed step hid a failed stage'
+        if (retry_calls /= 2) error stop 'composed step ran stages after a failure'
+        if (any(composed%stages(1)%z /= [0.1_dp, 0.0_dp, 0.0_dp, 0.0_dp])) &
+            error stop 'failed composed step changed the state'
+        if (stage_field%H /= 0.0_dp .or. stage_field%pth /= 0.0_dp .or. &
+            composed%stages(1)%pthold /= 0.0_dp) &
+            error stop 'failed composed step changed the field'
+    end subroutine test_multistage_stage_failure
 
   subroutine test_step_retry
     type(symplectic_integrator_t) :: retry_integrator
