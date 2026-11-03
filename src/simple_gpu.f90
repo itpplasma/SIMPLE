@@ -137,13 +137,12 @@ contains
         tolref(2) = dabs(1d1*boozer_state%torflux/f%ro0)
 
         do kit = 1, maxit
-            if (x(1) > 1d0) then
+            if (abs(x(1)) > 1d0) then
                 status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
                 return
             end if
-            ! Transient guard; converged-negative handled by the caller
-            ! (mirrors newton1 in orbit_symplectic, #370).
-            if (x(1) < 0d0) x(1) = 0.01d0
+            ! A negative radial label is the axis continuation (#370): the
+            ! field evaluation maps it to (|s|, theta+pi), as in newton1.
 
             call eval_field_booz_device(f, x(1), si%z(2), si%z(3), &
                 BOOZER_SECDERS_RADIAL_MIXED)
@@ -157,7 +156,7 @@ contains
                 status = SYMPLECTIC_STEP_LINEAR_SOLVE
                 return
             end if
-            if (x(1) > 1d0) then
+            if (abs(x(1)) > 1d0) then
                 status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
                 return
             end if
@@ -321,12 +320,12 @@ contains
         xlast = x
 
         do kit = 1, maxit
-            if (x(1) > 1.0_dp .or. x(5) > 1.0_dp) then
+            if (abs(x(1)) > 1.0_dp .or. abs(x(5)) > 1.0_dp) then
                 status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
                 return
             end if
-            if (x(1) < 0.0_dp) x(1) = 0.01_dp
-            if (x(5) < 0.0_dp) x(5) = 0.01_dp
+            ! Negative radial labels are the axis continuation (#370), as in
+            ! newton_midpoint.
 
             call gpu_midpoint_system(si, f, x, residual, jacobian)
             nfev = nfev + 2
@@ -349,7 +348,7 @@ contains
             end do
             limited = scale < 1.0_dp
             x = x - scale*residual
-            if (x(1) > 1.0_dp .or. x(5) > 1.0_dp) then
+            if (abs(x(1)) > 1.0_dp .or. abs(x(5)) > 1.0_dp) then
                 status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
                 return
             end if
