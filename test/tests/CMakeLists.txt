@@ -1190,9 +1190,11 @@ add_test(NAME test_gpu_orbit_bench
     COMMAND $<TARGET_FILE:simple.x>
         test_gpu_orbit_bench.in
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+# Start 9 crosses the magnetic axis inside the Newton iteration.
 set_tests_properties(test_gpu_orbit_bench PROPERTIES
     LABELS "unit"
     PASS_REGULAR_EXPRESSION "loss-step mismatches = *0"
+    FAIL_REGULAR_EXPRESSION "final state\\) = +[1-9][0-9.]*E([+]|-0[0-8])"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gpu_orbit_bench
     TIMEOUT 120)
 
