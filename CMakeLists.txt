@@ -45,6 +45,26 @@ elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     add_compile_options($<$<COMPILE_LANGUAGE:Fortran>:-Kieee>)
 endif()
 
+option(SIMPLE_DETERMINISTIC_FP "Disable fast-math for reproducible floating-point" OFF)
+
+# Link-time optimisation lets the field evaluation inline across SIMPLE, libneo
+# and fortnum (about 10 % per orbit step) at about three times the build CPU
+# time, since every test executable is optimised at link time. Production Fast
+# builds get it; deterministic builds, which the tests and CI use, do not. Set
+# before the dependencies are fetched so that their targets inherit it.
+option(SIMPLE_ENABLE_LTO "Link-time optimisation in GNU Fast builds" ON)
+if(SIMPLE_ENABLE_LTO AND NOT SIMPLE_DETERMINISTIC_FP
+        AND CMAKE_BUILD_TYPE MATCHES Fast AND CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT SIMPLE_IPO_SUPPORTED OUTPUT _ipo_output
+        LANGUAGES C Fortran)
+    if(SIMPLE_IPO_SUPPORTED)
+        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+    else()
+        message(STATUS "Link-time optimisation not available: ${_ipo_output}")
+    endif()
+endif()
+
 # Disable executable stack for security (trampolines/closures create execstack)
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
     # Apple's linker doesn't support -z,noexecstack (uses different security model)
@@ -74,7 +94,6 @@ option(ENABLE_PYTHON_INTERFACE "Enables the Python-Wrapper." ON)
 option(SIMPLE_TESTING "Enable testing." ON)
 option(ENABLE_OPENMP "Enable OpenMP compiler flags." ON)
 option(ENABLE_COVERAGE "Enable GNU code coverage analysis" OFF)
-option(SIMPLE_DETERMINISTIC_FP "Disable fast-math for reproducible floating-point" OFF)
 option(SIMPLE_ENABLE_PYTHON_TOOLS "Enable Python helpers (tests/data generation)" ON)
 option(SIMPLE_ENABLE_OPENACC "Enable OpenACC offload (NVHPC only)" OFF)
 option(SIMPLE_ENABLE_CUDA
@@ -461,7 +480,7 @@ if (ENABLE_COVERAGE)
         # Apply to SIMPLE targets declared below, after external dependencies.
         # Coverage must not depend on Debug-only initialization/trap options.
         link_libraries(coverage_flags)
-        
+
         # Add custom target for coverage data generation
         find_program(LCOV_PATH lcov)
         if(LCOV_PATH)
@@ -560,6 +579,22 @@ elseif (CMAKE_BUILD_TYPE MATCHES Profile)
 	endif()
 else()
     message(FATAL_ERROR "Unknown build type: ${CMAKE_BUILD_TYPE}")
+endif()
+
+# CMake has no flags for the custom Fast build type, so fortnum and its runtime
+# would build without optimisation. Their own -fno-fast-math stays in force.
+if(CMAKE_BUILD_TYPE MATCHES Fast AND CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+	if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
+		set(_fortnum_fast_options -O3 -mcpu=native)
+	else()
+		set(_fortnum_fast_options -O3 -march=native -mtune=native)
+	endif()
+	foreach(_target IN ITEMS fortnum fortgen_runtime)
+		if(TARGET ${_target})
+			target_compile_options(${_target} PRIVATE
+				$<$<COMPILE_LANGUAGE:Fortran>:${_fortnum_fast_options}>)
+		endif()
+	endforeach()
 endif()
 
 # Trampoline error flags will be applied per-target to avoid affecting subprojects

@@ -108,6 +108,15 @@ list(APPEND SOURCES
 
     add_library (simple STATIC ${SOURCES})
 
+    # The automatic arrays of the Newton kernels hold a few dozen doubles; keep
+    # them off the heap. Not global, since larger automatic arrays elsewhere
+    # could overflow OpenMP thread stacks.
+    if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+        set_source_files_properties(orbit_rk_core.f90 orbit_symplectic.f90
+            orbit_symplectic_base.f90 orbit_symplectic_euler1.f90
+            PROPERTIES COMPILE_OPTIONS -fstack-arrays)
+    endif()
+
     if(SIMPLE_ENABLE_OPENACC AND CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
         target_compile_options(simple PRIVATE "${SIMPLE_OPENACC_GPU_FLAG}")
     endif()
