@@ -66,6 +66,7 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
     integer, parameter :: STOP_CORRECTION = 0, STOP_RATE = 1
     integer :: sympl_stop_rule = STOP_RATE
     real(dp) :: sympl_stop_kappa = 1d0
+    !$acc declare copyin(sympl_predictor, sympl_stop_rule, sympl_stop_kappa)
 
     logical :: symplectic_newton_warning_mode = .true.
     real(dp), parameter :: symplectic_newton_warning_factor = 100.0_dp
@@ -128,6 +129,73 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
     end interface
 
 contains
+
+    pure logical function history_valid(si)
+        !$acc routine seq
+        ! The history continues the current state only if the last recorded step
+        ! ended exactly here with the same step size.
+        type(symplectic_integrator_t), intent(in) :: si
+
+        history_valid = si%nhist > 0
+        if (.not. history_valid) return
+        history_valid = si%hist_dt == si%dt .and. all(si%hist_z == si%z)
+    end function history_valid
+
+    pure function predict_state(si, c) result(z)
+        !$acc routine seq
+        ! Lagrange extrapolation of the accepted states z_(n-2), z_(n-1), z_n to the
+        ! fraction c of the coming step. Falls back to z_n without a valid history
+        ! or when the guess leaves the radial domain.
+        type(symplectic_integrator_t), intent(in) :: si
+        real(dp), intent(in) :: c
+        real(dp) :: z(4)
+
+        z = si%z
+        if (sympl_predictor == PREDICT_NONE) return
+        if (.not. history_valid(si)) return
+        z = si%z + c*si%hist_dz(:, 1)
+        if (sympl_predictor /= PREDICT_LINEAR .and. si%nhist > 1) &
+            z = z + 0.5d0*c*(c + 1d0)*(si%hist_dz(:, 1) - si%hist_dz(:, 2))
+        if (.not. (z(1) > 0d0 .and. z(1) < sympl_rmax)) z = si%z
+    end function predict_state
+
+    pure subroutine record_history(si, z_start, keep)
+        !$acc routine seq
+        ! Append the accepted step z_start -> si%z to the history, or restart it
+        ! when keep is false (chart switch).
+        type(symplectic_integrator_t), intent(inout) :: si
+        real(dp), intent(in) :: z_start(4)
+        logical, intent(in) :: keep
+
+        if (.not. keep) then
+            si%nhist = 0
+            return
+        end if
+        if (si%nhist > 0 .and. si%hist_dt == si%dt .and. all(si%hist_z == z_start)) then
+            si%hist_dz(:, 2) = si%hist_dz(:, 1)
+            si%nhist = min(si%nhist + 1, 2)
+        else
+            si%nhist = 1
+        end if
+        si%hist_dz(:, 1) = si%z - z_start
+        si%hist_z = si%z
+        si%hist_dt = si%dt
+    end subroutine record_history
+
+    pure logical function rate_converged(dnorm, dnorm_prev)
+        !$acc routine seq
+        ! Error bound for x_k from the contraction rate of the last two Newton
+        ! corrections, both scaled by their tolerances (Hairer & Wanner II, IV.8).
+        real(dp), intent(in) :: dnorm, dnorm_prev
+        real(dp) :: theta
+
+        rate_converged = .false.
+        if (sympl_stop_rule == STOP_CORRECTION) return
+        if (.not. (dnorm_prev > 0d0)) return
+        theta = dnorm/dnorm_prev
+        if (.not. (theta < 1d0)) return
+        rate_converged = theta/(1d0 - theta)*dnorm <= sympl_stop_kappa
+    end function rate_converged
 
     subroutine coeff_rk_gauss(n, a, b, c)
         !$acc routine seq
