@@ -53,13 +53,10 @@ module get_can_sub
     type(BatchSplineData3D), save :: G_batch_spline
     logical, save :: G_batch_spline_ready = .false.
 
-    ! Batch splines for sqg_c, B_vartheta_c, B_varphi_c (separate NQ=1 splines)
-    type(BatchSplineData3D), save :: sqg_batch_spline
-    type(BatchSplineData3D), save :: Bt_batch_spline
-    type(BatchSplineData3D), save :: Bp_batch_spline
-    logical, save :: sqg_batch_spline_ready = .false.
-    logical, save :: Bt_batch_spline_ready = .false.
-    logical, save :: Bp_batch_spline_ready = .false.
+    ! One batch spline for sqg_c, B_vartheta_c and B_varphi_c (quantities 1..3),
+    ! so a field evaluation locates one cell and reads one coefficient block.
+    type(BatchSplineData3D), save :: sqg_B_batch_spline
+    logical, save :: sqg_B_batch_spline_ready = .false.
 
 contains
 
@@ -95,17 +92,9 @@ contains
             call destroy_batch_splines_3d(G_batch_spline)
             G_batch_spline_ready = .false.
         end if
-        if (sqg_batch_spline_ready) then
-            call destroy_batch_splines_3d(sqg_batch_spline)
-            sqg_batch_spline_ready = .false.
-        end if
-        if (Bt_batch_spline_ready) then
-            call destroy_batch_splines_3d(Bt_batch_spline)
-            Bt_batch_spline_ready = .false.
-        end if
-        if (Bp_batch_spline_ready) then
-            call destroy_batch_splines_3d(Bp_batch_spline)
-            Bp_batch_spline_ready = .false.
+        if (sqg_B_batch_spline_ready) then
+            call destroy_batch_splines_3d(sqg_B_batch_spline)
+            sqg_B_batch_spline_ready = .false.
         end if
     end subroutine reset_canflux_batch_splines
 
@@ -362,17 +351,9 @@ contains
         logical :: periodic(3)
         real(dp), allocatable :: y_batch(:, :, :, :)
 
-        if (sqg_batch_spline_ready) then
-            call destroy_batch_splines_3d(sqg_batch_spline)
-            sqg_batch_spline_ready = .false.
-        end if
-        if (Bt_batch_spline_ready) then
-            call destroy_batch_splines_3d(Bt_batch_spline)
-            Bt_batch_spline_ready = .false.
-        end if
-        if (Bp_batch_spline_ready) then
-            call destroy_batch_splines_3d(Bp_batch_spline)
-            Bp_batch_spline_ready = .false.
+        if (sqg_B_batch_spline_ready) then
+            call destroy_batch_splines_3d(sqg_B_batch_spline)
+            sqg_B_batch_spline_ready = .false.
         end if
 
       order = [ns_s_c, ns_tp_c, ns_tp_c]
@@ -387,23 +368,13 @@ contains
 
         periodic = [.false., .true., .true.]
 
-        allocate (y_batch(ns_c, n_theta_c, n_phi_c, 1))
-
+        allocate (y_batch(ns_c, n_theta_c, n_phi_c, 3))
         y_batch(:, :, :, 1) = sqg_c
+        y_batch(:, :, :, 2) = B_vartheta_c
+        y_batch(:, :, :, 3) = B_varphi_c
         call construct_batch_splines_3d(x_min, x_max, y_batch, order, periodic, &
-                                        sqg_batch_spline)
-        sqg_batch_spline_ready = .true.
-
-        y_batch(:, :, :, 1) = B_vartheta_c
-        call construct_batch_splines_3d(x_min, x_max, y_batch, order, periodic, &
-                                        Bt_batch_spline)
-        Bt_batch_spline_ready = .true.
-
-        y_batch(:, :, :, 1) = B_varphi_c
-        call construct_batch_splines_3d(x_min, x_max, y_batch, order, periodic, &
-                                        Bp_batch_spline)
-        Bp_batch_spline_ready = .true.
-
+                                        sqg_B_batch_spline)
+        sqg_B_batch_spline_ready = .true.
         deallocate (y_batch)
     end subroutine build_canflux_sqg_Bt_Bp_batch_spline
 
@@ -543,14 +514,11 @@ contains
         real(dp) :: r_eval
         real(dp) :: rho_tor, drhods, drhods2, d2rhods2m
         real(dp) :: x_eval(3)
-        real(dp) :: yq(1), dyq(3, 1), d2yq(6, 1)
-        real(dp) :: d2yq_rmix(3, 1)
+        real(dp) :: yq(3), dyq(3, 3), d2yq(6, 3)
+        real(dp) :: d2yq_rmix(3, 3)
         real(dp) :: y_G(1), dy_G(3, 1)
         real(dp) :: y1d(1), dy1d(1), d2y1d(1)
         real(dp) :: theta_wrapped, phi_wrapped
-        real(dp) :: qua, dqua_dr, dqua_dt, dqua_dp
-        real(dp) :: d2qua_dr2, d2qua_drdt, d2qua_drdp
-        real(dp) :: d2qua_dt2, d2qua_dtdp, d2qua_dp2
 
         if (dodiag) then
 !$omp atomic
@@ -603,176 +571,67 @@ contains
             G_c = 0.0_dp
         end if
 
-        ! Interpolate sqg, B_vartheta, B_varphi (separate NQ=1 splines)
-        if (.not. (sqg_batch_spline_ready .and. Bt_batch_spline_ready .and. &
-                   Bp_batch_spline_ready)) then
-            error stop "splint_can_coord: sqg/Bt/Bp batch splines not initialized"
+        if (.not. sqg_B_batch_spline_ready) then
+            error stop "splint_can_coord: sqg/Bt/Bp batch spline not initialized"
         end if
 
-        if (mode_secders == 2 .or. mode_secders == 3) then
-            if (mode_secders == 2) then
-                call evaluate_batch_splines_3d_der2(sqg_batch_spline, x_eval, yq, &
-                                                    dyq, d2yq)
+        ! Quantities 1..3 are sqg, B_vartheta and B_varphi. The spline variable
+        ! is rho = sqrt(s); the chain rule maps derivatives to s.
+        d2yq = 0.0_dp
+        select case (mode_secders)
+        case (2)
+            call evaluate_batch_splines_3d_der2(sqg_B_batch_spline, x_eval, yq, &
+                                                dyq, d2yq)
+        case (1, 3)
+            call evaluate_batch_splines_3d_der2_rmix(sqg_B_batch_spline, x_eval, &
+                                                     yq, dyq, d2yq_rmix)
+            if (mode_secders == 3) then
+                d2yq(1:3, :) = d2yq_rmix
             else
-                call evaluate_batch_splines_3d_der2_rmix(sqg_batch_spline, x_eval, yq, &
-                                                         dyq, d2yq_rmix)
-                d2yq(1:3, 1) = d2yq_rmix(:, 1)
-                d2yq(4:6, 1) = 0.0_dp
+                d2yq(1, :) = d2yq_rmix(1, :)
             end if
+        case default
+            call evaluate_batch_splines_3d_der(sqg_B_batch_spline, x_eval, yq, dyq)
+        end select
 
-            qua = yq(1)
-            dqua_dr = dyq(1, 1)
-            dqua_dt = dyq(2, 1)
-            dqua_dp = dyq(3, 1)
-            d2qua_dr2 = d2yq(1, 1)
-            d2qua_drdt = d2yq(2, 1)
-            d2qua_drdp = d2yq(3, 1)
-            d2qua_dt2 = d2yq(4, 1)
-            d2qua_dtdp = d2yq(5, 1)
-            d2qua_dp2 = d2yq(6, 1)
-
-            d2qua_dr2 = d2qua_dr2*drhods2 - dqua_dr*d2rhods2m
-            dqua_dr = dqua_dr*drhods
-            d2qua_drdt = d2qua_drdt*drhods
-            d2qua_drdp = d2qua_drdp*drhods
-
-            sqg_c = qua
-            dsqg_c_dr = dqua_dr
-            dsqg_c_dt = dqua_dt
-            dsqg_c_dp = dqua_dp
-            d2sqg_rr = d2qua_dr2
-            d2sqg_rt = d2qua_drdt
-            d2sqg_rp = d2qua_drdp
-            d2sqg_tt = d2qua_dt2
-            d2sqg_tp = d2qua_dtdp
-            d2sqg_pp = d2qua_dp2
-
-            if (mode_secders == 2) then
-                call evaluate_batch_splines_3d_der2(Bt_batch_spline, x_eval, yq, &
-                                                    dyq, d2yq)
-            else
-                call evaluate_batch_splines_3d_der2_rmix(Bt_batch_spline, x_eval, yq, &
-                                                         dyq, d2yq_rmix)
-                d2yq(1:3, 1) = d2yq_rmix(:, 1)
-                d2yq(4:6, 1) = 0.0_dp
-            end if
-
-            qua = yq(1)
-            dqua_dr = dyq(1, 1)
-            dqua_dt = dyq(2, 1)
-            dqua_dp = dyq(3, 1)
-            d2qua_dr2 = d2yq(1, 1)
-            d2qua_drdt = d2yq(2, 1)
-            d2qua_drdp = d2yq(3, 1)
-            d2qua_dt2 = d2yq(4, 1)
-            d2qua_dtdp = d2yq(5, 1)
-            d2qua_dp2 = d2yq(6, 1)
-
-            d2qua_dr2 = d2qua_dr2*drhods2 - dqua_dr*d2rhods2m
-            dqua_dr = dqua_dr*drhods
-            d2qua_drdt = d2qua_drdt*drhods
-            d2qua_drdp = d2qua_drdp*drhods
-
-            B_vartheta_c = qua
-            dB_vartheta_c_dr = dqua_dr
-            dB_vartheta_c_dt = dqua_dt
-            dB_vartheta_c_dp = dqua_dp
-            d2bth_rr = d2qua_dr2
-            d2bth_rt = d2qua_drdt
-            d2bth_rp = d2qua_drdp
-            d2bth_tt = d2qua_dt2
-            d2bth_tp = d2qua_dtdp
-            d2bth_pp = d2qua_dp2
-
-            if (mode_secders == 2) then
-                call evaluate_batch_splines_3d_der2(Bp_batch_spline, x_eval, yq, &
-                                                    dyq, d2yq)
-            else
-                call evaluate_batch_splines_3d_der2_rmix(Bp_batch_spline, x_eval, yq, &
-                                                         dyq, d2yq_rmix)
-                d2yq(1:3, 1) = d2yq_rmix(:, 1)
-                d2yq(4:6, 1) = 0.0_dp
-            end if
-
-            qua = yq(1)
-            dqua_dr = dyq(1, 1)
-            dqua_dt = dyq(2, 1)
-            dqua_dp = dyq(3, 1)
-            d2qua_dr2 = d2yq(1, 1)
-            d2qua_drdt = d2yq(2, 1)
-            d2qua_drdp = d2yq(3, 1)
-            d2qua_dt2 = d2yq(4, 1)
-            d2qua_dtdp = d2yq(5, 1)
-            d2qua_dp2 = d2yq(6, 1)
-
-            d2qua_dr2 = d2qua_dr2*drhods2 - dqua_dr*d2rhods2m
-            dqua_dr = dqua_dr*drhods
-            d2qua_drdt = d2qua_drdt*drhods
-            d2qua_drdp = d2qua_drdp*drhods
-
-            B_varphi_c = qua
-            dB_varphi_c_dr = dqua_dr
-            dB_varphi_c_dt = dqua_dt
-            dB_varphi_c_dp = dqua_dp
-            d2bph_rr = d2qua_dr2
-            d2bph_rt = d2qua_drdt
-            d2bph_rp = d2qua_drdp
-            d2bph_tt = d2qua_dt2
-            d2bph_tp = d2qua_dtdp
-            d2bph_pp = d2qua_dp2
-
-        else
-            call evaluate_batch_splines_3d_der(sqg_batch_spline, x_eval, yq, dyq)
-            sqg_c = yq(1)
-            dsqg_c_dr = dyq(1, 1)*drhods
-            dsqg_c_dt = dyq(2, 1)
-            dsqg_c_dp = dyq(3, 1)
-
-            call evaluate_batch_splines_3d_der(Bt_batch_spline, x_eval, yq, dyq)
-            B_vartheta_c = yq(1)
-            dB_vartheta_c_dr = dyq(1, 1)*drhods
-            dB_vartheta_c_dt = dyq(2, 1)
-            dB_vartheta_c_dp = dyq(3, 1)
-
-            call evaluate_batch_splines_3d_der(Bp_batch_spline, x_eval, yq, dyq)
-            B_varphi_c = yq(1)
-            dB_varphi_c_dr = dyq(1, 1)*drhods
-            dB_varphi_c_dt = dyq(2, 1)
-            dB_varphi_c_dp = dyq(3, 1)
-
-            d2sqg_rr = 0.0_dp
-            d2sqg_rt = 0.0_dp
-            d2sqg_rp = 0.0_dp
-            d2sqg_tt = 0.0_dp
-            d2sqg_tp = 0.0_dp
-            d2sqg_pp = 0.0_dp
-            d2bth_rr = 0.0_dp
-            d2bth_rt = 0.0_dp
-            d2bth_rp = 0.0_dp
-            d2bth_tt = 0.0_dp
-            d2bth_tp = 0.0_dp
-            d2bth_pp = 0.0_dp
-            d2bph_rr = 0.0_dp
-            d2bph_rt = 0.0_dp
-            d2bph_rp = 0.0_dp
-            d2bph_tt = 0.0_dp
-            d2bph_tp = 0.0_dp
-            d2bph_pp = 0.0_dp
-
-            if (mode_secders == 1) then
-                call evaluate_batch_splines_3d_der2(sqg_batch_spline, x_eval, yq, dyq, &
-                                                    d2yq)
-                d2sqg_rr = d2yq(1, 1)*drhods2 - dyq(1, 1)*d2rhods2m
-
-                call evaluate_batch_splines_3d_der2(Bt_batch_spline, x_eval, yq, dyq, &
-                                                    d2yq)
-                d2bth_rr = d2yq(1, 1)*drhods2 - dyq(1, 1)*d2rhods2m
-
-                call evaluate_batch_splines_3d_der2(Bp_batch_spline, x_eval, yq, dyq, &
-                                                    d2yq)
-                d2bph_rr = d2yq(1, 1)*drhods2 - dyq(1, 1)*d2rhods2m
-            end if
+        if (mode_secders >= 1 .and. mode_secders <= 3) then
+            d2yq(1, :) = d2yq(1, :)*drhods2 - dyq(1, :)*d2rhods2m
+            d2yq(2:3, :) = d2yq(2:3, :)*drhods
         end if
+        dyq(1, :) = dyq(1, :)*drhods
+
+        sqg_c = yq(1)
+        dsqg_c_dr = dyq(1, 1)
+        dsqg_c_dt = dyq(2, 1)
+        dsqg_c_dp = dyq(3, 1)
+        d2sqg_rr = d2yq(1, 1)
+        d2sqg_rt = d2yq(2, 1)
+        d2sqg_rp = d2yq(3, 1)
+        d2sqg_tt = d2yq(4, 1)
+        d2sqg_tp = d2yq(5, 1)
+        d2sqg_pp = d2yq(6, 1)
+
+        B_vartheta_c = yq(2)
+        dB_vartheta_c_dr = dyq(1, 2)
+        dB_vartheta_c_dt = dyq(2, 2)
+        dB_vartheta_c_dp = dyq(3, 2)
+        d2bth_rr = d2yq(1, 2)
+        d2bth_rt = d2yq(2, 2)
+        d2bth_rp = d2yq(3, 2)
+        d2bth_tt = d2yq(4, 2)
+        d2bth_tp = d2yq(5, 2)
+        d2bth_pp = d2yq(6, 2)
+
+        B_varphi_c = yq(3)
+        dB_varphi_c_dr = dyq(1, 3)
+        dB_varphi_c_dt = dyq(2, 3)
+        dB_varphi_c_dp = dyq(3, 3)
+        d2bph_rr = d2yq(1, 3)
+        d2bph_rt = d2yq(2, 3)
+        d2bph_rp = d2yq(3, 3)
+        d2bph_tt = d2yq(4, 3)
+        d2bph_tp = d2yq(5, 3)
+        d2bph_pp = d2yq(6, 3)
 
     end subroutine splint_can_coord
 
