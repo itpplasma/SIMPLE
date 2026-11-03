@@ -13,7 +13,8 @@ use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_
   SYMPLECTIC_STEP_BOUNDARY, SYMPLECTIC_STEP_EVENT_NOT_CONVERGED, &
   SYMPLECTIC_STEP_BOUNDARY_LIMITED, boundary_event_fraction_tolerance, &
                       boundary_event_radial_tolerance, symplectic_newton_warning_mode, &
-                            history_valid, predict_state, record_history, rate_converged
+                         history_valid, predict_state, record_history, rate_converged, &
+                                     max_retry_depth, retry_split, retry_next
 use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_expl_impl_euler_quasi, &
   timestep_impl_expl_euler_quasi, timestep_midpoint_quasi, orbit_timestep_rk45, &
                   orbit_timestep_radau15, orbit_timestep_gbs16, orbit_timestep_tdrk24, &
@@ -135,98 +136,78 @@ logical function accept_warning_axis_crossing(si, x, xlast, tolref, rtol)
     call count_event(EVT_WARNING_AXIS_CROSSING_ACCEPT)
 end function accept_warning_axis_crossing
 
-subroutine advance_symplectic_with_retry(si, f, stepper, status, &
-    accepted_fraction)
-  type(symplectic_integrator_t), intent(inout) :: si
-  type(field_can_t), intent(inout) :: f
-  procedure(orbit_timestep_sympl_i) :: stepper
-  integer, intent(out) :: status
-  real(dp), intent(out), optional :: accepted_fraction
-  real(dp) :: accepted_fraction_local
+    subroutine advance_symplectic_with_retry(si, f, stepper, status, &
+                                             accepted_fraction)
+        ! For a fixed subdivision, the accepted maps remain symplectic and cover the
+        ! original interval exactly. State-dependent subdivision is a warning-mode
+        ! recovery path, not a globally fixed symplectic map.
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        procedure(orbit_timestep_sympl_i) :: stepper
+        integer, intent(out) :: status
+        real(dp), intent(out), optional :: accepted_fraction
+        type(symplectic_integrator_t) :: initial_integrator, substep_integrator
+        type(field_can_t) :: initial_field, substep_field
+        real(dp) :: interval, fraction
+        integer :: level, slot, k
+        logical :: done, split
 
-  call advance_retry_interval(si, f, stepper, si%dt, 0, status, &
-    accepted_fraction_local)
-  if (present(accepted_fraction)) accepted_fraction = accepted_fraction_local
-end subroutine advance_symplectic_with_retry
+        initial_integrator = si
+        initial_field = f
+        interval = si%dt
+        level = 0
+        slot = 0
+        fraction = 0.0_dp
+        do
+            if (level > 0) then
+                substep_integrator = si
+                substep_field = f
+            end if
+            si%dt = interval*0.5_dp**level
+            call stepper(si, f, status)
+            if (status == SYMPLECTIC_STEP_OK) then
+                call retry_next(level, slot, done)
+                if (.not. done) cycle
+                fraction = 1.0_dp
+                exit
+            end if
+            if (status == SYMPLECTIC_STEP_BOUNDARY) then
+                ! Fold the sub-interval fraction outwards one halving at a time, in the
+                ! order of the former recursive retry, so the arithmetic is unchanged.
+                do k = 1, level
+                    if (mod(slot, 2) == 0) then
+                        si%last_step_fraction = 0.5_dp*si%last_step_fraction
+                    else
+                        si%last_step_fraction = 0.5_dp + 0.5_dp*si%last_step_fraction
+                    end if
+                    si%last_event_fraction_width = 0.5_dp*si%last_event_fraction_width
+                    slot = slot/2
+                end do
+                fraction = si%last_step_fraction
+                exit
+            end if
 
-recursive subroutine advance_retry_interval(si, f, stepper, interval, depth, &
-    status, accepted_fraction)
-  integer, parameter :: max_retry_depth = 8
-  type(symplectic_integrator_t), intent(inout) :: si
-  type(field_can_t), intent(inout) :: f
-  procedure(orbit_timestep_sympl_i) :: stepper
-  real(dp), intent(in) :: interval
-  integer, intent(in) :: depth
-  integer, intent(out) :: status
-  real(dp), intent(out) :: accepted_fraction
-  type(symplectic_integrator_t) :: initial_integrator
-  type(field_can_t) :: initial_field
-  real(dp) :: child_fraction
-  logical :: recoverable
-
-  accepted_fraction = 0.0_dp
-  initial_integrator = si
-  initial_field = f
-  si%dt = interval
-  call stepper(si, f, status)
-  if (status == SYMPLECTIC_STEP_OK .or. &
-      status == SYMPLECTIC_STEP_BOUNDARY) then
-    if (status == SYMPLECTIC_STEP_OK) then
-      accepted_fraction = 1.0_dp
-    else
-      accepted_fraction = si%last_step_fraction
-    end if
-    si%dt = interval
-    return
-  end if
-
-  si = initial_integrator
-  f = initial_field
-  si%dt = interval
-  recoverable = status == SYMPLECTIC_STEP_MAXITER .or. &
-    status == SYMPLECTIC_STEP_LINEAR_SOLVE
-  if (.not. symplectic_newton_warning_mode .or. .not. recoverable .or. &
-      depth >= max_retry_depth) then
-    if (recoverable .and. depth >= max_retry_depth) &
-      call count_event(EVT_RETRY_EXHAUSTED)
-    return
-  end if
-
-  ! For a fixed subdivision, the two accepted maps remain symplectic and cover
-  ! the original interval exactly. State-dependent subdivision is a warning-mode
-  ! recovery path, not a globally fixed symplectic map.
-  call advance_retry_interval(si, f, stepper, 0.5_dp*interval, depth + 1, &
-    status, child_fraction)
-  if (status == SYMPLECTIC_STEP_BOUNDARY) then
-    si%last_step_fraction = 0.5_dp*si%last_step_fraction
-    si%last_event_fraction_width = 0.5_dp*si%last_event_fraction_width
-    accepted_fraction = 0.5_dp*child_fraction
-    si%dt = interval
-    return
-  end if
-  if (status == SYMPLECTIC_STEP_OK) then
-    call advance_retry_interval(si, f, stepper, 0.5_dp*interval, depth + 1, &
-      status, child_fraction)
-    if (status == SYMPLECTIC_STEP_BOUNDARY) then
-      si%last_step_fraction = 0.5_dp + 0.5_dp*si%last_step_fraction
-      si%last_event_fraction_width = 0.5_dp*si%last_event_fraction_width
-      accepted_fraction = 0.5_dp + 0.5_dp*child_fraction
-      si%dt = interval
-      return
-    end if
-    if (status == SYMPLECTIC_STEP_OK) then
-      accepted_fraction = 0.5_dp + 0.5_dp*child_fraction
-      si%dt = interval
-      return
-    end if
-  end if
-  if (status /= SYMPLECTIC_STEP_OK) then
-    si = initial_integrator
-    f = initial_field
-    accepted_fraction = 0.0_dp
-  end if
-  si%dt = interval
-end subroutine advance_retry_interval
+            if (level > 0) then
+                si = substep_integrator
+                f = substep_field
+            else
+                si = initial_integrator
+                f = initial_field
+            end if
+            call retry_split(status, symplectic_newton_warning_mode, level, slot, split)
+            if (.not. split) then
+                if (level >= max_retry_depth .and. &
+                    (status == SYMPLECTIC_STEP_MAXITER .or. &
+                     status == SYMPLECTIC_STEP_LINEAR_SOLVE)) &
+                    call count_event(EVT_RETRY_EXHAUSTED)
+                si = initial_integrator
+                f = initial_field
+                exit
+            end if
+        end do
+        si%dt = interval
+        if (present(accepted_fraction)) accepted_fraction = fraction
+    end subroutine advance_symplectic_with_retry
 
 subroutine apply_axis_chart_switch(radius, theta, crossed, status)
   real(dp), intent(inout) :: radius, theta
