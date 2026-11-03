@@ -72,3 +72,44 @@ fo fmt src/generated/generated_event_energy.f90
 
 For reproducibility, regenerate in an empty directory, format the result and
 compare it with the checked-in file. Ordinary SIMPLE builds need no CAS.
+
+Implicit-scheme residuals and Jacobians
+---------------------------------------
+
+The same generator CMake project builds `generate_orbit_systems`. Run it with
+`src/generated` as the argument; it writes the `euler1` and midpoint kernels to
+`src/generated/orbit_systems_euler1.inc` and
+`src/generated/orbit_systems_midpoint.inc`, all others to
+`src/generated/orbit_systems_kernels.inc`, and the module
+`orbit_systems_generated` that includes all three to
+`src/generated/orbit_systems_generated.f90`. `orbit_symplectic_euler1.f90` and
+`simple_gpu.f90` include the `euler1` and midpoint kernels in their own scope:
+called across modules, they made the OpenACC steps slower than the hand-written
+systems with nvfortran 26.9, compiled in place they are as fast.
+
+Each implicit symplectic scheme (`euler1`, `euler2`, `midpoint`, `gauss1` to
+`gauss4`, `lobatto3`) is stated once as a residual in the canonical field
+quantities H, p_theta, v_par, h_theta and h_phi, which are opaque functions of
+the stage states. Their partial derivatives bind to the members of
+`field_can_t` (the packed Hessian order of `get_derivatives2`), and every
+`<scheme>_jacobian` is the symbolic derivative of `<scheme>_residual` with
+respect to the Newton unknowns. `gc_rates_canonical` gives the guiding-centre
+rates from the same field quantities. All kernels carry `!$acc routine seq`, so
+the CPU build and the OpenACC device code share them. The Runge-Kutta
+coefficients stay arguments, supplied by `coeff_rk_gauss` and
+`coeff_rk_lobatto`.
+
+For a compatible existing FortSym build:
+
+```sh
+gfortran -I/path/to/fortsym/build/include gen/generate_orbit_systems.f90 \
+  -L/path/to/fortsym/build/lib -Wl,-rpath,/path/to/fortsym/build/lib \
+  -lfortsym -o /scratch/generate_orbit_systems
+/scratch/generate_orbit_systems src/generated <fortsym revision>
+```
+
+The optional second argument records the FortSym revision in the banner of
+every kernel. The emitted files are committed unformatted, so regenerating into
+an empty directory with that FortSym revision reproduces it byte for byte.
+`test_orbit_systems_generated` compares the kernels with the hand-derived
+formulas they replaced on random field values.

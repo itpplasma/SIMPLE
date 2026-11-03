@@ -1,6 +1,7 @@
 module orbit_symplectic_base
 use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_derivatives, &
                              get_derivatives2
+    use orbit_systems_generated, only: lobatto3_residual
 
     implicit none
 
@@ -334,8 +335,8 @@ contains
         real(dp), intent(out) :: fvec(4*s)
         integer, intent(in) :: jactype  ! 0 = no second derivatives, 2 = second derivatives
 
-        real(dp) :: a(s, s), ahat(s, s), b(s), c(s), Hprime(s)
-        integer :: k, l  ! counters
+        real(dp) :: a(s, s), ahat(s, s), b(s), c(s)
+        integer :: k
 
         call coeff_rk_lobatto(s, a, ahat, b, c)
 
@@ -347,31 +348,9 @@ contains
             call stage_derivatives(fs(k), x(4*k - 2))
         end do
 
-        Hprime = fs%dH(1)/fs%dpth(1)
-
-        fvec(1) = fs(1)%pth - si%pthold
-        fvec(2) = x(2) - si%z(4)
-
-        do l = 1, s
-fvec(1) = fvec(1) + si%dt*ahat(1, l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))        ! pthdot
-fvec(2) = fvec(2) + si%dt*ahat(1, l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))        ! pphdot
-        end do
-
-        do k = 2, s
-            fvec(4*k - 3 - 2) = fs(k)%pth - si%pthold
-            fvec(4*k - 2 - 2) = x(4*k - 2 - 2) - si%z(2)
-            fvec(4*k - 1 - 2) = x(4*k - 1 - 2) - si%z(3)
-            fvec(4*k - 2) = x(4*k - 2) - si%z(4)
-        end do
-
-        do l = 1, s
-            do k = 2, s
-      fvec(4*k-3-2) = fvec(4*k-3-2) + si%dt*ahat(k,l)*(fs(l)%dH(2) - Hprime(l)*fs(l)%dpth(2))        ! pthdot
-      fvec(4*k-2-2) = fvec(4*k-2-2) - si%dt*a(k,l)*Hprime(l)                                         ! thdot
-      fvec(4*k-1-2) = fvec(4*k-1-2) - si%dt*a(k,l)*(fs(l)%vpar  - Hprime(l)*fs(l)%hth)/fs(l)%hph     ! phdot
-      fvec(4*k-2)   = fvec(4*k-2)   + si%dt*ahat(k,l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))        ! pphdot
-            end do
-        end do
+        ! coeff_rk_lobatto implements s = 3 only.
+        if (s /= 3) error stop 'f_rk_lobatto: only s = 3 is implemented'
+        call lobatto3_residual(si%dt, si%pthold, si%z, a, ahat, x, fs, fvec)
 
     contains
 

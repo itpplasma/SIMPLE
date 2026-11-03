@@ -6,3 +6,6 @@ target_link_libraries(generate_axis_maps PRIVATE fortsym::fortsym)
 
 add_executable(generate_event_energy generate_event_energy.f90)
 target_link_libraries(generate_event_energy PRIVATE fortsym::fortsym)
+
+add_executable(generate_orbit_systems generate_orbit_systems.f90)
+target_link_libraries(generate_orbit_systems PRIVATE fortsym::fortsym)

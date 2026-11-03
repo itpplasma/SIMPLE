@@ -283,92 +283,19 @@ contains
         real(dp), intent(out) :: residual(5), jacobian(5, 5)
 
         type(field_can_t) :: fmid
-        real(dp) :: dpthmid, pthdotbar
+        real(dp) :: z(4)
 
-        call eval_field_booz_device(f, x(5), 0.5_dp*(x(2) + si%z(2)), &
-            0.5_dp*(x(3) + si%z(3)), 2)
-        call get_derivatives2(f, 0.5_dp*(x(4) + si%z(4)))
-
-        residual(2) = f%dpth(1)*(x(2) - si%z(2)) - si%dt*f%dH(1)
-        residual(3) = f%dpth(1)*f%hph*(x(3) - si%z(3)) - &
-            si%dt*(f%dpth(1)*f%vpar - f%dH(1)*f%hth)
-        residual(4) = f%dpth(1)*(x(4) - si%z(4)) + &
-            si%dt*(f%dH(3)*f%dpth(1) - f%dH(1)*f%dpth(3))
-        residual(5) = f%dpth(1)*(f%pth - si%pthold) + 0.5_dp*si%dt*( &
-            f%dpth(1)*f%dH(2) - f%dpth(2)*f%dH(1))
-
-        jacobian(2, 1) = 0.0_dp
-        jacobian(2, 5) = f%d2pth(1)*(x(2) - si%z(2)) - si%dt*f%d2H(1)
-        jacobian(2, 2:3) = 0.5_dp*(f%d2pth(2:3)*(x(2) - si%z(2)) - &
-            si%dt*f%d2H(2:3))
-        jacobian(2, 2) = jacobian(2, 2) + f%dpth(1)
-        jacobian(2, 4) = 0.5_dp*(f%d2pth(7)*(x(2) - si%z(2)) - &
-            si%dt*f%d2H(7))
-
-        jacobian(3, 1) = 0.0_dp
-        jacobian(3, 5) = (f%d2pth(1)*f%hph + f%dpth(1)*f%dhph(1))* &
-            (x(3) - si%z(3)) - si%dt*(f%d2pth(1)*f%vpar + &
-            f%dpth(1)*f%dvpar(1) - f%d2H(1)*f%hth - f%dH(1)*f%dhth(1))
-        jacobian(3, 2:3) = 0.5_dp*((f%d2pth(2:3)*f%hph + &
-            f%dpth(1)*f%dhph(2:3))*(x(3) - si%z(3)) - si%dt*( &
-            f%d2pth(2:3)*f%vpar + f%dpth(1)*f%dvpar(2:3) - &
-            f%d2H(2:3)*f%hth - f%dH(1)*f%dhth(2:3)))
-        jacobian(3, 3) = jacobian(3, 3) + f%dpth(1)*f%hph
-        jacobian(3, 4) = 0.5_dp*(f%d2pth(7)*f%hph*(x(3) - si%z(3)) - &
-            si%dt*(f%d2pth(7)*f%vpar + f%dpth(1)*f%dvpar(4) - &
-            f%d2H(7)*f%hth))
-
-        jacobian(4, 1) = 0.0_dp
-        jacobian(4, 5) = f%d2pth(1)*(x(4) - si%z(4)) + si%dt*( &
-            f%d2H(3)*f%dpth(1) + f%dH(3)*f%d2pth(1) - &
-            f%d2H(1)*f%dpth(3) - f%dH(1)*f%d2pth(3))
-        jacobian(4, 2) = 0.5_dp*(f%d2pth(2)*(x(4) - si%z(4)) + si%dt*( &
-            f%d2H(5)*f%dpth(1) + f%dH(3)*f%d2pth(2) - &
-            f%d2H(2)*f%dpth(3) - f%dH(1)*f%d2pth(5)))
-        jacobian(4, 3) = 0.5_dp*(f%d2pth(3)*(x(4) - si%z(4)) + si%dt*( &
-            f%d2H(6)*f%dpth(1) + f%dH(3)*f%d2pth(3) - &
-            f%d2H(3)*f%dpth(3) - f%dH(1)*f%d2pth(6)))
-        jacobian(4, 4) = 0.5_dp*(f%d2pth(7)*(x(4) - si%z(4)) + si%dt*( &
-            f%dH(3)*f%d2pth(7) + f%d2H(9)*f%dpth(1) - &
-            f%d2H(7)*f%dpth(3) - f%dH(1)*f%d2pth(9))) + f%dpth(1)
-
-        jacobian(5, 1) = 0.0_dp
-        jacobian(5, 5) = f%d2pth(1)*(f%pth - si%pthold) + &
-            f%dpth(1)*f%dpth(1) + 0.5_dp*si%dt*(f%d2pth(1)*f%dH(2) + &
-            f%dpth(1)*f%d2H(2) - f%d2pth(2)*f%dH(1) - f%dpth(2)*f%d2H(1))
-        jacobian(5, 2) = 0.5_dp*(f%d2pth(2)*(f%pth - si%pthold) + &
-            f%dpth(1)*f%dpth(2) + 0.5_dp*si%dt*(f%d2pth(2)*f%dH(2) + &
-            f%dpth(1)*f%d2H(4) - f%d2pth(4)*f%dH(1) - f%dpth(2)*f%d2H(2)))
-        jacobian(5, 3) = 0.5_dp*(f%d2pth(3)*(f%pth - si%pthold) + &
-            f%dpth(1)*f%dpth(3) + 0.5_dp*si%dt*(f%d2pth(3)*f%dH(2) + &
-            f%dpth(1)*f%d2H(5) - f%d2pth(5)*f%dH(1) - f%dpth(2)*f%d2H(3)))
-        jacobian(5, 4) = 0.5_dp*(f%d2pth(7)*(f%pth - si%pthold) + &
-            f%dpth(1)*f%dpth(4) + 0.5_dp*si%dt*(f%d2pth(7)*f%dH(2) + &
-            f%dpth(1)*f%d2H(8) - f%d2pth(8)*f%dH(1) - f%dpth(2)*f%d2H(7)))
-
+        ! Local copy of si%z; see sympl_euler1_residual.
+        z = si%z
+        call eval_field_booz_device(f, x(5), 0.5_dp*(x(2) + z(2)), &
+                                    0.5_dp*(x(3) + z(3)), 2)
+        call get_derivatives2(f, 0.5_dp*(x(4) + z(4)))
         fmid = f
-        dpthmid = f%dpth(1)
-        pthdotbar = f%dpth(1)*f%dH(2) - f%dpth(2)*f%dH(1)
+        ! The end point enters the system through p_theta and its gradient.
         call eval_field_booz_device(f, x(1), x(2), x(3), 0)
         call get_derivatives(f, x(4))
-        residual(1) = dpthmid*(f%pth - si%pthold) + si%dt*pthdotbar
-
-        jacobian(1, 1) = fmid%dpth(1)*f%dpth(1)
-        jacobian(1, 2) = 0.5_dp*(fmid%d2pth(2)*(f%pth - si%pthold) + &
-            si%dt*(fmid%d2pth(2)*fmid%dH(2) + fmid%dpth(1)*fmid%d2H(4) - &
-            fmid%dpth(2)*fmid%d2H(2) - fmid%d2pth(4)*fmid%dH(1))) + &
-            fmid%dpth(1)*f%dpth(2)
-        jacobian(1, 3) = 0.5_dp*(fmid%d2pth(3)*(f%pth - si%pthold) + &
-            si%dt*(fmid%d2pth(3)*fmid%dH(2) + fmid%dpth(1)*fmid%d2H(5) - &
-            fmid%dpth(2)*fmid%d2H(3) - fmid%d2pth(5)*fmid%dH(1))) + &
-            fmid%dpth(1)*f%dpth(3)
-        jacobian(1, 4) = 0.5_dp*(fmid%d2pth(7)*(f%pth - si%pthold) + &
-            si%dt*(fmid%d2pth(7)*fmid%dH(2) + fmid%dpth(1)*fmid%d2H(8) - &
-            fmid%dpth(2)*fmid%d2H(7) - fmid%d2pth(8)*fmid%dH(1))) + &
-            fmid%dpth(1)*f%dpth(4)
-        jacobian(1, 5) = fmid%d2pth(1)*(f%pth - si%pthold) + si%dt*( &
-            fmid%d2pth(1)*fmid%dH(2) + fmid%dpth(1)*fmid%d2H(2) - &
-            fmid%dpth(2)*fmid%d2H(1) - fmid%d2pth(2)*fmid%dH(1))
+        call midpoint_residual(si%dt, si%pthold, z, x, fmid, f, residual)
+        call midpoint_jacobian(si%dt, si%pthold, z, x, fmid, f, jacobian)
     end subroutine gpu_midpoint_system
 
     subroutine gpu_newton_midpoint(si, f, x, warning_mode, status, nfev)
@@ -1605,5 +1532,9 @@ contains
             error stop 'trace_orbits_gpu_method: unsupported GPU integrator'
         end select
     end subroutine trace_orbits_gpu_method
+
+    ! Compiled in place: called across modules, these kernels made the
+    ! OpenACC midpoint step 2 % slower (nvfortran 26.9).
+    include 'generated/orbit_systems_midpoint.inc'
 
 end module simple_gpu
