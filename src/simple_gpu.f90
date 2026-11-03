@@ -38,8 +38,7 @@ module simple_gpu
         rk54_initialize4, rk54_request4, rk54_supply4, &
         RK54_CASH_KARP, RK54_DORMAND_PRINCE_TUNED, RK54_NEED_RHS, &
         RK54_ACCEPTED, RK54_REJECTED, RK54_FAILED
-    use boozer_sub, only: boozer_state, splint_boozer_rk_device, &
-        BOOZER_SECDERS_RADIAL_MIXED
+    use boozer_sub, only: boozer_state, splint_boozer_rk_device
     use boozer_rk_tables, only: rk_tables_ready, splint_boozer_rk_table_device
     use params, only: gpu_num_devices, gpu_pilot_fraction, gpu_work_order
 !$  use omp_lib, only: omp_get_thread_num
@@ -144,8 +143,7 @@ contains
             ! A negative radial label is the axis continuation (#370): the
             ! field evaluation maps it to (|s|, theta+pi), as in newton1.
 
-            call eval_field_booz_device(f, x(1), si%z(2), si%z(3), &
-                BOOZER_SECDERS_RADIAL_MIXED)
+            call gpu_eval_field_rmix(f, x(1), si%z(2), si%z(3))
             nfev = nfev + 1
             call gpu_get_derivatives2_radial_mixed(f, x(2))
             call sympl_euler1_newton_iter(si, f, x, tolref, xlast, converged, &
@@ -271,6 +269,77 @@ contains
             ktau = ktau + 1
         end do
     end subroutine gpu_timestep_euler
+
+    subroutine gpu_eval_field_rmix(f, r, th_c, ph_c)
+        !$acc routine seq
+        ! Radial-mixed Boozer field for the Euler Newton step (rr, r-theta and
+        ! r-phi second derivatives only), with the axis continuation (#370) of
+        ! eval_field_booz_device. It lives here because nvfortran inlines device
+        ! routines only within a file, and the cross-file call is slower.
+        use boozer_sub, only: splint_boozer_rmix_device, boozer_rmix_field_t
+        type(field_can_t), intent(inout) :: f
+        real(dp), intent(in) :: r, th_c, ph_c
+
+        real(dp) :: bmod2, r_cont, th_cont, Bth, Bph, dBth, dBph, d2Bth, d2Bph
+        logical :: crossed
+        type(boozer_rmix_field_t) :: fld
+
+        crossed = r < 0.0_dp
+        if (crossed) then
+            r_cont = -r
+            th_cont = th_c + 0.5_dp*twopi
+        else
+            r_cont = r
+            th_cont = th_c
+        end if
+        call splint_boozer_rmix_device(r_cont, th_cont, ph_c, fld)
+        f%Ath = boozer_state%torflux*r_cont
+        f%dAth(1) = boozer_state%torflux
+        f%dAth(2:3) = 0.0_dp
+        f%Aph = fld%A_phi
+        f%dAph(1) = fld%dA_phi_dr
+        f%dAph(2:3) = 0.0_dp
+        f%d2Ath(1:3) = 0.0_dp
+        f%d2Aph(1) = fld%d2A_phi_dr2
+        f%d2Aph(2:3) = 0.0_dp
+        Bth = fld%B_vartheta
+        dBth = fld%dB_vartheta
+        d2Bth = fld%d2B_vartheta
+        Bph = fld%B_varphi
+        dBph = fld%dB_varphi
+        d2Bph = fld%d2B_varphi
+        f%Bmod = fld%Bmod
+        f%dBmod = fld%dBmod
+        f%d2Bmod(1:3) = fld%d2Bmod
+        f%d2Bmod(4:6) = 0.0_dp
+        if (crossed) then
+            f%dAth(1) = -f%dAth(1)
+            f%dAph(1) = -f%dAph(1)
+            dBth = -dBth
+            dBph = -dBph
+            f%dBmod(1) = -f%dBmod(1)
+            f%d2Bmod(2:3) = -f%d2Bmod(2:3)
+        end if
+        bmod2 = f%Bmod**2
+        f%hth = Bth/f%Bmod
+        f%hph = Bph/f%Bmod
+        f%dhth(1) = dBth/f%Bmod - Bth*f%dBmod(1)/bmod2
+        f%dhph(1) = dBph/f%Bmod - Bph*f%dBmod(1)/bmod2
+        f%dhth(2:3) = -Bth*f%dBmod(2:3)/bmod2
+        f%dhph(2:3) = -Bph*f%dBmod(2:3)/bmod2
+        f%d2hth(1) = d2Bth/f%Bmod - 2.0_dp*dBth*f%dBmod(1)/bmod2 + &
+                     Bth/bmod2*(2.0_dp*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
+        f%d2hph(1) = d2Bph/f%Bmod - 2.0_dp*dBph*f%dBmod(1)/bmod2 + &
+                     Bph/bmod2*(2.0_dp*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
+        f%d2hth(2) = -dBth*f%dBmod(2)/bmod2 + &
+                     Bth/bmod2*(2.0_dp*f%dBmod(1)*f%dBmod(2)/f%Bmod - f%d2Bmod(2))
+        f%d2hph(2) = -dBph*f%dBmod(2)/bmod2 + &
+                     Bph/bmod2*(2.0_dp*f%dBmod(1)*f%dBmod(2)/f%Bmod - f%d2Bmod(2))
+        f%d2hth(3) = -dBth*f%dBmod(3)/bmod2 + &
+                     Bth/bmod2*(2.0_dp*f%dBmod(1)*f%dBmod(3)/f%Bmod - f%d2Bmod(3))
+        f%d2hph(3) = -dBph*f%dBmod(3)/bmod2 + &
+                     Bph/bmod2*(2.0_dp*f%dBmod(1)*f%dBmod(3)/f%Bmod - f%d2Bmod(3))
+    end subroutine gpu_eval_field_rmix
 
     subroutine gpu_midpoint_system(si, f, x, residual, jacobian)
         ! Five-equation degenerate-variational midpoint system and analytic
@@ -1360,25 +1429,31 @@ contains
         integer :: i, it, ktau, ierr, lstep, step_nfev
         real(dp) :: elapsed
         logical :: warning_mode
+        type(symplectic_integrator_t) :: si_i
+        type(field_can_t) :: f_i
 
         warning_mode = symplectic_newton_warning_mode
         !$acc parallel loop gang vector default(present) &
         !$acc&   copy(si(istart:iend), f(istart:iend)) copyin(ntau_macro) &
         !$acc&   copyout(loss_step(istart:iend), zend(:, istart:iend), &
         !$acc&           nfev(istart:iend), loss_time_out(istart:iend)) &
-        !$acc&   private(it, ktau, ierr, lstep, step_nfev, elapsed) &
+        !$acc&   private(it, ktau, ierr, lstep, step_nfev, elapsed, si_i, f_i) &
         !$acc&   firstprivate(warning_mode)
         do i = istart, iend
             ierr = 0
             lstep = ntimstep
             nfev(i) = 0
             elapsed = 0.0_dp
+            ! Private copies live in interleaved local memory, so a warp reads
+            ! the state of its particles coalesced instead of striding the arrays.
+            si_i = si(i)
+            f_i = f(i)
             macro: do it = 2, ntimstep
                 do ktau = 1, ntau_macro(it)
-                    call gpu_timestep_midpoint(si(i), f(i), warning_mode, ierr, &
+                    call gpu_timestep_midpoint(si_i, f_i, warning_mode, ierr, &
                                                step_nfev)
                     nfev(i) = nfev(i) + step_nfev
-                    elapsed = elapsed + si(i)%dt
+                    elapsed = elapsed + si_i%dt
                     if (ierr /= 0) exit
                 end do
                 if (ierr /= 0) then
@@ -1386,6 +1461,8 @@ contains
                     exit macro
                 end if
             end do macro
+            si(i) = si_i
+            f(i) = f_i
             loss_step(i) = lstep
             if (ierr == 0 .and. lstep == ntimstep) &
                 elapsed = real(sum(ntau_macro(2:ntimstep)), dp)*si(i)%dt
@@ -1412,6 +1489,8 @@ contains
         integer :: i, it, ktau, ierr, lstep, step_nfev
         real(dp) :: elapsed
         logical :: warning_mode
+        type(symplectic_integrator_t) :: si_i
+        type(field_can_t) :: f_i
 
         warning_mode = symplectic_newton_warning_mode
 
@@ -1419,19 +1498,23 @@ contains
         !$acc&   copy(si(istart:iend), f(istart:iend)) copyin(ntau_macro) &
         !$acc&   copyout(loss_step(istart:iend), loss_time(istart:iend), &
         !$acc&           zend(:, istart:iend), nfev(istart:iend)) &
-        !$acc&   private(it, ktau, ierr, lstep, elapsed, step_nfev) &
+        !$acc&   private(it, ktau, ierr, lstep, elapsed, step_nfev, si_i, f_i) &
         !$acc&   firstprivate(warning_mode)
         do i = istart, iend
             ierr = 0
             lstep = ntimstep
             elapsed = 0.0_dp
             nfev(i) = 0
+            ! Private copies live in interleaved local memory, so a warp reads
+            ! the state of its particles coalesced instead of striding the arrays.
+            si_i = si(i)
+            f_i = f(i)
             macro: do it = 2, ntimstep
                 do ktau = 1, ntau_macro(it)
-                    call gpu_timestep_euler(si(i), f(i), warning_mode, ierr, &
+                    call gpu_timestep_euler(si_i, f_i, warning_mode, ierr, &
                                             step_nfev)
                     nfev(i) = nfev(i) + step_nfev
-                    elapsed = elapsed + si(i)%dt
+                    elapsed = elapsed + si_i%dt
                     if (ierr /= 0) exit
                 end do
                 if (ierr /= 0) then
@@ -1439,6 +1522,8 @@ contains
                     exit macro
                 end if
             end do macro
+            si(i) = si_i
+            f(i) = f_i
             loss_step(i) = lstep
             if (ierr == 0 .and. lstep == ntimstep) &
                 elapsed = real(sum(ntau_macro(2:ntimstep)), dp)*si(i)%dt

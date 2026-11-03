@@ -212,10 +212,8 @@ contains
     subroutine eval_field_booz_device(f, r, th_c, ph_c, mode_secders)
         ! Device-only counterpart of eval_field_booz. Initialization checks and
         ! host diagnostic counters stay in splint_boozer_coord's host wrapper.
-        ! BOOZER_SECDERS_RADIAL_MIXED computes only rr, r-theta, and r-phi.
-        use boozer_sub, only: splint_boozer_coord_device, boozer_state, &
-                              BOOZER_SECDERS_RADIAL_MIXED, splint_boozer_rmix_device, &
-                              boozer_rmix_field_t
+        ! The radial-mixed Newton evaluation is gpu_eval_field_rmix in simple_gpu.
+        use boozer_sub, only: splint_boozer_coord_device
 
         type(field_can_t), intent(inout) :: f
         real(dp), intent(in) :: r, th_c, ph_c
@@ -227,21 +225,13 @@ contains
             Bth, Bph, dBth, dBph, d2Bth, d2Bph
         real(dp) :: r_cont, th_cont
         logical :: crossed
-        type(boozer_rmix_field_t) :: fld
 
         f%dAth = 0.0_dp
         f%dAph = 0.0_dp
-        if (mode_secders == BOOZER_SECDERS_RADIAL_MIXED) then
-            f%d2Ath(1:3) = 0.0_dp
-            f%d2Aph(1:3) = 0.0_dp
-            f%d2hth(1:3) = 0.0_dp
-            f%d2hph(1:3) = 0.0_dp
-        else
-            f%d2Ath = 0.0_dp
-            f%d2Aph = 0.0_dp
-            f%d2hth = 0.0_dp
-            f%d2hph = 0.0_dp
-        end if
+        f%d2Ath = 0.0_dp
+        f%d2Aph = 0.0_dp
+        f%d2hth = 0.0_dp
+        f%d2hph = 0.0_dp
 
         ! Axis continuation (#370), mirroring eval_field_booz: a negative
         ! radial label denotes the physical point (|s|, theta+pi).
@@ -254,33 +244,12 @@ contains
             th_cont = th_c
         end if
 
-        if (mode_secders == BOOZER_SECDERS_RADIAL_MIXED) then
-            ! One output record instead of twenty addresses: the Newton step's
-            ! call saves and restores far fewer registers.
-            call splint_boozer_rmix_device(r_cont, th_cont, ph_c, fld)
-            f%Ath = boozer_state%torflux*r_cont
-            f%dAth(1) = boozer_state%torflux
-            f%Aph = fld%A_phi
-            f%dAph(1) = fld%dA_phi_dr
-            f%d2Aph(1) = fld%d2A_phi_dr2
-            Bth = fld%B_vartheta
-            dBth = fld%dB_vartheta
-            d2Bth = fld%d2B_vartheta
-            Bph = fld%B_varphi
-            dBph = fld%dB_varphi
-            d2Bph = fld%d2B_varphi
-            f%Bmod = fld%Bmod
-            f%dBmod = fld%dBmod
-            f%d2Bmod(1:3) = fld%d2Bmod
-            f%d2Bmod(4:6) = 0.0_dp
-        else
-            call splint_boozer_coord_device(r_cont, th_cont, ph_c, mode_secders, &
-                                            f%Ath, f%Aph, f%dAth(1), f%dAph(1), &
-                                            f%d2Aph(1), d3Aphdr3, &
-                                            Bth, dBth, d2Bth, Bph, dBph, d2Bph, &
-                                            f%Bmod, f%dBmod, f%d2Bmod, &
-                                            dummy, dummy3, dummy6)
-        end if
+        call splint_boozer_coord_device(r_cont, th_cont, ph_c, mode_secders, &
+                                        f%Ath, f%Aph, f%dAth(1), f%dAph(1), &
+                                        f%d2Aph(1), d3Aphdr3, &
+                                        Bth, dBth, d2Bth, Bph, dBph, d2Bph, &
+                                        f%Bmod, f%dBmod, f%d2Bmod, &
+                                        dummy, dummy3, dummy6)
 
         if (crossed) then
             f%dAth(1) = -f%dAth(1)
@@ -306,8 +275,7 @@ contains
                          Bph/bmod2*(2.0_dp*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
         end if
 
-        if (mode_secders == 2 .or. &
-                mode_secders == BOOZER_SECDERS_RADIAL_MIXED) then
+        if (mode_secders == 2) then
             f%d2hth(2) = -dBth*f%dBmod(2)/bmod2 + &
                 Bth/bmod2*(2.0_dp*f%dBmod(1)*f%dBmod(2)/f%Bmod - f%d2Bmod(2))
             f%d2hph(2) = -dBph*f%dBmod(2)/bmod2 + &
