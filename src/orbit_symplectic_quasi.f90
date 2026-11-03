@@ -1,15 +1,17 @@
 module orbit_symplectic_quasi
 
-use util, only: pi
+    use util, only: pi, twopi
     use field_can_mod, only: eval_field => evaluate, field_can_t, get_derivatives, &
                              get_derivatives2
 use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
    orbit_timestep_quasi_i, coeff_rk_gauss, coeff_rk_lobatto, f_rk_lobatto, sympl_rmax, &
-             SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN, SYMPLECTIC_STEP_MAXITER
-use orbit_symplectic_base, only: S_MAX
+          SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN, SYMPLECTIC_STEP_MAXITER, &
+                                     SYMPLECTIC_STEP_LINEAR_SOLVE
+    use orbit_symplectic_base, only: S_MAX, symplectic_newton_warning_mode
 use fortnum_multiroot, only: multiroot_hybrids, multiroot_hybrids_warm_t
-use fortnum_status, only: fortnum_status_t
-use diag_counters, only: count_event, EVT_R_NEGATIVE
+    use fortnum_status, only: fortnum_status_t, FORTNUM_OK, FORTNUM_DOMAIN_ERROR
+    use vector_potentail_mod, only: torflux
+    use diag_counters, only: count_event, EVT_R_NEGATIVE, EVT_WARNING_MAXIT_ACCEPT
 
 implicit none
 
@@ -72,6 +74,26 @@ contains
         end do
         kwarm = 1
     end subroutine reset_quasi_warm_start
+
+! The quasi solves stop like the Newton steppers in orbit_symplectic: on
+! |F| < atol, or on a full quasi-Newton step below rtol*tolref with the same
+! tolref per unknown. |F| stalls at its rounding floor far above atol, so the
+! step test is what ends a converged solve. Where that floor keeps the step
+! above rtol*tolref, warning mode accepts, as for the Newton steppers, a root
+! whose step falls below warning_factor times that. The relaxed solve restarts
+! from the last iterate with a fresh Jacobian, since a secant estimate updated
+! on noise can point far off. Otherwise the solve failed, and its status is the
+! one the Newton steppers report.
+    integer function quasi_solve_status(status)
+        type(fortnum_status_t), intent(in) :: status
+
+        quasi_solve_status = SYMPLECTIC_STEP_OK
+        if (status%code == FORTNUM_DOMAIN_ERROR) then
+            quasi_solve_status = SYMPLECTIC_STEP_LINEAR_SOLVE
+        else if (status%code /= FORTNUM_OK) then
+            quasi_solve_status = SYMPLECTIC_STEP_MAXITER
+        end if
+    end function quasi_solve_status
 
     !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
     !
@@ -300,6 +322,7 @@ subroutine orbit_timestep_multi_quasi(mi, ierr)
     si = mi%stages(1)
     kwarm = 1
     call orbit_timestep_quasi(ierr)
+        if (ierr /= 0) return
 
     do kstage = 2, 2*mi%s
       mi%stages(kstage)%z = si%z
@@ -307,6 +330,10 @@ subroutine orbit_timestep_multi_quasi(mi, ierr)
       si = mi%stages(kstage)
       kwarm = kstage
       call orbit_timestep_quasi(ierr)
+            if (ierr /= 0) then
+                kwarm = 1
+                return
+            end if
     end do
     kwarm = 1
     mi%stages(1)%z = si%z
@@ -322,20 +349,42 @@ subroutine timestep_midpoint_quasi(ierr)
 
   integer, parameter :: n = 5
 
-  real(dp), dimension(n) :: x, x0
+        real(dp), dimension(n) :: x, x0, tolref
   type(fortnum_status_t) :: status
   integer :: ktau
+        type(symplectic_integrator_t) :: accepted_integrator
+        type(field_can_t) :: accepted_field
 
   ierr = 0
   ktau = 0
   do while(ktau .lt. si%ntau)
+            accepted_integrator = si
+            accepted_field = f
     si%pthold = f%pth
 
     x0(1:4) = si%z
     x0(5) = si%z(1)
 
+            tolref(1) = 1d0
+            tolref(2) = twopi
+            tolref(3) = twopi
+            tolref(4) = max(dabs(f%Aph), dabs(1d1*torflux/f%ro0), dabs(si%z(4)))
+            tolref(5) = 1d0
+
     call multiroot_hybrids(f_midpoint_quasi, n, x0, x, status, &
-                                   xtol=si%rtol, ftol=si%rtol, warm=warm(kwarm))
+                  xtol=si%rtol, ftol=si%atol, warm=warm(kwarm), step_tol=si%rtol*tolref)
+            if (status%code /= FORTNUM_OK .and. symplectic_newton_warning_mode) then
+                x0 = x
+                call multiroot_hybrids(f_midpoint_quasi, n, x0, x, status, &
+                  xtol=si%rtol, ftol=si%atol, step_tol=si%warning_factor*si%rtol*tolref)
+               if (status%code == FORTNUM_OK) call count_event(EVT_WARNING_MAXIT_ACCEPT)
+            end if
+            ierr = quasi_solve_status(status)
+            if (ierr /= SYMPLECTIC_STEP_OK) then
+                si = accepted_integrator
+                f = accepted_field
+                return
+            end if
 
     if (x(1) > sympl_rmax) then
       warm(kwarm)%valid = .false.
@@ -372,21 +421,40 @@ subroutine timestep_expl_impl_euler_quasi(ierr)
 
   integer, parameter :: n = 2
 
-  real(dp), dimension(n) :: x, x0
+        real(dp), dimension(n) :: x, x0, tolref
   real(dp), dimension(1) :: xe0, xe
   type(fortnum_status_t) :: status
   integer :: ktau
+        type(symplectic_integrator_t) :: accepted_integrator
+        type(field_can_t) :: accepted_field
+
+        tolref(1) = 1d0
+        tolref(2) = dabs(1d1*torflux/f%ro0)
 
   ierr = 0
   ktau = 0
   do while(ktau .lt. si%ntau)
+            accepted_integrator = si
+            accepted_field = f
     si%pthold = f%pth
 
     x0(1)=si%z(1)
     x0(2)=si%z(4)
 
     call multiroot_hybrids(f_euler1_quasi, n, x0, x, status, &
-      xtol=si%rtol, ftol=si%rtol)
+                                   xtol=si%rtol, ftol=si%atol, step_tol=si%rtol*tolref)
+            if (status%code /= FORTNUM_OK .and. symplectic_newton_warning_mode) then
+                x0 = x
+                call multiroot_hybrids(f_euler1_quasi, n, x0, x, status, &
+                  xtol=si%rtol, ftol=si%atol, step_tol=si%warning_factor*si%rtol*tolref)
+               if (status%code == FORTNUM_OK) call count_event(EVT_WARNING_MAXIT_ACCEPT)
+            end if
+            ierr = quasi_solve_status(status)
+            if (ierr /= SYMPLECTIC_STEP_OK) then
+                si = accepted_integrator
+                f = accepted_field
+                return
+            end if
 
     if (x(1) > sympl_rmax) then
       ierr = 1
@@ -442,16 +510,33 @@ subroutine timestep_impl_expl_euler_quasi(ierr)
   real(dp), dimension(1) :: xe0, xe
   type(fortnum_status_t) :: status
   integer :: ktau
+        type(symplectic_integrator_t) :: accepted_integrator
+        type(field_can_t) :: accepted_field
+        real(dp), parameter :: tolref(n) = [1d0, twopi, twopi]
 
   ierr = 0
   ktau = 0
   do while(ktau .lt. si%ntau)
+            accepted_integrator = si
+            accepted_field = f
     si%pthold = f%pth
 
     x0 = si%z(1:3)
 
     call multiroot_hybrids(f_euler2_quasi, n, x0, x, status, &
-                                   xtol=si%rtol, ftol=si%rtol, warm=warm(kwarm))
+                  xtol=si%rtol, ftol=si%atol, warm=warm(kwarm), step_tol=si%rtol*tolref)
+            if (status%code /= FORTNUM_OK .and. symplectic_newton_warning_mode) then
+                x0 = x
+                call multiroot_hybrids(f_euler2_quasi, n, x0, x, status, &
+                  xtol=si%rtol, ftol=si%atol, step_tol=si%warning_factor*si%rtol*tolref)
+               if (status%code == FORTNUM_OK) call count_event(EVT_WARNING_MAXIT_ACCEPT)
+            end if
+            ierr = quasi_solve_status(status)
+            if (ierr /= SYMPLECTIC_STEP_OK) then
+                si = accepted_integrator
+                f = accepted_field
+                return
+            end if
 
     if (x(1) > sympl_rmax) then
       warm(kwarm)%valid = .false.
@@ -504,9 +589,11 @@ subroutine timestep_rk_gauss_quasi(s, ierr)
   type(fortnum_status_t) :: status
   integer :: ktau, k, l
 
-  real(dp) :: a(s,s), b(s), c(s), Hprime(s)
+        real(dp) :: a(s, s), b(s), c(s), Hprime(s), tolref(4*s)
         type(field_can_t), target :: fs(s)
         type(stage_fields_t) :: stages
+        type(symplectic_integrator_t) :: accepted_integrator
+        type(field_can_t) :: accepted_field
 
         if (s < 1 .or. s > S_MAX_GAUSS) &
             error stop 'timestep_rk_gauss_quasi: no Gauss coefficients for this s'
@@ -519,14 +606,29 @@ subroutine timestep_rk_gauss_quasi(s, ierr)
   ierr = 0
   ktau = 0
   do while(ktau .lt. si%ntau)
+            accepted_integrator = si
+            accepted_field = f
     si%pthold = f%pth
 
     do k = 1,s
       x0((4*k-3):(4*k)) = si%z
+                tolref((4*k - 3):(4*k)) = [1d0, twopi, twopi, dabs(si%z(4))]
     end do
 
     call multiroot_hybrids(f_rk_gauss_quasi, 4*s, x0, x, status, &
-                                   xtol=si%rtol, ftol=si%rtol, ctx=stages)
+                        xtol=si%rtol, ftol=si%atol, ctx=stages, step_tol=si%rtol*tolref)
+            if (status%code /= FORTNUM_OK .and. symplectic_newton_warning_mode) then
+                x0 = x
+                call multiroot_hybrids(f_rk_gauss_quasi, 4*s, x0, x, status, &
+      xtol=si%rtol, ftol=si%atol, ctx=stages, step_tol=si%warning_factor*si%rtol*tolref)
+               if (status%code == FORTNUM_OK) call count_event(EVT_WARNING_MAXIT_ACCEPT)
+            end if
+            ierr = quasi_solve_status(status)
+            if (ierr /= SYMPLECTIC_STEP_OK) then
+                si = accepted_integrator
+                f = accepted_field
+                return
+            end if
 
     if (x(1) > sympl_rmax) then
       ierr = 1
@@ -575,9 +677,11 @@ subroutine timestep_rk_lobatto_quasi(s, ierr)
   type(fortnum_status_t) :: status
   integer :: ktau, k, l
 
-  real(dp) :: a(s,s), ahat(s,s), b(s), c(s), Hprime(s)
+        real(dp) :: a(s, s), ahat(s, s), b(s), c(s), Hprime(s), tolref(4*s - 2)
         type(field_can_t), target :: fs(s)
         type(stage_fields_t) :: stages
+        type(symplectic_integrator_t) :: accepted_integrator
+        type(field_can_t) :: accepted_field
 
   do k = 1,s
     fs(k) = f
@@ -587,12 +691,16 @@ subroutine timestep_rk_lobatto_quasi(s, ierr)
   ierr = 0
   ktau = 0
   do while(ktau .lt. si%ntau)
+            accepted_integrator = si
+            accepted_field = f
     si%pthold = f%pth
 
     x0(1) = si%z(1)
     x0(2) = si%z(4)
+            tolref(1:2) = [1d0, dabs(si%z(4))]
     do k = 2,s
       x0((4*k-3-2):(4*k-2)) = si%z
+                tolref((4*k - 3 - 2):(4*k - 2)) = [1d0, twopi, twopi, dabs(si%z(4))]
     end do
 
     !
@@ -620,7 +728,19 @@ subroutine timestep_rk_lobatto_quasi(s, ierr)
     ! x x x 0 0
 
     call multiroot_hybrids(f_rk_lobatto_quasi, 4*s-2, x0, x, status, &
-                                   xtol=si%rtol, ftol=si%rtol, ctx=stages)
+                        xtol=si%rtol, ftol=si%atol, ctx=stages, step_tol=si%rtol*tolref)
+            if (status%code /= FORTNUM_OK .and. symplectic_newton_warning_mode) then
+                x0 = x
+                call multiroot_hybrids(f_rk_lobatto_quasi, 4*s - 2, x0, x, status, &
+      xtol=si%rtol, ftol=si%atol, ctx=stages, step_tol=si%warning_factor*si%rtol*tolref)
+               if (status%code == FORTNUM_OK) call count_event(EVT_WARNING_MAXIT_ACCEPT)
+            end if
+            ierr = quasi_solve_status(status)
+            if (ierr /= SYMPLECTIC_STEP_OK) then
+                si = accepted_integrator
+                f = accepted_field
+                return
+            end if
 
     call coeff_rk_lobatto(s, a, ahat, b, c)
 
