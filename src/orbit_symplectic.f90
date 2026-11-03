@@ -18,6 +18,7 @@ use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_expl_impl_euler
                   orbit_timestep_radau15, orbit_timestep_gbs16, orbit_timestep_tdrk24, &
                                     orbit_timestep_tdrk24a, orbit_timestep_cashkarp45, &
                                       reset_explicit_step_carry, &
+                                      reset_quasi_warm_start, &
                                       si_quasi => si, f_quasi => f, &
   timestep_rk_gauss_quasi, timestep_rk_lobatto_quasi
 use orbit_symplectic_euler1, only: sympl_euler1_residual, sympl_euler1_jacobian, &
@@ -235,6 +236,7 @@ recursive subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
   si%atol = 1d-15
   si%rtol = rtol_init
         call reset_explicit_step_carry
+        call reset_quasi_warm_start
 
   si%ntau = ntau
   si%dt = dt

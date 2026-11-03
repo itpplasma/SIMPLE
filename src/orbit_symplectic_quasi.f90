@@ -6,7 +6,8 @@ use util, only: pi
 use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
    orbit_timestep_quasi_i, coeff_rk_gauss, coeff_rk_lobatto, f_rk_lobatto, sympl_rmax, &
              SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN, SYMPLECTIC_STEP_MAXITER
-use fortnum_multiroot, only: multiroot_hybrids
+use orbit_symplectic_base, only: S_MAX
+use fortnum_multiroot, only: multiroot_hybrids, multiroot_hybrids_warm_t
 use fortnum_status, only: fortnum_status_t
 use diag_counters, only: count_event, EVT_R_NEGATIVE
 
@@ -40,11 +41,30 @@ procedure(orbit_timestep_quasi_i), pointer :: orbit_timestep_quasi => null()
     real(dp) :: explicit_h_carry = 0d0
     !$omp threadprivate(explicit_h_carry)
 
+! Jacobian estimate of the previous step's implicit system, so that
+! multiroot_hybrids does not rebuild it by n finite differences every step.
+! One per composition stage (kwarm), because each stage solves with its own dt.
+! Like the carry above it belongs to one orbit; orbit_sympl_init resets it.
+! Used where it measured faster: euler2 (all composition schemes) and midpoint.
+! For euler1 and Gauss the secant iterations it adds cost more than the n
+! difference evaluations it saves.
+    type(multiroot_hybrids_warm_t) :: warm(2*S_MAX)
+    integer :: kwarm = 1
+    !$omp threadprivate(warm, kwarm)
+
 contains
 
     subroutine reset_explicit_step_carry
         explicit_h_carry = 0d0
     end subroutine reset_explicit_step_carry
+
+    subroutine reset_quasi_warm_start
+        integer :: k
+        do k = 1, size(warm)
+            warm(k)%valid = .false.
+        end do
+        kwarm = 1
+    end subroutine reset_quasi_warm_start
 
     !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
     !
@@ -253,14 +273,17 @@ subroutine orbit_timestep_multi_quasi(mi, ierr)
     integer :: kstage
 
     si = mi%stages(1)
+    kwarm = 1
     call orbit_timestep_quasi(ierr)
 
     do kstage = 2, 2*mi%s
       mi%stages(kstage)%z = si%z
       mi%stages(kstage)%pthold = f%pth
       si = mi%stages(kstage)
+      kwarm = kstage
       call orbit_timestep_quasi(ierr)
     end do
+    kwarm = 1
     mi%stages(1)%z = si%z
     mi%stages(1)%pthold = f%pth
 
@@ -287,9 +310,10 @@ subroutine timestep_midpoint_quasi(ierr)
     x0(5) = si%z(1)
 
     call multiroot_hybrids(f_midpoint_quasi, n, x0, x, status, &
-      xtol=si%rtol, ftol=si%rtol)
+                                   xtol=si%rtol, ftol=si%rtol, warm=warm(kwarm))
 
     if (x(1) > sympl_rmax) then
+      warm(kwarm)%valid = .false.
       ierr = 1
       return
     end if
@@ -298,6 +322,7 @@ subroutine timestep_midpoint_quasi(ierr)
       ! Axis crossing: continue on the opposite ray, (r, theta) ->
       ! (|r|, theta + pi), instead of the former teleport to r = 0.01 (#370).
       call count_event(EVT_R_NEGATIVE)
+      warm(kwarm)%valid = .false.
       x(1) = -x(1)
       x(2) = x(2) + pi
       if (x(1) > sympl_rmax) then
@@ -401,9 +426,10 @@ subroutine timestep_impl_expl_euler_quasi(ierr)
     x0 = si%z(1:3)
 
     call multiroot_hybrids(f_euler2_quasi, n, x0, x, status, &
-      xtol=si%rtol, ftol=si%rtol)
+                                   xtol=si%rtol, ftol=si%rtol, warm=warm(kwarm))
 
     if (x(1) > sympl_rmax) then
+      warm(kwarm)%valid = .false.
       ierr = 1
       return
     end if
@@ -412,6 +438,7 @@ subroutine timestep_impl_expl_euler_quasi(ierr)
       ! Axis crossing: continue on the opposite ray, (r, theta) ->
       ! (|r|, theta + pi), instead of the former teleport to r = 0.01 (#370).
       call count_event(EVT_R_NEGATIVE)
+      warm(kwarm)%valid = .false.
       x(1) = -x(1)
       x(2) = x(2) + pi
       if (x(1) > sympl_rmax) then
