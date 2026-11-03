@@ -29,7 +29,7 @@ RULES = {
     "axis_healing": {
         "choices": ["", "legacy", "legacy_adaptive", "powerlaw", "polyfit"]
     },
-    "gpu_num_devices": {"min": 1},
+    "gpu_num_devices": {"min": 0},
     "gpu_t_block": {"positive": True},
     "gpu_loss_tau": {"positive": True},
     "gpu_maxloss": {"nonnegative": True},

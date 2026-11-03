@@ -187,7 +187,7 @@ gpu_landreman = .true.           ! segmented loss objective (arXiv:2606.19523); 
 gpu_compact_init = .false.       ! compact initializer: cuda-native, Boozer chartmap
 !                                  field_input, gpu_start_coordinates = 'boozer', no wall
 gpu_work_order = .true.          ! OpenACC: sort markers by estimated work between segments
-gpu_num_devices = 1              ! OpenACC: number of GPUs (more than 1 is experimental)
+gpu_num_devices = 1              ! GPUs per process; 0 = every visible GPU
 gpu_t_block = 1d-3               ! segment duration, s; in (0, trace_time]
 gpu_loss_tau = 1d-1              ! decay time of the loss weight exp(-t/gpu_loss_tau), s
 gpu_maxloss = 2d-2               ! stop when the weighted loss fraction exceeds this value

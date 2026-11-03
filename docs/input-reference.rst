@@ -264,7 +264,7 @@ Source: ``src/params.f90:250``.
      - ``default``
      - ``scalar``
      - ``1``
-     -
+     - GPUs per process; 0 = every visible GPU
    * - ``gpu_t_block``
      - ``real``
      - ``dp``

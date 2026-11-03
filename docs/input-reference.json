@@ -602,11 +602,11 @@
           "extent": [],
           "default": "1",
           "default_value": "1",
-          "documentation": "",
+          "documentation": "GPUs per process; 0 = every visible GPU",
           "source": "src/params.f90",
           "source_line": 90,
           "validation": {
-            "min": 1
+            "min": 0
           }
         },
         {

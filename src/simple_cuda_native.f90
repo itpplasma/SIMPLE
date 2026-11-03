@@ -12,6 +12,8 @@ module simple_cuda_native
     use boozer_rk_tables, only: rk_field_table, rk_profile_table, &
         rk_num_points, rk_x_min, rk_inv_h_step, rk_period, rk_inv_period, &
         rk_tables_ready
+    use params, only: gpu_num_devices
+!$  use omp_lib, only: omp_get_thread_num, omp_in_parallel
 
     implicit none
     private
@@ -24,6 +26,7 @@ module simple_cuda_native
 
     public :: trace_orbits_cuda_native_landreman
     public :: initialize_cuda_native_particle, evaluate_cuda_native_particle
+    public :: cuda_native_device_count
 
     interface
         function cuda_native_rk54(method, particle_count, field_table, &
@@ -53,6 +56,20 @@ module simple_cuda_native
             real(c_double), intent(out) :: profile_ms(5)
             integer(c_int) :: ierr
         end function cuda_native_rk54
+
+        function cuda_get_device_count(count) bind(c, &
+                                                 name='cudaGetDeviceCount') result(ierr)
+            import :: c_int
+            integer(c_int), intent(out) :: count
+            integer(c_int) :: ierr
+        end function cuda_get_device_count
+
+        function cuda_set_device(device) bind(c, name='cudaSetDevice') &
+            result(ierr)
+            import :: c_int
+            integer(c_int), value :: device
+            integer(c_int) :: ierr
+        end function cuda_set_device
     end interface
 
 contains
@@ -110,6 +127,9 @@ contains
             total_duration, block_duration, time_scale, loss_tau, maxloss, &
             hmin, loss_step, loss_time, zend, nfev, observed_duration, &
             energy_loss_fraction, warp_nfev_slots, profile_ms)
+        ! Particles are dealt cyclically to the devices. The kernel decides
+        ! the loss-threshold stop per call, so a split run is only equivalent
+        ! when the threshold cannot be reached (maxloss >= 1).
         type(symplectic_integrator_t), intent(in) :: si(npart)
         type(field_can_t), intent(in) :: f(npart)
         integer, intent(in) :: npart, method
@@ -118,6 +138,77 @@ contains
         integer, intent(out) :: loss_step(npart), nfev(npart)
         real(dp), intent(out) :: loss_time(npart), zend(4, npart)
         real(dp), intent(out) :: observed_duration, energy_loss_fraction
+        integer(int64), intent(out) :: warp_nfev_slots
+        real(dp), intent(out) :: profile_ms(CUDA_NATIVE_PROFILE_COUNT)
+
+        integer, allocatable :: loss_step_d(:), nfev_d(:)
+        real(dp), allocatable :: loss_time_d(:), zend_d(:, :)
+        real(dp) :: observed_d, weight_d, profile_d(CUDA_NATIVE_PROFILE_COUNT)
+        real(dp) :: weight
+        integer(int64) :: slots_d
+        integer :: ndev, dev, n
+
+        ndev = cuda_native_device_count(npart, maxloss)
+        weight = 0.0_dp
+        warp_nfev_slots = 0_int64
+        profile_ms = 0.0_dp
+        !$omp parallel num_threads(ndev) default(shared) if(ndev > 1) &
+        !$omp&   private(dev, n, loss_step_d, nfev_d, loss_time_d, zend_d, &
+        !$omp&           observed_d, weight_d, profile_d, slots_d)
+        dev = 0
+!$      dev = omp_get_thread_num()
+        if (cuda_set_device(int(dev, c_int)) /= 0_c_int) &
+            error stop 'native CUDA: cudaSetDevice failed'
+        n = (npart - dev - 1)/ndev + 1
+        allocate (loss_step_d(n), nfev_d(n), loss_time_d(n), zend_d(4, n))
+        call trace_cuda_native_slice(si(dev + 1:npart:ndev), &
+                     f(dev + 1:npart:ndev), n, method, total_duration, block_duration, &
+                        time_scale, loss_tau, maxloss, hmin, loss_step_d, loss_time_d, &
+                               zend_d, nfev_d, observed_d, weight_d, slots_d, profile_d)
+        loss_step(dev + 1:npart:ndev) = loss_step_d
+        nfev(dev + 1:npart:ndev) = nfev_d
+        loss_time(dev + 1:npart:ndev) = loss_time_d
+        zend(:, dev + 1:npart:ndev) = zend_d
+        !$omp critical (cuda_native_team)
+        weight = weight + weight_d
+        warp_nfev_slots = warp_nfev_slots + slots_d
+        profile_ms = max(profile_ms, profile_d)
+        if (dev == 0) observed_duration = observed_d
+        !$omp end critical (cuda_native_team)
+        !$omp end parallel
+        energy_loss_fraction = weight/real(npart, dp)
+    end subroutine trace_orbits_cuda_native_landreman
+
+    integer function cuda_native_device_count(npart, maxloss) result(ndev)
+        ! Devices a native trace of npart particles uses: gpu_num_devices, or
+        ! every visible device when it is 0. One device while the loss
+        ! threshold couples the particles or without a thread per device.
+        integer, intent(in) :: npart
+        real(dp), intent(in) :: maxloss
+        integer(c_int) :: navail
+        integer :: ncand
+
+        ndev = 1
+        if (maxloss < 1.0_dp) return
+        if (cuda_get_device_count(navail) /= 0_c_int) return
+        ncand = int(navail)
+        if (gpu_num_devices > 0) ncand = min(ncand, gpu_num_devices)
+!$      ndev = max(1, min(ncand, npart))
+!$      if (omp_in_parallel()) ndev = 1
+    end function cuda_native_device_count
+
+    subroutine trace_cuda_native_slice(si, f, npart, method, &
+                        total_duration, block_duration, time_scale, loss_tau, maxloss, &
+                            hmin, loss_step, loss_time, zend, nfev, observed_duration, &
+                                       loss_weight, warp_nfev_slots, profile_ms)
+        type(symplectic_integrator_t), intent(in) :: si(npart)
+        type(field_can_t), intent(in) :: f(npart)
+        integer, intent(in) :: npart, method
+        real(dp), intent(in) :: total_duration, block_duration, time_scale
+        real(dp), intent(in) :: loss_tau, maxloss, hmin
+        integer, intent(out) :: loss_step(npart), nfev(npart)
+        real(dp), intent(out) :: loss_time(npart), zend(4, npart)
+        real(dp), intent(out) :: observed_duration, loss_weight
         integer(int64), intent(out) :: warp_nfev_slots
         real(dp), intent(out) :: profile_ms(CUDA_NATIVE_PROFILE_COUNT)
 
@@ -163,7 +254,7 @@ contains
 
         loss_detection_tolerance = &
             16.0_dp*epsilon(1.0_dp)*max(total_duration, 1.0_dp)
-        energy_loss_fraction = 0.0_dp
+        loss_weight = 0.0_dp
         do i = 1, npart
             if (nfev_c(i) > int(huge(nfev(i)), c_int64_t)) &
                 error stop 'native CUDA RK field-evaluation count overflow'
@@ -172,13 +263,11 @@ contains
                 loss_step(i) = -int(status(i))
             else if (loss_time(i) < total_duration - loss_detection_tolerance) then
                 loss_step(i) = 1
-                energy_loss_fraction = energy_loss_fraction + &
-                    exp(-loss_time(i)*time_scale/loss_tau)
+                loss_weight = loss_weight + exp(-loss_time(i)*time_scale/loss_tau)
             else
                 loss_step(i) = 0
             end if
         end do
-        energy_loss_fraction = energy_loss_fraction/real(npart, dp)
-    end subroutine trace_orbits_cuda_native_landreman
+    end subroutine trace_cuda_native_slice
 
 end module simple_cuda_native
