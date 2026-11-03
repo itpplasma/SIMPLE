@@ -12,7 +12,9 @@ use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_
   SYMPLECTIC_STEP_MAXITER, SYMPLECTIC_STEP_LINEAR_SOLVE, &
   SYMPLECTIC_STEP_BOUNDARY, SYMPLECTIC_STEP_EVENT_NOT_CONVERGED, &
   SYMPLECTIC_STEP_BOUNDARY_LIMITED, boundary_event_fraction_tolerance, &
-  boundary_event_radial_tolerance, symplectic_newton_warning_mode
+                      boundary_event_radial_tolerance, symplectic_newton_warning_mode, &
+                                   sympl_predictor, sympl_stop_rule, sympl_stop_kappa, &
+                                     PREDICT_NONE, PREDICT_LINEAR, STOP_CORRECTION
 use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_expl_impl_euler_quasi, &
   timestep_impl_expl_euler_quasi, timestep_midpoint_quasi, orbit_timestep_rk45, &
                   orbit_timestep_radau15, orbit_timestep_gbs16, orbit_timestep_tdrk24, &
@@ -39,6 +41,88 @@ procedure(orbit_timestep_sympl_i), pointer :: orbit_timestep_sympl => null()
 procedure(orbit_timestep_sympl_i), pointer, private :: raw_timestep_sympl => null()
 
 contains
+
+    pure logical function history_valid(si)
+        ! The history continues the current state only if the last recorded step
+        ! ended exactly here with the same step size.
+        type(symplectic_integrator_t), intent(in) :: si
+
+        history_valid = si%nhist > 0
+        if (.not. history_valid) return
+        history_valid = si%hist_dt == si%dt .and. all(si%hist_z == si%z)
+    end function history_valid
+
+    pure function predict_state(si, c) result(z)
+        ! Lagrange extrapolation of the accepted states z_(n-2), z_(n-1), z_n to the
+        ! fraction c of the coming step. Falls back to z_n without a valid history
+        ! or when the guess leaves the radial domain.
+        type(symplectic_integrator_t), intent(in) :: si
+        real(dp), intent(in) :: c
+        real(dp) :: z(4)
+
+        z = si%z
+        if (sympl_predictor == PREDICT_NONE) return
+        if (.not. history_valid(si)) return
+        z = si%z + c*si%hist_dz(:, 1)
+        if (sympl_predictor /= PREDICT_LINEAR .and. si%nhist > 1) &
+            z = z + 0.5d0*c*(c + 1d0)*(si%hist_dz(:, 1) - si%hist_dz(:, 2))
+        if (.not. (z(1) > 0d0 .and. z(1) < sympl_rmax)) z = si%z
+    end function predict_state
+
+    pure subroutine record_history(si, z_start, keep)
+        ! Append the accepted step z_start -> si%z to the history, or restart it
+        ! when keep is false (chart switch).
+        type(symplectic_integrator_t), intent(inout) :: si
+        real(dp), intent(in) :: z_start(4)
+        logical, intent(in) :: keep
+
+        if (.not. keep) then
+            si%nhist = 0
+            return
+        end if
+        if (si%nhist > 0 .and. si%hist_dt == si%dt .and. all(si%hist_z == z_start)) then
+            si%hist_dz(:, 2) = si%hist_dz(:, 1)
+            si%nhist = min(si%nhist + 1, 2)
+        else
+            si%nhist = 1
+        end if
+        si%hist_dz(:, 1) = si%z - z_start
+        si%hist_z = si%z
+        si%hist_dt = si%dt
+    end subroutine record_history
+
+    pure logical function rate_converged(dnorm, dnorm_prev)
+        ! Error bound for x_k from the contraction rate of the last two Newton
+        ! corrections, both scaled by their tolerances (Hairer & Wanner II, IV.8).
+        real(dp), intent(in) :: dnorm, dnorm_prev
+        real(dp) :: theta
+
+        rate_converged = .false.
+        if (sympl_stop_rule == STOP_CORRECTION) return
+        if (.not. (dnorm_prev > 0d0)) return
+        theta = dnorm/dnorm_prev
+        if (.not. (theta < 1d0)) return
+        rate_converged = theta/(1d0 - theta)*dnorm <= sympl_stop_kappa
+    end function rate_converged
+
+    logical function accept_by_rate(xabs, tol, step_limited, dnorm_prev)
+        ! Rate-based acceptance of the current Newton iterate; dnorm_prev carries
+        ! the scaled norm of the previous correction between iterations.
+        real(dp), intent(in) :: xabs(:), tol(:)
+        logical, intent(in) :: step_limited
+        real(dp), intent(inout) :: dnorm_prev
+        real(dp) :: dnorm
+
+        accept_by_rate = .false.
+        ! A zero tolerance demands the correction rule; no estimate meets it.
+        if (step_limited .or. .not. all(tol > 0d0)) then
+            dnorm_prev = 0d0
+            return
+        end if
+        dnorm = maxval(xabs/tol)
+        accept_by_rate = rate_converged(dnorm, dnorm_prev)
+        dnorm_prev = dnorm
+    end function accept_by_rate
 
 pure logical function finite_newton_iterate(x)
   real(dp), intent(in) :: x(:)
@@ -243,6 +327,7 @@ recursive subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
   si%last_step_fraction = 1d0
   si%last_event_radial_residual = 0d0
   si%last_event_fraction_width = 0d0
+        si%nhist = 0
 
   si%z = z
 
@@ -658,12 +743,13 @@ recursive subroutine newton1(si, f, x, maxit, xlast, status)
   real(dp), intent(out) :: xlast(n)
   integer, intent(out) :: status
 
-  real(dp) :: tolref(n)
+        real(dp) :: tolref(n), dnorm_prev
   integer :: kit
   logical :: converged, linear_failed, boundary_limited, step_boundary_limited
 
   status = SYMPLECTIC_STEP_MAXITER
   boundary_limited = .false.
+        dnorm_prev = 0d0
 
   tolref(1) = 1d0
   tolref(2) = dabs(1d1*torflux/f%ro0)
@@ -695,6 +781,11 @@ recursive subroutine newton1(si, f, x, maxit, xlast, status)
       status = SYMPLECTIC_STEP_OK
       return
     end if
+            if (accept_by_rate(abs(x - xlast), si%rtol*tolref, step_boundary_limited, &
+                               dnorm_prev)) then
+                status = SYMPLECTIC_STEP_OK
+                return
+            end if
   enddo
   if (boundary_limited) then
     if (step_boundary_limited .and. &
@@ -728,11 +819,12 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast, status)
   real(dp) :: fvec(n), fjac(n,n), jinv(n,n)
 
   real(dp) :: xabs(n), tolref(n), fabs(n), correction(n)
-  real(dp) :: det, step_scale
+        real(dp) :: det, step_scale, dnorm_prev
   logical :: boundary_limited, step_limited
 
   status = SYMPLECTIC_STEP_MAXITER
   boundary_limited = .false.
+        dnorm_prev = 0d0
 
   do kit = 1, maxit
             if (abs(x(1)) > sympl_rmax) then
@@ -791,6 +883,10 @@ recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast, status)
       status = SYMPLECTIC_STEP_OK
       return
     end if
+            if (accept_by_rate(xabs, rtol*tolref, step_limited, dnorm_prev)) then
+                status = SYMPLECTIC_STEP_OK
+                return
+            end if
   enddo
   if (boundary_limited) then
     if (step_limited .and. &
@@ -894,12 +990,13 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
 
   real(dp) :: fvec(n), fjac(n,n)
 
-  real(dp) :: xabs(n), tolref(n), fabs(n), step_scale
+        real(dp) :: xabs(n), tolref(n), fabs(n), step_scale, dnorm_prev
   logical :: boundary_limited, step_limited
 
   xlast = x
   status = SYMPLECTIC_STEP_MAXITER
   boundary_limited = .false.
+        dnorm_prev = 0d0
 
   tolref(1) = 1d0
   tolref(2) = twopi
@@ -951,6 +1048,10 @@ recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
       status = SYMPLECTIC_STEP_OK
       return
     end if
+            if (accept_by_rate(xabs, rtol*tolref, step_limited, dnorm_prev)) then
+                status = SYMPLECTIC_STEP_OK
+                return
+            end if
   enddo
   if (boundary_limited) then
     if (step_limited .and. &
@@ -1017,12 +1118,13 @@ recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast, sta
 
   real(dp) :: fvec(4*s), fjac(4*s, 4*s)
 
-  real(dp) :: xabs(4*s), tolref(4*s), fabs(4*s), step_scale
+        real(dp) :: xabs(4*s), tolref(4*s), fabs(4*s), step_scale, dnorm_prev
   logical :: boundary_limited, step_limited
 
   xlast = x
   status = SYMPLECTIC_STEP_MAXITER
   boundary_limited = .false.
+        dnorm_prev = 0d0
   do ks = 1, s
     radial_indices(ks) = 4*ks - 3
   end do
@@ -1079,6 +1181,11 @@ recursive subroutine newton_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast, sta
       status = SYMPLECTIC_STEP_OK
       return
     end if
+            if (accept_by_rate(xabs, rtol*tolref, step_limited, dnorm_prev) .and. &
+                all(x(radial_indices) >= 0d0)) then
+                status = SYMPLECTIC_STEP_OK
+                return
+            end if
   enddo
   if (boundary_limited) then
     if (step_limited .and. &
@@ -1361,12 +1468,13 @@ recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast, s
 
   real(dp) :: fvec(4*s-2), fjac(4*s-2, 4*s-2)
 
-  real(dp) :: xabs(4*s-2), tolref(4*s-2), fabs(4*s-2), step_scale
+       real(dp) :: xabs(4*s - 2), tolref(4*s - 2), fabs(4*s - 2), step_scale, dnorm_prev
   logical :: boundary_limited, step_limited
 
   xlast = x
   status = SYMPLECTIC_STEP_MAXITER
   boundary_limited = .false.
+        dnorm_prev = 0d0
   radial_indices(1) = 1
   do ks = 2, s
     radial_indices(ks) = 4*ks - 5
@@ -1418,6 +1526,10 @@ recursive subroutine newton_rk_lobatto(si, fs, s, x, atol, rtol, maxit, xlast, s
       status = SYMPLECTIC_STEP_OK
       return
     end if
+            if (accept_by_rate(xabs, rtol*tolref, step_limited, dnorm_prev)) then
+                status = SYMPLECTIC_STEP_OK
+                return
+            end if
   enddo
   if (boundary_limited) then
     if (step_limited .and. &
@@ -1444,11 +1556,21 @@ recursive subroutine orbit_timestep_sympl_multi(mi, f, ierr)
   integer, intent(out) :: ierr
 
   integer :: kstage
+        logical :: chained
 
+        ! Each stage starts where the previous one ended, so its history stays
+        ! valid across the composition as long as nobody changed the state between
+        ! composed steps.
+        chained = all(mi%stages(1)%z == mi%stages(2*mi%s)%hist_z)
+        do kstage = 1, 2*mi%s
+            if (.not. chained) mi%stages(kstage)%nhist = 0
+        end do
+        if (chained) mi%stages(1)%hist_z = mi%stages(1)%z
   call orbit_timestep_sympl(mi%stages(1), f, ierr)
 
   do kstage = 2, 2*mi%s
     mi%stages(kstage)%z = mi%stages(kstage-1)%z
+            if (chained) mi%stages(kstage)%hist_z = mi%stages(kstage)%z
     mi%stages(kstage)%pthold = f%pth
     call orbit_timestep_sympl(mi%stages(kstage), f, ierr)
   end do
@@ -1687,6 +1809,7 @@ recursive subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
   integer, parameter :: maxit = 32
 
   real(dp), dimension(n) :: x, xlast
+        real(dp) :: z_start(4), z_guess(4)
   integer :: ktau, newton_status
   logical :: crossed
   type(symplectic_integrator_t) :: accepted_integrator
@@ -1699,8 +1822,10 @@ recursive subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
     accepted_field = f
     si%pthold = f%pth
 
-    x(1)=si%z(1)
-    x(2)=si%z(4)
+            z_start = si%z
+            z_guess = predict_state(si, 1d0)
+            x(1) = z_guess(1)
+            x(2) = z_guess(4)
 
     call newton1(si, f, x, maxit, xlast, newton_status)
     if (newton_status /= SYMPLECTIC_STEP_OK) then
@@ -1737,6 +1862,7 @@ recursive subroutine orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
     endif
 
     call sympl_euler1_advance_angles(si, f)
+            call record_history(si, z_start,.not. crossed)
 
     ktau = ktau+1
   enddo
@@ -1756,7 +1882,8 @@ recursive subroutine orbit_timestep_sympl_impl_expl_euler(si, f, ierr)
   integer, parameter :: n = 3
   integer, parameter :: maxit = 32
 
-  real(dp), dimension(n) :: x, xlast, dz
+        real(dp), dimension(n) :: x, xlast, dz
+        real(dp) :: z_start(4), z_guess(4)
   integer :: ktau, newton_status
   logical :: crossed
   type(symplectic_integrator_t) :: accepted_integrator
@@ -1769,7 +1896,9 @@ recursive subroutine orbit_timestep_sympl_impl_expl_euler(si, f, ierr)
     accepted_field = f
     si%pthold = f%pth
 
-    x = si%z(1:3)
+            z_start = si%z
+            z_guess = predict_state(si, 1d0)
+            x = z_guess(1:3)
 
     call newton2(si, f, x, si%atol, si%rtol, maxit, xlast, newton_status)
     if (newton_status /= SYMPLECTIC_STEP_OK) then
@@ -1814,6 +1943,7 @@ recursive subroutine orbit_timestep_sympl_impl_expl_euler(si, f, ierr)
 
     f%pth = si%pthold - si%dt*(f%dH(2) - f%dH(1)*f%dpth(2)/f%dpth(1))
     si%z(4) = si%z(4) - si%dt*(f%dH(3) - f%dH(1)*f%dpth(3)/f%dpth(1))
+            call record_history(si, z_start,.not. crossed)
 
     ktau = ktau+1
   enddo
@@ -1828,16 +1958,18 @@ subroutine attempt_midpoint_step(si, f, status)
   type(field_can_t), intent(inout) :: f
   integer, intent(out) :: status
 
-  integer, parameter :: n = 5, maxit = 32
-  real(dp) :: x(n), xlast(n)
+        integer, parameter :: n = 5, maxit = 32
+        real(dp) :: x(n), xlast(n), z_start(4), z_guess(4)
   logical :: crossed
 
   ! 32 as in the other schemes: the atol/rtol exits keep converged steps cheap,
   ! and the exact-landing substep solve (#441) needs fully converged trial
   ! steps, which 8 iterations do not guarantee near interfaces.
   si%pthold = f%pth
-  x(1:4) = si%z
-  x(5) = si%z(1)
+        z_start = si%z
+        x(1:4) = predict_state(si, 1d0)
+        z_guess = predict_state(si, 0.5d0)
+        x(5) = z_guess(1)
 
   call newton_midpoint(si, f, x, si%atol, si%rtol, maxit, xlast, status)
   if (status /= SYMPLECTIC_STEP_OK) return
@@ -1856,6 +1988,7 @@ subroutine attempt_midpoint_step(si, f, status)
     call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
     call get_val(f, si%z(4))
   end if
+        call record_history(si, z_start,.not. crossed)
 end subroutine attempt_midpoint_step
 
 subroutine get_boundary_event_tolerances(rtol, fraction_tolerance, radial_tolerance)
@@ -1995,7 +2128,7 @@ recursive subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
   integer, intent(out) :: ierr
 
   integer, parameter :: n = 5, maxit = 32
-  real(dp) :: x(n), xlast(n)
+        real(dp) :: x(n), xlast(n), z_start(4), z_guess(4)
   integer :: ktau, step_status
   type(symplectic_integrator_t) :: accepted_integrator
   type(field_can_t) :: accepted_field
@@ -2007,8 +2140,10 @@ recursive subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
       accepted_integrator = si
       accepted_field = f
       si%pthold = f%pth
-      x(1:4) = si%z
-      x(5) = si%z(1)
+                z_start = si%z
+                x(1:4) = predict_state(si, 1d0)
+                z_guess = predict_state(si, 0.5d0)
+                x(5) = z_guess(1)
       call newton_midpoint(si, f, x, si%atol, si%rtol, maxit, xlast, &
         step_status)
       if (step_status /= SYMPLECTIC_STEP_OK) then
@@ -2034,6 +2169,7 @@ recursive subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
         call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
         call get_val(f, si%z(4))
       end if
+                call record_history(si, z_start,.not. crossed)
     end do
     return
   end if
@@ -2202,11 +2338,12 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
   real(dp) :: a(s,s), b(s), c(s), Hprime(s), dz(4*s)
         real(dp) :: stage_value(s, 6), stage_rate(s, 6), endpoint_value(6)
         real(dp) :: radius_end, r_rate, theta_rate, phi_rate, pphi_rate, canonical_pth
+        real(dp) :: z_start(4)
 
   do k = 1,s
     fs(k) = f
-    fs(k) = f
   end do
+        call coeff_rk_gauss(s, a, b, c)
 
   ierr = 0
   ktau = 0
@@ -2215,8 +2352,9 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
     accepted_field = f
     si%pthold = f%pth
 
-    do k = 1,s
-      x((4*k-3):(4*k)) = si%z
+            z_start = si%z
+            do k = 1, s
+                x(4*k - 3:4*k) = predict_state(si, c(k))
     end do
 
     call newton_rk_gauss(si, fs, s, x, si%atol, si%rtol, maxit, xlast, &
@@ -2236,8 +2374,6 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
       ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
       return
     end if
-
-    call coeff_rk_gauss(s, a, b, c)  ! TODO: move this to preprocessing
 
     if (extrap_field) then
       do k = 1, s
@@ -2382,6 +2518,7 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
                 call get_val(f, si%z(4))
                 f%pth = canonical_pth
             end if
+            call record_history(si, z_start, .true.)
 
     ktau = ktau+1
   enddo
@@ -2417,10 +2554,12 @@ recursive subroutine orbit_timestep_sympl_rk_lobatto(si, f, s, ierr)
   type(field_can_t) :: accepted_field
   type(symplectic_integrator_t) :: accepted_integrator
   real(dp) :: a(s,s), ahat(s,s), b(s), c(s), Hprime(s)
+        real(dp) :: z_start(4)
 
   do k = 1,s
     fs(k) = f
   end do
+        call coeff_rk_lobatto(s, a, ahat, b, c)
 
   ierr = 0
   ktau = 0
@@ -2429,10 +2568,11 @@ recursive subroutine orbit_timestep_sympl_rk_lobatto(si, f, s, ierr)
     accepted_field = f
     si%pthold = f%pth
 
+            z_start = si%z
     x(1) = si%z(1)
     x(2) = si%z(4)
     do k = 2,s
-      x((4*k-3-2):(4*k-2)) = si%z
+                x((4*k - 3 - 2):(4*k - 2)) = predict_state(si, c(k))
     end do
 
     call newton_rk_lobatto(si, fs, s, x, si%atol, si%rtol, maxit, xlast, &
@@ -2443,8 +2583,6 @@ recursive subroutine orbit_timestep_sympl_rk_lobatto(si, f, s, ierr)
       ierr = newton_status
       return
     end if
-
-    call coeff_rk_lobatto(s, a, ahat, b, c)
 
     call eval_field(fs(1), x(1), si%z(2), si%z(3), 0)
     call get_derivatives(fs(1), x(2))
@@ -2466,6 +2604,7 @@ recursive subroutine orbit_timestep_sympl_rk_lobatto(si, f, s, ierr)
       si%z(3) = si%z(3) + si%dt*b(l)*(fs(l)%vpar-Hprime(l)*fs(l)%hth)/fs(l)%hph
       si%z(4) = si%z(4) - si%dt*b(l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))
     end do
+            call record_history(si, z_start, .true.)
 
     ktau = ktau+1
   enddo
