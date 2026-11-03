@@ -7,6 +7,8 @@ program test_orbit_systems_generated
     use field_can_base, only: field_can_t
     use orbit_symplectic_base, only: coeff_rk_gauss, coeff_rk_lobatto
     use orbit_systems_generated
+    use field_can_mod, only: get_derivatives
+    use simple_gpu, only: gpu_get_derivatives2_radial_mixed, gc_rates_boozer
     implicit none
 
     real(dp), parameter :: tol = 1d-12
@@ -23,6 +25,8 @@ program test_orbit_systems_generated
         end do
         call check_lobatto()
         call check_rates()
+        call check_radial_mixed()
+        call check_rates_boozer()
     end do
 
     if (errors /= 0) then
@@ -415,5 +419,162 @@ contains
         ref(4) = -(f%dH(3) - hp*f%dpth(3))
         call compare('guiding-centre rates', zdot, ref)
     end subroutine check_rates
+
+    !> Base field members of field_can_t, drawn independently.
+    subroutine random_base_field(f)
+        type(field_can_t), intent(out) :: f
+        integer :: k
+
+        f%Ath = uniform(-1d0, 1d0)
+        f%Aph = uniform(-1d0, 1d0)
+        f%hth = uniform(-1d0, 1d0)
+        f%hph = uniform(0.5d0, 1.5d0)
+        f%Bmod = uniform(0.5d0, 1.5d0)
+        f%Phie = uniform(-1d0, 1d0)
+        do k = 1, 3
+            f%dAth(k) = uniform(-1d0, 1d0)
+            f%dAph(k) = uniform(-1d0, 1d0)
+            f%dhth(k) = uniform(-1d0, 1d0)
+            f%dhph(k) = uniform(-1d0, 1d0)
+            f%dBmod(k) = uniform(-1d0, 1d0)
+            f%dPhie(k) = uniform(-1d0, 1d0)
+        end do
+        do k = 1, 6
+            f%d2Ath(k) = uniform(-1d0, 1d0)
+            f%d2Aph(k) = uniform(-1d0, 1d0)
+            f%d2hth(k) = uniform(-1d0, 1d0)
+            f%d2hph(k) = uniform(-1d0, 1d0)
+            f%d2Bmod(k) = uniform(-1d0, 1d0)
+            f%d2Phie(k) = uniform(-1d0, 1d0)
+        end do
+        f%mu = uniform(0d0, 1d0)
+        f%ro0 = uniform(0.5d0, 2d0)
+        f%dvpar = 7d0
+        f%dH = 7d0
+        f%dpth = 7d0
+        f%d2vpar = 7d0
+        f%d2H = 7d0
+        f%d2pth = 7d0
+    end subroutine random_base_field
+
+    subroutine compare_fields(name, new, old, order)
+        character(*), intent(in) :: name
+        type(field_can_t), intent(in) :: new, old
+        integer, intent(in) :: order
+
+        call compare(name//' values', [new%vpar, new%H, new%pth], &
+                     [old%vpar, old%H, old%pth])
+        if (order < 1) return
+        call compare(name//' gradients', [new%dvpar, new%dH, new%dpth], &
+                     [old%dvpar, old%dH, old%dpth])
+        if (order < 2) return
+        call compare(name//' Hessians', [new%d2vpar, new%d2H, new%d2pth], &
+                     [old%d2vpar, old%d2H, old%d2pth])
+    end subroutine compare_fields
+
+    subroutine check_radial_mixed()
+        type(field_can_t) :: f, new, old
+        real(dp) :: pphi
+
+        call random_base_field(f)
+        pphi = uniform(-1d0, 1d0)
+        new = f
+        old = f
+        call gpu_get_derivatives2_radial_mixed(new, pphi)
+        call old_radial_mixed(old, pphi)
+        call compare_fields('gpu_get_derivatives2_radial_mixed', new, old, 2)
+    end subroutine check_radial_mixed
+
+    !> The hand-written OpenACC subset of SIMPLE d5111a87, which omits
+    !> d2Phie: SIMPLE's electric potential is linear in s.
+    subroutine old_radial_mixed(f, pphi)
+        type(field_can_t), intent(inout) :: f
+        real(dp), intent(in) :: pphi
+
+        call get_derivatives(f, pphi)
+        f%d2vpar(1:3) = -f%d2Aph(1:3)/f%ro0 - f%d2hph(1:3)*f%vpar
+        f%d2vpar(1) = f%d2vpar(1) - 2.0_dp*f%dhph(1)*f%dvpar(1)
+        f%d2vpar(2) = f%d2vpar(2) - (f%dhph(1)*f%dvpar(2) + f%dhph(2)*f%dvpar(1))
+        f%d2vpar(3) = f%d2vpar(3) - (f%dhph(1)*f%dvpar(3) + f%dhph(3)*f%dvpar(1))
+        f%d2vpar(1:3) = f%d2vpar(1:3)/f%hph
+        f%d2H(1:3) = f%vpar*f%d2vpar(1:3) + f%mu*f%d2Bmod(1:3)
+        f%d2H(1) = f%d2H(1) + f%dvpar(1)**2
+        f%d2H(2) = f%d2H(2) + f%dvpar(1)*f%dvpar(2)
+        f%d2H(3) = f%d2H(3) + f%dvpar(1)*f%dvpar(3)
+        f%d2pth(1:3) = f%d2vpar(1:3)*f%hth + f%vpar*f%d2hth(1:3) + f%d2Ath(1:3)/f%ro0
+        f%d2pth(1) = f%d2pth(1) + 2.0_dp*f%dvpar(1)*f%dhth(1)
+        f%d2pth(2) = f%d2pth(2) + f%dvpar(1)*f%dhth(2) + f%dvpar(2)*f%dhth(1)
+        f%d2pth(3) = f%d2pth(3) + f%dvpar(1)*f%dhth(3) + f%dvpar(3)*f%dhth(1)
+        f%d2vpar(7:9) = -f%dhph/f%hph**2
+        f%d2H(7:9) = f%dvpar(1:3)/f%hph + f%vpar*f%d2vpar(7:9)
+        f%d2pth(7:9) = f%dhth/f%hph + f%hth*f%d2vpar(7:9)
+    end subroutine old_radial_mixed
+
+    !> The generated Boozer rates against the hand-written OpenACC rates of
+    !> SIMPLE d5111a87, including p_phi with v_par close to zero.
+    subroutine check_rates_boozer()
+        real(dp) :: pph, mu, ro0, torflux, aphi, daphi, btheta, dbtheta, bphi
+        real(dp) :: dbphi, bmod, dbmod(3), rates(4), ref(4)
+        integer :: near_zero
+
+        do near_zero = 0, 1
+            mu = uniform(0d0, 1d0)
+            ro0 = uniform(0.5d0, 2d0)
+            torflux = uniform(4d0, 6d0)
+            aphi = uniform(-1d0, 1d0)
+            daphi = uniform(-1d0, 1d0)
+            btheta = uniform(-1d0, 1d0)
+            dbtheta = uniform(-1d0, 1d0)
+            bphi = uniform(0.5d0, 1.5d0)
+            dbphi = uniform(-1d0, 1d0)
+            bmod = uniform(0.5d0, 1.5d0)
+            dbmod = [uniform(-1d0, 1d0), uniform(-1d0, 1d0), uniform(-1d0, 1d0)]
+            pph = uniform(-1d0, 1d0)
+            if (near_zero == 1) pph = aphi/ro0*(1d0 + 1d-9)
+            call gc_rates_boozer(pph, mu, ro0, torflux, aphi, daphi, btheta, &
+                                 dbtheta, bphi, dbphi, bmod, dbmod(1), dbmod(2), &
+                                 dbmod(3), rates(1), rates(2), rates(3), rates(4))
+            call old_rates_boozer(pph, mu, ro0, torflux, aphi, daphi, btheta, dbtheta, &
+                                  bphi, dbphi, bmod, dbmod, ref)
+            call compare('Boozer guiding-centre rates', rates, ref)
+        end do
+    end subroutine check_rates_boozer
+
+    subroutine old_rates_boozer(pph, mu, ro0, torflux, aphi, daphi, btheta, dbtheta, &
+                                bphi, dbphi, bmod, dbmod, dydt)
+        real(dp), intent(in) :: pph, mu, ro0, torflux, aphi, daphi, btheta, dbtheta
+        real(dp), intent(in) :: bphi, dbphi, bmod, dbmod(3)
+        real(dp), intent(out) :: dydt(4)
+        real(dp) :: hth, hph, vpar, hprime, inv_bmod, inv_bmod2, inv_hph, inv_dpth
+        real(dp) :: dhth_r, dhth_phi, dhph_r, dhph_theta, dhph_phi
+        real(dp) :: dvpar_r, dvpar_theta, dvpar_phi, dh_r, dh_theta, dh_phi
+        real(dp) :: dpth_r, dpth_phi
+
+        inv_bmod = 1.0_dp/bmod
+        inv_bmod2 = inv_bmod*inv_bmod
+        hth = btheta*inv_bmod
+        hph = bphi*inv_bmod
+        dhth_r = dbtheta*inv_bmod - btheta*dbmod(1)*inv_bmod2
+        dhth_phi = -btheta*dbmod(3)*inv_bmod2
+        dhph_r = dbphi*inv_bmod - bphi*dbmod(1)*inv_bmod2
+        dhph_theta = -bphi*dbmod(2)*inv_bmod2
+        dhph_phi = -bphi*dbmod(3)*inv_bmod2
+        inv_hph = 1.0_dp/hph
+        vpar = (pph - aphi/ro0)*inv_hph
+        dvpar_r = -(daphi/ro0 + dhph_r*vpar)*inv_hph
+        dvpar_theta = -dhph_theta*vpar*inv_hph
+        dvpar_phi = -dhph_phi*vpar*inv_hph
+        dh_r = vpar*dvpar_r + mu*dbmod(1)
+        dh_theta = vpar*dvpar_theta + mu*dbmod(2)
+        dh_phi = vpar*dvpar_phi + mu*dbmod(3)
+        dpth_r = dvpar_r*hth + vpar*dhth_r + torflux/ro0
+        dpth_phi = dvpar_phi*hth + vpar*dhth_phi
+        inv_dpth = 1.0_dp/dpth_r
+        hprime = dh_r*inv_dpth
+        dydt(1) = -(dh_theta - hth*inv_hph*dh_phi)*inv_dpth
+        dydt(2) = hprime
+        dydt(3) = (vpar - hprime*hth)*inv_hph
+        dydt(4) = -(dh_phi - hprime*dpth_phi)
+    end subroutine old_rates_boozer
 
 end program test_orbit_systems_generated
