@@ -428,6 +428,17 @@ if (ENABLE_OPENMP)
         RUN_SERIAL TRUE
         TIMEOUT 300)
 
+    add_executable (test_newton_iterations.x test_newton_iterations.f90)
+    target_link_libraries(test_newton_iterations.x simple)
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/newton_iterations)
+    file(CREATE_LINK ${WOUT_FILE}
+        ${CMAKE_CURRENT_BINARY_DIR}/newton_iterations/wout.nc SYMBOLIC)
+    add_test(NAME test_newton_iterations COMMAND test_newton_iterations.x
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/newton_iterations)
+    set_tests_properties(test_newton_iterations PROPERTIES
+        LABELS "integration"
+        TIMEOUT 120)
+
     add_executable (test_sympl_testfield.x test_sympl_testfield.f90)
     target_link_libraries(test_sympl_testfield.x simple)
     add_test(NAME test_sympl_testfield

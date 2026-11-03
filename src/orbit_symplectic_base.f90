@@ -53,6 +53,20 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
     integer, parameter :: SYMPLECTIC_STEP_BOUNDARY = 4
     integer, parameter :: SYMPLECTIC_STEP_EVENT_NOT_CONVERGED = 5
     integer, parameter :: SYMPLECTIC_STEP_BOUNDARY_LIMITED = 6
+    ! Newton starting guess: z_n, or Lagrange extrapolation of the last two or
+    ! three accepted states.
+    integer, parameter :: PREDICT_NONE = 0, PREDICT_LINEAR = 1, &
+                          PREDICT_QUADRATIC = 2
+    integer :: sympl_predictor = PREDICT_QUADRATIC
+    ! Newton stopping rule. STOP_CORRECTION accepts x_k once the correction
+    ! x_k - x_(k-1) is below tolerance. STOP_RATE also accepts x_k when the
+    ! contraction rate theta = |dx_k|/|dx_(k-1)| bounds the remaining error,
+    ! theta/(1 - theta)*|dx_k| <= kappa*tolerance, which saves the iteration
+    ! that would only confirm convergence.
+    integer, parameter :: STOP_CORRECTION = 0, STOP_RATE = 1
+    integer :: sympl_stop_rule = STOP_RATE
+    real(dp) :: sympl_stop_kappa = 1d0
+
     logical :: symplectic_newton_warning_mode = .true.
     real(dp), parameter :: symplectic_newton_warning_factor = 100.0_dp
     real(dp), parameter :: symplectic_spectre_newton_warning_factor = 10.0_dp
@@ -75,6 +89,16 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
         real(dp) :: last_step_fraction = 1d0
         real(dp) :: last_event_radial_residual = 0d0
         real(dp) :: last_event_fraction_width = 0d0
+
+        ! Accepted-step history for the Newton starting guess: the last two
+        ! increments z_n - z_(n-1), z_(n-1) - z_(n-2), and the state and step
+        ! they belong to. The history is valid only while z and dt still match,
+        ! so any external change of the state (chart switch, interface map,
+        ! retry with a smaller step) discards it.
+        integer :: nhist = 0
+        real(dp) :: hist_dt = 0d0
+        real(dp) :: hist_z(4) = 0d0
+        real(dp) :: hist_dz(4, 2) = 0d0
     end type symplectic_integrator_t
 
     !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -245,11 +269,11 @@ contains
         call coeff_rk_lobatto(s, a, ahat, b, c)
 
         call eval_field(fs(1), x(1), si%z(2), si%z(3), jactype)
-        call get_derivatives(fs(1), x(2))
+        call stage_derivatives(fs(1), x(2))
 
         do k = 2, s
          call eval_field(fs(k), x(4*k - 3 - 2), x(4*k - 2 - 2), x(4*k - 1 - 2), jactype)
-            call get_derivatives(fs(k), x(4*k - 2))
+            call stage_derivatives(fs(k), x(4*k - 2))
         end do
 
         Hprime = fs%dH(1)/fs%dpth(1)
@@ -277,6 +301,20 @@ fvec(2) = fvec(2) + si%dt*ahat(1, l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))    
       fvec(4*k-2)   = fvec(4*k-2)   + si%dt*ahat(k,l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))        ! pphdot
             end do
         end do
+
+    contains
+
+        subroutine stage_derivatives(fk, pphi)
+            ! The Newton Jacobian needs the second derivatives of H and p_theta.
+            type(field_can_t), intent(inout) :: fk
+            real(dp), intent(in) :: pphi
+
+            if (jactype == 2) then
+                call get_derivatives2(fk, pphi)
+            else
+                call get_derivatives(fk, pphi)
+            end if
+        end subroutine stage_derivatives
 
     end subroutine f_rk_lobatto
 
