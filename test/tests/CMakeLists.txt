@@ -309,10 +309,13 @@ set(WOUT_NCSX_URL "https://github.com/hiddenSymmetries/simsopt/raw/master/tests/
 set(COILS_STELLOPT_FILE "${TEST_DATA_DIR}/coils.c09r00")
 set(COILS_STELLOPT_URL "https://princetonuniversity.github.io/STELLOPT/examples/coils.c09r00")
 
-if(NOT EXISTS "${WOUT_NCSX_FILE}")
-    message(STATUS "Downloading NCSX VMEC file to ${WOUT_NCSX_FILE}...")
-    file(DOWNLOAD "${WOUT_NCSX_URL}" "${WOUT_NCSX_FILE}")
-endif()
+include("${CMAKE_SOURCE_DIR}/cmake/DownloadNonemptyFile.cmake")
+download_nonempty_file("${WOUT_NCSX_URL}" "${WOUT_NCSX_FILE}")
+
+add_test(NAME test_download_nonempty_file
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_download_nonempty_file.py
+        ${CMAKE_SOURCE_DIR}/cmake/DownloadNonemptyFile.cmake ${CMAKE_COMMAND})
+set_tests_properties(test_download_nonempty_file PROPERTIES LABELS "unit;python" TIMEOUT 30)
 
 if(NOT EXISTS "${COILS_STELLOPT_FILE}")
     message(STATUS "Downloading NCSX coils file to ${COILS_STELLOPT_FILE}...")
