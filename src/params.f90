@@ -87,7 +87,7 @@ module params
     logical :: gpu_landreman = .true.
     logical :: gpu_compact_init = .false.
     logical :: gpu_work_order = .true.
-    integer :: gpu_num_devices = 1
+    integer :: gpu_num_devices = 1  ! GPUs per process; 0 = every visible GPU
     real(dp) :: gpu_t_block = 1.0d-3
     real(dp) :: gpu_loss_tau = 0.1d0
     real(dp) :: gpu_maxloss = 0.02d0
@@ -489,7 +489,7 @@ contains
             error stop 'gpu_start_coordinates must be reference or boozer'
         end select
 
-        if (gpu_num_devices < 1) error stop 'gpu_num_devices must be positive'
+        if (gpu_num_devices < 0) error stop 'gpu_num_devices must be nonnegative'
         if (gpu_t_block <= 0.0d0) error stop 'gpu_t_block must be positive'
         if (gpu_loss_tau <= 0.0d0) error stop 'gpu_loss_tau must be positive'
         if (gpu_maxloss < 0.0d0) error stop 'gpu_maxloss must be nonnegative'

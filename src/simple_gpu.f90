@@ -32,16 +32,18 @@ module simple_gpu
     use orbit_symplectic_base, only: EXPL_IMPL_EULER, MIDPOINT, CASH_KARP, &
         DORMAND_PRINCE
     use orbit_rk_core, only: rk_solve
-    use orbit_symplectic_base, only: history_valid, predict_state, record_history, &
-                                     rate_converged
+    use orbit_symplectic_base, only: predict_state, record_history, &
+                                     rate_converged, retry_split, retry_next
     use fortnum_ode_rk54_device, only: rk54_controls4_t, rk54_state4_t, &
         rk54_initialize4, rk54_request4, rk54_supply4, &
         RK54_CASH_KARP, RK54_DORMAND_PRINCE_TUNED, RK54_NEED_RHS, &
         RK54_ACCEPTED, RK54_REJECTED, RK54_FAILED
-    use boozer_sub, only: boozer_state, splint_boozer_rk_device
+    use boozer_sub, only: boozer_state, splint_boozer_rk_device, sync_boozer_state
+    use orbit_symplectic_base, only: sympl_rmax, sympl_predictor, &
+                                     sympl_stop_rule, sympl_stop_kappa
     use boozer_rk_tables, only: rk_tables_ready, splint_boozer_rk_table_device
     use params, only: gpu_num_devices, gpu_pilot_fraction, gpu_work_order
-!$  use omp_lib, only: omp_get_thread_num
+!$  use omp_lib, only: omp_get_thread_num, omp_in_parallel
 #ifdef _OPENACC
     use openacc, only: acc_get_num_devices, acc_set_device_num, acc_device_nvidia
 #endif
@@ -51,12 +53,21 @@ module simple_gpu
 
     integer, parameter :: maxit = 32
 
-    public :: trace_orbits_gpu, trace_orbits_gpu_range
+    public :: gpu_device_count
+    public :: trace_orbits_gpu_range
     public :: trace_orbits_gpu_method, trace_orbits_gpu_rk54_range
     public :: trace_orbits_gpu_midpoint_range
     public :: trace_orbits_gpu_landreman
     public :: evaluate_rhs_gpu
     public :: gpu_get_derivatives2_radial_mixed, gc_rates_boozer
+
+    ! A second plain field_can_t local in one device routine, after inlining,
+    ! trips an nvfortran 26.9 device-compiler error (redefinition of the
+    ! type's initializer), so the saved step start is wrapped.
+    type :: gpu_saved_state_t
+        type(symplectic_integrator_t) :: si
+        type(field_can_t) :: f
+    end type gpu_saved_state_t
 
 contains
 
@@ -169,7 +180,21 @@ contains
         ! Non-convergence diagnostics (CPU writes fort.6601) are omitted on device.
     end subroutine gpu_newton1
 
-    subroutine gpu_timestep_euler(si, f, warning_mode, ierr, nfev)
+    subroutine gpu_restore_euler_start(si, f, z_start, accepted_pthold)
+        !$acc routine seq
+        ! Undo a failed Euler step without a per-step copy of f: the step reads
+        ! only pth from the incoming field and recomputes everything else
+        ! before use, so restoring pth restores the step's input.
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        real(dp), intent(in) :: z_start(4), accepted_pthold
+
+        f%pth = si%pthold
+        si%pthold = accepted_pthold
+        si%z = z_start
+    end subroutine gpu_restore_euler_start
+
+    subroutine gpu_step_euler(si, f, warning_mode, ierr, nfev)
         !$acc routine seq
         type(symplectic_integrator_t), intent(inout) :: si
         type(field_can_t), intent(inout) :: f
@@ -179,7 +204,7 @@ contains
 
         real(dp) :: x(2), xlast(2), accepted_pthold, z_start(4), z_guess(4)
         integer :: ktau, newton_status, newton_nfev
-        logical :: crossed, predicted
+        logical :: crossed
 
         ierr = 0
         nfev = 0
@@ -189,7 +214,6 @@ contains
             si%pthold = f%pth
 
             z_start = si%z
-            predicted = history_valid(si)
             z_guess = predict_state(si, 1d0)
             x(1) = z_guess(1)
             x(2) = z_guess(4)
@@ -197,22 +221,14 @@ contains
             call gpu_newton1(si, f, x, xlast, warning_mode, newton_status, &
                 newton_nfev)
             nfev = nfev + newton_nfev
-            if (newton_status /= SYMPLECTIC_STEP_OK .and. predicted) then
-                si%pthold = accepted_pthold
-                x(1) = si%z(1)
-                x(2) = si%z(4)
-                call gpu_newton1(si, f, x, xlast, warning_mode, newton_status, &
-                    newton_nfev)
-                nfev = nfev + newton_nfev
-            end if
             if (newton_status /= SYMPLECTIC_STEP_OK) then
-                si%pthold = accepted_pthold
+                call gpu_restore_euler_start(si, f, z_start, accepted_pthold)
                 ierr = newton_status
                 return
             end if
 
             if (x(1) > 1.0d0) then
-                si%pthold = accepted_pthold
+                call gpu_restore_euler_start(si, f, z_start, accepted_pthold)
                 ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
                 return
             end if
@@ -223,7 +239,7 @@ contains
                 x(1) = -x(1)
                 crossed = .true.
                 if (x(1) > 1.0d0) then
-                    si%pthold = accepted_pthold
+                    call gpu_restore_euler_start(si, f, z_start, accepted_pthold)
                     ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
                     return
                 end if
@@ -247,7 +263,7 @@ contains
 
             ktau = ktau + 1
         end do
-    end subroutine gpu_timestep_euler
+    end subroutine gpu_step_euler
 
     subroutine gpu_eval_field_rmix(f, r, th_c, ph_c)
         !$acc routine seq
@@ -425,7 +441,7 @@ contains
             status = SYMPLECTIC_STEP_OK
     end subroutine gpu_newton_midpoint
 
-    subroutine gpu_timestep_midpoint(si, f, warning_mode, ierr, nfev)
+    subroutine gpu_step_midpoint(si, f, warning_mode, ierr, nfev)
         !$acc routine seq
         type(symplectic_integrator_t), intent(inout) :: si
         type(field_can_t), intent(inout) :: f
@@ -436,7 +452,7 @@ contains
         type(field_can_t) :: accepted_field
         real(dp) :: x(5), z_start(4), z_guess(4)
         integer :: ktau, step_status, step_nfev
-        logical :: crossed, predicted
+        logical :: crossed
 
         ierr = 0
         nfev = 0
@@ -445,21 +461,11 @@ contains
             accepted_field = f
             si%pthold = f%pth
             z_start = si%z
-            predicted = history_valid(si)
             x(1:4) = predict_state(si, 1d0)
             z_guess = predict_state(si, 0.5d0)
             x(5) = z_guess(1)
             call gpu_newton_midpoint(si, f, x, warning_mode, step_status, step_nfev)
             nfev = nfev + step_nfev
-            if (step_status /= SYMPLECTIC_STEP_OK .and. predicted) then
-                si = accepted_integrator
-                f = accepted_field
-                x(1:4) = si%z
-                x(5) = si%z(1)
-                call gpu_newton_midpoint(si, f, x, warning_mode, step_status, &
-                    step_nfev)
-                nfev = nfev + step_nfev
-            end if
             if (step_status /= SYMPLECTIC_STEP_OK) then
                 si = accepted_integrator
                 f = accepted_field
@@ -483,6 +489,93 @@ contains
             nfev = nfev + 1
             call record_history(si, z_start,.not. crossed)
         end do
+    end subroutine gpu_step_midpoint
+
+    subroutine gpu_timestep_euler(si, f, warning_mode, ierr, nfev)
+        !$acc routine seq
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        logical, intent(in) :: warning_mode
+        integer, intent(out) :: ierr, nfev
+
+        type(gpu_saved_state_t) :: initial
+        real(dp) :: interval
+        integer :: level, slot, step_nfev
+        logical :: done, split
+
+        ! Step-halving retry of advance_symplectic_with_retry, with the same
+        ! schedule. A failed step leaves si and f at the start of its
+        ! sub-interval (ntau = 1 on the GPU paths), so the start of the whole
+        ! step needs saving only on the first failure.
+        nfev = 0
+        interval = si%dt
+        level = 0
+        slot = 0
+        do
+            si%dt = interval*0.5_dp**level
+            call gpu_step_euler(si, f, warning_mode, ierr, step_nfev)
+            nfev = nfev + step_nfev
+            if (ierr == SYMPLECTIC_STEP_OK) then
+                call retry_next(level, slot, done)
+                if (done) exit
+                cycle
+            end if
+            if (level == 0) then
+                initial%si = si
+                initial%f = f
+            end if
+            call retry_split(ierr, warning_mode, level, slot, split)
+            if (.not. split) then
+                if (level > 0) then
+                    si = initial%si
+                    f = initial%f
+                end if
+                exit
+            end if
+        end do
+        si%dt = interval
+    end subroutine gpu_timestep_euler
+
+    subroutine gpu_timestep_midpoint(si, f, warning_mode, ierr, nfev)
+        !$acc routine seq
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        logical, intent(in) :: warning_mode
+        integer, intent(out) :: ierr, nfev
+
+        type(gpu_saved_state_t) :: initial
+        real(dp) :: interval
+        integer :: level, slot, step_nfev
+        logical :: done, split
+
+        ! Same retry as gpu_timestep_euler.
+        nfev = 0
+        interval = si%dt
+        level = 0
+        slot = 0
+        do
+            si%dt = interval*0.5_dp**level
+            call gpu_step_midpoint(si, f, warning_mode, ierr, step_nfev)
+            nfev = nfev + step_nfev
+            if (ierr == SYMPLECTIC_STEP_OK) then
+                call retry_next(level, slot, done)
+                if (done) exit
+                cycle
+            end if
+            if (level == 0) then
+                initial%si = si
+                initial%f = f
+            end if
+            call retry_split(ierr, warning_mode, level, slot, split)
+            if (.not. split) then
+                if (level > 0) then
+                    si = initial%si
+                    f = initial%f
+                end if
+                exit
+            end if
+        end do
+        si%dt = interval
     end subroutine gpu_timestep_midpoint
 
     subroutine gpu_rhs_canonical(y, mu, ro0, dydt)
@@ -1312,6 +1405,41 @@ contains
         end select
     end subroutine trace_orbits_gpu_landreman
 
+    integer function gpu_device_count(npart) result(ngpu)
+        ! Devices a trace of npart particles uses: gpu_num_devices, or every
+        ! visible device when it is 0, never more than one per particle.
+        integer, intent(in) :: npart
+#ifdef _OPENACC
+        integer :: navail
+#endif
+
+        ngpu = 1
+#if defined(_OPENACC) && defined(_OPENMP)
+        navail = max(1, acc_get_num_devices(acc_device_nvidia))
+        if (gpu_num_devices > 0) navail = min(navail, gpu_num_devices)
+        ngpu = max(1, min(navail, npart))
+        ! Nested inside another parallel region there is no thread per device.
+        if (omp_in_parallel()) ngpu = 1
+#endif
+    end function gpu_device_count
+
+    subroutine gpu_use_device(dev)
+        ! Select device dev for this host thread and give it its own copy of
+        ! the static device data: the Boozer spline descriptors and the
+        ! integrator controls. Coefficient arrays stay shared host-side
+        ! allocations that each device reads through its descriptor.
+        integer, intent(in) :: dev
+
+#ifdef _OPENACC
+        call acc_set_device_num(dev, acc_device_nvidia)
+        call sync_boozer_state
+        !$acc update device(sympl_rmax, sympl_predictor, sympl_stop_rule, &
+        !$acc&              sympl_stop_kappa)
+#else
+        if (dev < 0) error stop 'gpu_use_device: invalid device'
+#endif
+    end subroutine gpu_use_device
+
     subroutine trace_orbits_gpu_rk54_range(si, f, npart, istart, iend, &
             ntimstep, ntau_macro, method, loss_step, loss_time_out, zend, nfev)
         type(symplectic_integrator_t), intent(in) :: si(npart)
@@ -1489,63 +1617,55 @@ contains
         end do
     end subroutine trace_orbits_gpu_range
 
-    subroutine trace_orbits_gpu(si, f, npart, ntimstep, ntau_macro, loss_step, zend)
-        ! Evolve npart pre-initialised particles, splitting the work evenly
-        ! across all available NVIDIA GPUs (one host thread per device). Falls
-        ! back to a single device / the host when only one is present.
+    subroutine trace_orbits_gpu_method(si, f, npart, ntimstep, ntau_macro, &
+                                       method, loss_step, loss_time, zend, nfev)
+        ! Orbits are independent here, so each device traces its cyclic share
+        ! of the particles from start to end without synchronization.
         type(symplectic_integrator_t), intent(inout) :: si(npart)
         type(field_can_t), intent(inout) :: f(npart)
-        integer, intent(in) :: npart, ntimstep
+        integer, intent(in) :: npart, ntimstep, method
         integer, intent(in) :: ntau_macro(ntimstep)
-        integer, intent(out) :: loss_step(npart)
+        integer, intent(out) :: loss_step(npart), nfev(npart)
+        real(dp), intent(out) :: loss_time(npart)
         real(dp), intent(out) :: zend(4, npart)
 
-        integer :: ngpu, navail, dev, i0, i1
-        real(dp), allocatable :: loss_time(:)
-        integer, allocatable :: nfev(:)
-        integer :: req
+        type(symplectic_integrator_t), allocatable :: si_d(:)
+        type(field_can_t), allocatable :: f_d(:)
+        integer, allocatable :: loss_step_d(:), nfev_d(:)
+        real(dp), allocatable :: loss_time_d(:), zend_d(:, :)
+        integer :: ngpu, dev, n
 
-        ! Number of devices to use. Default 1: with -gpu=mem:unified the spline
-        ! coefficient array is shared and migrates between devices on access, so
-        ! splitting across cards thrashes. Real multi-GPU needs a per-device
-        ! resident copy of the read-only splines. Opt in with gpu_num_devices.
-        req = gpu_num_devices
-
-        ngpu = 1
-        allocate (loss_time(npart), nfev(npart))
-#ifdef _OPENACC
-        navail = acc_get_num_devices(acc_device_nvidia)
-        if (navail < 1) navail = 1
-        ngpu = min(req, navail)
-#ifndef _OPENMP
-        ! Without OpenMP the device split below runs as one thread with dev = 0,
-        ! which would trace only the first npart/ngpu particles.
-        ngpu = 1
-#endif
-#endif
-        if (ngpu <= 1) then
-            call trace_orbits_gpu_range(si, f, npart, 1, npart, ntimstep, &
-                                        ntau_macro, loss_step, loss_time, zend, nfev)
+        ngpu = gpu_device_count(npart)
+        if (ngpu == 1) then
+            call gpu_use_device(0)
+            call trace_orbits_gpu_method_device(si, f, npart, ntimstep, &
+                                   ntau_macro, method, loss_step, loss_time, zend, nfev)
             return
         end if
 
-        !$omp parallel num_threads(ngpu) private(dev, i0, i1)
+        !$omp parallel num_threads(ngpu) default(shared) &
+        !$omp&   private(dev, n, si_d, f_d, loss_step_d, nfev_d, loss_time_d, zend_d)
         dev = 0
 !$      dev = omp_get_thread_num()
-#ifdef _OPENACC
-        call acc_set_device_num(dev, acc_device_nvidia)
-#endif
-        i0 = int(int(dev, 8)*npart/ngpu) + 1
-        i1 = int(int(dev + 1, 8)*npart/ngpu)
-        if (i1 >= i0) then
-            call trace_orbits_gpu_range(si, f, npart, i0, i1, ntimstep, &
-                                        ntau_macro, loss_step, loss_time, zend, nfev)
-        end if
+        call gpu_use_device(dev)
+        n = (npart - dev - 1)/ngpu + 1
+        allocate (si_d(n), f_d(n), loss_step_d(n), nfev_d(n), loss_time_d(n), &
+                  zend_d(4, n))
+        si_d = si(dev + 1:npart:ngpu)
+        f_d = f(dev + 1:npart:ngpu)
+        call trace_orbits_gpu_method_device(si_d, f_d, n, ntimstep, ntau_macro, &
+                                       method, loss_step_d, loss_time_d, zend_d, nfev_d)
+        si(dev + 1:npart:ngpu) = si_d
+        f(dev + 1:npart:ngpu) = f_d
+        loss_step(dev + 1:npart:ngpu) = loss_step_d
+        nfev(dev + 1:npart:ngpu) = nfev_d
+        loss_time(dev + 1:npart:ngpu) = loss_time_d
+        zend(:, dev + 1:npart:ngpu) = zend_d
         !$omp end parallel
-    end subroutine trace_orbits_gpu
+    end subroutine trace_orbits_gpu_method
 
-    subroutine trace_orbits_gpu_method(si, f, npart, ntimstep, ntau_macro, &
-            method, loss_step, loss_time, zend, nfev)
+    subroutine trace_orbits_gpu_method_device(si, f, npart, ntimstep, &
+                                   ntau_macro, method, loss_step, loss_time, zend, nfev)
         ! Compile-time-specialized kernels sit behind this host-only dispatch;
         ! no method branch is executed in the per-stage device hot path.
         type(symplectic_integrator_t), intent(inout) :: si(npart)
@@ -1569,7 +1689,7 @@ contains
         case default
             error stop 'trace_orbits_gpu_method: unsupported GPU integrator'
         end select
-    end subroutine trace_orbits_gpu_method
+    end subroutine trace_orbits_gpu_method_device
 
     ! Compiled in place: called across modules, these kernels made the
     ! OpenACC midpoint step 2 % slower (nvfortran 26.9).

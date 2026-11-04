@@ -10,7 +10,7 @@
 #include <numeric>
 #include <vector>
 
-namespace {
+namespace simple_cuda_native_detail {
 
 #ifndef SIMPLE_CUDA_NATIVE_THREADS
 #define SIMPLE_CUDA_NATIVE_THREADS 96
@@ -41,14 +41,16 @@ __device__ __forceinline__ double radial_norm(const double y[4]) {
   return sqrt(y[0] * y[0] + y[1] * y[1]);
 }
 
-void canonical_to_cartesian(const double canonical[4], double cartesian[4]) {
+static void canonical_to_cartesian(const double canonical[4],
+                                   double cartesian[4]) {
   cartesian[0] = canonical[0] * std::cos(canonical[1]);
   cartesian[1] = canonical[0] * std::sin(canonical[1]);
   cartesian[2] = canonical[2];
   cartesian[3] = canonical[3];
 }
 
-void cartesian_to_canonical(const double cartesian[4], double canonical[4]) {
+static void cartesian_to_canonical(const double cartesian[4],
+                                   double canonical[4]) {
   canonical[0] =
       std::sqrt(cartesian[0] * cartesian[0] + cartesian[1] * cartesian[1]);
   canonical[1] = std::atan2(cartesian[1], cartesian[0]);
@@ -56,6 +58,7 @@ void cartesian_to_canonical(const double cartesian[4], double canonical[4]) {
   canonical[3] = cartesian[3];
 }
 
+template <bool WithDerivative>
 __device__ __forceinline__ void
 cubic_table_location(double x, int dimension, const Geometry &geometry,
                      int &first, float weight[4], float *derivative) {
@@ -82,7 +85,7 @@ cubic_table_location(double x, int dimension, const Geometry &geometry,
   weight[1] = relative * (2.0f - relative) * (3.0f - relative) / 2.0f;
   weight[2] = relative * (relative - 1.0f) * (3.0f - relative) / 2.0f;
   weight[3] = relative * (relative - 1.0f) * (relative - 2.0f) / 6.0f;
-  if (derivative) {
+  if constexpr (WithDerivative) {
     derivative[0] = (-11.0f + relative * (12.0f - 3.0f * relative)) / 6.0f;
     derivative[1] = (6.0f + relative * (-10.0f + 3.0f * relative)) / 2.0f;
     derivative[2] = (-3.0f + relative * (8.0f - 3.0f * relative)) / 2.0f;
@@ -98,7 +101,7 @@ evaluate_profile_table(const float *__restrict__ table,
                        const Geometry &geometry, double s, float value[6]) {
   int first;
   float weight[4];
-  cubic_table_location(s, 0, geometry, first, weight, nullptr);
+  cubic_table_location<false>(s, 0, geometry, first, weight, nullptr);
 #pragma unroll
   for (int q = 0; q < 6; ++q)
     value[q] = 0.0f;
@@ -117,10 +120,11 @@ evaluate_field_table(const float *__restrict__ table, const Geometry &geometry,
   int first_s, first_theta, first_phi;
   float weight_s[4], weight_theta[4], weight_phi[4];
   float derivative_theta[4], derivative_phi[4];
-  cubic_table_location(s, 0, geometry, first_s, weight_s, nullptr);
-  cubic_table_location(theta, 1, geometry, first_theta, weight_theta,
-                       derivative_theta);
-  cubic_table_location(phi, 2, geometry, first_phi, weight_phi, derivative_phi);
+  cubic_table_location<false>(s, 0, geometry, first_s, weight_s, nullptr);
+  cubic_table_location<true>(theta, 1, geometry, first_theta, weight_theta,
+                            derivative_theta);
+  cubic_table_location<true>(phi, 2, geometry, first_phi, weight_phi,
+                            derivative_phi);
 #pragma unroll
   for (int q = 0; q < 4; ++q)
     value[q] = 0.0f;
@@ -365,12 +369,12 @@ finish_attempt(const double y[4], double h, const double k[7][4],
 }
 
 template <int Method>
-__device__ void trace_particle(const float *__restrict__ field_table,
-                               const float *__restrict__ profile_table,
-                               const Geometry &geometry,
-                               const double initial_z[4], double mu, double ro0,
-                               double final_z[4], double &lost_at,
-                               int &particle_status, uint64_t &nfev) {
+static __device__ void trace_particle(const float *__restrict__ field_table,
+                                      const float *__restrict__ profile_table,
+                                      const Geometry &geometry,
+                                      const double initial_z[4], double mu, double ro0,
+                                      double final_z[4], double &lost_at,
+                                      int &particle_status, uint64_t &nfev) {
   double y[4] = {initial_z[0], initial_z[1], initial_z[2], initial_z[3]};
   double current_time = 0.0;
   lost_at = geometry.total_duration;
@@ -510,15 +514,13 @@ trace_kernel(const float *__restrict__ field_table,
 
 using Clock = std::chrono::steady_clock;
 
-double milliseconds(Clock::time_point begin, Clock::time_point end) {
+static double milliseconds(Clock::time_point begin, Clock::time_point end) {
   return std::chrono::duration<double, std::milli>(end - begin).count();
 }
 
-int cuda_status(cudaError_t status) {
+static int cuda_status(cudaError_t status) {
   return status == cudaSuccess ? 0 : 1000 + static_cast<int>(status);
 }
-
-} // namespace
 
 extern "C" int simple_cuda_native_rk54(
     int method, int particle_count, const float *field_table,
@@ -950,3 +952,5 @@ extern "C" const char *simple_cuda_native_error_string(int status) {
     return "unknown SIMPLE native CUDA error";
   }
 }
+
+} // namespace simple_cuda_native_detail

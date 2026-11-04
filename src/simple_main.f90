@@ -1000,7 +1000,8 @@ contains
         ! campaign (J_parallel and rotation only) and all unsupported physics.
         use finite_check, only: quiet_nan
         use simple, only: init_sympl
-        use simple_gpu, only: trace_orbits_gpu_landreman, trace_orbits_gpu_method
+        use simple_gpu, only: trace_orbits_gpu_landreman, trace_orbits_gpu_method, &
+                              gpu_device_count
         use field_can_boozer, only: eval_field_booz
         use field_can_mod, only: get_val
         use boozer_sub, only: boozer_rk_device_supported, sync_boozer_state
@@ -1009,6 +1010,7 @@ contains
                                          CASH_KARP, DORMAND_PRINCE
 #ifdef SIMPLE_ENABLE_CUDA_NATIVE
         use simple_cuda_native, only: trace_orbits_cuda_native_landreman, &
+                                      cuda_native_device_count, &
                           initialize_cuda_native_particle, evaluate_cuda_native_particle
         use simple_cuda_euler, only: trace_orbits_cuda_euler, cuda_euler_supported
 #endif
@@ -1242,6 +1244,15 @@ contains
         print '(a,i0)', ' integrator mode = ', method
         print '(a,a)', ' backend = ', trim(backend_name)
         print '(a,i0)', ' particles = ', ntestpart
+        if (cuda_native_backend) then
+#ifdef SIMPLE_ENABLE_CUDA_NATIVE
+            print '(a,i0)', ' GPU devices = ', &
+                cuda_native_device_count(ntestpart, gpu_maxloss)
+#endif
+        else
+            print '(a,i0)', ' GPU devices = ', &
+                merge(1, gpu_device_count(ntestpart), landreman_mode)
+        end if
         print '(a,a)', ' start coordinates = ', trim(start_coordinates)
         print '(a,f12.6,a)', ' initialization = ', t_init, ' s'
         print '(a,f12.6,a)', ' tracing        = ', t_trace, ' s'
@@ -1294,14 +1305,18 @@ contains
         ! Triggered by gpu_mode='benchmark' and restricted to the Boozer
         ! explicit-implicit Euler or midpoint path without wall, collision, or
         ! classifier options.
-        use orbit_symplectic, only: orbit_timestep_sympl
+        use orbit_symplectic, only: orbit_timestep_sympl, &
+                                    advance_symplectic_with_retry
         use orbit_symplectic_base, only: symplectic_integrator_t, &
-                                         EXPL_IMPL_EULER, MIDPOINT
+                                         EXPL_IMPL_EULER, MIDPOINT, &
+                                         SYMPLECTIC_STEP_MAXITER, &
+                                         SYMPLECTIC_STEP_LINEAR_SOLVE
         use field_can_mod, only: field_can_t, get_derivatives
         use field_can_boozer, only: eval_field_booz
         use magfie_sub, only: BOOZER
         use boozer_sub, only: sync_boozer_state
-        use simple_gpu, only: evaluate_rhs_gpu, trace_orbits_gpu_method
+        use simple_gpu, only: evaluate_rhs_gpu, trace_orbits_gpu_method, &
+                              gpu_device_count
 #ifdef SIMPLE_ENABLE_CUDA_NATIVE
         use simple_cuda_euler, only: trace_orbits_cuda_euler, cuda_euler_supported, &
                                      cuda_euler_system_probe
@@ -1311,7 +1326,7 @@ contains
 
         type(symplectic_integrator_t), allocatable :: si_cpu(:), si_gpu(:)
         type(field_can_t), allocatable :: f_cpu(:), f_gpu(:)
-        integer, allocatable :: cpu_loss(:), gpu_loss(:), gpu_nfev(:)
+        integer, allocatable :: cpu_loss(:), cpu_ierr(:), gpu_loss(:), gpu_nfev(:)
         real(dp), allocatable :: gpu_loss_time(:)
         real(dp), allocatable :: cpu_zend(:, :), gpu_zend(:, :)
         real(dp), allocatable :: rhs_y(:, :), rhs_mu(:), rhs_ro0(:)
@@ -1319,6 +1334,7 @@ contains
         real(dp) :: z(5), hprime, rhs_scale, rhs_error
         integer :: i, it, ktau, ierr, loss_mismatch, rhs_location(2)
         integer :: cpu_lost, gpu_lost, flip
+        logical :: newton_failed
         real(dp) :: t0, t1, t_cpu, t_gpu, maxz
 #ifdef SIMPLE_ENABLE_CUDA_NATIVE
         type(symplectic_integrator_t), allocatable :: si_cuda(:)
@@ -1342,7 +1358,8 @@ contains
 
         allocate (si_cpu(ntestpart), si_gpu(ntestpart))
         allocate (f_cpu(ntestpart), f_gpu(ntestpart))
-        allocate (cpu_loss(ntestpart), gpu_loss(ntestpart), gpu_nfev(ntestpart))
+        allocate (cpu_loss(ntestpart), cpu_ierr(ntestpart), gpu_loss(ntestpart), &
+                  gpu_nfev(ntestpart))
         allocate (gpu_loss_time(ntestpart))
         allocate (cpu_zend(4, ntestpart), gpu_zend(4, ntestpart))
         allocate (rhs_y(4, ntestpart), rhs_mu(ntestpart), rhs_ro0(ntestpart))
@@ -1399,7 +1416,10 @@ contains
             cpu_loss(i) = ntimstep
             do it = 2, ntimstep
                 do ktau = 1, ntau_macro(it)
-                    call orbit_timestep_sympl(si_cpu(i), f_cpu(i), ierr)
+                    ! The tracing loops' step-halving retry, which the GPU
+                    ! kernels share.
+                    call advance_symplectic_with_retry(si_cpu(i), f_cpu(i), &
+                                                       orbit_timestep_sympl, ierr)
                     if (ierr /= 0) exit
                 end do
                 if (ierr /= 0) then
@@ -1407,6 +1427,7 @@ contains
                     exit
                 end if
             end do
+            cpu_ierr(i) = ierr
             cpu_zend(:, i) = si_cpu(i)%z(1:4)
         end do
         !$omp end parallel do
@@ -1414,6 +1435,23 @@ contains
         t_cpu = t1 - t0
 
         if (any(cpu_loss < ntimstep)) then
+            newton_failed = .false.
+            do i = 1, ntestpart
+                if (cpu_loss(i) == ntimstep) cycle
+                if (cpu_ierr(i) == SYMPLECTIC_STEP_MAXITER .or. &
+                    cpu_ierr(i) == SYMPLECTIC_STEP_LINEAR_SOLVE) then
+                    newton_failed = .true.
+                    print '(a,i0,a,i0,a,i0,a)', ' CPU reference particle ', i, &
+                        ': Newton solve failed at step ', cpu_loss(i), &
+                        ' (symplectic status ', cpu_ierr(i), ')'
+                else
+                    print '(a,i0,a,i0,a,i0,a)', ' CPU reference particle ', i, &
+                        ': boundary exit at step ', cpu_loss(i), &
+                        ' (symplectic status ', cpu_ierr(i), ')'
+                end if
+            end do
+            if (newton_failed) error stop &
+                'gpu_mode=benchmark: the CPU reference Newton solve failed'
             error stop 'gpu_mode=benchmark does not support boundary-reaching traces'
         end if
 
@@ -1467,6 +1505,7 @@ contains
         print *, '==================== GPU vs CPU tracing ===================='
         print '(a,i0,a,i0)', ' particles = ', ntestpart, '   timesteps = ', ntimstep
         print '(a,i0)', ' integrator mode = ', integmode
+        print '(a,i0)', ' GPU devices = ', gpu_device_count(ntestpart)
         print '(a,es12.4)', ' compact RHS relative error = ', rhs_error
         print '(a,es12.4)', ' max |z_cpu - z_gpu| (final state) = ', maxz
         print '(a,i0,a,i0)', ' loss-step mismatches = ', loss_mismatch, ' / ', ntestpart
