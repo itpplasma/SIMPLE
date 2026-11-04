@@ -42,6 +42,7 @@ module simple_main
                       ORBIT_EXIT_NUMERICAL_MAXITER, ORBIT_EXIT_NUMERICAL_LINEAR, &
                       ORBIT_EXIT_NUMERICAL_EVENT, ORBIT_EXIT_NUMERICAL_FULL_ORBIT
     use params, only: radial_electric_potential_slope
+    use params, only: thermal_stop_factor, ORBIT_EXIT_THERMALIZED
     use params, only: orbit_warning_hold_count, orbit_first_warning_step, &
                       orbit_terminal_exit_code, orbit_terminal_time
     use params, only: canonical_grid_nr, canonical_grid_ntheta, &
@@ -68,6 +69,8 @@ module simple_main
 
     ! Define real(dp) kind parameter
     integer, parameter :: dp = kind(1.0d0)
+    ! Macrostep return code of a marker stopped by thermal_stop_factor.
+    integer, parameter :: THERMALIZED_EXIT = 78
 
     logical, save :: wall_enabled = .false.
     integer, save :: map_boundary_exit_code = ORBIT_EXIT_LCFS
@@ -1943,6 +1946,8 @@ contains
 
         if (ierr_orbit == 0) then
             classify_orbit_exit = ORBIT_EXIT_COMPLETED
+        else if (ierr_orbit == THERMALIZED_EXIT) then
+            classify_orbit_exit = ORBIT_EXIT_THERMALIZED
         else if (ierr_orbit == 77) then
             classify_orbit_exit = ORBIT_EXIT_WALL
         else if (model == ORBIT_FULL_ORBIT) then
@@ -2041,7 +2046,7 @@ contains
         integer :: first_unresolved_it, hold_streak
         integer(8) :: kt
         logical :: passing, faulted, numerical_hold, physical_exit
-        logical :: numerically_confined
+        logical :: numerically_confined, thermalized_exit
         type(rk_recovery_state_t) :: rk_recovery
         type(classification_result_t) :: class_result
 
@@ -2049,6 +2054,7 @@ contains
         faulted = .false.
         physical_exit = .false.
         numerically_confined = .false.
+        thermalized_exit = .false.
         first_unresolved_it = 0
         hold_streak = 0
         rk_recovery = rk_recovery_state_t()
@@ -2142,6 +2148,13 @@ contains
                                        orbit_exit_code(ipart), orbit_model, integmode, &
                            symplectic_newton_warning_mode, swcoll, rk_recovery%active, &
                                        reference_normalized_flux_s(u_ref_prev(1)))
+                thermalized_exit = orbit_exit_code(ipart) == ORBIT_EXIT_THERMALIZED
+                if (thermalized_exit) then
+                    ! Joined the thermal population: confined from here on.
+                    do it_f = it, ntimstep
+                        call increase_confined_count(it_f, passing)
+                    end do
+                end if
                 if (numerically_confined) then
                     ! All pushers failed from the same validated state in the
                     ! axis-local core (VMEC s<0.01, or chartmap rho<0.1).
@@ -2167,7 +2180,7 @@ contains
                         boundary_event_time_width(ipart) = &
                             anorb%si%last_event_fraction_width*dtaumin/v0
                     end if
-                else if (.not. numerically_confined) then
+                else if (.not. (numerically_confined .or. thermalized_exit)) then
                     if (first_unresolved_it == 0) first_unresolved_it = it
                     faulted = .true.
                 end if
@@ -2206,7 +2219,7 @@ contains
         zend(4:5, ipart) = z(4:5)
         if (physical_exit) then
             times_lost(ipart) = exit_step*dtaumin/v0
-        else if (numerically_confined) then
+        else if (numerically_confined .or. thermalized_exit) then
             times_lost(ipart) = trace_time
         else if (faulted) then
             times_lost(ipart) = quiet_nan()
@@ -2941,6 +2954,11 @@ contains
                 if (rk_recovery_local%active) then
                     rk_recovery_local%momentum_reference = z(4)
                 end if
+                if (thermalized(z)) then
+                    ierr_orbit = THERMALIZED_EXIT
+                    kt = kt + 1
+                    exit
+                end if
             end if
             if (symplectic_accepted) &
                 call record_symplectic_success(rk_recovery_local)
@@ -3304,6 +3322,11 @@ contains
                 if (rk_recovery_local%active) then
                     rk_recovery_local%momentum_reference = z(4)
                 end if
+                if (thermalized(z)) then
+                    ierr_orbit = THERMALIZED_EXIT
+                    kt = kt + 1
+                    exit
+                end if
             end if
             if (symplectic_accepted) &
                 call record_symplectic_success(rk_recovery_local)
@@ -3463,6 +3486,22 @@ contains
             print *, 'Error in stost: ', ierr_coll, 'z = ', z, 'dtaumin = ', dtaumin
         end if
     end subroutine collide
+
+    !> True once a collisional marker's kinetic energy is below
+    !> thermal_stop_factor times the local main-ion temperature.
+    logical function thermalized(z)
+        use profile_radius, only: profile_s
+        use simple_profiles, only: get_plasma_params
+        use params, only: particle_energy_eV_effective
+        real(dp), intent(in) :: z(5)
+        real(dp) :: te, ti1, ti2, ni1, ni2
+
+        thermalized = .false.
+        if (thermal_stop_factor <= 0.0_dp) return
+        if (trim(collision_model) == 'lorentz_nustar') return
+        call get_plasma_params(max(0.0_dp, profile_s(z(1:3))), te, ti1, ti2, ni1, ni2)
+        thermalized = z(4)**2*particle_energy_eV_effective < thermal_stop_factor*ti1
+    end function thermalized
 
     subroutine write_output
         use field_can_base, only: n_field_evaluations, n_field_evaluations_d1, &
