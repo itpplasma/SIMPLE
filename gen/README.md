@@ -126,6 +126,11 @@ hand-written: the same kernel emitted for CUDA ran about 2 % slower there.
 `get_derivatives2`; the CPU chain stays hand-written because a different
 rounding changes the chaotic orbits of the golden-record classifier cases.
 
+`gc_geometry_gradient_transport` transports the gradients of A_theta,
+A_phi, h_theta, h_phi and B to the corrected Newton stage using the packed
+Hessians already stored in `field_can_t`. Gauss endpoint Hermite extrapolation
+uses those transported gradients, without another field evaluation.
+
 The optional second argument records the FortSym revision in the banner of
 every kernel. The emitted files are committed unformatted, so regenerating into
 an empty directory with that FortSym revision reproduces it byte for byte.

@@ -27,6 +27,7 @@ program test_orbit_systems_generated
         call check_rates()
         call check_radial_mixed()
         call check_rates_boozer()
+        call check_geometry_transport()
     end do
 
     if (errors /= 0) then
@@ -419,6 +420,45 @@ contains
         ref(4) = -(f%dH(3) - hp*f%dpth(3))
         call compare('guiding-centre rates', zdot, ref)
     end subroutine check_rates
+
+    subroutine check_geometry_transport()
+        type(field_can_t) :: f
+        real(dp) :: state(3), delta(3), old(3, 5), expected(3, 5)
+        real(dp) :: hessian(6, 5), actual(3, 5)
+        integer :: q
+
+        call random_vector(state)
+        call random_vector(delta)
+        do q = 1, 5
+            old(:, q) = quadratic_gradient(state, q)
+            expected(:, q) = quadratic_gradient(state + delta, q)
+            hessian(:, q) = q*[2d0, 1d0, 2d0, 4d0, 3d0, 6d0]
+        end do
+        f%dAth = old(:, 1)
+        f%dAph = old(:, 2)
+        f%dhth = old(:, 3)
+        f%dhph = old(:, 4)
+        f%dBmod = old(:, 5)
+        f%d2Ath = hessian(:, 1)
+        f%d2Aph = hessian(:, 2)
+        f%d2hth = hessian(:, 3)
+        f%d2hph = hessian(:, 4)
+        f%d2Bmod = hessian(:, 5)
+        call gc_geometry_gradient_transport(delta, f, actual)
+        call compare('transported geometry gradients', reshape(actual, [15]), &
+                     reshape(expected, [15]))
+    end subroutine check_geometry_transport
+
+    !> Independent derivative of a quadratic field with every mixed term.
+    function quadratic_gradient(state, q) result(gradient)
+        real(dp), intent(in) :: state(3)
+        integer, intent(in) :: q
+        real(dp) :: gradient(3)
+
+        gradient = [q*(2*state(1) + state(2) + 2*state(3)) + 1, &
+                    q*(4*state(2) + state(1) + 3*state(3)) + q + 1, &
+                    q*(6*state(3) + 2*state(1) + 3*state(2)) + q + 2]
+    end function quadratic_gradient
 
     !> Base field members of field_can_t, drawn independently.
     subroutine random_base_field(f)
