@@ -32,8 +32,8 @@ module simple_gpu
     use orbit_symplectic_base, only: EXPL_IMPL_EULER, MIDPOINT, CASH_KARP, &
         DORMAND_PRINCE
     use orbit_rk_core, only: rk_solve
-    use orbit_symplectic_base, only: history_valid, predict_state, record_history, &
-                                     rate_converged
+    use orbit_symplectic_base, only: predict_state, record_history, &
+                                     rate_converged, retry_split, retry_next
     use fortnum_ode_rk54_device, only: rk54_controls4_t, rk54_state4_t, &
         rk54_initialize4, rk54_request4, rk54_supply4, &
         RK54_CASH_KARP, RK54_DORMAND_PRINCE_TUNED, RK54_NEED_RHS, &
@@ -60,6 +60,15 @@ module simple_gpu
     public :: trace_orbits_gpu_midpoint_range
     public :: trace_orbits_gpu_landreman
     public :: evaluate_rhs_gpu
+    public :: gpu_get_derivatives2_radial_mixed, gc_rates_boozer
+
+    ! A second plain field_can_t local in one device routine, after inlining,
+    ! trips an nvfortran 26.9 device-compiler error (redefinition of the
+    ! type's initializer), so the saved step start is wrapped.
+    type :: gpu_saved_state_t
+        type(symplectic_integrator_t) :: si
+        type(field_can_t) :: f
+    end type gpu_saved_state_t
 
 contains
 
@@ -89,32 +98,10 @@ contains
         real(dp), intent(in) :: pphi
 
         call get_derivatives(f, pphi)
-
-        f%d2vpar(1:3) = -f%d2Aph(1:3)/f%ro0 - f%d2hph(1:3)*f%vpar
-        f%d2vpar(1) = f%d2vpar(1) - 2.0_dp*f%dhph(1)*f%dvpar(1)
-        f%d2vpar(2) = f%d2vpar(2) - &
-            (f%dhph(1)*f%dvpar(2) + f%dhph(2)*f%dvpar(1))
-        f%d2vpar(3) = f%d2vpar(3) - &
-            (f%dhph(1)*f%dvpar(3) + f%dhph(3)*f%dvpar(1))
-        f%d2vpar(1:3) = f%d2vpar(1:3)/f%hph
-
-        f%d2H(1:3) = f%vpar*f%d2vpar(1:3) + f%mu*f%d2Bmod(1:3)
-        f%d2H(1) = f%d2H(1) + f%dvpar(1)**2
-        f%d2H(2) = f%d2H(2) + f%dvpar(1)*f%dvpar(2)
-        f%d2H(3) = f%d2H(3) + f%dvpar(1)*f%dvpar(3)
-
-        f%d2pth(1:3) = f%d2vpar(1:3)*f%hth + &
-            f%vpar*f%d2hth(1:3) + f%d2Ath(1:3)/f%ro0
-        f%d2pth(1) = f%d2pth(1) + 2.0_dp*f%dvpar(1)*f%dhth(1)
-        f%d2pth(2) = f%d2pth(2) + f%dvpar(1)*f%dhth(2) + &
-            f%dvpar(2)*f%dhth(1)
-        f%d2pth(3) = f%d2pth(3) + f%dvpar(1)*f%dhth(3) + &
-            f%dvpar(3)*f%dhth(1)
-
-        f%d2vpar(7:9) = -f%dhph/f%hph**2
-        f%d2H(7:9) = f%dvpar(1:3)/f%hph + f%vpar*f%d2vpar(7:9)
-        f%d2pth(7:9) = f%dhth/f%hph + f%hth*f%d2vpar(7:9)
+        call gpu_radial_mixed_second_derivatives(f)
     end subroutine gpu_get_derivatives2_radial_mixed
+
+    include 'generated/gpu_derivatives2_radial_mixed.inc'
 
     subroutine gpu_newton1(si, f, x, xlast, warning_mode, status, nfev)
         !$acc routine seq
@@ -194,7 +181,21 @@ contains
         ! Non-convergence diagnostics (CPU writes fort.6601) are omitted on device.
     end subroutine gpu_newton1
 
-    subroutine gpu_timestep_euler(si, f, warning_mode, ierr, nfev)
+    subroutine gpu_restore_euler_start(si, f, z_start, accepted_pthold)
+        !$acc routine seq
+        ! Undo a failed Euler step without a per-step copy of f: the step reads
+        ! only pth from the incoming field and recomputes everything else
+        ! before use, so restoring pth restores the step's input.
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        real(dp), intent(in) :: z_start(4), accepted_pthold
+
+        f%pth = si%pthold
+        si%pthold = accepted_pthold
+        si%z = z_start
+    end subroutine gpu_restore_euler_start
+
+    subroutine gpu_step_euler(si, f, warning_mode, ierr, nfev)
         !$acc routine seq
         type(symplectic_integrator_t), intent(inout) :: si
         type(field_can_t), intent(inout) :: f
@@ -204,7 +205,7 @@ contains
 
         real(dp) :: x(2), xlast(2), accepted_pthold, z_start(4), z_guess(4)
         integer :: ktau, newton_status, newton_nfev
-        logical :: crossed, predicted
+        logical :: crossed
 
         ierr = 0
         nfev = 0
@@ -214,7 +215,6 @@ contains
             si%pthold = f%pth
 
             z_start = si%z
-            predicted = history_valid(si)
             z_guess = predict_state(si, 1d0)
             x(1) = z_guess(1)
             x(2) = z_guess(4)
@@ -222,22 +222,14 @@ contains
             call gpu_newton1(si, f, x, xlast, warning_mode, newton_status, &
                 newton_nfev)
             nfev = nfev + newton_nfev
-            if (newton_status /= SYMPLECTIC_STEP_OK .and. predicted) then
-                si%pthold = accepted_pthold
-                x(1) = si%z(1)
-                x(2) = si%z(4)
-                call gpu_newton1(si, f, x, xlast, warning_mode, newton_status, &
-                    newton_nfev)
-                nfev = nfev + newton_nfev
-            end if
             if (newton_status /= SYMPLECTIC_STEP_OK) then
-                si%pthold = accepted_pthold
+                call gpu_restore_euler_start(si, f, z_start, accepted_pthold)
                 ierr = newton_status
                 return
             end if
 
             if (x(1) > 1.0d0) then
-                si%pthold = accepted_pthold
+                call gpu_restore_euler_start(si, f, z_start, accepted_pthold)
                 ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
                 return
             end if
@@ -248,7 +240,7 @@ contains
                 x(1) = -x(1)
                 crossed = .true.
                 if (x(1) > 1.0d0) then
-                    si%pthold = accepted_pthold
+                    call gpu_restore_euler_start(si, f, z_start, accepted_pthold)
                     ierr = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
                     return
                 end if
@@ -272,7 +264,7 @@ contains
 
             ktau = ktau + 1
         end do
-    end subroutine gpu_timestep_euler
+    end subroutine gpu_step_euler
 
     subroutine gpu_eval_field_rmix(f, r, th_c, ph_c)
         !$acc routine seq
@@ -450,7 +442,7 @@ contains
             status = SYMPLECTIC_STEP_OK
     end subroutine gpu_newton_midpoint
 
-    subroutine gpu_timestep_midpoint(si, f, warning_mode, ierr, nfev)
+    subroutine gpu_step_midpoint(si, f, warning_mode, ierr, nfev)
         !$acc routine seq
         type(symplectic_integrator_t), intent(inout) :: si
         type(field_can_t), intent(inout) :: f
@@ -461,7 +453,7 @@ contains
         type(field_can_t) :: accepted_field
         real(dp) :: x(5), z_start(4), z_guess(4)
         integer :: ktau, step_status, step_nfev
-        logical :: crossed, predicted
+        logical :: crossed
 
         ierr = 0
         nfev = 0
@@ -470,21 +462,11 @@ contains
             accepted_field = f
             si%pthold = f%pth
             z_start = si%z
-            predicted = history_valid(si)
             x(1:4) = predict_state(si, 1d0)
             z_guess = predict_state(si, 0.5d0)
             x(5) = z_guess(1)
             call gpu_newton_midpoint(si, f, x, warning_mode, step_status, step_nfev)
             nfev = nfev + step_nfev
-            if (step_status /= SYMPLECTIC_STEP_OK .and. predicted) then
-                si = accepted_integrator
-                f = accepted_field
-                x(1:4) = si%z
-                x(5) = si%z(1)
-                call gpu_newton_midpoint(si, f, x, warning_mode, step_status, &
-                    step_nfev)
-                nfev = nfev + step_nfev
-            end if
             if (step_status /= SYMPLECTIC_STEP_OK) then
                 si = accepted_integrator
                 f = accepted_field
@@ -508,6 +490,93 @@ contains
             nfev = nfev + 1
             call record_history(si, z_start,.not. crossed)
         end do
+    end subroutine gpu_step_midpoint
+
+    subroutine gpu_timestep_euler(si, f, warning_mode, ierr, nfev)
+        !$acc routine seq
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        logical, intent(in) :: warning_mode
+        integer, intent(out) :: ierr, nfev
+
+        type(gpu_saved_state_t) :: initial
+        real(dp) :: interval
+        integer :: level, slot, step_nfev
+        logical :: done, split
+
+        ! Step-halving retry of advance_symplectic_with_retry, with the same
+        ! schedule. A failed step leaves si and f at the start of its
+        ! sub-interval (ntau = 1 on the GPU paths), so the start of the whole
+        ! step needs saving only on the first failure.
+        nfev = 0
+        interval = si%dt
+        level = 0
+        slot = 0
+        do
+            si%dt = interval*0.5_dp**level
+            call gpu_step_euler(si, f, warning_mode, ierr, step_nfev)
+            nfev = nfev + step_nfev
+            if (ierr == SYMPLECTIC_STEP_OK) then
+                call retry_next(level, slot, done)
+                if (done) exit
+                cycle
+            end if
+            if (level == 0) then
+                initial%si = si
+                initial%f = f
+            end if
+            call retry_split(ierr, warning_mode, level, slot, split)
+            if (.not. split) then
+                if (level > 0) then
+                    si = initial%si
+                    f = initial%f
+                end if
+                exit
+            end if
+        end do
+        si%dt = interval
+    end subroutine gpu_timestep_euler
+
+    subroutine gpu_timestep_midpoint(si, f, warning_mode, ierr, nfev)
+        !$acc routine seq
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        logical, intent(in) :: warning_mode
+        integer, intent(out) :: ierr, nfev
+
+        type(gpu_saved_state_t) :: initial
+        real(dp) :: interval
+        integer :: level, slot, step_nfev
+        logical :: done, split
+
+        ! Same retry as gpu_timestep_euler.
+        nfev = 0
+        interval = si%dt
+        level = 0
+        slot = 0
+        do
+            si%dt = interval*0.5_dp**level
+            call gpu_step_midpoint(si, f, warning_mode, ierr, step_nfev)
+            nfev = nfev + step_nfev
+            if (ierr == SYMPLECTIC_STEP_OK) then
+                call retry_next(level, slot, done)
+                if (done) exit
+                cycle
+            end if
+            if (level == 0) then
+                initial%si = si
+                initial%f = f
+            end if
+            call retry_split(ierr, warning_mode, level, slot, split)
+            if (.not. split) then
+                if (level > 0) then
+                    si = initial%si
+                    f = initial%f
+                end if
+                exit
+            end if
+        end do
+        si%dt = interval
     end subroutine gpu_timestep_midpoint
 
     subroutine gpu_rhs_canonical(y, mu, ro0, dydt)
@@ -518,14 +587,10 @@ contains
         real(dp), intent(in) :: mu, ro0
         real(dp), intent(out) :: dydt(4)
 
-        real(dp) :: aphi, daphi, btheta, dbtheta, bphi, dbphi, bmod
-        real(dp) :: dbmod(3), hth, hph, vpar, hprime
-        real(dp) :: inv_bmod, inv_bmod2, inv_hph, inv_dpth
-        real(dp) :: dhth_r, dhth_phi
-        real(dp) :: dhph_r, dhph_theta, dhph_phi
-        real(dp) :: dvpar_r, dvpar_theta, dvpar_phi
-        real(dp) :: dh_r, dh_theta, dh_phi, dpth_r, dpth_phi
+        real(dp) :: aphi, daphi, btheta, dbtheta, bphi, dbphi, bmod, dbmod(3)
+        real(dp) :: torflux
 
+        torflux = boozer_state%torflux
         if (rk_tables_ready) then
             call splint_boozer_rk_table_device(y(1), y(2), y(3), aphi, &
                 daphi, btheta, dbtheta, bphi, dbphi, bmod, dbmod)
@@ -533,33 +598,12 @@ contains
             call splint_boozer_rk_device(y(1), y(2), y(3), aphi, daphi, &
                 btheta, dbtheta, bphi, dbphi, bmod, dbmod)
         end if
-        inv_bmod = 1.0_dp/bmod
-        inv_bmod2 = inv_bmod*inv_bmod
-        hth = btheta*inv_bmod
-        hph = bphi*inv_bmod
-        dhth_r = dbtheta*inv_bmod - btheta*dbmod(1)*inv_bmod2
-        dhth_phi = -btheta*dbmod(3)*inv_bmod2
-        dhph_r = dbphi*inv_bmod - bphi*dbmod(1)*inv_bmod2
-        dhph_theta = -bphi*dbmod(2)*inv_bmod2
-        dhph_phi = -bphi*dbmod(3)*inv_bmod2
-        inv_hph = 1.0_dp/hph
-        vpar = (y(4) - aphi/ro0)*inv_hph
-        dvpar_r = -(daphi/ro0 + dhph_r*vpar)*inv_hph
-        dvpar_theta = -dhph_theta*vpar*inv_hph
-        dvpar_phi = -dhph_phi*vpar*inv_hph
-        dh_r = vpar*dvpar_r + mu*dbmod(1)
-        dh_theta = vpar*dvpar_theta + mu*dbmod(2)
-        dh_phi = vpar*dvpar_phi + mu*dbmod(3)
-        dpth_r = dvpar_r*hth + vpar*dhth_r + boozer_state%torflux/ro0
-        dpth_phi = dvpar_phi*hth + vpar*dhth_phi
-        inv_dpth = 1.0_dp/dpth_r
-        hprime = dh_r*inv_dpth
-
-        dydt(1) = -(dh_theta - hth*inv_hph*dh_phi)*inv_dpth
-        dydt(2) = hprime
-        dydt(3) = (vpar - hprime*hth)*inv_hph
-        dydt(4) = -(dh_phi - hprime*dpth_phi)
+        call gc_rates_boozer(y(4), mu, ro0, torflux, aphi, daphi, btheta, &
+                             dbtheta, bphi, dbphi, bmod, dbmod(1), dbmod(2), &
+                             dbmod(3), dydt(1), dydt(2), dydt(3), dydt(4))
     end subroutine gpu_rhs_canonical
+
+    include 'generated/gc_rates_boozer.inc'
 
     subroutine gpu_rhs_canonical_cartesian(y, mu, ro0, dydt)
         ! Integrate the radial Boozer plane as (s*cos(theta), s*sin(theta)).

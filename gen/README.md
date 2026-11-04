@@ -108,6 +108,24 @@ gfortran -I/path/to/fortsym/build/include gen/generate_orbit_systems.f90 \
 /scratch/generate_orbit_systems src/generated <fortsym revision>
 ```
 
+The same run writes two OpenACC kernels. `gpu_radial_mixed_second_derivatives`
+(`src/generated/gpu_derivatives2_radial_mixed.inc`, included in
+`simple_gpu.f90`) states v_par = (p_phi - A_phi/ro0)/h_phi,
+H = v_par^2/2 + mu B + Phi_e and p_theta = h_theta v_par + A_theta/ro0 once and
+gives the second derivatives with a radial or p_phi index, which the Euler
+Newton system reads, from the values and gradients that `get_derivatives`
+stored in `field_can_t`. v_par is a named intermediate of `fortsym_chain`, so
+its derivatives reuse v_par and its lower derivatives. d2Phi_e is dropped
+because the electric potential is linear in s. `gc_rates_boozer`
+(`gc_rates_boozer.inc`, called by `gpu_rhs_canonical`) applies the
+guiding-centre rates of `gc_rates_canonical` to a Boozer field; p_phi -
+A_phi/ro0 stays a named difference, so no rewrite expands it where v_par is
+close to zero. The CUDA rates in `simple_cuda_native_rk54.cu` stay
+hand-written: the same kernel emitted for CUDA ran about 2 % slower there.
+`emit_field_derivatives` can also emit `get_val`, `get_derivatives` and
+`get_derivatives2`; the CPU chain stays hand-written because a different
+rounding changes the chaotic orbits of the golden-record classifier cases.
+
 The optional second argument records the FortSym revision in the banner of
 every kernel. The emitted files are committed unformatted, so regenerating into
 an empty directory with that FortSym revision reproduces it byte for byte.

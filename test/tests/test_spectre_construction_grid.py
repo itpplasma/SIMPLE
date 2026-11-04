@@ -23,7 +23,6 @@ import re
 import subprocess
 import sys
 import tempfile
-import time
 
 import numpy as np
 from spectre_test_utils import axis_volume
@@ -62,29 +61,23 @@ def write_input(path, h5, integmode, ntestpart, trace_time, ntimstep, npoiper2,
 
 
 def run_peak_rss(binary, workdir):
-    """Run simple.x and return (peak_rss_MB, stdout). VmHWM is the kernel's
-    per-process resident high-water mark, so polling it captures the transient
-    construction peak regardless of read timing."""
-    proc = subprocess.Popen([binary, "simple.in"], cwd=workdir,
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                            text=True)
-    peak_kb = 0
-    status = f"/proc/{proc.pid}/status"
-    while proc.poll() is None:
-        try:
-            with open(status) as f:
-                for line in f:
-                    if line.startswith("VmHWM:"):
-                        peak_kb = max(peak_kb, int(line.split()[1]))
-                        break
-        except OSError:
-            break
-        time.sleep(0.02)
-    out = proc.stdout.read()
-    proc.wait()
+    """Return the child's kernel high-water RSS in MiB and its output."""
+    # A file prevents a full stdout pipe from blocking the child before wait4.
+    with tempfile.TemporaryFile(mode="w+") as output:
+        proc = subprocess.Popen([binary, "simple.in"], cwd=workdir,
+                                stdout=output, stderr=subprocess.STDOUT)
+        _, status, usage = os.wait4(proc.pid, 0)
+        proc.returncode = os.waitstatus_to_exitcode(status)
+        output.seek(0)
+        out = output.read()
     if proc.returncode != 0:
         raise RuntimeError(f"simple.x failed:\n{out[-3000:]}")
-    return peak_kb / 1024.0, out
+    # Darwin reports bytes; Linux reports KiB. Both include transient peaks.
+    scale = 1024.0 ** 2 if sys.platform == "darwin" else 1024.0
+    peak_mib = usage.ru_maxrss / scale
+    if peak_mib <= 0:
+        raise RuntimeError("kernel did not report a positive peak RSS")
+    return peak_mib, out
 
 
 def run_config(binary, h5, integmode=3, ntestpart=2, trace_time=1.0e-6,
@@ -140,10 +133,10 @@ def check(binary, tok2vol):
         failures.append(f"red proof: explicit phi=32 not honored "
                         f"(n_phi={grid_full['n_phi']} auto={grid_full['phi_auto']})")
     if not rss_clamped < CLAMP_RSS_FRACTION * rss_full:
-        failures.append(f"red proof: clamped RSS {rss_clamped:.0f} MB not below "
-                        f"{CLAMP_RSS_FRACTION}x unclamped {rss_full:.0f} MB")
-    print(f"memory: clamped(phi={grid['n_phi']})={rss_clamped:.0f} MB  "
-          f"unclamped(phi=32)={rss_full:.0f} MB  "
+        failures.append(f"red proof: clamped RSS {rss_clamped:.0f} MiB not below "
+                        f"{CLAMP_RSS_FRACTION}x unclamped {rss_full:.0f} MiB")
+    print(f"memory: clamped(phi={grid['n_phi']})={rss_clamped:.0f} MiB  "
+          f"unclamped(phi=32)={rss_full:.0f} MiB  "
           f"ratio={rss_clamped / rss_full:.2f}")
 
     # Coarse r,th knob drops peak RSS further below the default.
@@ -151,10 +144,10 @@ def check(binary, tok2vol):
         binary, tok2vol,
         extra=("spectre_ncon_r = 16", "spectre_ncon_th = 16"))
     if not rss_coarse < rss_clamped:
-        failures.append(f"knob: coarse RSS {rss_coarse:.0f} MB not below "
-                        f"default {rss_clamped:.0f} MB")
+        failures.append(f"knob: coarse RSS {rss_coarse:.0f} MiB not below "
+                        f"default {rss_clamped:.0f} MiB")
     print(f"memory: coarse(16x16, phi={parse_grid(out_coarse)['n_phi']})="
-          f"{rss_coarse:.0f} MB (default {rss_clamped:.0f} MB)")
+          f"{rss_coarse:.0f} MiB (default {rss_clamped:.0f} MiB)")
 
     rss_cubic, out_cubic, _ = run_config(
         binary, tok2vol,
@@ -162,10 +155,10 @@ def check(binary, tok2vol):
     if parse_grid(out_cubic)["order"] != 3:
         failures.append("order: cubic construction setting not honored")
     if not rss_cubic < rss_full:
-        failures.append(f"order: cubic RSS {rss_cubic:.0f} MB not below "
-                        f"quintic {rss_full:.0f} MB")
+        failures.append(f"order: cubic RSS {rss_cubic:.0f} MiB not below "
+                        f"quintic {rss_full:.0f} MiB")
     print(f"memory: cubic({grid['n_r']}x{grid['n_th']}, phi=32)="
-          f"{rss_cubic:.0f} MB (quintic {rss_full:.0f} MB)")
+          f"{rss_cubic:.0f} MiB (quintic {rss_full:.0f} MiB)")
 
     # Construction identity: a coarse-grid chart still conserves the
     # guiding-center energy p^2 for confined low-energy markers.

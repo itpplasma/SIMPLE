@@ -74,6 +74,7 @@ use field_can_mod, only: eval_field => evaluate, field_can_t, get_val, get_deriv
     real(dp), parameter :: symplectic_spectre_newton_warning_factor = 10.0_dp
     real(dp) :: boundary_event_fraction_tolerance = -1d0
     real(dp) :: boundary_event_radial_tolerance = -1d0
+    integer, parameter :: max_retry_depth = 8
 
     type :: symplectic_integrator_t
         real(dp) :: atol
@@ -200,6 +201,39 @@ contains
         if (.not. (theta < 1d0)) return
         rate_converged = theta/(1d0 - theta)*dnorm <= sympl_stop_kappa
     end function rate_converged
+
+    pure subroutine retry_split(status, warning_mode, level, slot, split)
+        !$acc routine seq
+        ! A failed Newton solve on the sub-interval (level, slot) of width
+        ! 2**-level is retried as its two halves. Shared by the CPU and OpenACC
+        ! steppers so that both subdivide the same steps.
+        integer, intent(in) :: status
+        logical, intent(in) :: warning_mode
+        integer, intent(inout) :: level, slot
+        logical, intent(out) :: split
+
+        split = warning_mode .and. level < max_retry_depth .and. &
+                (status == SYMPLECTIC_STEP_MAXITER .or. &
+                 status == SYMPLECTIC_STEP_LINEAR_SOLVE)
+        if (.not. split) return
+        level = level + 1
+        slot = 2*slot
+    end subroutine retry_split
+
+    pure subroutine retry_next(level, slot, done)
+        !$acc routine seq
+        ! After an accepted sub-interval, continue with its second half sibling,
+        ! or with the parent's sibling once both halves of a split are done.
+        integer, intent(inout) :: level, slot
+        logical, intent(out) :: done
+
+        slot = slot + 1
+        do while (level > 0 .and. mod(slot, 2) == 0)
+            level = level - 1
+            slot = slot/2
+        end do
+        done = level == 0
+    end subroutine retry_next
 
     subroutine coeff_rk_gauss(n, a, b, c)
         !$acc routine seq
