@@ -6,7 +6,7 @@ program test_collision_slowing_down
     ! the code. The ODE is integrated independently in physical time.
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use collis_alp, only: stost, loacol_alpha, efcolf, velrat, enrat, &
-        efcolf_grid, velrat_grid, enrat_grid, N_S_GRID
+                          set_uniform_coeffs
     implicit none
 
     integer, parameter :: npart = 10000, ncheck = 3
@@ -27,11 +27,7 @@ program test_collision_slowing_down
     call loacol_alpha(am1, am2, z1, z2, densi1, densi2, tempi, tempi, tempe, &
         energy0, v0, dchichi, slowrate, dchichi_norm, &
         slowrate_norm, test_mass, test_charge)
-    do i = 1, N_S_GRID
-        efcolf_grid(:, i) = efcolf
-        velrat_grid(:, i) = velrat
-        enrat_grid(:, i) = enrat
-    end do
+    call set_uniform_coeffs(efcolf, velrat, enrat)
 
     ! Checkpoints at 10, 30 and 60 % of the initial energy-loss time.
     times = [0.1_dp, 0.3_dp, 0.6_dp]/loss_rate(energy0)
