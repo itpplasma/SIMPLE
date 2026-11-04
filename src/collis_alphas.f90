@@ -223,19 +223,14 @@ contains
                                         tempi1, tempi2, tempe, ealpha, v0, &
                                         efcolf_out, velrat_out, enrat_out, &
                                         test_mass, test_charge, clog_out, bratio_out)
+        use util, only: pi, hbar, pmass => p_mass, emass => e_mass, &
+                        e_cgs => e_charge, ev_cgs => ev
         real(wp), intent(in) :: am1, am2, Z1, Z2, densi1, densi2
         real(wp), intent(in) :: tempi1, tempi2, tempe, ealpha
         real(wp), intent(in), optional :: test_mass, test_charge
         real(wp), intent(out) :: v0
       real(wp), intent(out) :: efcolf_out(nsorts), velrat_out(nsorts), enrat_out(nsorts)
         real(wp), intent(out), optional :: clog_out(nsorts), bratio_out(nsorts)
-
-        real(wp), parameter :: pi = 3.14159265358979d0
-        real(wp), parameter :: hbar = 1.054571817d-27
-        real(wp), parameter :: pmass = 1.6726d-24
-        real(wp), parameter :: emass = 9.1094d-28
-        real(wp), parameter :: e_cgs = 4.8032d-10
-        real(wp), parameter :: ev_cgs = 1.6022d-12
 
         real(wp) :: dense, vti1, vti2, vte
         real(wp) :: alami1, alami2, alame, frecol_base, mass, charge

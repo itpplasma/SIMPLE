@@ -11,8 +11,8 @@ program test_collision_slowing_down
 
     integer, parameter :: npart = 10000, ncheck = 3
     real(dp), parameter :: pi = acos(-1.0_dp)
-    real(dp), parameter :: pmass = 1.6726d-24, emass = 9.1094d-28
-    real(dp), parameter :: e_cgs = 4.8032d-10, ev_cgs = 1.6022d-12
+    real(dp), parameter :: pmass = 1.67262192369d-24, emass = 9.1093837015d-28
+    real(dp), parameter :: e_cgs = 4.803204712570263d-10, ev_cgs = 1.602176634d-12
     ! 55 keV H+ in an H+/C6+ plasma at 2 keV, ne = 5.6e13 cm^-3 (Zeff = 1.6).
     real(dp), parameter :: am1 = 1.0_dp, am2 = 12.0_dp, z1 = 1.0_dp, z2 = 6.0_dp
     real(dp), parameter :: densi1 = 5.0d13, densi2 = 1.0d12

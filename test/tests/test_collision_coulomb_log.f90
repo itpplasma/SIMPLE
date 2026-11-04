@@ -7,7 +7,7 @@ program test_collision_coulomb_log
     implicit none
     real(dp), parameter :: e = 1.602176634e-19_dp, eps0 = 8.8541878128e-12_dp
     real(dp), parameter :: hbar = 1.054571817e-34_dp, pi = acos(-1.0_dp)
-    real(dp), parameter :: mp = 1.6726e-27_dp, me = 9.1094e-31_dp
+    real(dp), parameter :: mp = 1.67262192369e-27_dp, me = 9.1093837015e-31_dp
     real(dp), parameter :: energy = 55000.0_dp, temp = 1000.0_dp
     real(dp), parameter :: n1 = 1.0e13_dp, n2 = 1.0e12_dp, z2 = 6.0_dp, a2 = 12.0_dp
     real(dp) :: coef(nsorts), velrat(nsorts), enr(nsorts), clog(nsorts), bratio(nsorts)
