@@ -12,6 +12,14 @@ endif()
 ##################################################
 # DOWNLOAD TEST DATA
 ##################################################
+if(SIMPLE_ENABLE_CGAL AND ENABLE_OPENMP)
+    add_executable(test_cgal_openmp_link.x test_cgal_openmp_link.f90)
+    target_link_libraries(test_cgal_openmp_link.x simple)
+    add_test(NAME test_cgal_openmp_link COMMAND test_cgal_openmp_link.x)
+    set_tests_properties(test_cgal_openmp_link PROPERTIES
+        ENVIRONMENT "OMP_TARGET_OFFLOAD=DISABLED")
+endif()
+
 # Download VMEC test file to unified test_data directory (shared with Python tests)
 set(TEST_DATA_DIR "${CMAKE_SOURCE_DIR}/test/test_data")
 set(WOUT_FILE "${TEST_DATA_DIR}/wout.nc")
