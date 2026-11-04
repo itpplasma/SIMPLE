@@ -94,7 +94,8 @@ the stage states. Their partial derivatives bind to the members of
 `field_can_t` (the packed Hessian order of `get_derivatives2`), and every
 `<scheme>_jacobian` is the symbolic derivative of `<scheme>_residual` with
 respect to the Newton unknowns. `gc_rates_canonical` gives the guiding-centre
-rates from the same field quantities. All kernels carry `!$acc routine seq`, so
+rates from the same field quantities; `gc_rates_canonical_jacobian` differentiates
+those rates for the two-derivative integrators. All kernels carry `!$acc routine seq`, so
 the CPU build and the OpenACC device code share them. The Runge-Kutta
 coefficients stay arguments, supplied by `coeff_rk_gauss` and
 `coeff_rk_lobatto`.

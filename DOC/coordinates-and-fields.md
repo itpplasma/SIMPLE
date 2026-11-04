@@ -327,6 +327,14 @@ module-level singletons: one canonical field per process
 ([#293](https://github.com/itpplasma/SIMPLE/issues/293)). They are written
 during initialisation and read-only during tracing.
 
+For a canonical guiding-centre state `(r, theta, phi, p_phi)`, the radial
+rate includes the toroidal derivative of the poloidal canonical momentum.
+Writing that momentum as `P` and the Hamiltonian as `H`, with subscripts
+denoting partial derivatives at fixed other state variables, the rate is
+`dr/dtau = -(H_theta + P_phi H_p_phi - P_p_phi H_phi)/P_r`.
+The explicit and two-derivative integrators share this expression and its
+symbolic Jacobian. In the Boozer special case, `P_phi` vanishes.
+
 Gauss collocation reports endpoint field values by Hermite extrapolation of
 its stage values and rates. After the final Newton correction, the geometric
 field gradients are transported with their existing Hessians to the same
