@@ -590,3 +590,8 @@ Ser. 2397, 012012 (2022),
 Entry points: `invariants_from_state`, `states_from_invariants`,
 `potato_to_simple_invariants`; the flat wrappers in `simple_main` convert
 coordinates and add $R_c$ for Python.
+
+The direct VMEC magfie path requires positive normalized toroidal flux `s`.
+Its radial difference step is capped at `s/8` near the axis so neither
+sample crosses the singular `s=0` surface. This retains a finite-step
+truncation error and does not define a field-coordinate basis on the axis.

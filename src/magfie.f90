@@ -482,6 +482,7 @@ end function cross_product
   real(dp) :: s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
                       sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
                       Bcovar_r,Bcovar_vartheta,Bcovar_varphi
+        real(dp) :: ds
   real(dp) :: cjac,bcov_s_vmec,bcov_t_vmec,bcov_p_vmec
   real(dp) :: dhs_dt,dhs_dp,dht_ds,dht_dp,dhp_ds,dhp_dt
   real(dp), dimension(3), intent(in) :: x
@@ -489,9 +490,11 @@ end function cross_product
   !
   ! Begin derivatives over s
   !
+        ! Keep the radial stencil inside the positive-flux coordinate domain.
+        ds = min(hs, x(1)/8.d0)
   theta=x(2)
   varphi=x(3)
-  s=x(1)+hs
+        s = x(1) + ds
   !
   call vmec_field(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
                   sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
@@ -505,7 +508,7 @@ end function cross_product
   dht_ds=bcov_t_vmec/bmod
   dhp_ds=bcov_p_vmec/bmod
   !
-  s=x(1)-hs
+        s = x(1) - ds
   !
   call vmec_field(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
                   sqg,alam,dl_ds,dl_dt,dl_dp,Bctrvr_vartheta,Bctrvr_varphi,     &
@@ -515,9 +518,9 @@ end function cross_product
   bcov_s_vmec=Bcovar_r+dl_ds*Bcovar_vartheta
   bcov_t_vmec=(1.d0+dl_dt)*Bcovar_vartheta
   bcov_p_vmec=Bcovar_varphi+dl_dp*Bcovar_vartheta
-  bder(1)=(bder(1)-bmod)/(2.d0*hs)
-  dht_ds=(dht_ds-bcov_t_vmec/bmod)/(2.d0*hs)
-  dhp_ds=(dhp_ds-bcov_p_vmec/bmod)/(2.d0*hs)
+        bder(1) = (bder(1) - bmod)/(2.d0*ds)
+        dht_ds = (dht_ds - bcov_t_vmec/bmod)/(2.d0*ds)
+        dhp_ds = (dhp_ds - bcov_p_vmec/bmod)/(2.d0*ds)
   !
   ! End derivatives over s
   !

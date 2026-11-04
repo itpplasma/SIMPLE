@@ -152,3 +152,10 @@ add_test(NAME test_refcoords_cartesian_axis
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
 )
 set_tests_properties(test_refcoords_cartesian_axis PROPERTIES TIMEOUT 120)
+
+add_executable(test_magfie_vmec_near_axis.x test_magfie_vmec_near_axis.f90)
+target_link_libraries(test_magfie_vmec_near_axis.x simple)
+add_dependencies(test_magfie_vmec_near_axis.x ncsx_test_data)
+add_test(NAME test_magfie_vmec_near_axis
+    COMMAND $<TARGET_FILE:test_magfie_vmec_near_axis.x>
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..)
