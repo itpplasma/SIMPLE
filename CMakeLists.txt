@@ -25,12 +25,6 @@ if(NOT SIMPLE_VERSION)
 endif()
 message(STATUS "SIMPLE version: ${SIMPLE_VERSION}")
 
-# Generate version.f90 from template
-configure_file(
-    ${CMAKE_SOURCE_DIR}/src/version.f90.in
-    ${CMAKE_BINARY_DIR}/version.f90
-    @ONLY
-)
 
 add_compile_options(-g)
 
