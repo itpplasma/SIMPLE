@@ -2068,7 +2068,7 @@ contains
 
         call ref_to_integ(zstart(1:3, ipart), z(1:3))
         z(4:5) = zstart(4:5, ipart)
-        orbit_traj(:, 1) = zstart(:, ipart)
+        orbit_traj(:, 1) = z
         orbit_times(1) = 0.0_dp
         zend(:, ipart) = 0d0
 
