@@ -1,3 +1,5 @@
+// fpm compiles every source; without CGAL this unit is empty, as in CMake.
+#ifdef SIMPLE_ENABLE_CGAL
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -305,3 +307,4 @@ extern "C" int stl_wall_first_hit_segment_with_normal(void* h, const double p0_m
     }
     return 1;
 }
+#endif  // SIMPLE_ENABLE_CGAL
