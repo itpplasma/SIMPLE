@@ -19,6 +19,7 @@ program test_profiles
     call test_zero_density_operator(all_passed, n_failed)
     call test_flat_profile_coefficients(all_passed, n_failed)
     call test_peaked_profile_collision_rates(all_passed, n_failed)
+    call test_steep_edge_coefficients(all_passed, n_failed)
     call test_flat_intermediate_values(all_passed, n_failed)
     call test_slowing_down_distribution(all_passed, n_failed)
     call test_loss_fraction_flat_vs_scalar(all_passed, n_failed)
@@ -541,6 +542,49 @@ contains
         end if
     end subroutine test_peaked_profile_collision_rates
 
+    ! Between radial nodes the coefficients must follow the profile itself, not
+    ! a linear interpolation of coefficients, which fails on steep edges.
+    subroutine test_steep_edge_coefficients(passed, nfail)
+        logical, intent(inout) :: passed
+        integer, intent(inout) :: nfail
+
+        real(dp) :: ef(nsorts), vr(nsorts), er(nsorts)
+        real(dp) :: ef_ref(nsorts), vr_ref(nsorts), er_ref(nsorts)
+        real(dp) :: Te, Ti1, Ti2, ni1, ni2, v0, s
+        integer :: k
+
+        print *, 'Testing coefficients between nodes on a steep edge profile...'
+        profile_type = "two_power"
+        active_profile = TWO_POWER
+        Te_scale = 1.5d4; Te_p1 = 12.0d0; Te_p2 = 3.0d0
+        Ti1_scale = 1.5d4; Ti1_p1 = 12.0d0; Ti1_p2 = 3.0d0
+        Ti2_scale = 1.5d4; Ti2_p1 = 12.0d0; Ti2_p2 = 3.0d0
+        ni1_scale = 5.0d19; ni1_p1 = 12.0d0; ni1_p2 = 1.0d0
+        ni2_scale = 5.0d19; ni2_p1 = 12.0d0; ni2_p2 = 1.0d0
+        call init_collision_profiles(2.0_dp, 3.0_dp, 1.0_dp, 1.0_dp, 55000.0_dp, v0)
+        do k = 0, 9
+            s = 0.9905_dp + 0.001_dp*k
+            call get_local_coeffs(s, ef, vr, er)
+            call get_plasma_params(s, Te, Ti1, Ti2, ni1, ni2)
+            ni1 = max(ni1*1.0d-6, 1.0d0)
+            ni2 = max(ni2*1.0d-6, 1.0d0)
+            call compute_collision_coeffs(2.0_dp, 3.0_dp, 1.0_dp, 1.0_dp, ni1, ni2, &
+                                          max(Ti1, 1.0d0), max(Ti2, 1.0d0), &
+                                          max(Te, 1.0d0), 55000.0_dp, v0, &
+                                          ef_ref, vr_ref, er_ref, 4.0_dp, 2.0_dp)
+            if (maxval(abs(ef/ef_ref - 1)) > 1.0d-13 .or. &
+                maxval(abs(vr/vr_ref - 1)) > 1.0d-13 .or. &
+                maxval(abs(er/er_ref - 1)) > 1.0d-13) then
+                print *, '  FAIL: steep edge coefficients at s =', s
+                print *, '    relative error:', maxval(abs(ef/ef_ref - 1))
+                passed = .false.
+                nfail = nfail + 1
+                return
+            end if
+        end do
+        print *, '  PASS: coefficients follow the steep edge profile between nodes'
+    end subroutine test_steep_edge_coefficients
+
     ! Flat radial profiles must reproduce the scalar (constant-coefficient)
     ! collision operator to round-off. This checks every intermediate value the
     ! stochastic step depends on: the interpolated coefficients at off-node s
@@ -904,12 +948,7 @@ contains
     end subroutine set_flat_two_power
 
     subroutine fill_constant_grid()
-        integer :: i
-        do i = 1, N_S_GRID
-            efcolf_grid(:, i) = efcolf
-            velrat_grid(:, i) = velrat
-            enrat_grid(:, i) = enrat
-        end do
+        call set_uniform_coeffs(efcolf, velrat, enrat)
     end subroutine fill_constant_grid
 
     subroutine drag_residence(dtauc, plo, phi, nbin, pstop, hist)

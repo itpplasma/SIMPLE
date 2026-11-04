@@ -3,11 +3,19 @@ module collis_alp
     implicit none
 
     integer, parameter :: nsorts = 3
-    integer, parameter :: N_S_GRID = 101
     real(wp) :: collision_s_max = 1.0_wp
 
     real(wp), dimension(nsorts) :: efcolf, velrat, enrat
-    real(wp), dimension(nsorts, N_S_GRID) :: efcolf_grid, velrat_grid, enrat_grid
+    ! Species of the radial collision profile, set by init_collision_profiles.
+    real(wp) :: profile_am1 = 0.0_wp, profile_am2 = 0.0_wp
+    real(wp) :: profile_Z1 = 0.0_wp, profile_Z2 = 0.0_wp
+    real(wp) :: profile_ealpha = 0.0_wp
+    real(wp) :: profile_test_mass = 4.0_wp, profile_test_charge = 2.0_wp
+    logical :: profile_ready = .false.
+    ! Radially uniform coefficients override the profile when set.
+    logical :: uniform_ready = .false.
+    real(wp), dimension(nsorts) :: uniform_efcolf = 0.0_wp, &
+                                   uniform_velrat = 0.0_wp, uniform_enrat = 0.0_wp
     real(wp) :: lorentz_nu = 0.0_wp
     real(wp) :: lorentz_dhh = 0.0_wp
 
@@ -245,63 +253,76 @@ contains
 
     subroutine init_collision_profiles(am1, am2, Z1, Z2, ealpha, v0, &
                                        test_mass, test_charge)
-        use simple_profiles, only: get_plasma_params, profile_max_s
+        use simple_profiles, only: profile_max_s
 
         real(wp), intent(in) :: am1, am2, Z1, Z2, ealpha, v0
         real(wp), intent(in), optional :: test_mass, test_charge
-        real(wp) :: s, Te, Ti1, Ti2, ni1, ni2
-        real(wp) :: densi1_loc, densi2_loc, tempi1_loc, tempi2_loc, tempe_loc
-        real(wp) :: v0_loc
-        integer :: i
 
         collision_s_max = profile_max_s()
-        do i = 1, N_S_GRID
-            s = collision_s_max*dble(i - 1)/dble(N_S_GRID - 1)
-
-            call get_plasma_params(s, Te, Ti1, Ti2, ni1, ni2)
-
-            tempe_loc = max(Te, 1.0d0)
-            tempi1_loc = max(Ti1, 1.0d0)
-            tempi2_loc = max(Ti2, 1.0d0)
-            ! Preserve exact vacuum; retain the floor for positive densities.
-            if (ni1 == 0.0_wp .and. ni2 == 0.0_wp) then
-                densi1_loc = 0.0_wp
-                densi2_loc = 0.0_wp
-            else
-                densi1_loc = max(ni1*1.0d-6, 1.0d0)
-                densi2_loc = max(ni2*1.0d-6, 1.0d0)
-            end if
-
-            call compute_collision_coeffs(am1, am2, Z1, Z2, &
-                                          densi1_loc, densi2_loc, &
-                                          tempi1_loc, tempi2_loc, tempe_loc, &
-                                          ealpha, v0_loc, &
-                               efcolf_grid(:, i), velrat_grid(:, i), enrat_grid(:, i), &
-                                          test_mass, test_charge)
-        end do
+        profile_am1 = am1
+        profile_am2 = am2
+        profile_Z1 = Z1
+        profile_Z2 = Z2
+        profile_ealpha = ealpha
+        profile_test_mass = 4.0_wp
+        profile_test_charge = 2.0_wp
+        if (present(test_mass)) profile_test_mass = test_mass
+        if (present(test_charge)) profile_test_charge = test_charge
+        if (profile_test_mass <= 0.0_wp .or. profile_test_charge <= 0.0_wp) &
+            error stop "Collision test species must have positive mass and charge"
+        profile_ready = .true.
+        uniform_ready = .false.
     end subroutine init_collision_profiles
 
+    subroutine set_uniform_coeffs(efcolf_in, velrat_in, enrat_in)
+        real(wp), intent(in) :: efcolf_in(nsorts), velrat_in(nsorts), enrat_in(nsorts)
+
+        uniform_efcolf = efcolf_in
+        uniform_velrat = velrat_in
+        uniform_enrat = enrat_in
+        uniform_ready = .true.
+    end subroutine set_uniform_coeffs
+
     subroutine get_local_coeffs(s, efcolf_loc, velrat_loc, enrat_loc)
+        use simple_profiles, only: get_plasma_params
+
         real(wp), intent(in) :: s
         real(wp), intent(out) :: efcolf_loc(nsorts), velrat_loc(nsorts), enrat_loc(nsorts)
 
-        real(wp) :: s_clamped, s_norm, weight
-        integer :: idx_lo, idx_hi
+        real(wp) :: s_clamped, Te, Ti1, Ti2, ni1, ni2, v0_loc
+        real(wp) :: densi1_loc, densi2_loc
 
+        if (uniform_ready) then
+            efcolf_loc = uniform_efcolf
+            velrat_loc = uniform_velrat
+            enrat_loc = uniform_enrat
+            return
+        end if
+        if (.not. profile_ready) then
+            ! Without a plasma the operator is vacuum.
+            efcolf_loc = 0.0_wp
+            velrat_loc = 0.0_wp
+            enrat_loc = 0.0_wp
+            return
+        end if
+        ! Direct evaluation: a linear table in s misrepresents steep edge
+        ! profiles by up to 89 % in pitch frequency with 100 intervals.
         s_clamped = max(0.0d0, min(collision_s_max, s))
-        s_norm = s_clamped*dble(N_S_GRID - 1)/collision_s_max
-        idx_lo = max(1, min(N_S_GRID - 1, int(s_norm) + 1))
-        idx_hi = idx_lo + 1
-        weight = s_norm - dble(idx_lo - 1)
-
-        ! Stable interpolation form: reproduces a node value exactly when both
-        ! bracketing nodes are equal (flat profile -> scalar coefficients bitwise).
-        efcolf_loc = efcolf_grid(:, idx_lo) &
-                     + weight*(efcolf_grid(:, idx_hi) - efcolf_grid(:, idx_lo))
-        velrat_loc = velrat_grid(:, idx_lo) &
-                     + weight*(velrat_grid(:, idx_hi) - velrat_grid(:, idx_lo))
-        enrat_loc = enrat_grid(:, idx_lo) &
-                    + weight*(enrat_grid(:, idx_hi) - enrat_grid(:, idx_lo))
+        call get_plasma_params(s_clamped, Te, Ti1, Ti2, ni1, ni2)
+        ! Preserve exact vacuum; retain the floor for positive densities.
+        if (ni1 == 0.0_wp .and. ni2 == 0.0_wp) then
+            densi1_loc = 0.0_wp
+            densi2_loc = 0.0_wp
+        else
+            densi1_loc = max(ni1*1.0d-6, 1.0d0)
+            densi2_loc = max(ni2*1.0d-6, 1.0d0)
+        end if
+        call compute_collision_coeffs(profile_am1, profile_am2, profile_Z1, &
+                                      profile_Z2, densi1_loc, densi2_loc, &
+                                      max(Ti1, 1.0d0), max(Ti2, 1.0d0), &
+                                      max(Te, 1.0d0), profile_ealpha, v0_loc, &
+                                      efcolf_loc, velrat_loc, enrat_loc, &
+                                      profile_test_mass, profile_test_charge)
     end subroutine get_local_coeffs
 
     subroutine stost(z, dtauc, iswmode, ierr, max_substep_fraction, s_profile)

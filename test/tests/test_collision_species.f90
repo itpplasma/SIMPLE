@@ -1,7 +1,7 @@
 program test_collision_species
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use collis_alp, only: compute_collision_coeffs, loacol_alpha, &
-                          init_collision_profiles, efcolf, efcolf_grid
+                          init_collision_profiles, efcolf, get_local_coeffs
     use simple_main, only: init_collisions
     use params, only: n_d, n_e, v0, particle_energy_eV_effective
     use velo_mod, only: isw_field_type
@@ -11,6 +11,7 @@ program test_collision_species
     real(dp), parameter :: proton_mass = 1.6726e-24_dp, ev = 1.6022e-12_dp
     real(dp) :: alpha(3), coefficients(3), ratios(3), energies(3), speed
     real(dp) :: pitch_rate, drag_rate, pitch_norm, drag_norm
+    real(dp) :: local(3), local_ratios(3), local_energies(3)
     integer :: mass
 
     call compute_collision_coeffs(1.0_dp, 12.0_dp, 1.0_dp, 6.0_dp, &
@@ -38,7 +39,8 @@ program test_collision_species
         if (any(efcolf /= coefficients)) error stop 'Scalar initialization lost species'
         call init_collision_profiles(1.0_dp, 12.0_dp, 1.0_dp, 6.0_dp, &
                                      energy, speed, real(mass, dp), 1.0_dp)
-        if (any(efcolf_grid <= 0)) error stop 'Profile initialization lost collisions'
+        call get_local_coeffs(0.0_dp, local, local_ratios, local_energies)
+        if (any(local <= 0)) error stop 'Profile initialization lost collisions'
         ! Exercise the production initializer, including its orbit-speed guard.
         n_d = real(mass, dp)
         n_e = 1
@@ -46,7 +48,8 @@ program test_collision_species
         v0 = speed
         isw_field_type = TEST
         call init_collisions
-        if (any(efcolf /= efcolf_grid(:, 1))) &
+        call get_local_coeffs(0.0_dp, local, local_ratios, local_energies)
+        if (any(efcolf /= local)) &
             error stop 'Scalar and profile species disagree'
     end do
     print *, 'PASS: H, D and variable charge Coulomb collision coefficients'

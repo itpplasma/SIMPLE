@@ -4,9 +4,8 @@
 !> further time progress (ierr = 4). The Cartesian substep is regular there.
 program test_collision_low_speed
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use collis_alp, only: stost, coleff, efcolf, velrat, enrat, efcolf_grid, &
-                          velrat_grid, enrat_grid, N_S_GRID, &
-                          compute_collision_coeffs
+    use collis_alp, only: stost, coleff, efcolf, velrat, enrat, &
+                          set_uniform_coeffs, compute_collision_coeffs
     implicit none
 
     real(dp), parameter :: ealpha = 55.0e3_dp, temp = 20.0_dp
@@ -30,17 +29,12 @@ contains
     subroutine setup_cold_plasma()
         ! H test ion in a 20 eV H plasma with 2.5% C6+, n_e = 2e19 m^-3.
         real(dp) :: ni1, ni2
-        integer :: node
         ni1 = 2.0e13_dp/(1.0_dp + 6.0_dp*0.025_dp)
         ni2 = 0.025_dp*ni1
         call compute_collision_coeffs(1.0_dp, 12.0_dp, 1.0_dp, 6.0_dp, ni1, ni2, &
                                       temp, temp, temp, ealpha, v0, &
                                       efcolf, velrat, enrat)
-        do node = 1, N_S_GRID
-            efcolf_grid(:, node) = efcolf
-            velrat_grid(:, node) = velrat
-            enrat_grid(:, node) = enrat
-        end do
+        call set_uniform_coeffs(efcolf, velrat, enrat)
     end subroutine setup_cold_plasma
 
     subroutine check_tiny_speed_start()
