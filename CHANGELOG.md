@@ -5,6 +5,7 @@ compared to earlier versions.
 
 | Differing behavior | commit hash / tag and timestamp | Summary |
 | ---------------- | ------------------------------- | ------- |
+| Y | 2026-11-04 | Transport geometric field gradients to the corrected Gauss stages before Hermite endpoint extrapolation. This restores the expected endpoint field-cache accuracy without additional field evaluations. |
 | Y | 2026-11-03 | Composition integrators (`orbit_sympl_init_verlet`, `_order4`, `_mclachlan4`, `_blanes4`, `_kahan6`, `_kahan8`, symplectic and quasi path) alternate the Euler step and its adjoint as intended; every stage previously ran implicit-explicit Euler, so all were first order. The McLachlan, Blanes-Moan and triple-jump coefficients get their missing minus signs and the Hairer, Lubich & Wanner orientation. `simple.x` runs no composition scheme, so its output is unchanged. |
 | Y | 2026-10-30 | Sample chart-reference field splines over the chart field period, including coil-only callers with uninitialized or stale VMEC period state, and double the default toroidal sampling intervals relative to the geometry. |
 | Y | 2026-10-20 | Accelerate the standalone full-orbit Gauss-2 energy/oracle evaluator with exact coefficient sparsity, shared recurrent Fourier phases and FortSym-generated field/Hessian contractions. The algebraically equivalent factored Hessian can change roundoff; orbit length, seeds, step policy, tolerances and energy checks are unchanged. |

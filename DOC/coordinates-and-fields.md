@@ -327,6 +327,12 @@ module-level singletons: one canonical field per process
 ([#293](https://github.com/itpplasma/SIMPLE/issues/293)). They are written
 during initialisation and read-only during tracing.
 
+Gauss collocation reports endpoint field values by Hermite extrapolation of
+its stage values and rates. After the final Newton correction, the geometric
+field gradients are transported with their existing Hessians to the same
+corrected stage coordinates before forming those rates; no additional field
+evaluation is needed.
+
 | Coordinates | File | $r$ | Construction |
 |---|---|---|---|
 | canonical flux | `src/field/field_can_flux.f90` | $s$ | libneo `vmec_to_can`, `can_to_vmec`, `splint_can_coord` |

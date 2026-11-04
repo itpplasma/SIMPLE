@@ -60,6 +60,7 @@ program generate_orbit_systems
     end do
     call emit_lobatto(unit, 3)
     call emit_rates_canonical(unit)
+    call emit_geometry_gradient_transport(unit)
     close (unit)
 
     open (newunit=unit, file=trim(output_dir)//'/gpu_derivatives2_radial_mixed.inc', &
@@ -249,6 +250,36 @@ contains
         call emit_one(unit, 'gc_rates_canonical', rates, refs, 'zdot', '(4)', &
                       ['f'], [character(6) ::], [character(6) ::])
     end subroutine emit_rates_canonical
+
+    !> Transport geometric gradients to the corrected Newton stage using
+    !> the Hessians already evaluated for the implicit solve.
+    subroutine emit_geometry_gradient_transport(unit)
+        integer, intent(in) :: unit
+        character(4), parameter :: names(5) = &
+                                   [character(4) :: 'Ath', 'Aph', 'hth', 'hph', 'Bmod']
+        type(expr_t) :: state(3), quantity, gradient, roots(15)
+        type(str_t) :: refs(15)
+        integer :: i, j, q, k
+
+        call reset()
+        state = [sym(arena, 'r_'), sym(arena, 'th_'), sym(arena, 'ph_')]
+        do q = 1, 5
+            quantity = func('geometry_'//trim(names(q)), state)
+            call bind_quantity('geometry_'//trim(names(q)), 'f%', trim(names(q)), 3)
+            do i = 1, 3
+                k = i + 3*(q - 1)
+                gradient = diff(quantity, state(i))
+                roots(k) = gradient
+                do j = 1, 3
+                    roots(k) = roots(k) + diff(gradient, state(j)) &
+                               *sym(arena, 'dz('//itoa(j)//')')
+                end do
+                refs(k) = str('gradients('//itoa(i)//', '//itoa(q)//')')
+            end do
+        end do
+        call emit_one(unit, 'gc_geometry_gradient_transport', roots, refs, &
+                      'gradients', '(3, 5)', ['f'], ['dz'], ['(3)'])
+    end subroutine emit_geometry_gradient_transport
 
     subroutine emit_euler1(unit)
         integer, intent(in) :: unit
