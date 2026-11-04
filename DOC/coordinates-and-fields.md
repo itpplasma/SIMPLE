@@ -6,6 +6,10 @@ fit together.
 
 Update this file when coordinates or field-loading paths change.
 
+Macrostep trajectories, including the initial sample, are stored in integrator
+coordinates. The NetCDF writer converts every sample to reference coordinates;
+its time-zero position therefore recovers the reference birth in `start.dat`.
+
 The IMAS actor (`docs/user-guide/imas.rst`) loads an equilibrium IDS as a libneo
 Boozer chartmap. Its Cartesian geometry covers the full toroidal period even for
 an axisymmetric field; its covariant toroidal field is G, not the transform
