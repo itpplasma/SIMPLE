@@ -12,29 +12,22 @@ subroutine boozer_h_first(f, Bth, dBth, Bph, dBph)
     real(dp), intent(in) :: dBth
     real(dp), intent(in) :: Bph
     real(dp), intent(in) :: dBph
-    real(dp) :: hth, hph, hth_d1, hth_d2, hth_d3, hph_d1, hph_d2, hph_d3
-    real(dp) :: t1, t2, t3, t4
+    real(dp) :: t1, t2, t3, t4, t5, t6
 
-    t1 = f%Bmod
-    hth = Bth/t1
-    hph = Bph/t1
-    t2 = f%dBmod(1)
-    hth_d1 = (dBth - hth*t2)/t1
-    t3 = f%dBmod(2)
-    hth_d2 = -hth*t3/t1
-    t4 = f%dBmod(3)
-    hth_d3 = -hth*t4/t1
-    hph_d1 = (dBph - hph*t2)/t1
-    hph_d2 = -hph*t3/t1
-    hph_d3 = -hph*t4/t1
-    f%hth = hth
-    f%dhth(1) = hth_d1
-    f%dhth(2) = hth_d2
-    f%dhth(3) = hth_d3
-    f%hph = hph
-    f%dhph(1) = hph_d1
-    f%dhph(2) = hph_d2
-    f%dhph(3) = hph_d3
+    t1 = Bth
+    t2 = f%Bmod
+    t3 = f%dBmod(1)
+    t4 = f%dBmod(2)
+    t5 = f%dBmod(3)
+    t6 = Bph
+    f%hth = t1/t2
+    f%dhth(1) = -t1*t3/t2**2 + dBth/t2
+    f%dhth(2) = -t1*t4/t2**2
+    f%dhth(3) = -t1*t5/t2**2
+    f%hph = t6/t2
+    f%dhph(1) = -t6*t3/t2**2 + dBph/t2
+    f%dhph(2) = -t6*t4/t2**2
+    f%dhph(3) = -t6*t5/t2**2
 
 end subroutine boozer_h_first
 
@@ -54,36 +47,28 @@ subroutine boozer_h_rr(f, Bth, dBth, d2Bth, Bph, dBph, d2Bph)
     real(dp), intent(in) :: Bph
     real(dp), intent(in) :: dBph
     real(dp), intent(in) :: d2Bph
-    real(dp) :: hth, hph, hth_d1, hth_d2, hth_d3, hth_d1_1, hph_d1, hph_d2, hph_d3, hph_d1_1
-    real(dp) :: t1, t2, t3, t4, t5, t6, t7
+    real(dp) :: t1, t2, t3, t4, t5, t6, t7, t8, t9, t10
 
-    t1 = f%Bmod
-    hth = Bth/t1
-    hph = Bph/t1
-    t2 = f%dBmod(1)
-    hth_d1 = (dBth - hth*t2)/t1
-    t3 = f%dBmod(2)
-    hth_d2 = -hth*t3/t1
-    t4 = f%dBmod(3)
-    hth_d3 = -hth*t4/t1
-    t5 = f%d2Bmod(1)
-    t6 = hth_d1*t2
-    hth_d1_1 = (d2Bth - (hth*t5 + t6 + t6))/t1
-    hph_d1 = (dBph - hph*t2)/t1
-    hph_d2 = -hph*t3/t1
-    hph_d3 = -hph*t4/t1
-    t7 = hph_d1*t2
-    hph_d1_1 = (d2Bph - (hph*t5 + t7 + t7))/t1
-    f%hth = hth
-    f%dhth(1) = hth_d1
-    f%dhth(2) = hth_d2
-    f%dhth(3) = hth_d3
-    f%d2hth(1) = hth_d1_1
-    f%hph = hph
-    f%dhph(1) = hph_d1
-    f%dhph(2) = hph_d2
-    f%dhph(3) = hph_d3
-    f%d2hph(1) = hph_d1_1
+    t1 = Bth
+    t2 = f%Bmod
+    t3 = f%dBmod(1)
+    t4 = dBth
+    t5 = f%dBmod(2)
+    t6 = f%dBmod(3)
+    t7 = f%d2Bmod(1)
+    t8 = t3**2
+    t9 = Bph
+    t10 = dBph
+    f%hth = t1/t2
+    f%dhth(1) = -t1*t3/t2**2 + t4/t2
+    f%dhth(2) = -t1*t5/t2**2
+    f%dhth(3) = -t1*t6/t2**2
+    f%d2hth(1) = (d2Bth - t1*t7/t2 + t1*t8*2/t2**2 - t3*t4*2/t2)/t2
+    f%hph = t9/t2
+    f%dhph(1) = -t9*t3/t2**2 + t10/t2
+    f%dhph(2) = -t9*t5/t2**2
+    f%dhph(3) = -t9*t6/t2**2
+    f%d2hph(1) = (d2Bph - t9*t7/t2 + t9*t8*2/t2**2 - t3*t10*2/t2)/t2
 
 end subroutine boozer_h_rr
 
@@ -103,47 +88,34 @@ subroutine boozer_h_rmix(f, Bth, dBth, d2Bth, Bph, dBph, d2Bph)
     real(dp), intent(in) :: Bph
     real(dp), intent(in) :: dBph
     real(dp), intent(in) :: d2Bph
-    real(dp) :: hth, hph, hth_d1, hth_d2, hth_d3, hth_d1_1, hth_d1_2, hth_d1_3, hph_d1, hph_d2, &
-        hph_d3, hph_d1_1, hph_d1_2, hph_d1_3
-    real(dp) :: t1, t2, t3, t4, t5, t6, t7, t8, t9
+    real(dp) :: t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12
 
-    t1 = f%Bmod
-    hth = Bth/t1
-    hph = Bph/t1
-    t2 = f%dBmod(1)
-    hth_d1 = (dBth - hth*t2)/t1
-    t3 = f%dBmod(2)
-    hth_d2 = -hth*t3/t1
-    t4 = f%dBmod(3)
-    hth_d3 = -hth*t4/t1
-    t5 = f%d2Bmod(1)
-    t6 = hth_d1*t2
-    hth_d1_1 = (d2Bth - (hth*t5 + t6 + t6))/t1
-    t7 = f%d2Bmod(2)
-    hth_d1_2 = -(hth*t7 + hth_d1*t3 + hth_d2*t2)/t1
-    t8 = f%d2Bmod(3)
-    hth_d1_3 = -(hth*t8 + hth_d1*t4 + hth_d3*t2)/t1
-    hph_d1 = (dBph - hph*t2)/t1
-    hph_d2 = -hph*t3/t1
-    hph_d3 = -hph*t4/t1
-    t9 = hph_d1*t2
-    hph_d1_1 = (d2Bph - (hph*t5 + t9 + t9))/t1
-    hph_d1_2 = -(hph*t7 + hph_d1*t3 + hph_d2*t2)/t1
-    hph_d1_3 = -(hph*t8 + hph_d1*t4 + hph_d3*t2)/t1
-    f%hth = hth
-    f%dhth(1) = hth_d1
-    f%dhth(2) = hth_d2
-    f%dhth(3) = hth_d3
-    f%d2hth(1) = hth_d1_1
-    f%d2hth(2) = hth_d1_2
-    f%d2hth(3) = hth_d1_3
-    f%hph = hph
-    f%dhph(1) = hph_d1
-    f%dhph(2) = hph_d2
-    f%dhph(3) = hph_d3
-    f%d2hph(1) = hph_d1_1
-    f%d2hph(2) = hph_d1_2
-    f%d2hph(3) = hph_d1_3
+    t1 = Bth
+    t2 = f%Bmod
+    t3 = f%dBmod(1)
+    t4 = dBth
+    t5 = f%dBmod(2)
+    t6 = f%dBmod(3)
+    t7 = f%d2Bmod(1)
+    t8 = t3**2
+    t9 = f%d2Bmod(2)
+    t10 = f%d2Bmod(3)
+    t11 = Bph
+    t12 = dBph
+    f%hth = t1/t2
+    f%dhth(1) = -t1*t3/t2**2 + t4/t2
+    f%dhth(2) = -t1*t5/t2**2
+    f%dhth(3) = -t1*t6/t2**2
+    f%d2hth(1) = (d2Bth - t1*t7/t2 + t1*t8*2/t2**2 - t3*t4*2/t2)/t2
+    f%d2hth(2) = (t1*t3*t5*2/t2 - t1*t9 - t5*t4)/t2**2
+    f%d2hth(3) = (t1*t3*t6*2/t2 - t1*t10 - t6*t4)/t2**2
+    f%hph = t11/t2
+    f%dhph(1) = -t11*t3/t2**2 + t12/t2
+    f%dhph(2) = -t11*t5/t2**2
+    f%dhph(3) = -t11*t6/t2**2
+    f%d2hph(1) = (d2Bph - t11*t7/t2 + t11*t8*2/t2**2 - t3*t12*2/t2)/t2
+    f%d2hph(2) = (t11*t3*t5*2/t2 - t11*t9 - t5*t12)/t2**2
+    f%d2hph(3) = (t11*t3*t6*2/t2 - t11*t10 - t6*t12)/t2**2
 
 end subroutine boozer_h_rmix
 
@@ -163,61 +135,42 @@ subroutine boozer_h_all(f, Bth, dBth, d2Bth, Bph, dBph, d2Bph)
     real(dp), intent(in) :: Bph
     real(dp), intent(in) :: dBph
     real(dp), intent(in) :: d2Bph
-    real(dp) :: hth, hph, hth_d1, hth_d2, hth_d3, hth_d1_1, hth_d1_2, hth_d1_3, hth_d2_2, hth_d2_3, &
-        hth_d3_3, hph_d1, hph_d2, hph_d3, hph_d1_1, hph_d1_2, hph_d1_3, hph_d2_2, hph_d2_3, hph_d3_3
-    real(dp) :: t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12
+    real(dp) :: t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14, t15
 
-    t1 = f%Bmod
-    hth = Bth/t1
-    hph = Bph/t1
-    t2 = f%dBmod(1)
-    hth_d1 = (dBth - hth*t2)/t1
-    t3 = f%dBmod(2)
-    hth_d2 = -hth*t3/t1
-    t4 = f%dBmod(3)
-    hth_d3 = -hth*t4/t1
-    t5 = f%d2Bmod(1)
-    t6 = hth_d1*t2
-    hth_d1_1 = (d2Bth - (hth*t5 + t6 + t6))/t1
-    t7 = f%d2Bmod(2)
-    hth_d1_2 = -(hth*t7 + hth_d1*t3 + hth_d2*t2)/t1
-    t8 = f%d2Bmod(3)
-    hth_d1_3 = -(hth*t8 + hth_d1*t4 + hth_d3*t2)/t1
-    t9 = f%d2Bmod(4)
-    hth_d2_2 = -(hth*t9 + hth_d2*t3*2)/t1
-    t10 = f%d2Bmod(5)
-    hth_d2_3 = -(hth*t10 + hth_d2*t4 + hth_d3*t3)/t1
-    t11 = f%d2Bmod(6)
-    hth_d3_3 = -(hth*t11 + hth_d3*t4*2)/t1
-    hph_d1 = (dBph - hph*t2)/t1
-    hph_d2 = -hph*t3/t1
-    hph_d3 = -hph*t4/t1
-    t12 = hph_d1*t2
-    hph_d1_1 = (d2Bph - (hph*t5 + t12 + t12))/t1
-    hph_d1_2 = -(hph*t7 + hph_d1*t3 + hph_d2*t2)/t1
-    hph_d1_3 = -(hph*t8 + hph_d1*t4 + hph_d3*t2)/t1
-    hph_d2_2 = -(hph*t9 + hph_d2*t3*2)/t1
-    hph_d2_3 = -(hph*t10 + hph_d2*t4 + hph_d3*t3)/t1
-    hph_d3_3 = -(hph*t11 + hph_d3*t4*2)/t1
-    f%hth = hth
-    f%dhth(1) = hth_d1
-    f%dhth(2) = hth_d2
-    f%dhth(3) = hth_d3
-    f%d2hth(1) = hth_d1_1
-    f%d2hth(2) = hth_d1_2
-    f%d2hth(3) = hth_d1_3
-    f%d2hth(4) = hth_d2_2
-    f%d2hth(5) = hth_d2_3
-    f%d2hth(6) = hth_d3_3
-    f%hph = hph
-    f%dhph(1) = hph_d1
-    f%dhph(2) = hph_d2
-    f%dhph(3) = hph_d3
-    f%d2hph(1) = hph_d1_1
-    f%d2hph(2) = hph_d1_2
-    f%d2hph(3) = hph_d1_3
-    f%d2hph(4) = hph_d2_2
-    f%d2hph(5) = hph_d2_3
-    f%d2hph(6) = hph_d3_3
+    t1 = Bth
+    t2 = f%Bmod
+    t3 = f%dBmod(1)
+    t4 = dBth
+    t5 = f%dBmod(2)
+    t6 = f%dBmod(3)
+    t7 = f%d2Bmod(1)
+    t8 = t3**2
+    t9 = f%d2Bmod(2)
+    t10 = f%d2Bmod(3)
+    t11 = -f%d2Bmod(4) + t5**2*2/t2
+    t12 = t5*t6*2/t2 - f%d2Bmod(5)
+    t13 = -f%d2Bmod(6) + t6**2*2/t2
+    t14 = Bph
+    t15 = dBph
+    f%hth = t1/t2
+    f%dhth(1) = -t1*t3/t2**2 + t4/t2
+    f%dhth(2) = -t1*t5/t2**2
+    f%dhth(3) = -t1*t6/t2**2
+    f%d2hth(1) = (d2Bth - t1*t7/t2 + t1*t8*2/t2**2 - t3*t4*2/t2)/t2
+    f%d2hth(2) = (t1*t3*t5*2/t2 - t1*t9 - t5*t4)/t2**2
+    f%d2hth(3) = (t1*t3*t6*2/t2 - t1*t10 - t6*t4)/t2**2
+    f%d2hth(4) = t1*t11/t2**2
+    f%d2hth(5) = t1*t12/t2**2
+    f%d2hth(6) = t1*t13/t2**2
+    f%hph = t14/t2
+    f%dhph(1) = -t14*t3/t2**2 + t15/t2
+    f%dhph(2) = -t14*t5/t2**2
+    f%dhph(3) = -t14*t6/t2**2
+    f%d2hph(1) = (d2Bph - t14*t7/t2 + t14*t8*2/t2**2 - t3*t15*2/t2)/t2
+    f%d2hph(2) = (t14*t3*t5*2/t2 - t14*t9 - t5*t15)/t2**2
+    f%d2hph(3) = (t14*t3*t6*2/t2 - t14*t10 - t6*t15)/t2**2
+    f%d2hph(4) = t14*t11/t2**2
+    f%d2hph(5) = t14*t12/t2**2
+    f%d2hph(6) = t14*t13/t2**2
 
 end subroutine boozer_h_all

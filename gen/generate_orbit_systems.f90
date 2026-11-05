@@ -651,18 +651,17 @@ contains
     !> covariant components B_theta(r), B_phi(r) passed as arguments and
     !> B(r, theta, phi) read from f, and their gradients and the packed
     !> Hessian entries `hessian` written to f. The same kernels serve the CPU
-    !> evaluation and, included in simple_gpu, the OpenACC one.
+    !> evaluation and, included in simple_gpu, the OpenACC one. Gradients stay
+    !> unfolded so that they round like the hand-written chain they replaced.
     subroutine emit_boozer_h(unit, name, hessian)
         integer, intent(in) :: unit
         character(*), intent(in) :: name
         integer, intent(in) :: hessian(:)
         integer, parameter :: row(6) = [1, 1, 1, 2, 2, 3], col(6) = [1, 2, 3, 2, 3, 3]
         character(3), parameter :: hname(2) = ['hth', 'hph'], bname(2) = ['Bth', 'Bph']
-        type(chain_t) :: c
-        type(expr_t) :: x(3), h(2), b
+        type(expr_t) :: x(3), h(2), b, e
         type(expr_t), allocatable :: roots(:)
         type(str_t), allocatable :: refs(:)
-        integer, allocatable :: needed(:)
         type(kernel_spec_t) :: spec
         type(str_t) :: source
         character(:), allocatable :: message
@@ -672,10 +671,9 @@ contains
         call reset()
         x = [sym(arena, 'r_'), sym(arena, 'th_'), sym(arena, 'ph_')]
         b = field_function('Bmod', x)
-        call c%init(x)
         allocate (roots(0), refs(0), spec%args(0))
         do m = 1, 2
-            h(m) = c%let(hname(m), func(bname(m), x(1:1))/b)
+            h(m) = func(bname(m), x(1:1))/b
             call add_binding(bname(m), [integer ::], bname(m))
             call add_binding(bname(m), [1], 'd'//bname(m))
             spec%args = [spec%args, str(bname(m)), str('d'//bname(m))]
@@ -687,16 +685,15 @@ contains
         do m = 1, 2
             call add_root(roots, refs, h(m), 'f%'//hname(m))
             do i = 1, 3
-                call add_root(roots, refs, c%d(h(m), i), &
+                call add_root(roots, refs, diff(h(m), x(i)), &
                               'f%d'//hname(m)//'('//itoa(i)//')')
             end do
             do k = 1, size(hessian)
-                call add_root(roots, refs, &
-                              c%d(c%d(h(m), row(hessian(k))), col(hessian(k))), &
+                e = diff(diff(h(m), x(row(hessian(k)))), x(col(hessian(k))))
+                call add_root(roots, refs, fold_numbers(e), &
                               'f%d2'//hname(m)//'('//itoa(hessian(k))//')')
             end do
         end do
-        needed = c%needed(roots)
 
         spec%name = str(name)
         spec%mode = KERNEL_SUBROUTINE
@@ -705,8 +702,7 @@ contains
                           [(str('real(dp)'), k=2, size(spec%args))]]
         spec%arg_intents = [str('inout'), [(str('in'), k=2, size(spec%args))]]
         allocate (spec%outputs(0))
-        spec%locals = [(c%names(needed(k))%name(), k=1, size(needed))]
-        spec%output_references = [spec%locals, refs]
+        spec%output_references = refs
         spec%bindings = bindings
         spec%temp_prefix = str('t')
         spec%generator = str('gen/generate_orbit_systems.f90')
@@ -715,7 +711,7 @@ contains
         spec%regenerate_command = str('generate_orbit_systems src/generated '// &
                                       trim(fortsym_revision))
         spec%openacc_routine_seq = .true.
-        source = emit_kernel([c%defs(needed), roots], spec, good, message=message)
+        source = emit_kernel(roots, spec, good, message=message)
         if (.not. good) then
             print *, 'emission of ', name, ' failed: ', message
             error stop 1

@@ -132,9 +132,12 @@ instead of reciprocal temporaries, gives `get_val`, `get_derivatives` and
 (`src/generated/boozer_h_derivatives.inc`) state h_theta = B_theta/B and
 h_phi = B_phi/B once, with B_theta(r) and B_phi(r) passed as arguments and
 B read from `field_can_t`, and give their gradients and no, the rr, the
-radial-mixed or all packed Hessian entries. h_theta and h_phi are named
-intermediates of `fortsym_chain`, so every derivative is
-(D B_theta - h_theta D B)/B with the lower derivatives of h reused.
+radial-mixed or all packed Hessian entries. The gradients stay in the
+unfolded quotient-rule form D B_theta/B - B_theta D B/B^2, which rounds like
+the hand-written chain they replaced: they enter the Newton residuals, and a
+different rounding there changes chaotic orbits of the golden-record
+classifier cases. The Hessian entries, which enter only the Newton Jacobians,
+are folded.
 `field_can_boozer` includes them for `eval_field_booz` and
 `eval_field_booz_device`, and `simple_gpu` includes them again for
 `gpu_eval_field_rmix`, because nvfortran inlines device routines only within
