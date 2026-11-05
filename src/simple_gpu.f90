@@ -276,7 +276,7 @@ contains
         type(field_can_t), intent(inout) :: f
         real(dp), intent(in) :: r, th_c, ph_c
 
-        real(dp) :: bmod2, r_cont, th_cont, Bth, Bph, dBth, dBph, d2Bth, d2Bph
+        real(dp) :: r_cont, th_cont, Bth, Bph, dBth, dBph, d2Bth, d2Bph
         logical :: crossed
         type(boozer_rmix_field_t) :: fld
 
@@ -316,26 +316,10 @@ contains
             f%dBmod(1) = -f%dBmod(1)
             f%d2Bmod(2:3) = -f%d2Bmod(2:3)
         end if
-        bmod2 = f%Bmod**2
-        f%hth = Bth/f%Bmod
-        f%hph = Bph/f%Bmod
-        f%dhth(1) = dBth/f%Bmod - Bth*f%dBmod(1)/bmod2
-        f%dhph(1) = dBph/f%Bmod - Bph*f%dBmod(1)/bmod2
-        f%dhth(2:3) = -Bth*f%dBmod(2:3)/bmod2
-        f%dhph(2:3) = -Bph*f%dBmod(2:3)/bmod2
-        f%d2hth(1) = d2Bth/f%Bmod - 2.0_dp*dBth*f%dBmod(1)/bmod2 + &
-                     Bth/bmod2*(2.0_dp*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
-        f%d2hph(1) = d2Bph/f%Bmod - 2.0_dp*dBph*f%dBmod(1)/bmod2 + &
-                     Bph/bmod2*(2.0_dp*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
-        f%d2hth(2) = -dBth*f%dBmod(2)/bmod2 + &
-                     Bth/bmod2*(2.0_dp*f%dBmod(1)*f%dBmod(2)/f%Bmod - f%d2Bmod(2))
-        f%d2hph(2) = -dBph*f%dBmod(2)/bmod2 + &
-                     Bph/bmod2*(2.0_dp*f%dBmod(1)*f%dBmod(2)/f%Bmod - f%d2Bmod(2))
-        f%d2hth(3) = -dBth*f%dBmod(3)/bmod2 + &
-                     Bth/bmod2*(2.0_dp*f%dBmod(1)*f%dBmod(3)/f%Bmod - f%d2Bmod(3))
-        f%d2hph(3) = -dBph*f%dBmod(3)/bmod2 + &
-                     Bph/bmod2*(2.0_dp*f%dBmod(1)*f%dBmod(3)/f%Bmod - f%d2Bmod(3))
+        call boozer_h_rmix(f, Bth, dBth, d2Bth, Bph, dBph, d2Bph)
     end subroutine gpu_eval_field_rmix
+
+    include 'generated/boozer_h_derivatives.inc'
 
     subroutine gpu_midpoint_system(si, f, x, residual, jacobian)
         ! Five-equation degenerate-variational midpoint system and analytic

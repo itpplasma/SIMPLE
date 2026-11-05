@@ -125,8 +125,7 @@ contains
         double precision, intent(in) :: r, th_c, ph_c
         integer, intent(in) :: mode_secders
 
-        double precision :: Bctr_vartheta, Bctr_varphi, bmod2, sqg, &
-            d3Aphdr3, dummy, dummy3(3), dummy6(6), &
+        double precision :: d3Aphdr3, dummy, dummy3(3), dummy6(6), &
             Bth, Bph, dBth, dBph, d2Bth, d2Bph
         double precision :: r_cont, th_cont
         logical :: crossed
@@ -176,43 +175,12 @@ contains
             f%d2Bmod(2:3) = -f%d2Bmod(2:3)
         end if
 
-        bmod2 = f%Bmod**2
-        sqg = (-f%dAph(1)/f%dAth(1)*Bth + Bph)/bmod2*boozer_state%torflux
-        Bctr_vartheta = -f%dAph(1)/sqg
-        Bctr_varphi = f%dAth(1)/sqg
-
-        f%hth = Bth/f%Bmod
-        f%hph = Bph/f%Bmod
-        f%dhth(1) = dBth/f%Bmod - Bth*f%dBmod(1)/bmod2
-        f%dhph(1) = dBph/f%Bmod - Bph*f%dBmod(1)/bmod2
-        f%dhth(2:3) = -Bth*f%dBmod(2:3)/bmod2
-        f%dhph(2:3) = -Bph*f%dBmod(2:3)/bmod2
-
-        if (mode_secders > 0) then
-            f%d2hth(1) = d2Bth/f%Bmod - 2d0*dBth*f%dBmod(1)/bmod2 + &
-                         Bth/bmod2*(2d0*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
-            f%d2hph(1) = d2Bph/f%Bmod - 2d0*dBph*f%dBmod(1)/bmod2 + &
-                         Bph/bmod2*(2d0*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
-        end if
-
-        if (mode_secders .eq. 2) then
-            f%d2hth((/4, 6/)) = Bth/bmod2*(2d0*f%dBmod((/2, 3/))**2/f%Bmod - &
-                                           f%d2Bmod((/4, 6/)))
-            f%d2hph((/4, 6/)) = Bph/bmod2*(2d0*f%dBmod((/2, 3/))**2/f%Bmod - &
-                                           f%d2Bmod((/4, 6/)))
-
-            f%d2hth(2) = -dBth*f%dBmod(2)/bmod2 &
-                         + Bth/bmod2*(2d0*f%dBmod(1)*f%dBmod(2)/f%Bmod - f%d2Bmod(2))
-            f%d2hph(2) = -dBph*f%dBmod(2)/bmod2 &
-                         + Bph/bmod2*(2d0*f%dBmod(1)*f%dBmod(2)/f%Bmod - f%d2Bmod(2))
-
-            f%d2hth(3) = -dBth*f%dBmod(3)/bmod2 &
-                         + Bth/bmod2*(2d0*f%dBmod(1)*f%dBmod(3)/f%Bmod - f%d2Bmod(3))
-            f%d2hph(3) = -dBph*f%dBmod(3)/bmod2 &
-                         + Bph/bmod2*(2d0*f%dBmod(1)*f%dBmod(3)/f%Bmod - f%d2Bmod(3))
-
-            f%d2hth(5) = Bth/bmod2*(2d0*f%dBmod(2)*f%dBmod(3)/f%Bmod - f%d2Bmod(5))
-            f%d2hph(5) = Bph/bmod2*(2d0*f%dBmod(2)*f%dBmod(3)/f%Bmod - f%d2Bmod(5))
+        if (mode_secders == 2) then
+            call boozer_h_all(f, Bth, dBth, d2Bth, Bph, dBph, d2Bph)
+        else if (mode_secders > 0) then
+            call boozer_h_rr(f, Bth, dBth, d2Bth, Bph, dBph, d2Bph)
+        else
+            call boozer_h_first(f, Bth, dBth, Bph, dBph)
         end if
     end subroutine eval_field_booz
 
@@ -227,9 +195,8 @@ contains
         integer, intent(in) :: mode_secders
         !$acc routine seq
 
-        real(dp) :: bmod2, &
-            d3Aphdr3, dummy, dummy3(3), dummy6(6), &
-            Bth, Bph, dBth, dBph, d2Bth, d2Bph
+        real(dp) :: d3Aphdr3, dummy, dummy3(3), dummy6(6), &
+                    Bth, Bph, dBth, dBph, d2Bth, d2Bph
         real(dp) :: r_cont, th_cont
         logical :: crossed
 
@@ -267,44 +234,15 @@ contains
             f%d2Bmod(2:3) = -f%d2Bmod(2:3)
         end if
 
-        bmod2 = f%Bmod**2
-        f%hth = Bth/f%Bmod
-        f%hph = Bph/f%Bmod
-        f%dhth(1) = dBth/f%Bmod - Bth*f%dBmod(1)/bmod2
-        f%dhph(1) = dBph/f%Bmod - Bph*f%dBmod(1)/bmod2
-        f%dhth(2:3) = -Bth*f%dBmod(2:3)/bmod2
-        f%dhph(2:3) = -Bph*f%dBmod(2:3)/bmod2
-
-        if (mode_secders > 0) then
-            f%d2hth(1) = d2Bth/f%Bmod - 2.0_dp*dBth*f%dBmod(1)/bmod2 + &
-                         Bth/bmod2*(2.0_dp*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
-            f%d2hph(1) = d2Bph/f%Bmod - 2.0_dp*dBph*f%dBmod(1)/bmod2 + &
-                         Bph/bmod2*(2.0_dp*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
-        end if
-
         if (mode_secders == 2) then
-            f%d2hth(2) = -dBth*f%dBmod(2)/bmod2 + &
-                Bth/bmod2*(2.0_dp*f%dBmod(1)*f%dBmod(2)/f%Bmod - f%d2Bmod(2))
-            f%d2hph(2) = -dBph*f%dBmod(2)/bmod2 + &
-                Bph/bmod2*(2.0_dp*f%dBmod(1)*f%dBmod(2)/f%Bmod - f%d2Bmod(2))
-
-            f%d2hth(3) = -dBth*f%dBmod(3)/bmod2 + &
-                Bth/bmod2*(2.0_dp*f%dBmod(1)*f%dBmod(3)/f%Bmod - f%d2Bmod(3))
-            f%d2hph(3) = -dBph*f%dBmod(3)/bmod2 + &
-                Bph/bmod2*(2.0_dp*f%dBmod(1)*f%dBmod(3)/f%Bmod - f%d2Bmod(3))
-        end if
-
-        if (mode_secders == 2) then
-            f%d2hth((/4, 6/)) = Bth/bmod2*( &
-                2.0_dp*f%dBmod((/2, 3/))**2/f%Bmod - f%d2Bmod((/4, 6/)))
-            f%d2hph((/4, 6/)) = Bph/bmod2*( &
-                2.0_dp*f%dBmod((/2, 3/))**2/f%Bmod - f%d2Bmod((/4, 6/)))
-
-            f%d2hth(5) = Bth/bmod2*( &
-                2.0_dp*f%dBmod(2)*f%dBmod(3)/f%Bmod - f%d2Bmod(5))
-            f%d2hph(5) = Bph/bmod2*( &
-                2.0_dp*f%dBmod(2)*f%dBmod(3)/f%Bmod - f%d2Bmod(5))
+            call boozer_h_all(f, Bth, dBth, d2Bth, Bph, dBph, d2Bph)
+        else if (mode_secders > 0) then
+            call boozer_h_rr(f, Bth, dBth, d2Bth, Bph, dBph, d2Bph)
+        else
+            call boozer_h_first(f, Bth, dBth, Bph, dBph)
         end if
     end subroutine eval_field_booz_device
+
+    include '../generated/boozer_h_derivatives.inc'
 
 end module field_can_boozer

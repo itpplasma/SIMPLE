@@ -66,10 +66,28 @@ program generate_orbit_systems
     open (newunit=unit, file=trim(output_dir)//'/gpu_derivatives2_radial_mixed.inc', &
           status='replace', action='write')
     first_in_file = .true.
-    call emit_field_derivatives(unit, 'gpu_radial_mixed_second_derivatives', 2, .true.)
+    call emit_field_derivatives(unit, 'gpu_radial_mixed_second_derivatives', 2, &
+                                .true., .true.)
     close (unit)
 
     call emit_rates_boozer(output_dir)
+
+    open (newunit=unit, file=trim(output_dir)//'/field_can_derivatives.inc', &
+          status='replace', action='write')
+    first_in_file = .true.
+    call emit_field_derivatives(unit, 'get_val', 0, .false., .false.)
+    call emit_field_derivatives(unit, 'get_derivatives', 1, .false., .false.)
+    call emit_field_derivatives(unit, 'get_derivatives2', 2, .false., .false.)
+    close (unit)
+
+    open (newunit=unit, file=trim(output_dir)//'/boozer_h_derivatives.inc', &
+          status='replace', action='write')
+    first_in_file = .true.
+    call emit_boozer_h(unit, 'boozer_h_first', [integer ::])
+    call emit_boozer_h(unit, 'boozer_h_rr', [1])
+    call emit_boozer_h(unit, 'boozer_h_rmix', [1, 2, 3])
+    call emit_boozer_h(unit, 'boozer_h_all', [1, 2, 3, 4, 5, 6])
+    close (unit)
 
     open (newunit=unit, file=trim(output_dir)//'/orbit_systems_generated.f90', &
           status='replace', action='write')
@@ -449,11 +467,12 @@ contains
     !> that get_derivatives already stored in f, and drops d2Phie: SIMPLE's
     !> electric potential is linear in s. Reading them back from f, as the
     !> hand-written device code did, keeps the OpenACC Euler kernel at its
-    !> register count.
-    subroutine emit_field_derivatives(unit, name, order, radial_mixed)
+    !> register count. `reciprocal` multiplies by named reciprocals instead
+    !> of dividing.
+    subroutine emit_field_derivatives(unit, name, order, radial_mixed, reciprocal)
         integer, intent(in) :: unit, order
         character(*), intent(in) :: name
-        logical, intent(in) :: radial_mixed
+        logical, intent(in) :: radial_mixed, reciprocal
         character(4), parameter :: quantity(3) = ['vpar', 'H   ', 'pth ']
         type(chain_t) :: c
         type(expr_t) :: x(4), aph, ath, hth, hph, bmod, phie, mu, ro0, q(3), e
@@ -535,11 +554,12 @@ contains
             do k = 1, size(needed)
                 defs(k) = fold_numbers(subs_many(c%defs(needed(k)), old, new))
             end do
-            call emit_with_locals(unit, name, c, needed, roots, refs, defs)
+            call emit_with_locals(unit, name, c, needed, roots, refs, defs, reciprocal)
             return
         end if
         needed = c%needed(roots)
-        call emit_with_locals(unit, name, c, needed, roots, refs, c%defs(needed))
+        call emit_with_locals(unit, name, c, needed, roots, refs, c%defs(needed), &
+                              reciprocal)
     end subroutine emit_field_derivatives
 
     !> A value that an earlier kernel stored in field_can_t: an opaque
@@ -582,8 +602,9 @@ contains
 
     !> A kernel (f, pphi) that assigns the chain intermediates as locals and
     !> the roots to the members of the inout field_can_t f.
-    subroutine emit_with_locals(unit, name, c, needed, roots, refs, defs)
+    subroutine emit_with_locals(unit, name, c, needed, roots, refs, defs, reciprocal)
         integer, intent(in) :: unit
+        logical, intent(in) :: reciprocal
         character(*), intent(in) :: name
         type(chain_t), intent(in) :: c
         integer, intent(in) :: needed(:)
@@ -617,7 +638,7 @@ contains
         spec%regenerate_command = str('generate_orbit_systems src/generated '// &
                                       trim(fortsym_revision))
         spec%openacc_routine_seq = .true.
-        spec%reciprocal_temporaries = .true.
+        spec%reciprocal_temporaries = reciprocal
         source = emit_kernel([defs, roots], spec, good, message=message)
         if (.not. good) then
             print *, 'emission of ', name, ' failed: ', message
@@ -625,6 +646,78 @@ contains
         end if
         call write_source(unit, chars(source))
     end subroutine emit_with_locals
+
+    !> h_theta = B_theta/B and h_phi = B_phi/B of a Boozer field, with
+    !> covariant components B_theta(r), B_phi(r) passed as arguments and
+    !> B(r, theta, phi) read from f, and their gradients and the packed
+    !> Hessian entries `hessian` written to f. The same kernels serve the CPU
+    !> evaluation and, included in simple_gpu, the OpenACC one. Gradients stay
+    !> unfolded so that they round like the hand-written chain they replaced.
+    subroutine emit_boozer_h(unit, name, hessian)
+        integer, intent(in) :: unit
+        character(*), intent(in) :: name
+        integer, intent(in) :: hessian(:)
+        integer, parameter :: row(6) = [1, 1, 1, 2, 2, 3], col(6) = [1, 2, 3, 2, 3, 3]
+        character(3), parameter :: hname(2) = ['hth', 'hph'], bname(2) = ['Bth', 'Bph']
+        type(expr_t) :: x(3), h(2), b, e
+        type(expr_t), allocatable :: roots(:)
+        type(str_t), allocatable :: refs(:)
+        type(kernel_spec_t) :: spec
+        type(str_t) :: source
+        character(:), allocatable :: message
+        logical :: good
+        integer :: m, i, k
+
+        call reset()
+        x = [sym(arena, 'r_'), sym(arena, 'th_'), sym(arena, 'ph_')]
+        b = field_function('Bmod', x)
+        allocate (roots(0), refs(0), spec%args(0))
+        do m = 1, 2
+            h(m) = func(bname(m), x(1:1))/b
+            call add_binding(bname(m), [integer ::], bname(m))
+            call add_binding(bname(m), [1], 'd'//bname(m))
+            spec%args = [spec%args, str(bname(m)), str('d'//bname(m))]
+            if (size(hessian) > 0) then
+                call add_binding(bname(m), [1, 1], 'd2'//bname(m))
+                spec%args = [spec%args, str('d2'//bname(m))]
+            end if
+        end do
+        do m = 1, 2
+            call add_root(roots, refs, h(m), 'f%'//hname(m))
+            do i = 1, 3
+                call add_root(roots, refs, diff(h(m), x(i)), &
+                              'f%d'//hname(m)//'('//itoa(i)//')')
+            end do
+            do k = 1, size(hessian)
+                e = diff(diff(h(m), x(row(hessian(k)))), x(col(hessian(k))))
+                call add_root(roots, refs, fold_numbers(e), &
+                              'f%d2'//hname(m)//'('//itoa(hessian(k))//')')
+            end do
+        end do
+
+        spec%name = str(name)
+        spec%mode = KERNEL_SUBROUTINE
+        spec%args = [str('f'), spec%args]
+        spec%arg_types = [str('type(field_can_t)'), &
+                          [(str('real(dp)'), k=2, size(spec%args))]]
+        spec%arg_intents = [str('inout'), [(str('in'), k=2, size(spec%args))]]
+        allocate (spec%outputs(0))
+        spec%output_references = refs
+        spec%bindings = bindings
+        spec%temp_prefix = str('t')
+        spec%generator = str('gen/generate_orbit_systems.f90')
+        if (len_trim(fortsym_revision) > 0) &
+            spec%generator_revision = str('fortsym '//trim(fortsym_revision))
+        spec%regenerate_command = str('generate_orbit_systems src/generated '// &
+                                      trim(fortsym_revision))
+        spec%openacc_routine_seq = .true.
+        source = emit_kernel(roots, spec, good, message=message)
+        if (.not. good) then
+            print *, 'emission of ', name, ' failed: ', message
+            error stop 1
+        end if
+        call write_source(unit, chars(source))
+    end subroutine emit_boozer_h
 
     !> Guiding-centre rates of a Boozer field: B(r, theta, phi) and the
     !> profiles A_phi, B_theta, B_phi of r, with dA_theta/dr = torflux. They
