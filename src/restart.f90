@@ -8,6 +8,7 @@ module restart_mod
         v0, dtaumin, trace_time, ORBIT_EXIT_COMPLETED, &
         ORBIT_EXIT_LCFS, ORBIT_EXIT_WALL, ORBIT_EXIT_NUMERICAL_CONFINED, &
         ORBIT_EXIT_THERMALIZED
+    use params, only: zstart, iclass, class_scores, classification_enabled
     implicit none
     private
 
@@ -72,9 +73,50 @@ contains
             end do
             close (unit)
         end if
+        if (classification_enabled()) call read_restart_classes()
         print *, 'restart: loaded', count(particle_done), '/', ntestpart, &
                  'finished particles'
     end subroutine read_restart_data
+
+    !> Restore the classes of finished markers from class_parts.dat and
+    !> class_scores.dat. A finished marker without a class row for the same
+    !> start radius is traced again, so class_parts.dat never loses classes.
+    subroutine read_restart_classes()
+        integer :: i, idx, unit, ios
+        integer :: ic(3)
+        real(dp) :: s_start, pi_val, tp
+        real(dp) :: scores(size(class_scores, 1))
+        logical, allocatable :: restored(:)
+
+        allocate (restored(ntestpart), source=.false.)
+        open (newunit=unit, file='class_parts.dat', status='old', &
+              action='read', iostat=ios, recl=1024)
+        if (ios == 0) then
+            do i = 1, ntestpart
+                read (unit, *, iostat=ios) idx, s_start, pi_val, ic
+                if (ios /= 0) exit
+                if (idx < 1 .or. idx > ntestpart) cycle
+                if (abs(s_start - zstart(1, idx)) > &
+                    16d0*epsilon(s_start)*max(1d0, abs(s_start))) cycle
+                if (.not. particle_done(idx)) cycle
+                iclass(:, idx) = ic
+                restored(idx) = .true.
+            end do
+            close (unit)
+        end if
+        particle_done = particle_done .and. restored
+
+        open (newunit=unit, file='class_scores.dat', status='old', &
+              action='read', iostat=ios, recl=1024)
+        if (ios /= 0) return
+        do i = 1, ntestpart
+            read (unit, *, iostat=ios) idx, scores, tp
+            if (ios /= 0) exit
+            if (idx < 1 .or. idx > ntestpart) cycle
+            if (particle_done(idx)) class_scores(:, idx) = scores
+        end do
+        close (unit)
+    end subroutine read_restart_classes
 
     subroutine restore_confined_counts()
         integer :: i, it
