@@ -388,6 +388,17 @@ endif()
 # TEST EXECUTABLES
 ##################################################
 if (ENABLE_OPENMP)
+    add_executable(test_canflux_threads.x test_canflux_threads.f90)
+    target_link_libraries(test_canflux_threads.x simple)
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/canflux_threads)
+    file(CREATE_LINK ${WOUT_FILE}
+        ${CMAKE_CURRENT_BINARY_DIR}/canflux_threads/wout.nc SYMBOLIC)
+    add_test(NAME test_canflux_threads COMMAND test_canflux_threads.x
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/canflux_threads)
+    set_tests_properties(test_canflux_threads PROPERTIES
+        LABELS "integration;canflux_threads" PROCESSORS 4 TIMEOUT 120
+        ENVIRONMENT "OMP_NUM_THREADS=4;OPENBLAS_NUM_THREADS=1")
+
     add_executable (test_sympl_tok.x test_sympl.f90)
     target_link_libraries(test_sympl_tok.x simple)
     add_test(NAME test_sympl_tokamak

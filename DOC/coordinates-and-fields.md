@@ -350,6 +350,13 @@ evaluation is needed.
 | SPECTRE | `src/field/field_can_spectre.f90` | $\rho_g$ | Meiss per volume (section 6) |
 | test | `src/field/field_can_test.f90` | $r$ | analytic circular tokamak |
 
+Canonical-flux construction and conversion share the selected, read-only field
+object across OpenMP threads. The construction/conversion phase flag is also
+shared and changes only outside the parallel regions; coordinate scratch
+values remain thread-local. Workers therefore use the same field dispatch and
+Newton stopping threshold as the calling thread. Field initialization must
+finish before concurrent conversions begin.
+
 For Boozer chartmaps the Boozer splines come from the chartmap
 (`load_boozer_from_chartmap`) and `integ_to_ref_boozer_chartmap` maps
 $s \to \rho = \sqrt s$. The RK45 GPU path evaluates the same Boozer splines
