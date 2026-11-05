@@ -885,12 +885,25 @@ contains
     end subroutine test_exit_classification
 
     subroutine test_numerically_confined_classification
-        if (abs(normalized_flux_from_reference_radial(0.1_dp, .true.) - &
+        use libneo_coordinates, only: RHO_TOR, PSI_TOR_NORM
+        if (abs(normalized_flux_from_reference_radial(0.1_dp, RHO_TOR, 1.0_dp) - &
                 0.01_dp) > epsilon(1.0_dp)) then
             error stop 'chartmap rho was not converted to normalized flux s'
         end if
-        if (normalized_flux_from_reference_radial(0.1_dp, .false.) /= 0.1_dp) then
+        if (normalized_flux_from_reference_radial(0.1_dp, 0, 1.0_dp) /= 0.1_dp) then
             error stop 'VMEC normalized flux s was incorrectly rescaled'
+        end if
+        ! A psi_tor_norm chart radius is s itself, so s = 0.05 is outside
+        ! the s < 0.01 core; squaring it would give 0.0025.
+        if (normalized_flux_from_reference_radial(0.05_dp, PSI_TOR_NORM, &
+                                                  1.0_dp) /= 0.05_dp) then
+            error stop 'psi_tor_norm chart radius was squared'
+        end if
+        ! Extended charts scale rho = rho_lcfs*sqrt(s): rho = 0.09 at
+        ! rho_lcfs = 0.8 is s = 0.0127, outside the core, not rho^2 = 0.0081.
+        if (abs(normalized_flux_from_reference_radial(0.09_dp, RHO_TOR, 0.8_dp) - &
+                (0.09_dp/0.8_dp)**2) > epsilon(1.0_dp)) then
+            error stop 'extended chartmap rho was not scaled by rho_lcfs'
         end if
         if (.not. should_classify_numerically_confined( &
             ORBIT_EXIT_NUMERICAL_MAXITER, ORBIT_GC, 1, .true., .false., &

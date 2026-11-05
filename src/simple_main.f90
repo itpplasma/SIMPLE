@@ -79,6 +79,7 @@ module simple_main
     integer, save :: map_boundary_exit_code = ORBIT_EXIT_LCFS
     real(dp), save :: chartmap_cart_scale_to_m = -1.0d0
     real(dp), save :: invariant_edge_radius = 1.0_dp
+    real(dp), save :: reference_rho_lcfs = 1.0_dp
     type(stl_wall_t), save :: wall
 
     integer, parameter :: INPUT_VMEC = 0
@@ -854,6 +855,7 @@ contains
         chart_boundary_kind_effective = 'lcfs'
         chartmap_cart_scale_to_m = -1.0d0
         wall_query_rho_lcfs = -1.0d0
+        reference_rho_lcfs = 1.0_dp
 
         if (.not. allocated(ref_coords)) then
             if (len_trim(wall_input) == 0) return
@@ -885,6 +887,7 @@ contains
             end select
             if (meta%rho_lcfs > 0.0_dp .and. meta%rho_lcfs <= 1.0_dp) then
                 invariant_edge_radius = meta%rho_lcfs**2
+                reference_rho_lcfs = meta%rho_lcfs
             end if
         class default
             if (len_trim(wall_input) == 0) return
@@ -2090,31 +2093,42 @@ contains
         end if
     end function classify_orbit_exit
 
+    !> Normalized flux at a reference radius. chart_convention is 0 for VMEC
+    !> reference coordinates, whose radius is s, else the chartmap
+    !> rho_convention. rho_tor charts put the LCFS at rho_lcfs <= 1.
     pure real(dp) function normalized_flux_from_reference_radial( &
-        reference_radial, radial_is_rho)
-        real(dp), intent(in) :: reference_radial
-        logical, intent(in) :: radial_is_rho
+        reference_radial, chart_convention, rho_lcfs)
+        use libneo_coordinates, only: PSI_TOR_NORM, PSI_POL_NORM
+        real(dp), intent(in) :: reference_radial, rho_lcfs
+        integer, intent(in) :: chart_convention
 
         normalized_flux_from_reference_radial = reference_radial
-        if (radial_is_rho .and. reference_radial >= 0.0_dp) &
-            normalized_flux_from_reference_radial = reference_radial**2
+        select case (chart_convention)
+        case (0, PSI_TOR_NORM, PSI_POL_NORM)
+            continue
+        case default
+            if (reference_radial >= 0.0_dp) &
+                normalized_flux_from_reference_radial = &
+                (reference_radial/rho_lcfs)**2
+        end select
     end function normalized_flux_from_reference_radial
 
     real(dp) function reference_normalized_flux_s(reference_radial)
         real(dp), intent(in) :: reference_radial
-        logical :: radial_is_rho
+        integer :: chart_convention
 
-        radial_is_rho = .false.
+        chart_convention = 0
         if (allocated(ref_coords)) then
             select type (ref_coords)
             class is (chartmap_coordinate_system_t)
-                radial_is_rho = .true.
+                chart_convention = ref_coords%rho_convention
             class default
                 continue
             end select
         end if
         reference_normalized_flux_s = normalized_flux_from_reference_radial( &
-                                      reference_radial, radial_is_rho)
+                                      reference_radial, chart_convention, &
+                                      reference_rho_lcfs)
     end function reference_normalized_flux_s
 
     pure logical function should_classify_numerically_confined(exit_code, &
@@ -2265,7 +2279,7 @@ contains
                 end if
                 if (numerically_confined) then
                     ! All pushers failed from the same validated state in the
-                    ! axis-local core (VMEC s<0.01, or chartmap rho<0.1).
+                    ! axis-local core s < 0.01.
                     ! This is neither a wall nor an LCFS event. Preserve it as
                     ! an explicit audited outcome and apply the established
                     ! numerical-fault-as-
