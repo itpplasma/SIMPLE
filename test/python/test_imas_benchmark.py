@@ -205,7 +205,7 @@ def test_suite_retains_every_child_failure(tmp_path, monkeypatch):
 @pytest.mark.parametrize("version", ["3.42.2", "4.1.1"])
 def test_geqdsk_cocos_preserves_physical_field(monkeypatch, cocos, flux_scale, version):
     pytest.importorskip("imas")
-    import libneo.eqdsk_base
+    eqdsk_base = pytest.importorskip("libneo.eqdsk_base")
     from pysimple.imas.equilibrium import _geqdsk_input
 
     expected = _geqdsk_input(benchmark.circular_equilibrium())
@@ -213,7 +213,7 @@ def test_geqdsk_cocos_preserves_physical_field(monkeypatch, cocos, flux_scale, v
     source.update(R=np.linspace(8.7, 11.3, 129), Z=np.linspace(-1.3, 1.3, 129))
     for key in ("PsiVs", "PsiaxisVs", "PsiedgeVs"):
         source[key] = expected[key] * flux_scale
-    monkeypatch.setattr(libneo.eqdsk_base, "read_eqdsk", lambda path: source)
+    monkeypatch.setattr(eqdsk_base, "read_eqdsk", lambda path: source)
     actual = _geqdsk_input(
         benchmark.equilibrium_from_geqdsk("unused", cocos, version=version)
     )
