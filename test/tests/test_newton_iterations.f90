@@ -11,7 +11,8 @@ program test_newton_iterations
     use orbit_symplectic, only: orbit_sympl_init, orbit_timestep_sympl
     use orbit_symplectic_base, only: symplectic_integrator_t, sympl_predictor, &
                     sympl_stop_rule, PREDICT_NONE, PREDICT_QUADRATIC, STOP_CORRECTION, &
-                                  STOP_RATE, EXPL_IMPL_EULER, MIDPOINT, GAUSS2, LOBATTO3
+                                STOP_RATE, EXPL_IMPL_EULER, IMPL_EXPL_EULER, MIDPOINT, &
+                                     GAUSS1, GAUSS2, GAUSS3, GAUSS4, LOBATTO3
     use simple, only: tracer_t, init_params
     use simple_main, only: init_field
     use params, only: coord_input, field_input
@@ -38,6 +39,7 @@ program test_newton_iterations
     call check_scheme('gauss4', GAUSS2, 2, nfail)
     call check_scheme('lobatto4', LOBATTO3, 3, nfail)
     call check_history_reset(nfail)
+    call check_iteration_counts(nfail)
 
     if (nfail > 0) then
         write (error_unit, '(i0,a)') nfail, ' check(s) failed'
@@ -66,9 +68,10 @@ contains
         dt = twopi*rmajor*1d2/48d0
     end subroutine setup
 
-    subroutine run(mode, predictor, stop_rule, z, evaluations_per_step)
+    subroutine run(mode, predictor, stop_rule, z, evaluations_per_step, evaluations)
         integer, intent(in) :: mode, predictor, stop_rule
         real(dp), intent(out) :: z(4), evaluations_per_step
+        integer(8), intent(out), optional :: evaluations
         type(symplectic_integrator_t) :: si
         type(field_can_t) :: f
         integer(8) :: d2_start
@@ -84,6 +87,7 @@ contains
             if (ierr /= 0) error stop 'symplectic step failed'
         end do
         evaluations_per_step = real(n_field_evaluations_d2 - d2_start, dp)/nsteps
+        if (present(evaluations)) evaluations = n_field_evaluations_d2 - d2_start
         z = si%z
         sympl_predictor = PREDICT_QUADRATIC
         sympl_stop_rule = STOP_RATE
@@ -139,5 +143,36 @@ contains
             nfail = nfail + 1
         end if
     end subroutine check_history_reset
+
+    subroutine check_iteration_counts(nfail)
+        ! Refactor guard for the Newton drivers: field evaluations, one per stage
+        ! and Newton iteration, as recorded with the per-scheme drivers that
+        ! preceded the shared one, for the rate stop and the correction stop.
+        integer, intent(inout) :: nfail
+        integer, parameter :: nschemes = 8
+        character(8), parameter :: names(nschemes) = [character(8) :: 'euler1', &
+               'euler2', 'midpoint', 'gauss1', 'gauss2', 'gauss3', 'gauss4', 'lobatto3']
+        integer, parameter :: modes(nschemes) = [EXPL_IMPL_EULER, IMPL_EXPL_EULER, &
+                                     MIDPOINT, GAUSS1, GAUSS2, GAUSS3, GAUSS4, LOBATTO3]
+        integer, parameter :: rate_counts(nschemes) = &
+                              [802, 964, 1678, 824, 1602, 2403, 3204, 2403]
+        integer, parameter :: correction_counts(nschemes) = &
+                              [1332, 1698, 3200, 1600, 3200, 4800, 6400, 4800]
+        real(dp) :: z(4), cost
+        integer(8) :: counts(2)
+        integer :: k
+
+        do k = 1, nschemes
+            call run(modes(k), PREDICT_QUADRATIC, STOP_RATE, z, cost, counts(1))
+            call run(modes(k), PREDICT_NONE, STOP_CORRECTION, z, cost, counts(2))
+            write (*, '(a10,a,2i8)') names(k), ': field evaluations ', counts
+            if (counts(1) /= rate_counts(k) .or. &
+                counts(2) /= correction_counts(k)) then
+                write (error_unit, '(a,a,a,2i8)') '  Newton iterations changed: ', &
+                    trim(names(k)), ', expected', rate_counts(k), correction_counts(k)
+                nfail = nfail + 1
+            end if
+        end do
+    end subroutine check_iteration_counts
 
 end program test_newton_iterations
