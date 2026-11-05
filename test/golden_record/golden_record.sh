@@ -181,6 +181,16 @@ main() {
            2>/dev/null; then
         baseline_set=physical_direction
     fi
+    # A reference that still rejects symplectic Euler steps at 0.5 % momentum
+    # (#560) is compared through the records without that gate (#697), only
+    # for a candidate that contains the fix.
+    local jump_marker=src/simple_main.f90
+    if [ -z "$baseline_set" ] && \
+       grep -q SYMPLECTIC_JUMP_FRACTION "$PROJECT_ROOT_CUR/$jump_marker" && \
+       ! grep -q SYMPLECTIC_JUMP_FRACTION "$PROJECT_ROOT_REF/$jump_marker" \
+           2>/dev/null; then
+        baseline_set=symplectic_jump
+    fi
     if [ -n "$baseline_set" ]; then
         comparison_ref="$RUN_DIR_CUR.reference"
         local case_name baseline
