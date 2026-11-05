@@ -517,8 +517,8 @@ contains
         else
             times_lost(ipart) = kt*dtaumin/v0
         end if
-        deallocate(zpoipl_tip, zpoipl_per)
         !$omp end critical
+        deallocate (zpoipl_tip, zpoipl_per)
         if (class_result%exit_code >= ORBIT_EXIT_NUMERICAL_DOMAIN) then
             if (first_unresolved_it == 0) first_unresolved_it = min(it, ntimstep)
             do it_f = first_unresolved_it, ntimstep
