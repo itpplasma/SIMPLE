@@ -176,6 +176,7 @@ program test_sympl_testfield
     call test_reseed_momentum_reference
     call test_recovery_preserves_magnetic_moment
     call test_collision_momentum_uses_current_field
+    call test_albert_wall_boundary_residual
 
     print *, 'TEST field symplectic step succeeded'
 
@@ -1153,5 +1154,78 @@ contains
         if (.not. abs(local_orbit%si%pthold - fresh%pth) <= 1.0e-12_dp) &
             error stop 'Collision kick left a stale poloidal momentum'
     end subroutine test_collision_momentum_uses_current_field
+
+    ! A reference-boundary event during RK recovery reports its radial residual
+    ! in the reference radius on the wall path as on the plain one (#740). The
+    ! Albert radius A_theta/A_norm is not constant on s = 1. Runs last because
+    ! it replaces the TEST field.
+    subroutine test_albert_wall_boundary_residual
+        use magfie_sub, only: ALBERT
+        use parmot_mod, only: ro0, rmu
+        use params, only: dtaumin, relerr, wall_query_rho_lcfs, &
+                          canonical_grid_nr, canonical_grid_ntheta, &
+                          canonical_grid_nphi, canonical_ode_relerr
+        use field_can_mod, only: ref_to_integ
+        type(tracer_t) :: albert_orbit, local_orbit
+        type(rk_recovery_state_t) :: recovery
+        real(dp) :: z0(5), z(5), z_event(5), x_previous(3), residual(0:1)
+        integer(int64) :: kt
+        integer :: wall_path, step_error, icase, events
+        logical :: albert_radius_differs
+        ! Starts at s = 0.97 whose single recovery step crosses s = 1.
+        real(dp), parameter :: thetas(3) = [1.0_dp, 2.0_dp, 3.0_dp]
+        real(dp), parameter :: pitches(3) = [0.1_dp, 0.1_dp, -0.4_dp]
+
+        isw_field_type = ALBERT
+        integmode = 1
+        canonical_grid_nr = 16
+        canonical_grid_ntheta = 17
+        canonical_grid_nphi = 18
+        canonical_ode_relerr = 1.0e-10_dp
+        call init_field(albert_orbit, vmec_file, ans_s, ans_tp, amultharm, integmode)
+        ro0 = 3.0e6_dp
+        rmu = 1.0e8_dp
+        dtaumin = 1.0e3_dp
+        relerr = 1.0e-10_dp
+        wall_query_rho_lcfs = huge(1.0_dp)
+        orbit_model = ORBIT_GC
+        swcoll = .false.
+        symplectic_newton_warning_mode = .true.
+        events = 0
+        albert_radius_differs = .false.
+        do icase = 1, size(thetas)
+            call ref_to_integ([0.97_dp, thetas(icase), 0.3_dp], z0(1:3))
+            z0(4:5) = [1.0_dp, pitches(icase)]
+            do wall_path = 0, 1
+                local_orbit = albert_orbit
+                call init_sympl(local_orbit%si, local_orbit%f, z0, dtaumin, &
+                                dtaumin, relerr, integmode)
+                recovery = rk_recovery_state_t()
+                call activate_rk_recovery(recovery, z0, 1.0_dp)
+                z = z0
+                kt = 0_int64
+                x_previous = z(1:3)
+                if (wall_path == 0) then
+                    call macrostep(local_orbit, z, kt, step_error, 1, &
+                                   rk_recovery=recovery)
+                else
+                    call macrostep(local_orbit, z, kt, step_error, 1, &
+                                   ipart=1, x_prev_m=x_previous, rk_recovery=recovery)
+                end if
+                if (step_error /= SYMPLECTIC_STEP_BOUNDARY) exit
+                residual(wall_path) = local_orbit%si%last_event_radial_residual
+                if (wall_path == 0) z_event = z
+            end do
+            if (step_error /= SYMPLECTIC_STEP_BOUNDARY) cycle
+            events = events + 1
+            if (abs(z_event(1) - 1.0_dp) > 0.05_dp) albert_radius_differs = .true.
+            if (residual(0) > 1.0e-8_dp) &
+                error stop 'Albert boundary residual is not in the reference radius'
+            if (residual(1) /= residual(0)) &
+                error stop 'Wall path changed the Albert boundary residual'
+        end do
+        if (events == 0 .or. .not. albert_radius_differs) &
+            error stop 'Albert boundary fixture did not cross s = 1 off the Albert edge'
+    end subroutine test_albert_wall_boundary_residual
 
 end program test_sympl_testfield
