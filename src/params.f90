@@ -69,6 +69,10 @@ module params
     integer, parameter :: ORBIT_EXIT_NUMERICAL_LINEAR = 103
     integer, parameter :: ORBIT_EXIT_NUMERICAL_EVENT = 104
     integer, parameter :: ORBIT_EXIT_NUMERICAL_FULL_ORBIT = 105
+    ! A marker whose failed symplectic steps needed more than max_rk_recoveries
+    ! RK recoveries: its trajectory is no longer the symplectic one (#508), so it
+    ! is unresolved from that macrostep on.
+    integer, parameter :: ORBIT_EXIT_RECOVERY_STORM = 106
     real(dp) :: contr_pp = -1d0
     integer          :: ibins
     logical          :: generate_start_only = .False.
@@ -206,6 +210,8 @@ module params
     !> microstep. A second consecutive failure is terminal rather than freezing
     !> the remainder of the orbit at one phase-space point.
     integer, parameter :: max_consecutive_warning_holds = 1
+    ! RK recoveries one marker may need before it counts as unresolved.
+    integer :: max_rk_recoveries = 1000
 
     character(1000) :: field_input = ''
     character(1000) :: coord_input = ''
@@ -267,7 +273,7 @@ module params
         gpu_landreman, gpu_compact_init, gpu_work_order, gpu_num_devices, &
         gpu_t_block, gpu_loss_tau, gpu_maxloss, gpu_min_timestep, &
         gpu_pilot_fraction, gpu_particle_profile, &
-        symplectic_newton_warning_mode, &
+        symplectic_newton_warning_mode, max_rk_recoveries, &
         boundary_event_fraction_tolerance, boundary_event_radial_tolerance, &
         canonical_grid_nr, canonical_grid_ntheta, canonical_grid_nphi, &
         canonical_ode_relerr, &

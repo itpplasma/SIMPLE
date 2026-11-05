@@ -55,6 +55,7 @@ relerr = 1d-13                   ! relative tolerance of the implicit (Newton) a
 orbit_model = 0                  ! 0 = guiding center, 7 = full orbit (Boris pusher)
 orbit_coord = 0                  ! chart for orbit_model = 7; must then be 1 (Boozer/chartmap)
 symplectic_newton_warning_mode = .true. ! .true.: accept bounded Newton corrections after maxit
+max_rk_recoveries = 1000          ! RK recoveries per marker before it counts as unresolved (#508)
 !                                  and retry failed steps (see DOC/config.md);
 !                                  .false.: end the marker at the first exhausted recovery
 boundary_event_fraction_tolerance = -1d0 ! fractional-step tolerance of the s = 1 event,
