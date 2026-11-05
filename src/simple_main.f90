@@ -3042,10 +3042,8 @@ contains
                     if (hit) then
                         ierr_orbit = WALL_HIT_EXIT
                     else if (rk_recovery_local%active) then
-                        ! Wall runs keep their historical integration-radius
-                        ! residual for reference-boundary events.
                         call record_rk_boundary_event(anorb%si, z, loss_fraction, &
-                                              reference_boundary .and. .not. wall_query)
+                                                      reference_boundary)
                         ierr_orbit = SYMPLECTIC_STEP_BOUNDARY
                     end if
                 else if (ierr_orbit /= 0) then
@@ -3141,7 +3139,7 @@ contains
                             ierr_orbit = WALL_HIT_EXIT
                         else
                             call record_rk_boundary_event(anorb%si, z, loss_fraction, &
-                                              reference_boundary .and. .not. wall_query)
+                                                          reference_boundary)
                             ierr_orbit = SYMPLECTIC_STEP_BOUNDARY
                         end if
                         if (present(exit_step)) then
