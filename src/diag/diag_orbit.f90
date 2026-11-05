@@ -190,7 +190,7 @@ function newton_midpoint_count_iterations(si, f, x, atol, rtol, maxit, xlast, fi
             do ktau = 1, ntau
                 si%pthold = f%pth
 
-                ! Set up for midpoint integration (like diag_newton)
+                ! Set up for midpoint integration
                 z(1:4) = si%z
                 z(5) = si%z(1)
 

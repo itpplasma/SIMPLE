@@ -640,10 +640,6 @@ add_executable(diag_albert.x
     app/simple_diag_albert.f90
 )
 
-add_executable(diag_newton.x
-    app/simple_diag_newton.f90
-)
-
 add_executable(diag_orbit.x
     app/simple_diag_orbit.f90
 )
@@ -691,13 +687,11 @@ endif()
 
 target_link_libraries(diag_meiss.x PRIVATE simple)
 target_link_libraries(diag_albert.x PRIVATE simple)
-target_link_libraries(diag_newton.x PRIVATE simple)
 target_link_libraries(diag_orbit.x PRIVATE simple)
 target_link_libraries(diag_traj.x PRIVATE simple)
 set_target_properties(diag_traj.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set_target_properties(diag_meiss.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set_target_properties(diag_albert.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
-set_target_properties(diag_newton.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set_target_properties(diag_orbit.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 # Boozer chartmap export tool
@@ -731,7 +725,6 @@ set_target_properties(spectre_poincare.x PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${C
 # Ensure fortplot is built before diagnostics (when available)
 if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     add_dependencies(diag_meiss.x fortplot)
-    add_dependencies(diag_newton.x fortplot)
     add_dependencies(diag_albert.x fortplot)
     add_dependencies(diag_orbit.x fortplot)
 endif()

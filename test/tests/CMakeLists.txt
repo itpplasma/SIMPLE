@@ -9,6 +9,11 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
     )
 endif()
 
+# Quasi-Newton implicit steppers, kept only as an independent root solver for
+# the tests that compare against the Newton steppers of simple.x.
+add_library(simple_quasi_implicit STATIC orbit_quasi_implicit.f90)
+target_link_libraries(simple_quasi_implicit PUBLIC simple)
+
 ##################################################
 # DOWNLOAD TEST DATA
 ##################################################
@@ -420,7 +425,7 @@ if (ENABLE_OPENMP)
         LABELS "integration")
 
     add_executable (test_sympl.x test_sympl_stell.f90)
-    target_link_libraries(test_sympl.x simple)
+    target_link_libraries(test_sympl.x simple_quasi_implicit)
     # Stellarator symplectic + quasi-symplectic integrator driver. The quasi
     # branch is the only code path that exercises the root solver behind the
     # quasi steps (fortnum multiroot_hybrids on this branch, MINPACK hybrd1 on
@@ -443,7 +448,7 @@ if (ENABLE_OPENMP)
         LABELS "integration;slow" TIMEOUT 120
         PROCESSORS 1 ENVIRONMENT "OMP_NUM_THREADS=1")
     add_executable (test_quasi_gauss_threads.x test_quasi_gauss_threads.f90)
-    target_link_libraries(test_quasi_gauss_threads.x simple)
+    target_link_libraries(test_quasi_gauss_threads.x simple_quasi_implicit)
     file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/quasi_gauss_threads)
     file(CREATE_LINK ${WOUT_FILE}
         ${CMAKE_CURRENT_BINARY_DIR}/quasi_gauss_threads/wout.nc SYMBOLIC)
@@ -537,9 +542,6 @@ if (ENABLE_OPENMP)
         LABELS "integration"
         TIMEOUT 120)
 endif()
-
-add_executable (test_collis.x ../../src/test_collis.f90)
-target_link_libraries(test_collis.x simple)
 
 # Explicit high-order integmodes on the 4D canonical chart: energy drift must
 # respond to the tolerance, and the four adaptive methods must agree. Uses the
@@ -1112,7 +1114,7 @@ target_link_libraries(test_newton_solver_status.x simple)
 add_test(NAME test_newton_solver_status COMMAND test_newton_solver_status.x)
 
 add_executable(test_composition_order.x test_composition_order.f90)
-target_link_libraries(test_composition_order.x simple)
+target_link_libraries(test_composition_order.x simple_quasi_implicit)
 add_test(NAME test_composition_order COMMAND test_composition_order.x)
 
 add_executable(test_boundary_event_config.x test_boundary_event_config.f90)
