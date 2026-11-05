@@ -791,6 +791,7 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(test_skipped_physics_rejection PROPERTIES
         LABELS "integration"
+        TIMEOUT 300)
 
     add_test(NAME test_classifier_thread_counts
         COMMAND ${CMAKE_COMMAND} -E env
