@@ -27,13 +27,14 @@ module simple_gpu
         SYMPLECTIC_STEP_OK, SYMPLECTIC_STEP_OUTSIDE_DOMAIN, &
         SYMPLECTIC_STEP_MAXITER, SYMPLECTIC_STEP_LINEAR_SOLVE, &
         SYMPLECTIC_STEP_BOUNDARY_LIMITED, symplectic_newton_warning_mode
-    use orbit_symplectic_euler1, only: sympl_euler1_newton_iter
+    use orbit_symplectic_euler1, only: sympl_euler1_residual, sympl_euler1_jacobian
+    use orbit_newton, only: newton_state_t, newton_begin, newton_advance, &
+                            SYSTEM_EULER1, SYSTEM_MIDPOINT
     use orbit_symplectic_euler1, only: sympl_euler1_extrapolate_field, sympl_euler1_advance_angles
     use orbit_symplectic_base, only: EXPL_IMPL_EULER, MIDPOINT, CASH_KARP, &
         DORMAND_PRINCE
-    use orbit_rk_core, only: rk_solve
     use orbit_symplectic_base, only: predict_state, record_history, &
-                                     rate_converged, retry_split, retry_next
+                                     retry_split, retry_next
     use fortnum_ode_rk54_device, only: rk54_controls4_t, rk54_state4_t, &
         rk54_initialize4, rk54_request4, rk54_supply4, &
         RK54_CASH_KARP, RK54_DORMAND_PRINCE_TUNED, RK54_NEED_RHS, &
@@ -43,7 +44,8 @@ module simple_gpu
                                      sympl_stop_rule, sympl_stop_kappa
     use boozer_rk_tables, only: rk_tables_ready, splint_boozer_rk_table_device
     use params, only: gpu_num_devices, gpu_pilot_fraction, gpu_work_order
-!$  use omp_lib, only: omp_get_thread_num, omp_in_parallel
+    use simple_mpi, only: mpi_node_rank
+!$  use omp_lib, only: omp_get_thread_num, omp_get_num_threads, omp_in_parallel
 #ifdef _OPENACC
     use openacc, only: acc_get_num_devices, acc_set_device_num, acc_device_nvidia
 #endif
@@ -71,23 +73,6 @@ module simple_gpu
 
 contains
 
-    logical function gpu_finite_iterate(x)
-        !$acc routine seq
-        real(dp), intent(in) :: x(:)
-
-        integer(int64), parameter :: exponent_mask = &
-            int(z'7FF0000000000000', int64)
-        integer(int64) :: bits
-        integer :: i
-
-        gpu_finite_iterate = .false.
-        do i = 1, size(x)
-            bits = transfer(x(i), bits)
-            if (iand(bits, exponent_mask) == exponent_mask) return
-        end do
-        gpu_finite_iterate = .true.
-    end function gpu_finite_iterate
-
     subroutine gpu_get_derivatives2_radial_mixed(f, pphi)
         ! Euler's two-variable Newton system consumes only derivatives with at
         ! least one radial or canonical-momentum index. Avoid constructing the
@@ -103,6 +88,7 @@ contains
     include 'generated/gpu_derivatives2_radial_mixed.inc'
 
     subroutine gpu_newton1(si, f, x, xlast, warning_mode, status, nfev)
+        ! The CPU Newton driver with the device field evaluation.
         !$acc routine seq
         type(symplectic_integrator_t), intent(inout) :: si
         type(field_can_t), intent(inout) :: f
@@ -112,72 +98,24 @@ contains
         integer, intent(out) :: status
         integer, intent(out) :: nfev
 
-        real(dp) :: tolref(2), dnorm, dnorm_prev
-        integer :: kit
-        logical :: converged, linear_failed, boundary_limited
-        logical :: step_boundary_limited
+        type(newton_state_t) :: state
+        real(dp) :: fvec(2), fjac(4)
+        logical :: need_system
 
-        status = SYMPLECTIC_STEP_MAXITER
         nfev = 0
-        boundary_limited = .false.
-        dnorm_prev = 0d0
-
-        tolref(1) = 1d0
-        tolref(2) = dabs(1d1*boozer_state%torflux/f%ro0)
-
-        do kit = 1, maxit
-            if (abs(x(1)) > 1d0) then
-                status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
-                return
-            end if
-            ! A negative radial label is the axis continuation (#370): the
-            ! field evaluation maps it to (|s|, theta+pi), as in newton1.
-
+        call newton_begin(state, SYSTEM_EULER1, 2, 0, maxit, si%atol, si%rtol, &
+                          warning_mode, si%warning_factor, si%z(1), &
+                          1d1*boozer_state%torflux/f%ro0, f%Aph)
+        call newton_advance(state, x, xlast, fvec, fjac, need_system)
+        do while (need_system)
             call gpu_eval_field_rmix(f, x(1), si%z(2), si%z(3))
             nfev = nfev + 1
             call gpu_get_derivatives2_radial_mixed(f, x(2))
-            call sympl_euler1_newton_iter(si, f, x, tolref, xlast, converged, &
-                linear_failed, step_boundary_limited)
-            boundary_limited = boundary_limited .or. step_boundary_limited
-
-            if (linear_failed) then
-                status = SYMPLECTIC_STEP_LINEAR_SOLVE
-                return
-            end if
-            if (abs(x(1)) > 1d0) then
-                status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
-                return
-            end if
-            if (converged) then
-                status = SYMPLECTIC_STEP_OK
-                return
-            end if
-            if (step_boundary_limited .or. .not. si%rtol > 0d0) then
-                dnorm_prev = 0d0
-            else
-                dnorm = max(abs(x(1) - xlast(1))/(si%rtol*tolref(1)), &
-                            abs(x(2) - xlast(2))/(si%rtol*tolref(2)))
-                if (rate_converged(dnorm, dnorm_prev)) then
-                    status = SYMPLECTIC_STEP_OK
-                    return
-                end if
-                dnorm_prev = dnorm
-            end if
+            call sympl_euler1_residual(si, f, x, fvec)
+            call sympl_euler1_jacobian(si, f, x, fjac)
+            call newton_advance(state, x, xlast, fvec, fjac, need_system)
         end do
-        if (boundary_limited) then
-            if (step_boundary_limited .and. &
-                abs(1d0 - x(1)) <= max(1d-10, 10d0*si%rtol)) then
-                status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
-            else
-                status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
-            end if
-        else if (warning_mode .and. gpu_finite_iterate(x) .and. &
-                 gpu_finite_iterate(xlast) .and. gpu_finite_iterate(tolref) .and. &
-                 all(abs(x - xlast) <= &
-                     si%warning_factor*si%rtol*abs(tolref))) then
-            status = SYMPLECTIC_STEP_OK
-        end if
-        ! Non-convergence diagnostics (CPU writes fort.6601) are omitted on device.
+        status = state%status
     end subroutine gpu_newton1
 
     subroutine gpu_restore_euler_start(si, f, z_start, accepted_pthold)
@@ -275,7 +213,7 @@ contains
         type(field_can_t), intent(inout) :: f
         real(dp), intent(in) :: r, th_c, ph_c
 
-        real(dp) :: bmod2, r_cont, th_cont, Bth, Bph, dBth, dBph, d2Bth, d2Bph
+        real(dp) :: r_cont, th_cont, Bth, Bph, dBth, dBph, d2Bth, d2Bph
         logical :: crossed
         type(boozer_rmix_field_t) :: fld
 
@@ -315,26 +253,10 @@ contains
             f%dBmod(1) = -f%dBmod(1)
             f%d2Bmod(2:3) = -f%d2Bmod(2:3)
         end if
-        bmod2 = f%Bmod**2
-        f%hth = Bth/f%Bmod
-        f%hph = Bph/f%Bmod
-        f%dhth(1) = dBth/f%Bmod - Bth*f%dBmod(1)/bmod2
-        f%dhph(1) = dBph/f%Bmod - Bph*f%dBmod(1)/bmod2
-        f%dhth(2:3) = -Bth*f%dBmod(2:3)/bmod2
-        f%dhph(2:3) = -Bph*f%dBmod(2:3)/bmod2
-        f%d2hth(1) = d2Bth/f%Bmod - 2.0_dp*dBth*f%dBmod(1)/bmod2 + &
-                     Bth/bmod2*(2.0_dp*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
-        f%d2hph(1) = d2Bph/f%Bmod - 2.0_dp*dBph*f%dBmod(1)/bmod2 + &
-                     Bph/bmod2*(2.0_dp*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
-        f%d2hth(2) = -dBth*f%dBmod(2)/bmod2 + &
-                     Bth/bmod2*(2.0_dp*f%dBmod(1)*f%dBmod(2)/f%Bmod - f%d2Bmod(2))
-        f%d2hph(2) = -dBph*f%dBmod(2)/bmod2 + &
-                     Bph/bmod2*(2.0_dp*f%dBmod(1)*f%dBmod(2)/f%Bmod - f%d2Bmod(2))
-        f%d2hth(3) = -dBth*f%dBmod(3)/bmod2 + &
-                     Bth/bmod2*(2.0_dp*f%dBmod(1)*f%dBmod(3)/f%Bmod - f%d2Bmod(3))
-        f%d2hph(3) = -dBph*f%dBmod(3)/bmod2 + &
-                     Bph/bmod2*(2.0_dp*f%dBmod(1)*f%dBmod(3)/f%Bmod - f%d2Bmod(3))
+        call boozer_h_rmix(f, Bth, dBth, d2Bth, Bph, dBph, d2Bph)
     end subroutine gpu_eval_field_rmix
+
+    include 'generated/boozer_h_derivatives.inc'
 
     subroutine gpu_midpoint_system(si, f, x, residual, jacobian)
         ! Five-equation degenerate-variational midpoint system and analytic
@@ -362,6 +284,7 @@ contains
     end subroutine gpu_midpoint_system
 
     subroutine gpu_newton_midpoint(si, f, x, warning_mode, status, nfev)
+        ! The CPU Newton driver with the device field evaluation.
         !$acc routine seq
         type(symplectic_integrator_t), intent(in) :: si
         type(field_can_t), intent(inout) :: f
@@ -369,76 +292,21 @@ contains
         logical, intent(in) :: warning_mode
         integer, intent(out) :: status, nfev
 
-        integer :: kit, info, ir
-        integer, parameter :: radial_indices(2) = [1, 5]
-        real(dp) :: residual(5), jacobian(5, 5), xlast(5), tolref(5)
-        real(dp) :: residual_abs(5), correction_abs(5), scale, outward
-        real(dp) :: dnorm, dnorm_prev
-        logical :: limited
+        type(newton_state_t) :: state
+        real(dp) :: residual(5), jacobian(25), xlast(5)
+        logical :: need_system
 
-        status = SYMPLECTIC_STEP_MAXITER
         nfev = 0
-        dnorm_prev = 0.0_dp
-        tolref = [1.0_dp, twopi, twopi, &
-            max(abs(f%Aph), abs(10.0_dp*boozer_state%torflux/f%ro0)), 1.0_dp]
-        xlast = x
-
-        do kit = 1, maxit
-            if (abs(x(1)) > 1.0_dp .or. abs(x(5)) > 1.0_dp) then
-                status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
-                return
-            end if
-            ! Negative radial labels are the axis continuation (#370), as in
-            ! newton_midpoint.
-
+        call newton_begin(state, SYSTEM_MIDPOINT, 5, 0, maxit, si%atol, si%rtol, &
+                          warning_mode, si%warning_factor, si%z(1), &
+                          10.0_dp*boozer_state%torflux/f%ro0, f%Aph)
+        call newton_advance(state, x, xlast, residual, jacobian, need_system)
+        do while (need_system)
             call gpu_midpoint_system(si, f, x, residual, jacobian)
             nfev = nfev + 2
-            residual_abs = abs(residual)
-            xlast = x
-            call rk_solve(5, jacobian, residual, info)
-            if (info /= 0) then
-                status = SYMPLECTIC_STEP_LINEAR_SOLVE
-                return
-            end if
-
-            scale = 1.0_dp
-            limited = .false.
-            do ir = 1, 2
-                outward = -residual(radial_indices(ir))
-                if (outward > 0.0_dp) then
-                    scale = min(scale, 0.8_dp*max(0.0_dp, &
-                        1.0_dp - x(radial_indices(ir)))/outward)
-                end if
-            end do
-            limited = scale < 1.0_dp
-            x = x - scale*residual
-            if (abs(x(1)) > 1.0_dp .or. abs(x(5)) > 1.0_dp) then
-                status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
-                return
-            end if
-            correction_abs = abs(x - xlast)
-            tolref(4) = max(abs(x(4)), tolref(4))
-            if (.not. limited .and. (all(residual_abs < si%atol) .or. &
-                    all(correction_abs < si%rtol*tolref))) then
-                status = SYMPLECTIC_STEP_OK
-                return
-            end if
-            if (limited .or. .not. all(si%rtol*tolref > 0.0_dp)) then
-                dnorm_prev = 0.0_dp
-            else
-                dnorm = maxval(correction_abs/(si%rtol*tolref))
-                if (rate_converged(dnorm, dnorm_prev)) then
-                    status = SYMPLECTIC_STEP_OK
-                    return
-                end if
-                dnorm_prev = dnorm
-            end if
+            call newton_advance(state, x, xlast, residual, jacobian, need_system)
         end do
-
-        if (warning_mode .and. gpu_finite_iterate(x) .and. &
-                gpu_finite_iterate(xlast) .and. gpu_finite_iterate(tolref) .and. &
-                all(abs(x - xlast) <= si%warning_factor*si%rtol*abs(tolref))) &
-            status = SYMPLECTIC_STEP_OK
+        status = state%status
     end subroutine gpu_newton_midpoint
 
     subroutine gpu_step_midpoint(si, f, warning_mode, ierr, nfev)
@@ -1423,20 +1291,23 @@ contains
 #endif
     end function gpu_device_count
 
-    subroutine gpu_use_device(dev)
-        ! Select device dev for this host thread and give it its own copy of
-        ! the static device data: the Boozer spline descriptors and the
-        ! integrator controls. Coefficient arrays stay shared host-side
-        ! allocations that each device reads through its descriptor.
-        integer, intent(in) :: dev
+    subroutine gpu_use_device(dev, ngpu)
+        ! Select the dev-th of the ngpu devices of this rank for this host
+        ! thread and give it its own copy of the static device data: the Boozer
+        ! spline descriptors and the integrator controls. Coefficient arrays
+        ! stay shared host-side allocations that each device reads through its
+        ! descriptor. Ranks on one node start at different devices.
+        integer, intent(in) :: dev, ngpu
 
 #ifdef _OPENACC
-        call acc_set_device_num(dev, acc_device_nvidia)
+        call acc_set_device_num(mod(mpi_node_rank*ngpu + dev, &
+                                    max(1, acc_get_num_devices(acc_device_nvidia))), &
+                                acc_device_nvidia)
         call sync_boozer_state
         !$acc update device(sympl_rmax, sympl_predictor, sympl_stop_rule, &
         !$acc&              sympl_stop_kappa)
 #else
-        if (dev < 0) error stop 'gpu_use_device: invalid device'
+        if (dev < 0 .or. ngpu < 1) error stop 'gpu_use_device: invalid device'
 #endif
     end subroutine gpu_use_device
 
@@ -1633,34 +1504,41 @@ contains
         type(field_can_t), allocatable :: f_d(:)
         integer, allocatable :: loss_step_d(:), nfev_d(:)
         real(dp), allocatable :: loss_time_d(:), zend_d(:, :)
-        integer :: ngpu, dev, n
+        integer :: ngpu, dev, n, first_dev, team_size
 
         ngpu = gpu_device_count(npart)
         if (ngpu == 1) then
-            call gpu_use_device(0)
+            call gpu_use_device(0, 1)
             call trace_orbits_gpu_method_device(si, f, npart, ntimstep, &
                                    ntau_macro, method, loss_step, loss_time, zend, nfev)
             return
         end if
 
         !$omp parallel num_threads(ngpu) default(shared) &
-        !$omp&   private(dev, n, si_d, f_d, loss_step_d, nfev_d, loss_time_d, zend_d)
-        dev = 0
-!$      dev = omp_get_thread_num()
-        call gpu_use_device(dev)
-        n = (npart - dev - 1)/ngpu + 1
-        allocate (si_d(n), f_d(n), loss_step_d(n), nfev_d(n), loss_time_d(n), &
-                  zend_d(4, n))
-        si_d = si(dev + 1:npart:ngpu)
-        f_d = f(dev + 1:npart:ngpu)
-        call trace_orbits_gpu_method_device(si_d, f_d, n, ntimstep, ntau_macro, &
+        !$omp&   private(dev, n, si_d, f_d, loss_step_d, nfev_d, loss_time_d, zend_d, &
+        !$omp&           first_dev, team_size)
+        first_dev = 0
+        team_size = 1
+!$      first_dev = omp_get_thread_num()
+!$      team_size = omp_get_num_threads()
+        ! OpenMP may grant fewer threads than devices, so threads share them.
+        do dev = first_dev, ngpu - 1, team_size
+            call gpu_use_device(dev, ngpu)
+            n = (npart - dev - 1)/ngpu + 1
+            allocate (si_d(n), f_d(n), loss_step_d(n), nfev_d(n), loss_time_d(n), &
+                      zend_d(4, n))
+            si_d = si(dev + 1:npart:ngpu)
+            f_d = f(dev + 1:npart:ngpu)
+            call trace_orbits_gpu_method_device(si_d, f_d, n, ntimstep, ntau_macro, &
                                        method, loss_step_d, loss_time_d, zend_d, nfev_d)
-        si(dev + 1:npart:ngpu) = si_d
-        f(dev + 1:npart:ngpu) = f_d
-        loss_step(dev + 1:npart:ngpu) = loss_step_d
-        nfev(dev + 1:npart:ngpu) = nfev_d
-        loss_time(dev + 1:npart:ngpu) = loss_time_d
-        zend(:, dev + 1:npart:ngpu) = zend_d
+            si(dev + 1:npart:ngpu) = si_d
+            f(dev + 1:npart:ngpu) = f_d
+            loss_step(dev + 1:npart:ngpu) = loss_step_d
+            nfev(dev + 1:npart:ngpu) = nfev_d
+            loss_time(dev + 1:npart:ngpu) = loss_time_d
+            zend(:, dev + 1:npart:ngpu) = zend_d
+            deallocate (si_d, f_d, loss_step_d, nfev_d, loss_time_d, zend_d)
+        end do
         !$omp end parallel
     end subroutine trace_orbits_gpu_method
 

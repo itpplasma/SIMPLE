@@ -176,7 +176,7 @@ def test_wall_character_substring_cannot_bypass_no_wall_gate(cases, which):
     assert MODULE.compare(*cases, 1.5e-7, 1e-12) == 1
 
 
-def _shell(ref, cur, enabled):
+def _shell(ref, cur, enabled, default_gate=False):
     env = dict(
         os.environ,
         GOLDEN_RECORD_STOCHASTIC_COLLISION=str(enabled),
@@ -185,6 +185,10 @@ def _shell(ref, cur, enabled):
         GOLDEN_RECORD_MIN_REF_RUNTIME_S="1",
         GOLDEN_RECORD_MAX_ABS_SLOWDOWN_S=".2",
     )
+    if default_gate:
+        for key in ("GOLDEN_RECORD_MAX_SLOWDOWN", "GOLDEN_RECORD_MIN_REF_RUNTIME_S",
+                    "GOLDEN_RECORD_MAX_ABS_SLOWDOWN_S", "GOLDEN_RECORD_PERF_GATE"):
+            env.pop(key, None)
     return subprocess.run(
         [
             "bash",
@@ -210,3 +214,11 @@ def test_collision_performance_gate_remains_active(cases):
     result = _shell(ref, cur, 1)
     assert result.returncode != 0
     assert "performance regression" in result.stdout
+
+
+@pytest.mark.parametrize("seconds, passes", [("6", True), ("11", False)])
+def test_default_gate_fails_only_gross_slowdowns(cases, seconds, passes):
+    ref, cur = cases
+    (cur / "runtime_seconds.txt").write_text(seconds + "\n")
+    result = _shell(ref, cur, 1, default_gate=True)
+    assert (result.returncode == 0) == passes, result.stdout

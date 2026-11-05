@@ -357,6 +357,11 @@ values remain thread-local. Workers therefore use the same field dispatch and
 Newton stopping threshold as the calling thread. Field initialization must
 finish before concurrent conversions begin.
 
+`vmec_to_boozer` returns $\varphi_B$ in the first field period;
+`ref_to_integ_boozer` adds back the whole periods of the reference angle, so a
+start keeps its toroidal sector in the integrator and in every output derived
+from it.
+
 For Boozer chartmaps the Boozer splines come from the chartmap
 (`load_boozer_from_chartmap`) and `integ_to_ref_boozer_chartmap` maps
 $s \to \rho = \sqrt s$. The RK45 GPU path evaluates the same Boozer splines

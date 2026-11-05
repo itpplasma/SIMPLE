@@ -60,6 +60,10 @@ module params
     ! thermal_stop_factor times the local main-ion temperature. It has joined
     ! the thermal population and is counted confined, not lost.
     integer, parameter :: ORBIT_EXIT_THERMALIZED = 5
+    ! A GPU production marker still inside when the weighted-loss threshold
+    ! gpu_maxloss ended the trace before trace_time: confined until the stop,
+    ! unresolved afterwards.
+    integer, parameter :: ORBIT_EXIT_STOPPED = 6
     integer, parameter :: ORBIT_EXIT_NUMERICAL_DOMAIN = 101
     integer, parameter :: ORBIT_EXIT_NUMERICAL_MAXITER = 102
     integer, parameter :: ORBIT_EXIT_NUMERICAL_LINEAR = 103
@@ -683,6 +687,7 @@ contains
     end function to_lower
 
     subroutine init_batch
+        use simple_mpi, only: mpi_is_root
         integer :: unit, status, source_index, selected, source_count, seedsize
         integer, allocatable :: batch_seed(:)
         real(dp) :: draw
@@ -727,11 +732,14 @@ contains
                     if (selected == batch_size) exit
                 end if
             end do
-            open (newunit=unit, file='batch.dat', status='replace', action='write')
-            do selected = 1, batch_size
-                write (unit, *) idx(selected)
-            end do
-            close (unit)
+            if (mpi_is_root()) then
+                open (newunit=unit, file='batch.dat', status='replace', &
+                      action='write')
+                do selected = 1, batch_size
+                    write (unit, *) idx(selected)
+                end do
+                close (unit)
+            end if
         end if
         ntestpart = batch_size
     end subroutine init_batch

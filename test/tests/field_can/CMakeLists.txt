@@ -54,6 +54,16 @@ set_tests_properties(test_boozer_spline_derivatives PROPERTIES
     LABELS "unit"
     TIMEOUT 180)
 
+add_executable(test_boozer_start_period.x test_boozer_start_period.f90)
+target_link_libraries(test_boozer_start_period.x simple)
+
+add_test(NAME test_boozer_start_period
+    COMMAND $<TARGET_FILE:test_boozer_start_period.x>
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..)
+set_tests_properties(test_boozer_start_period PROPERTIES
+    LABELS "unit"
+    TIMEOUT 180)
+
 # Per-volume Meiss canonical coordinates for SPECTRE (#439): construction identity
 # on the committed libneo stellarator fixture, p_phi conservation on the committed
 # axisymmetric two-volume tokamak fixture.

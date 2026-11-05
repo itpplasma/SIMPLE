@@ -93,7 +93,7 @@ program test_sympl_testfield
     use simple_main, only: update_momentum
     use classification, only: classify_classifier_exit
     use simple_main, only: classify_orbit_exit, init_field, locate_linear_lcfs, &
-                          locate_validated_lcfs, macrostep, macrostep_with_wall_check, &
+                           locate_validated_lcfs, macrostep, &
                      recovery_state_has_valid_phase_space, recovery_state_is_physical, &
                            rk_recovery_state_t, validate_rk_state, &
                            validate_rk_step_or_reference_boundary, &
@@ -159,6 +159,7 @@ program test_sympl_testfield
         error stop 'unconverged Euler test-field step changed accepted position'
     end if
 
+    call test_integrators_keep_their_scheme
     call test_macrostep_lcfs_event
     call test_failed_step_preserves_state
     call test_collision_failure_propagation
@@ -175,10 +176,48 @@ program test_sympl_testfield
     call test_reseed_momentum_reference
     call test_recovery_preserves_magnetic_moment
     call test_collision_momentum_uses_current_field
+    call test_albert_wall_boundary_residual
 
     print *, 'TEST field symplectic step succeeded'
 
 contains
+
+    ! An integrator keeps the scheme it was initialised with when another
+    ! integrator is initialised with a different scheme afterwards.
+    subroutine test_integrators_keep_their_scheme
+        use orbit_symplectic_base, only: symplectic_integrator_t, &
+                                         EXPL_IMPL_EULER, MIDPOINT
+        use field_can_mod, only: field_can_t
+        use parmot_mod, only: ro0
+        type(symplectic_integrator_t) :: si_euler, si_midpoint
+        type(field_can_t) :: f_euler, f_midpoint
+        real(dp), parameter :: z0(5) = [0.15_dp, 0.5_dp, 0.3_dp, 1.0_dp, 0.3_dp]
+        real(dp) :: z_alone(4)
+        integer :: status_alone, status_mixed
+        real(dp) :: ro0_saved
+
+        ro0_saved = ro0
+        ro0 = 1.0e-2_dp
+        f_euler = norb%f
+        call init_sympl(si_euler, f_euler, z0, 1.0e-4_dp, 1.0e-4_dp, &
+                        1.0e-12_dp, EXPL_IMPL_EULER)
+        call orbit_timestep_sympl(si_euler, f_euler, status_alone)
+        z_alone = si_euler%z
+
+        f_euler = norb%f
+        f_midpoint = norb%f
+        call init_sympl(si_euler, f_euler, z0, 1.0e-4_dp, 1.0e-4_dp, &
+                        1.0e-12_dp, EXPL_IMPL_EULER)
+        call init_sympl(si_midpoint, f_midpoint, z0, 1.0e-4_dp, 1.0e-4_dp, &
+                        1.0e-12_dp, MIDPOINT)
+        call orbit_timestep_sympl(si_euler, f_euler, status_mixed)
+        ro0 = ro0_saved
+
+        if (status_alone /= SYMPLECTIC_STEP_OK) &
+            error stop 'Euler step on the TEST field did not converge'
+        if (status_mixed /= status_alone .or. any(si_euler%z /= z_alone)) &
+            error stop 'Euler integrator stepped with another integrator''s scheme'
+    end subroutine test_integrators_keep_their_scheme
 
     subroutine test_macrostep_lcfs_event
         real(dp) :: z(5), exit_step
@@ -232,8 +271,8 @@ contains
         x_previous = 0.0_dp
         kt = 0_int64
         recovery = rk_recovery_state_t(failures=1, symplectic_steps=1)
-        call macrostep_with_wall_check(norb, z, kt, step_error, 1, 1, x_previous, &
-                                       rk_recovery=recovery)
+        call macrostep(norb, z, kt, step_error, 1, ipart=1, x_prev_m=x_previous, &
+                       rk_recovery=recovery)
         if (recovery%symplectic_steps /= 0 .or. recovery%failures /= 1) &
             error stop 'failed wall attempt preserved a provisional success'
         if (step_error /= 1) error stop 'wall path lost failed step status'
@@ -274,9 +313,9 @@ contains
         kt = 0_int64
         hold_streak = 0
         recovery = rk_recovery_state_t(failures=1, symplectic_steps=1)
-        call macrostep_with_wall_check(norb, z, kt, step_error, 1, 1, x_previous, &
-                           hold_streak=hold_streak, numerical_hold_any=numerical_hold, &
-                                       rk_recovery=recovery)
+        call macrostep(norb, z, kt, step_error, 1, ipart=1, x_prev_m=x_previous, &
+                       hold_streak=hold_streak, numerical_hold_any=numerical_hold, &
+                       rk_recovery=recovery)
         if (step_error /= 0) error stop 'isolated wall warning stopped orbit'
         if (kt /= 1_int64) error stop 'isolated wall hold lost its interval'
         if (.not. numerical_hold .or. hold_streak /= 1) &
@@ -287,9 +326,9 @@ contains
             error stop 'isolated wall hold changed the last accepted state'
         end if
 
-        call macrostep_with_wall_check(norb, z, kt, step_error, 1, 1, x_previous, &
-                           hold_streak=hold_streak, numerical_hold_any=numerical_hold, &
-                                       rk_recovery=recovery)
+        call macrostep(norb, z, kt, step_error, 1, ipart=1, x_prev_m=x_previous, &
+                       hold_streak=hold_streak, numerical_hold_any=numerical_hold, &
+                       rk_recovery=recovery)
         if (step_error == 0) error stop 'repeated wall failure was hidden'
         if (kt /= 1_int64) error stop 'repeated wall failure consumed another interval'
         if (numerical_hold .or. hold_streak /= 1) &
@@ -369,10 +408,10 @@ contains
                            hold_streak=hold_streak, numerical_hold_any=numerical_hold, &
                                    rk_recovery=recovery)
                 else
-                    call macrostep_with_wall_check(local_orbit, z, kt, &
-                                step_error, 1, 1, x_previous, hold_streak=hold_streak, &
-                                                   numerical_hold_any=numerical_hold, &
-                                                   rk_recovery=recovery)
+                    call macrostep(local_orbit, z, kt, &
+                 step_error, 1, ipart=1, x_prev_m=x_previous, hold_streak=hold_streak, &
+                                   numerical_hold_any=numerical_hold, &
+                                   rk_recovery=recovery)
                 end if
                 if (successful_drift_calls /= 1) &
                     error stop 'Collision caller fixture did not complete its drift'
@@ -437,8 +476,10 @@ contains
             injected_stale_cache = excessive == 3
             radial_electric_potential_slope = 0.0_dp
             if (excessive == 2) radial_electric_potential_slope = -1.0_dp
-            injected_momentum_ratio = 1.004_dp
-            if (excessive == 1) injected_momentum_ratio = 1.006_dp
+            ! Symplectic Euler keeps the energy only to O(dt): a 2% endpoint
+            ! offset is a valid step; a 30% one is a jump to reject.
+            injected_momentum_ratio = 1.02_dp
+            if (excessive == 1) injected_momentum_ratio = 1.3_dp
             if (excessive == 2) injected_momentum_ratio = 1.1_dp
             do collisions = 0, 1
                 swcoll = collisions == 1
@@ -468,8 +509,8 @@ contains
                         if (wall_path == 0) then
                             call macrostep(local_orbit, z, kt, step_error, 1, exit_step)
                         else
-                            call macrostep_with_wall_check(local_orbit, z, kt, &
-                                                step_error, 1, 1, x_previous, exit_step)
+                            call macrostep(local_orbit, z, kt, &
+                       step_error, 1, ipart=1, x_prev_m=x_previous, exit_step=exit_step)
                         end if
                         if (excessive /= 1) then
                             cached_ratio = injected_momentum_ratio
@@ -622,9 +663,9 @@ contains
                 call macrostep(local_orbit, z, kt, step_error, 1, &
                                rk_recovery=recovery)
             else
-                call macrostep_with_wall_check(local_orbit, z, kt, &
-                                               step_error, 1, 1, x_previous, &
-                                               rk_recovery=recovery)
+                call macrostep(local_orbit, z, kt, &
+                               step_error, 1, ipart=1, x_prev_m=x_previous, &
+                               rk_recovery=recovery)
             end if
             if (step_error /= 0 .or. kt /= 1_int64) &
                 error stop 'successful recovery probe did not advance'
@@ -645,9 +686,9 @@ contains
                     call macrostep(local_orbit, z, kt, step_error, 1, &
                                    rk_recovery=recovery)
                 else
-                    call macrostep_with_wall_check(local_orbit, z, kt, &
-                                                   step_error, 1, 1, x_previous, &
-                                                   rk_recovery=recovery)
+                    call macrostep(local_orbit, z, kt, &
+                                   step_error, 1, ipart=1, x_prev_m=x_previous, &
+                                   rk_recovery=recovery)
                 end if
                 if (step_error /= 0) &
                     error stop 'stable symplectic recovery probe failed'
@@ -682,7 +723,12 @@ contains
         real(dp) :: initial(5), z(5), x_previous(3), initial_mu
         real(dp) :: saved_ro0, saved_rmu, saved_dt, saved_tol, saved_wall_gate
         integer(int64) :: kt
-        integer :: wall_path, resume, step_error
+        integer :: wall_path, resume, step_error, ipitch
+        logical :: shell_holds_mu
+        ! At pitch 0.05 the 0.4% momentum excess gives p^2*(1-pitch^2) > 1:
+        ! no pitch on the reference shell keeps mu, so recovery must keep
+        ! the carried state instead of lowering mu.
+        real(dp), parameter :: pitches(2) = [0.25_dp, 0.05_dp]
 
         saved_ro0 = ro0
         saved_rmu = rmu
@@ -700,47 +746,58 @@ contains
         integmode = 3
         swcoll = .false.
         symplectic_newton_warning_mode = .true.
-        do resume = 0, 1
-            do wall_path = 0, 1
-                local_orbit = norb
-                initial = [0.2_dp, 1.0_dp, 0.2_dp, 1.004_dp, 0.25_dp]
-                call init_sympl(local_orbit%si, local_orbit%f, initial, &
-                                dtaumin, dtaumin, relerr, integmode)
-                initial_mu = local_orbit%f%mu
-                ! An accepted endpoint can differ from the fixed reference by 0.4%.
-                local_orbit%si%pabs = 1.0_dp
-                recovery = rk_recovery_state_t()
-                if (resume == 0) then
-                    ! Euler caches need not describe the carried canonical endpoint.
-                    local_orbit%f%vpar = 1.01_dp*local_orbit%f%vpar
-                    call to_standard_z_coordinates(local_orbit, z)
-                    orbit_timestep_sympl => fail_symplectic_step
-                else
-                    z = initial
-                    call activate_rk_recovery(recovery, z, 1.0_dp)
-                    recovery%safe_steps = 255
-                end if
-                kt = 0_int64
-                x_previous = z(1:3)
-                if (wall_path == 0) then
-                    call macrostep(local_orbit, z, kt, step_error, 1, &
-                                   rk_recovery=recovery)
-                else
-                    call macrostep_with_wall_check(local_orbit, z, kt, &
-                                     step_error, 1, 1, x_previous, rk_recovery=recovery)
-                end if
-                if (step_error /= 0 .or. kt /= 1_int64) &
-                    error stop 'Magnetic-moment recovery fixture did not advance'
-                if (recovery%active .neqv. (resume == 0)) &
-                    error stop 'Magnetic-moment fixture missed recovery transition'
-                if (abs(local_orbit%f%mu/initial_mu - 1.0_dp) > 1.0e-9_dp) &
-                    error stop 'Collisionless recovery changed magnetic moment'
-                if (local_orbit%si%pabs /= 1.0_dp) &
+        do ipitch = 1, 2
+            shell_holds_mu = ipitch == 1
+            do resume = 0, 1
+                do wall_path = 0, 1
+                    local_orbit = norb
+                    initial = [0.2_dp, 1.0_dp, 0.2_dp, 1.004_dp, pitches(ipitch)]
+                    call init_sympl(local_orbit%si, local_orbit%f, initial, &
+                                    dtaumin, dtaumin, relerr, integmode)
+                    initial_mu = local_orbit%f%mu
+                    ! An accepted endpoint can differ from the fixed reference by 0.4%.
+                    local_orbit%si%pabs = 1.0_dp
+                    recovery = rk_recovery_state_t()
+                    if (resume == 0) then
+                        ! Euler caches need not describe the carried canonical endpoint.
+                        local_orbit%f%vpar = 1.01_dp*local_orbit%f%vpar
+                        call to_standard_z_coordinates(local_orbit, z)
+                        orbit_timestep_sympl => fail_symplectic_step
+                    else
+                        z = initial
+                        call activate_rk_recovery(recovery, z, 1.0_dp)
+                        recovery%safe_steps = 255
+                    end if
+                    kt = 0_int64
+                    x_previous = z(1:3)
+                    if (wall_path == 0) then
+                        call macrostep(local_orbit, z, kt, step_error, 1, &
+                                       rk_recovery=recovery)
+                    else
+                        call macrostep(local_orbit, z, kt, step_error, 1, &
+                                       ipart=1, x_prev_m=x_previous, &
+                                       rk_recovery=recovery)
+                    end if
+                    if (step_error /= 0 .or. kt /= 1_int64) &
+                        error stop 'Magnetic-moment recovery fixture did not advance'
+                    if (abs(local_orbit%f%mu/initial_mu - 1.0_dp) > 1.0e-9_dp) &
+                        error stop 'Collisionless recovery changed magnetic moment'
+                    if (.not. shell_holds_mu) then
+                        if (.not. recovery%active) &
+                            error stop 'Recovery resumed on a shell that cannot hold mu'
+                        if (abs(z(4) - 1.0_dp) > 0.005_dp) &
+                            error stop 'Kept recovery state left the momentum band'
+                        cycle
+                    end if
+                    if (recovery%active .neqv. (resume == 0)) &
+                        error stop 'Magnetic-moment fixture missed recovery transition'
+                    if (local_orbit%si%pabs /= 1.0_dp) &
                  error stop 'Invariant-preserving recovery ratcheted momentum reference'
-                ! Seeding with the decoded 1.004 random-walks energy over many
-                ! recoveries (#639); the reference momentum is the invariant.
-                if (abs(z(4) - 1.0_dp) > 1.0e-9_dp) &
+                    ! Seeding with the decoded 1.004 random-walks energy over many
+                    ! recoveries (#639); the reference momentum is the invariant.
+                    if (abs(z(4) - 1.0_dp) > 1.0e-9_dp) &
                 error stop 'Recovery kept the decoded instead of the reference momentum'
+                end do
             end do
         end do
         deallocate (ref_coords)
@@ -845,12 +902,25 @@ contains
     end subroutine test_exit_classification
 
     subroutine test_numerically_confined_classification
-        if (abs(normalized_flux_from_reference_radial(0.1_dp, .true.) - &
+        use libneo_coordinates, only: RHO_TOR, PSI_TOR_NORM
+        if (abs(normalized_flux_from_reference_radial(0.1_dp, RHO_TOR, 1.0_dp) - &
                 0.01_dp) > epsilon(1.0_dp)) then
             error stop 'chartmap rho was not converted to normalized flux s'
         end if
-        if (normalized_flux_from_reference_radial(0.1_dp, .false.) /= 0.1_dp) then
+        if (normalized_flux_from_reference_radial(0.1_dp, 0, 1.0_dp) /= 0.1_dp) then
             error stop 'VMEC normalized flux s was incorrectly rescaled'
+        end if
+        ! A psi_tor_norm chart radius is s itself, so s = 0.05 is outside
+        ! the s < 0.01 core; squaring it would give 0.0025.
+        if (normalized_flux_from_reference_radial(0.05_dp, PSI_TOR_NORM, &
+                                                  1.0_dp) /= 0.05_dp) then
+            error stop 'psi_tor_norm chart radius was squared'
+        end if
+        ! Extended charts scale rho = rho_lcfs*sqrt(s): rho = 0.09 at
+        ! rho_lcfs = 0.8 is s = 0.0127, outside the core, not rho^2 = 0.0081.
+        if (abs(normalized_flux_from_reference_radial(0.09_dp, RHO_TOR, 0.8_dp) - &
+                (0.09_dp/0.8_dp)**2) > epsilon(1.0_dp)) then
+            error stop 'extended chartmap rho was not scaled by rho_lcfs'
         end if
         if (.not. should_classify_numerically_confined( &
             ORBIT_EXIT_NUMERICAL_MAXITER, ORBIT_GC, 1, .true., .false., &
@@ -1084,5 +1154,78 @@ contains
         if (.not. abs(local_orbit%si%pthold - fresh%pth) <= 1.0e-12_dp) &
             error stop 'Collision kick left a stale poloidal momentum'
     end subroutine test_collision_momentum_uses_current_field
+
+    ! A reference-boundary event during RK recovery reports its radial residual
+    ! in the reference radius on the wall path as on the plain one (#740). The
+    ! Albert radius A_theta/A_norm is not constant on s = 1. Runs last because
+    ! it replaces the TEST field.
+    subroutine test_albert_wall_boundary_residual
+        use magfie_sub, only: ALBERT
+        use parmot_mod, only: ro0, rmu
+        use params, only: dtaumin, relerr, wall_query_rho_lcfs, &
+                          canonical_grid_nr, canonical_grid_ntheta, &
+                          canonical_grid_nphi, canonical_ode_relerr
+        use field_can_mod, only: ref_to_integ
+        type(tracer_t) :: albert_orbit, local_orbit
+        type(rk_recovery_state_t) :: recovery
+        real(dp) :: z0(5), z(5), z_event(5), x_previous(3), residual(0:1)
+        integer(int64) :: kt
+        integer :: wall_path, step_error, icase, events
+        logical :: albert_radius_differs
+        ! Starts at s = 0.97 whose single recovery step crosses s = 1.
+        real(dp), parameter :: thetas(3) = [1.0_dp, 2.0_dp, 3.0_dp]
+        real(dp), parameter :: pitches(3) = [0.1_dp, 0.1_dp, -0.4_dp]
+
+        isw_field_type = ALBERT
+        integmode = 1
+        canonical_grid_nr = 16
+        canonical_grid_ntheta = 17
+        canonical_grid_nphi = 18
+        canonical_ode_relerr = 1.0e-10_dp
+        call init_field(albert_orbit, vmec_file, ans_s, ans_tp, amultharm, integmode)
+        ro0 = 3.0e6_dp
+        rmu = 1.0e8_dp
+        dtaumin = 1.0e3_dp
+        relerr = 1.0e-10_dp
+        wall_query_rho_lcfs = huge(1.0_dp)
+        orbit_model = ORBIT_GC
+        swcoll = .false.
+        symplectic_newton_warning_mode = .true.
+        events = 0
+        albert_radius_differs = .false.
+        do icase = 1, size(thetas)
+            call ref_to_integ([0.97_dp, thetas(icase), 0.3_dp], z0(1:3))
+            z0(4:5) = [1.0_dp, pitches(icase)]
+            do wall_path = 0, 1
+                local_orbit = albert_orbit
+                call init_sympl(local_orbit%si, local_orbit%f, z0, dtaumin, &
+                                dtaumin, relerr, integmode)
+                recovery = rk_recovery_state_t()
+                call activate_rk_recovery(recovery, z0, 1.0_dp)
+                z = z0
+                kt = 0_int64
+                x_previous = z(1:3)
+                if (wall_path == 0) then
+                    call macrostep(local_orbit, z, kt, step_error, 1, &
+                                   rk_recovery=recovery)
+                else
+                    call macrostep(local_orbit, z, kt, step_error, 1, &
+                                   ipart=1, x_prev_m=x_previous, rk_recovery=recovery)
+                end if
+                if (step_error /= SYMPLECTIC_STEP_BOUNDARY) exit
+                residual(wall_path) = local_orbit%si%last_event_radial_residual
+                if (wall_path == 0) z_event = z
+            end do
+            if (step_error /= SYMPLECTIC_STEP_BOUNDARY) cycle
+            events = events + 1
+            if (abs(z_event(1) - 1.0_dp) > 0.05_dp) albert_radius_differs = .true.
+            if (residual(0) > 1.0e-8_dp) &
+                error stop 'Albert boundary residual is not in the reference radius'
+            if (residual(1) /= residual(0)) &
+                error stop 'Wall path changed the Albert boundary residual'
+        end do
+        if (events == 0 .or. .not. albert_radius_differs) &
+            error stop 'Albert boundary fixture did not cross s = 1 off the Albert edge'
+    end subroutine test_albert_wall_boundary_residual
 
 end program test_sympl_testfield

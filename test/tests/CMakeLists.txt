@@ -649,7 +649,8 @@ set_tests_properties(test_api_repeated_sampling PROPERTIES LABELS "integration"
 add_executable(test_fusion_birth_equilibrium.x test_fusion_birth_equilibrium.f90)
 target_link_libraries(test_fusion_birth_equilibrium.x simple)
 add_dependencies(test_fusion_birth_equilibrium.x generate_test_boozer_chartmap)
-set(fusion_equilibrium_cases vmec vmec_peaked chartmap annulus interior trace bad_energy)
+set(fusion_equilibrium_cases vmec vmec_peaked chartmap annulus interior trace bad_energy
+    explicit_energy)
 if(ENABLE_OPENMP)
     list(APPEND fusion_equilibrium_cases vmec_parallel chartmap_parallel)
 endif()
@@ -665,7 +666,7 @@ foreach(case IN LISTS fusion_equilibrium_cases)
         TIMEOUT 120 ENVIRONMENT "OMP_NUM_THREADS=1"
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/fusion_${case})
 endforeach()
-set_tests_properties(test_fusion_bad_energy PROPERTIES
+set_tests_properties(test_fusion_bad_energy test_fusion_explicit_energy PROPERTIES
     PASS_REGULAR_EXPRESSION "fusion births require 3.5 MeV alphas")
 
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/start_integration_coordinates)
@@ -753,7 +754,44 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(test_fast_class_driver PROPERTIES
         LABELS "integration;system"
+        TIMEOUT 300)
+
+    add_test(NAME test_classifier_start_coordinates
+        COMMAND ${CMAKE_COMMAND} -E env
+            CTEST_BINARY_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}
+            ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_classifier_start_coordinates.py
+            $<TARGET_FILE:simple.x>
+            ${WOUT_FILE}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(test_classifier_start_coordinates PROPERTIES
+        LABELS "integration;system"
+        TIMEOUT 300)
+
+    add_test(NAME test_ants_start_rows
+        COMMAND ${CMAKE_COMMAND} -E env
+            CTEST_BINARY_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}
+            ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_ants_start_rows.py
+            $<TARGET_FILE:simple.x>
+            ${WOUT_FILE}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(test_ants_start_rows PROPERTIES
+        LABELS "integration;system"
         TIMEOUT 120)
+
+    add_test(NAME test_skipped_physics_rejection
+        COMMAND ${CMAKE_COMMAND} -E env
+            CTEST_BINARY_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}
+            ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_skipped_physics_rejection.py
+            $<TARGET_FILE:simple.x>
+            ${WOUT_FILE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/data/tok2vol.h5
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(test_skipped_physics_rejection PROPERTIES
+        LABELS "integration"
+        TIMEOUT 300)
 
     add_test(NAME test_class_scores_driver
         COMMAND ${CMAKE_COMMAND} -E env
@@ -1195,6 +1233,16 @@ if(SIMPLE_ENABLE_CUDA)
     set_tests_properties(test_cuda_native_bridge PROPERTIES
         LABELS "unit;gpu;cuda"
         TIMEOUT 120)
+
+    # One OpenMP thread for two devices must still trace both particle
+    # shares; a host with one visible device skips the test.
+    add_test(NAME test_cuda_native_bridge_thread_limit
+        COMMAND test_cuda_native_bridge.x)
+    set_tests_properties(test_cuda_native_bridge_thread_limit PROPERTIES
+        LABELS "unit;gpu;cuda"
+        ENVIRONMENT "OMP_THREAD_LIMIT=1"
+        SKIP_REGULAR_EXPRESSION "native CUDA devices = 1[^0-9]"
+        TIMEOUT 120)
 endif()
 
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gpu_orbit_bench)
@@ -1258,10 +1306,41 @@ add_test(NAME test_gpu_two_devices
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gpu_two_devices)
 set_tests_properties(test_gpu_two_devices PROPERTIES
     LABELS "unit;gpu"
+    RESOURCE_LOCK gpu_two_devices
     PASS_REGULAR_EXPRESSION "GPU devices = 2"
     SKIP_REGULAR_EXPRESSION "GPU devices = 1"
     FAIL_REGULAR_EXPRESSION "loss-step mismatches = *[1-9];final state\\) = +[1-9][0-9.]*E([+]|-0[0-8])"
     TIMEOUT 120)
+# The same with one OpenMP thread for both devices. Only OpenACC builds use
+# several devices; elsewhere the single-threaded CPU reference only costs time.
+if(SIMPLE_ENABLE_OPENACC)
+    add_test(NAME test_gpu_two_devices_thread_limit
+        COMMAND $<TARGET_FILE:simple.x> test_gpu_two_devices.in
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gpu_two_devices)
+    set_tests_properties(test_gpu_two_devices_thread_limit PROPERTIES
+        LABELS "unit;gpu"
+        ENVIRONMENT "OMP_THREAD_LIMIT=1"
+        RESOURCE_LOCK gpu_two_devices
+        PASS_REGULAR_EXPRESSION "GPU devices = 2"
+        SKIP_REGULAR_EXPRESSION "GPU devices = 1"
+        FAIL_REGULAR_EXPRESSION "loss-step mismatches = *[1-9];final state\\) = +[1-9][0-9.]*E([+]|-0[0-8])"
+        TIMEOUT 120)
+endif()
+
+if(SIMPLE_ENABLE_MPI)
+    add_test(NAME test_mpi_two_ranks
+        COMMAND ${CMAKE_COMMAND}
+            -DMPIEXEC=${MPIEXEC_EXECUTABLE}
+            -DNPFLAG=${MPIEXEC_NUMPROC_FLAG}
+            -DSIMPLE=$<TARGET_FILE:simple.x>
+            -DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/test_mpi_ranks.in
+            -DWOUT=${WOUT_FILE}
+            -DWORK=${CMAKE_CURRENT_BINARY_DIR}/mpi_two_ranks
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/test_mpi_ranks.cmake)
+    set_tests_properties(test_mpi_two_ranks PROPERTIES
+        LABELS "unit;mpi"
+        TIMEOUT 300)
+endif()
 
 add_test(NAME test_gpu_midpoint_bench
     COMMAND $<TARGET_FILE:simple.x>

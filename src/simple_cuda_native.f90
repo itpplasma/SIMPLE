@@ -13,7 +13,8 @@ module simple_cuda_native
         rk_num_points, rk_x_min, rk_inv_h_step, rk_period, rk_inv_period, &
         rk_tables_ready
     use params, only: gpu_num_devices
-!$  use omp_lib, only: omp_get_thread_num, omp_in_parallel
+    use simple_mpi, only: mpi_node_rank
+!$  use omp_lib, only: omp_get_thread_num, omp_get_num_threads, omp_in_parallel
 
     implicit none
     private
@@ -146,35 +147,44 @@ contains
         real(dp) :: observed_d, weight_d, profile_d(CUDA_NATIVE_PROFILE_COUNT)
         real(dp) :: weight
         integer(int64) :: slots_d
-        integer :: ndev, dev, n
+        integer :: ndev, dev, n, first_dev, team_size
+        integer(c_int) :: navail
 
         ndev = cuda_native_device_count(npart, maxloss)
+        if (cuda_get_device_count(navail) /= 0_c_int) navail = 1
         weight = 0.0_dp
         warp_nfev_slots = 0_int64
         profile_ms = 0.0_dp
         !$omp parallel num_threads(ndev) default(shared) if(ndev > 1) &
         !$omp&   private(dev, n, loss_step_d, nfev_d, loss_time_d, zend_d, &
-        !$omp&           observed_d, weight_d, profile_d, slots_d)
-        dev = 0
-!$      dev = omp_get_thread_num()
-        if (cuda_set_device(int(dev, c_int)) /= 0_c_int) &
-            error stop 'native CUDA: cudaSetDevice failed'
-        n = (npart - dev - 1)/ndev + 1
-        allocate (loss_step_d(n), nfev_d(n), loss_time_d(n), zend_d(4, n))
-        call trace_cuda_native_slice(si(dev + 1:npart:ndev), &
+        !$omp&           observed_d, weight_d, profile_d, slots_d, first_dev, team_size)
+        first_dev = 0
+        team_size = 1
+!$      first_dev = omp_get_thread_num()
+!$      team_size = omp_get_num_threads()
+        ! OpenMP may grant fewer threads than devices, so threads share them.
+        do dev = first_dev, ndev - 1, team_size
+            ! Ranks on one node start at different devices.
+            if (cuda_set_device(int(mod(mpi_node_rank*ndev + dev, navail), c_int)) &
+                /= 0_c_int) error stop 'native CUDA: cudaSetDevice failed'
+            n = (npart - dev - 1)/ndev + 1
+            allocate (loss_step_d(n), nfev_d(n), loss_time_d(n), zend_d(4, n))
+            call trace_cuda_native_slice(si(dev + 1:npart:ndev), &
                      f(dev + 1:npart:ndev), n, method, total_duration, block_duration, &
                         time_scale, loss_tau, maxloss, hmin, loss_step_d, loss_time_d, &
                                zend_d, nfev_d, observed_d, weight_d, slots_d, profile_d)
-        loss_step(dev + 1:npart:ndev) = loss_step_d
-        nfev(dev + 1:npart:ndev) = nfev_d
-        loss_time(dev + 1:npart:ndev) = loss_time_d
-        zend(:, dev + 1:npart:ndev) = zend_d
-        !$omp critical (cuda_native_team)
-        weight = weight + weight_d
-        warp_nfev_slots = warp_nfev_slots + slots_d
-        profile_ms = max(profile_ms, profile_d)
-        if (dev == 0) observed_duration = observed_d
-        !$omp end critical (cuda_native_team)
+            loss_step(dev + 1:npart:ndev) = loss_step_d
+            nfev(dev + 1:npart:ndev) = nfev_d
+            loss_time(dev + 1:npart:ndev) = loss_time_d
+            zend(:, dev + 1:npart:ndev) = zend_d
+            deallocate (loss_step_d, nfev_d, loss_time_d, zend_d)
+            !$omp critical (cuda_native_team)
+            weight = weight + weight_d
+            warp_nfev_slots = warp_nfev_slots + slots_d
+            profile_ms = max(profile_ms, profile_d)
+            if (dev == 0) observed_duration = observed_d
+            !$omp end critical (cuda_native_team)
+        end do
         !$omp end parallel
         energy_loss_fraction = weight/real(npart, dp)
     end subroutine trace_orbits_cuda_native_landreman

@@ -63,7 +63,9 @@ In warning mode, a collisionless guiding-centre marker of a symplectic run
 whose recovery is exhausted while its last valid $s < 0.01$ counts as
 confined, with exit code 4 and `trace_time` as loss time
 (`src/simple_main.f90`, `should_classify_numerically_confined`). Chartmap runs
-convert $\rho$ to $s = \rho^2$ first. This rule is off with collisions, in
+convert the chart radius to $s$ first: $s = (\rho/\rho_\mathrm{lcfs})^2$, with
+$\rho_\mathrm{lcfs}$ from the chartmap metadata (1 if absent), except for
+`psi_tor_norm` and `psi_pol_norm` charts, whose radius is already a flux. This rule is off with collisions, in
 strict mode, for full orbits and for SPECTRE.
 
 ## Canonical-map grid (Meiss, Albert)
@@ -115,9 +117,10 @@ Collision substeps are chosen automatically; their bounds are in
   `H = vpar**2/2 + mu*B + Phi`, so it is in the units of `H`, and the slope is
   per unit of the Boozer radial variable `r = s` (normalized toroidal flux).
   A nonzero slope requires `integ_coords = 2` (Boozer), a symplectic
-  `integmode > 0`, `orbit_model = 0` and `gpu_mode = 'off'`; other
-  configurations stop with an error, since only the Boozer canonical field
-  applies the potential.
+  `integmode > 0`, `orbit_model = 0`, `gpu_mode = 'off'` and
+  `symplectic_newton_warning_mode = .false.` (the RK recovery of warning mode
+  has no potential); other configurations stop with an error, since only the
+  Boozer canonical field applies the potential.
 - With `output_results_netcdf` and `output_orbits_macrostep`, `results.nc` and
   `orbits.nc` carry the effective energy, collision model and these values as
   global attributes.

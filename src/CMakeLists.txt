@@ -7,7 +7,6 @@
         wall/stl_wall_intersection.F90
         coordinates/coordinates.f90
         coordinates/stencil_utils.f90
-        coordinates/array_utils.f90
         coordinates/reference_coordinates.f90
         coordinates/coordinate_scaling.f90
         coordinates/scaled_chartmap_coordinates.f90
@@ -43,6 +42,7 @@
     orbit_symplectic_quasi.f90
     orbit_symplectic_euler1.f90
     orbit_rk_core.f90
+    orbit_newton.f90
     orbit_symplectic.f90
     orbit_fo_field.f90
     orbit_fo_boris.f90
@@ -70,6 +70,7 @@
     restart.f90
     progress_monitor.f90
     timing.f90
+    simple_mpi.F90
     simple_gpu.f90
     simple_main.f90
     simple_api.f90
@@ -116,12 +117,14 @@ list(APPEND SOURCES
     # could overflow OpenMP thread stacks.
     if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
         set_source_files_properties(orbit_rk_core.f90 orbit_symplectic.f90
-            orbit_symplectic_base.f90 orbit_symplectic_euler1.f90
+            orbit_symplectic_base.f90 orbit_symplectic_euler1.f90 orbit_newton.f90
             PROPERTIES COMPILE_OPTIONS -fstack-arrays)
     endif()
 
-    if(SIMPLE_ENABLE_OPENACC AND CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
-        target_compile_options(simple PRIVATE "${SIMPLE_OPENACC_GPU_FLAG}")
+    if(SIMPLE_ENABLE_MPI)
+        find_package(MPI REQUIRED COMPONENTS Fortran)
+        target_compile_definitions(simple PRIVATE SIMPLE_ENABLE_MPI)
+        target_link_libraries(simple PUBLIC MPI::MPI_Fortran)
     endif()
 
     if(SIMPLE_ENABLE_CUDA)

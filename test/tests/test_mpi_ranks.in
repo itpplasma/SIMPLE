@@ -1,0 +1,8 @@
+&config
+trace_time = 1d-3
+sbeg = 0.9d0
+ntestpart = 16
+startmode = 1
+netcdffile = 'wout.nc'
+deterministic = .true.
+/

@@ -27,7 +27,7 @@ module orbit_rk_core
   ! GC kernel exists here; the CPP and symplectic full-orbit models were shelved.
   integer, parameter, public :: MODEL_GC = 0
 
-  public :: rk_gauss_residual, rk_gauss_jacobian, rk_gauss_newton, rk_solve
+  public :: rk_gauss_residual, rk_gauss_jacobian, rk_solve
 
 contains
 
@@ -170,71 +170,5 @@ contains
             end do
         end do
     end subroutine rk_solve
-
-  ! Device-callable Newton iteration for the Gauss step. Mirrors the
-  ! newton_rk_gauss control flow (atol/rtol/tolref, boundary guards, maxit) with
-  ! the device LU solver rk_solve in place of dgesv. No event counters here:
-  ! hit_maxit is returned so the CPU caller can record EVT_RK_GAUSS_MAXIT,
-  ! exactly as the GPU newton1 path omits fort.6601. Retained for the deferred
-  ! fortnum multiroot wiring; not yet called by the CPU GC Newton step.
-  subroutine rk_gauss_newton(model, si, fs, s, x, atol, rtol, maxit, xlast, &
-                             hit_maxit)
-    !$acc routine seq
-    integer, intent(in) :: model
-    type(symplectic_integrator_t), intent(inout) :: si
-    integer, intent(in) :: s
-    type(field_can_t), intent(inout) :: fs(:)
-    real(dp), intent(inout) :: x(4*s)
-    real(dp), intent(in) :: atol, rtol
-    integer, intent(in) :: maxit
-    real(dp), intent(out) :: xlast(4*s)
-    logical, intent(out) :: hit_maxit
-
-    real(dp) :: fvec(4*s), fjac(4*s, 4*s)
-    real(dp) :: xabs(4*s), tolref(4*s), fabs(4*s)
-    integer :: kit, ks, info
-    logical :: conv
-
-    hit_maxit = .false.
-    do kit = 1, maxit
-
-      ! Check if radius left the boundary
-      do ks = 1, s
-        if (x(4*ks-3) > sympl_rmax) return
-        ! Transient guard for intermediate iterates; the converged-negative
-        ! case is handled by the caller via a chart switch (#370).
-        if (x(4*ks-3) < 0.0d0) x(4*ks-3) = 0.01d0
-      end do
-
-      call rk_gauss_residual(model, si, fs, s, x, fvec)
-      call rk_gauss_jacobian(model, si, fs, s, fjac)
-      fabs = abs(fvec)
-      xlast = x
-      call rk_solve(4*s, fjac, fvec, info)
-      if (info /= 0) return
-      ! after solution: fvec = (xold-xnew)_Newton
-      x = x - fvec
-      xabs = abs(x - xlast)
-
-      do ks = 1, s
-        tolref(4*ks-3) = 1d0
-        tolref(4*ks-2) = twopi
-        tolref(4*ks-1) = twopi
-        tolref(4*ks)   = abs(xlast(4*ks))
-      end do
-
-      conv = .true.
-      do ks = 1, 4*s
-        if (fabs(ks) >= atol) conv = .false.
-      end do
-      if (conv) return
-      conv = .true.
-      do ks = 1, 4*s
-        if (xabs(ks) >= rtol*tolref(ks)) conv = .false.
-      end do
-      if (conv) return
-    end do
-    hit_maxit = .true.
-  end subroutine rk_gauss_newton
 
 end module orbit_rk_core

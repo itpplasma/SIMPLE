@@ -14,6 +14,7 @@ program test_field_can_meiss
            xmin, xmax, h_r, h_phi, h_th, ah_cov_on_slice, n_r, n_phi, n_th, &
            spl_transform_batch, transformation_relerr, ref_to_integ_meiss, &
            integ_to_ref_meiss
+    use field_can_meiss, only: floored_hph
     use interpolate, only: evaluate_batch_splines_3d
     use params, only: canonical_grid_nr, canonical_grid_ntheta, &
         canonical_grid_nphi, canonical_ode_relerr, field_input, coord_input, &
@@ -23,6 +24,8 @@ program test_field_can_meiss
     type(tracer_t) :: norb
     type(vmec_field_t) :: magfie
     integer :: config_unit
+
+    call test_floored_hph
 
     isw_field_type = MEISS
     call create_vmec_field(magfie)
@@ -65,6 +68,19 @@ program test_field_can_meiss
     call test_repeated_initialization
 
 contains
+
+    subroutine test_floored_hph
+        ! The floor of h_phi must keep its sign, or lambda' = -h_r/h_phi
+        ! reverses direction for tiny negative h_phi.
+        if (floored_hph(-0.25e-14_dp) >= 0.0_dp) &
+            error stop 'floored h_phi flipped a small negative value'
+        if (floored_hph(0.25e-14_dp) <= 0.0_dp) &
+            error stop 'floored h_phi flipped a small positive value'
+        if (abs(floored_hph(-0.25e-14_dp)) < 1.0e-14_dp) &
+            error stop 'floored h_phi is below the floor'
+        if (floored_hph(-0.3_dp) /= -0.3_dp) &
+            error stop 'floored h_phi changed a regular value'
+    end subroutine test_floored_hph
 
     subroutine test_repeated_initialization
         call init_meiss(magfie, 12, 13, 14, 0.01_dp, 0.9_dp, 0.2_dp, 6.0_dp, &

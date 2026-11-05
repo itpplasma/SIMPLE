@@ -45,30 +45,48 @@ contains
         real(wp), intent(in) :: dtauc
         integer, intent(out) :: ierr
 
-        real(wp) :: alam, coala, dalam
+        ! Same bound on dhh*step as stost; it keeps one Euler kick below 0.17,
+        ! so a single reflection always returns it to [-1, 1].
+        real(wp), parameter :: max_dhh_step = 0.01_wp
+        ! Beyond nu*dt = 40 every Legendre moment has decayed below 1e-17,
+        ! so the pitch is drawn from the uniform equilibrium.
+        real(wp), parameter :: equilibrium_dhh_tau = 20.0_wp
+        real(wp) :: alam, coala, dalam, remaining, step
         real :: ur
 
         ierr = 0
         alam = z(5)
-        coala = 1.0_wp - alam**2
-        if (coala < 0.0_wp) then
+        if (1.0_wp - alam**2 < 0.0_wp) then
             ierr = 1
             return
         end if
-
-        call getran(1, ur)
-        dalam = sqrt(2.0_wp*lorentz_dhh*coala*dtauc)*real(ur, wp) &
-                - 2.0_wp*alam*lorentz_dhh*dtauc
-        alam = alam + dalam
-        if (alam > 1.0_wp) then
-            alam = 2.0_wp - alam
-        else if (alam < -1.0_wp) then
-            alam = -2.0_wp - alam
-        end if
-        if (abs(alam) > 1.0_wp) then
-            ierr = 2
+        if (lorentz_dhh*dtauc >= equilibrium_dhh_tau) then
+            call random_number(ur)
+            z(5) = 2.0_wp*real(ur, wp) - 1.0_wp
             return
         end if
+
+        remaining = dtauc
+        do
+            step = remaining
+            if (lorentz_dhh*step > max_dhh_step) step = max_dhh_step/lorentz_dhh
+            coala = 1.0_wp - alam**2
+            call getran(1, ur)
+            dalam = sqrt(2.0_wp*lorentz_dhh*coala*step)*real(ur, wp) &
+                    - 2.0_wp*alam*lorentz_dhh*step
+            alam = alam + dalam
+            if (alam > 1.0_wp) then
+                alam = 2.0_wp - alam
+            else if (alam < -1.0_wp) then
+                alam = -2.0_wp - alam
+            end if
+            if (abs(alam) > 1.0_wp) then
+                ierr = 2
+                return
+            end if
+            remaining = remaining - step
+            if (remaining <= 0.0_wp) exit
+        end do
         z(5) = alam
     end subroutine stost_lorentz
 

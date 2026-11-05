@@ -1,7 +1,8 @@
 program test_cuda_native_bridge
     use, intrinsic :: iso_fortran_env, only: dp => real64, sp => real32, int64
     use simple_cuda_native, only: trace_orbits_cuda_native_landreman, &
-        CUDA_NATIVE_PROFILE_COUNT
+                                  cuda_native_device_count, CUDA_NATIVE_PROFILE_COUNT
+    use params, only: gpu_num_devices
     use field_can_mod, only: field_can_t
     use orbit_symplectic_base, only: symplectic_integrator_t, &
         CASH_KARP, DORMAND_PRINCE
@@ -48,6 +49,9 @@ program test_cuda_native_bridge
         f(i)%ro0 = real(i + 1, dp)
     end do
 
+    ! Every visible device, so a host with two GPUs splits the particles.
+    gpu_num_devices = 0
+    print '(a,i0)', ' native CUDA devices = ', cuda_native_device_count(npart, 1.0_dp)
     do method = CASH_KARP, DORMAND_PRINCE
         if (method /= CASH_KARP .and. method /= DORMAND_PRINCE) cycle
         call check_method(method)

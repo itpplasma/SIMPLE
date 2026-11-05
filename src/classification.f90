@@ -25,6 +25,8 @@ module classification
     use get_can_sub, only : vmec_to_can, can_to_vmec
     use boozer_sub, only : vmec_to_boozer, boozer_to_vmec
     use magfie_sub, only : CANFLUX, BOOZER
+    use field_can_mod, only: ref_to_integ, integ_to_ref
+    use field_can_boozer, only: ref_to_integ_boozer
     use check_orbit_type_sub, only : check_orbit_type
     use detect_oneline_mod, only: jpar_variation_rate, rotation_number_drift, &
                                   precession_turns, jpar_sample_count, &
@@ -133,8 +135,11 @@ contains
         !
         if(isw_field_type .eq. CANFLUX) then
             call vmec_to_can(r,theta_vmec,varphi_vmec,z(2),z(3))
-        elseif(isw_field_type .eq. BOOZER) then
+        elseif (vmec_boozer()) then
             call vmec_to_boozer(r,theta_vmec,varphi_vmec,z(2),z(3))
+        else
+            ! Meiss, Albert, chartmap Boozer and TEST start like trace_orbit.
+            call ref_to_integ(zstart(1:3, ipart), z(1:3))
         endif
 
         ! In case of classification plot all starting points are moved to the classification cut:
@@ -524,8 +529,10 @@ contains
         zend(:,ipart) = z
         if(isw_field_type .eq. CANFLUX) then
             call can_to_vmec(z(1),z(2),z(3),zend(2,ipart),zend(3,ipart))
-        elseif(isw_field_type .eq. BOOZER) then
+        elseif (vmec_boozer()) then
             call boozer_to_vmec(z(1),z(2),z(3),zend(2,ipart),zend(3,ipart))
+        else
+            call integ_to_ref(z(1:3), zend(1:3, ipart))
         endif
         orbit_exit_code(ipart) = class_result%exit_code
         if (class_result%exit_code >= ORBIT_EXIT_NUMERICAL_DOMAIN) then
@@ -679,5 +686,12 @@ contains
         endif
 
     end subroutine write_classification_results
+
+    !> Boozer coordinates built from a VMEC equilibrium, whose transform the
+    !> legacy vmec_to_boozer/boozer_to_vmec pair implements.
+    logical function vmec_boozer()
+        vmec_boozer = isw_field_type == BOOZER
+        if (vmec_boozer) vmec_boozer = associated(ref_to_integ, ref_to_integ_boozer)
+    end function vmec_boozer
 
 end module classification

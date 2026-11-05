@@ -22,6 +22,9 @@ target_link_libraries(test_jacobian_conventions_vmec.x simple)
 add_executable(test_hctr_from_metric_vmec.x test_hctr_from_metric_vmec.f90)
 target_link_libraries(test_hctr_from_metric_vmec.x simple)
 
+add_executable(test_magfie_field_line.x test_magfie_field_line.f90)
+target_link_libraries(test_magfie_field_line.x simple)
+
 add_executable(test_hcurl_from_dhcov_splines.x test_hcurl_from_dhcov_splines.f90)
 target_link_libraries(test_hcurl_from_dhcov_splines.x simple)
 
@@ -57,6 +60,12 @@ add_test(NAME test_hctr_from_metric_vmec
     COMMAND $<TARGET_FILE:test_hctr_from_metric_vmec.x>
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
 )
+
+add_test(NAME test_magfie_field_line
+    COMMAND $<TARGET_FILE:test_magfie_field_line.x>
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
+)
+set_tests_properties(test_magfie_field_line PROPERTIES LABELS "unit")
 
 # Sub-second VMEC-coordinate tests that exercise libneo directly; the libneo
 # reverse-dependency gate runs this "smoke" set (ctest -L smoke).

@@ -93,6 +93,7 @@ option(SIMPLE_ENABLE_OPENACC "Enable OpenACC offload (NVHPC only)" OFF)
 option(SIMPLE_ENABLE_CUDA
     "Build direct-CUDA guiding-center kernels" OFF)
 option(SIMPLE_ENABLE_DEBUG_OUTPUT "Enable debug output in hot loops" OFF)
+option(SIMPLE_ENABLE_MPI "Distribute particles over MPI ranks" OFF)
 option(SIMPLE_ENABLE_VMECPP "Enable direct VMEC++ input-file geometry" OFF)
 
 if(SIMPLE_ENABLE_VMECPP)
@@ -251,11 +252,11 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
             "OpenACC memory model: managed|unified|separate")
         set(SIMPLE_OPENACC_GPU_ARCH "ccnative" CACHE STRING
             "NVHPC OpenACC GPU architecture (for example ccnative or cc75)")
-        # Keep the managed-memory spelling identical to the standard libneo
-        # OpenACC checkout. NVHPC accepts the newer spelling too, but mixing
-        # the two spellings across linked targets has caused illegal-address
-        # failures at runtime on older cluster toolchains.
-        if(SIMPLE_OPENACC_MEM STREQUAL "managed")
+        # Use libneo's spelling of the memory model: legacy -gpu=managed before
+        # NVHPC 24, mem:managed after. Mixing the spellings across linked
+        # targets causes illegal-address failures at runtime.
+        if(SIMPLE_OPENACC_MEM STREQUAL "managed" AND
+           CMAKE_Fortran_COMPILER_VERSION VERSION_LESS "24.0")
             set(_simple_openacc_mem_option "managed")
         else()
             set(_simple_openacc_mem_option "mem:${SIMPLE_OPENACC_MEM}")
@@ -268,12 +269,15 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
             "OpenACC memory model for libneo" FORCE)
         set(FORTNUM_GPU_BACKEND OPENACC CACHE STRING
             "GPU backend for Fortnum" FORCE)
+        # Every target, libneo's included, must share one memory model: a
+        # module compiled without it maps its data differently on the device.
         add_compile_options(
             $<$<COMPILE_LANGUAGE:Fortran>:-acc>
+            $<$<COMPILE_LANGUAGE:Fortran>:${SIMPLE_OPENACC_GPU_FLAG}>
             $<$<COMPILE_LANGUAGE:C>:-acc>
         )
         add_link_options(
-            -acc
+            -acc ${SIMPLE_OPENACC_GPU_FLAG}
         )
     endif()
 endif()

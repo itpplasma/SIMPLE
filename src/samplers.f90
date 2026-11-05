@@ -83,9 +83,11 @@ contains
     end subroutine load_marker_weights
 
     subroutine save_starting_points(zstart)
+        use simple_mpi, only: mpi_is_root
         real(dp), dimension(:, :), intent(in) :: zstart
         integer :: ipart
 
+        if (.not. mpi_is_root()) return
         open (1, file=START_FILE, recl=1024)
         do ipart = 1, size(zstart, 2)
             write (1, *) zstart(:, ipart)
@@ -137,9 +139,12 @@ contains
             num_surf = 2
         end if
 
-        ! Clamp lower bound to s_min to avoid axis singularity
+        ! Clamp lower bound to s_min to avoid axis singularity; a range that
+        ! lies below the clamp cannot be honoured.
+        if (s_outer < s_min) error stop &
+            'startmode 5 needs an upper s bound of at least 0.01'
         s_lo = max(s_inner, s_min)
-        s_hi = max(s_outer, s_min)
+        s_hi = s_outer
 
         do ipart = 1, size(zstart, 2)
             call random_number(tmp_rand)
@@ -163,10 +168,12 @@ contains
     end subroutine sample_volume_single
 
     subroutine sample_fusion_birth(zstart, s_inner, s_outer, integration_coords)
-        use params, only: fusion_grid, num_surf, facE_al, n_d, n_e, &
+        use params, only: fusion_grid, num_surf, n_d, n_e, &
+                          particle_energy_eV_effective, &
                           am1, am2, Z1, Z2, sbeg
         use fusion_source, only: build_birth_cdf, draw_birth, alpha_energy_joule
         use field_can_mod, only: integ_to_ref
+        use simple_mpi, only: mpi_is_root
         real(dp), intent(out) :: zstart(:, :)
         real(dp), value, intent(in) :: s_inner, s_outer
         logical, intent(in) :: integration_coords
@@ -174,8 +181,9 @@ contains
         real(dp) :: power, x(3)
         integer :: ipart, unit, n
 
-        if (facE_al /= 1.0_dp .or. n_d /= 4.0_dp .or. n_e /= 2) &
-            error stop 'fusion births require 3.5 MeV alphas: facE_al=1, n_d=4, n_e=2'
+        if (abs(particle_energy_eV_effective - 3.5e6_dp) > 3.5e-3_dp .or. &
+            n_d /= 4.0_dp .or. n_e /= 2) &
+            error stop 'fusion births require 3.5 MeV alphas with n_d=4, n_e=2'
         if (am1 /= 2.0_dp .or. am2 /= 3.0_dp .or. &
             Z1 /= 1.0_dp .or. Z2 /= 1.0_dp) &
             error stop 'fusion births require species 1=D and species 2=T'
@@ -192,6 +200,7 @@ contains
         num_surf = 2
         sbeg(1:2) = [s_inner, s_outer]
         call save_starting_points(zstart)
+        if (.not. mpi_is_root()) return
         open (newunit=unit, file='alpha_source.dat', status='replace')
         write (unit, '(a)') '# Equal-weight D-T births; rows of start.dat are markers.'
         write (unit, '(a)') '# Midpoint source cells, uniform positions within cells.'
@@ -475,19 +484,17 @@ contains
         character(len=maxlen) :: line
         real(8) :: v_par, v_perp, u, v, s
         real(8) :: th, ph
-        integer :: ipart
+        integer :: ipart, unit
 
+        if (use_special_ants_file) then
+            open (newunit=unit, file=START_FILE_ANTS, recl=1024, status='old', &
+                  action='read')
+        else
+            open (newunit=unit, file=START_FILE, recl=1024, status='old', &
+                  action='read')
+        end if
         do ipart = 1, ntestpart
-            if (use_special_ants_file) then
-                open (1, file=START_FILE_ANTS, recl=1024)
-                read (1, '(A)') line
-                close (1)
-            else
-                open (1, file=START_FILE, recl=1024)
-                read (1, '(A)') line
-                close (1)
-            end if
-
+            read (unit, '(A)') line
             call process_line(line, v_par, v_perp, u, v, s)
             ! In the test case, u runs from 0 to 1 and v from 0 to 4
             th = 2d0*pi*u
@@ -498,6 +505,7 @@ contains
             zstart(4, ipart) = 1.d0
             zstart(5, ipart) = v_par/sqrt(v_par**2 + v_perp**2)
         end do
+        close (unit)
     end subroutine sample_points_ants
 
 end module samplers

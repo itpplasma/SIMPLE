@@ -86,7 +86,8 @@ Start positions
      - Uniform random :math:`s` in the range set by ``num_surf`` (0:
        :math:`[0,1]`, 1: :math:`[0,` ``sbeg(1)`` :math:`]`, 2:
        :math:`[` ``sbeg(1)``, ``sbeg(2)`` :math:`]`), clamped to
-       :math:`s \ge 0.01`; random angles.
+       :math:`s \ge 0.01`; random angles. An upper bound below 0.01 stops
+       the run.
    * - 6
      - Read ``start.dat`` with positions in integration coordinates.
    * - 7
@@ -164,6 +165,10 @@ Restart and batches
 
 ``restart = .true.`` reads ``times_lost.dat`` and ``orbit_exit_code.dat``;
 markers with exit code 0, 1, 2 or 4 keep their result, the others are traced
-again. ``batch_size`` smaller than ``ntestpart`` traces a random subset of
+again. Classifying runs also read ``class_parts.dat`` and
+``class_scores.dat``; a finished marker without a class row for its start
+radius is traced again. Results are matched to start points by row, so random
+starts (``startmode`` 1, 5 or 7, or the TEST field) need ``deterministic =
+.true.``. ``batch_size`` smaller than ``ntestpart`` traces a random subset of
 the start positions, whose indices go to ``batch.dat`` (``reuse_batch =
 .true.`` reads them back).
