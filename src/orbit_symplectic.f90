@@ -1684,6 +1684,7 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
         real(dp) :: geometry_gradients(3, 5)
         real(dp) :: radius_end, r_rate, theta_rate, phi_rate, pphi_rate, canonical_pth
         real(dp) :: z_start(4)
+        logical :: crossed
 
   do k = 1,s
     fs(k) = f
@@ -1871,7 +1872,21 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
                 call get_val(f, si%z(4))
                 f%pth = canonical_pth
             end if
-            call record_history(si, z_start, .true.)
+            ! A stage radius past the axis is the point (|r|, theta+pi); commit that
+            ! chart switch as the Euler and midpoint steps do (#370).
+            call apply_axis_chart_switch(si%z(1), si%z(2), crossed, ierr)
+            if (ierr /= SYMPLECTIC_STEP_OK) then
+                si = accepted_integrator
+                f = accepted_field
+                return
+            end if
+            if (crossed) then
+                ! The stage cache lives in the other chart: evaluate the field
+                ! and p_theta afresh at the new endpoint, as Euler and midpoint do.
+                call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
+                call get_val(f, si%z(4))
+            end if
+            call record_history(si, z_start,.not. crossed)
 
     ktau = ktau+1
   enddo
@@ -1908,6 +1923,7 @@ recursive subroutine orbit_timestep_sympl_rk_lobatto(si, f, s, ierr)
   type(symplectic_integrator_t) :: accepted_integrator
   real(dp) :: a(s,s), ahat(s,s), b(s), c(s), Hprime(s)
         real(dp) :: z_start(4)
+        logical :: crossed
 
   do k = 1,s
     fs(k) = f
@@ -1957,7 +1973,21 @@ recursive subroutine orbit_timestep_sympl_rk_lobatto(si, f, s, ierr)
       si%z(3) = si%z(3) + si%dt*b(l)*(fs(l)%vpar-Hprime(l)*fs(l)%hth)/fs(l)%hph
       si%z(4) = si%z(4) - si%dt*b(l)*(fs(l)%dH(3) - Hprime(l)*fs(l)%dpth(3))
     end do
-            call record_history(si, z_start, .true.)
+            ! A stage radius past the axis is the point (|r|, theta+pi); commit that
+            ! chart switch as the Euler and midpoint steps do (#370).
+            call apply_axis_chart_switch(si%z(1), si%z(2), crossed, ierr)
+            if (ierr /= SYMPLECTIC_STEP_OK) then
+                si = accepted_integrator
+                f = accepted_field
+                return
+            end if
+            if (crossed) then
+                ! The stage cache lives in the other chart: evaluate the field
+                ! and p_theta afresh at the new endpoint, as Euler and midpoint do.
+                call eval_field(f, si%z(1), si%z(2), si%z(3), 0)
+                call get_val(f, si%z(4))
+            end if
+            call record_history(si, z_start,.not. crossed)
 
     ktau = ktau+1
   enddo
