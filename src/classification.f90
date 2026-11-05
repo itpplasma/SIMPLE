@@ -317,9 +317,6 @@ contains
                 if(ierr.ne.0) then
                     call classify_classifier_exit(ierr, integmode, &
                         class_result%lost, class_result%exit_code)
-                    if(class_plot .and. class_result%lost) then
-                        call output_lost_orbit_starting_data(ipart, passing)
-                    endif
                     exit
                 endif
                 kt = kt+1
@@ -501,18 +498,12 @@ contains
                         class_result%fractal = 2
                     endif
 
-                    if(class_plot) then
-                        call output_minkowsky_class(ipart, regular, passing)
-                        ierr=1
-                    endif
+                    ! write_classification_results writes the plot records.
+                    if (class_plot) ierr = 1
                 endif
                 !
                 if(ierr.ne.0) then
-                    if(class_plot .and. .not. passing) then
-                        call output_jpar_class(ipart, ijpar)
-                        call output_topological_class(ipart, ideal)
-                        exit
-                    endif
+                    if (class_plot .and. .not. passing) exit
                 endif
                 !    write(999, *) kt*dtaumin/v0, z
             enddo
@@ -675,15 +666,11 @@ contains
             call output_minkowsky_class(ipart, regular, class_result%passing)
         endif
 
-        ! Write J_parallel and topological classification if computed
-        ! These are only done for trapped orbits
-        if(.not. class_result%passing) then
-            if(class_result%jpar /= 0) then
-                call output_jpar_class(ipart, class_result%jpar)
-            endif
-            if(class_result%topology /= 0) then
-                call output_topological_class(ipart, class_result%topology)
-            endif
+        ! Trapped orbits that reached the classification cut also carry the
+        ! J_parallel and topological classes, including the unclassified 0.
+        if (class_result%fractal /= 0 .and. .not. class_result%passing) then
+            call output_jpar_class(ipart, class_result%jpar)
+            call output_topological_class(ipart, class_result%topology)
         endif
 
     end subroutine write_classification_results

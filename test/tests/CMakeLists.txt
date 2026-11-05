@@ -791,6 +791,17 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(test_skipped_physics_rejection PROPERTIES
         LABELS "integration"
+
+    add_test(NAME test_class_plot_records
+        COMMAND ${CMAKE_COMMAND} -E env
+            CTEST_BINARY_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}
+            ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_class_plot_records.py
+            $<TARGET_FILE:simple.x>
+            ${WOUT_FILE}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(test_class_plot_records PROPERTIES
+        LABELS "integration;system"
         TIMEOUT 300)
 
     add_test(NAME test_classifier_log_macrosteps
