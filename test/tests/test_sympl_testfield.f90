@@ -93,7 +93,7 @@ program test_sympl_testfield
     use simple_main, only: update_momentum
     use classification, only: classify_classifier_exit
     use simple_main, only: classify_orbit_exit, init_field, locate_linear_lcfs, &
-                          locate_validated_lcfs, macrostep, macrostep_with_wall_check, &
+                           locate_validated_lcfs, macrostep, &
                      recovery_state_has_valid_phase_space, recovery_state_is_physical, &
                            rk_recovery_state_t, validate_rk_state, &
                            validate_rk_step_or_reference_boundary, &
@@ -270,8 +270,8 @@ contains
         x_previous = 0.0_dp
         kt = 0_int64
         recovery = rk_recovery_state_t(failures=1, symplectic_steps=1)
-        call macrostep_with_wall_check(norb, z, kt, step_error, 1, 1, x_previous, &
-                                       rk_recovery=recovery)
+        call macrostep(norb, z, kt, step_error, 1, ipart=1, x_prev_m=x_previous, &
+                       rk_recovery=recovery)
         if (recovery%symplectic_steps /= 0 .or. recovery%failures /= 1) &
             error stop 'failed wall attempt preserved a provisional success'
         if (step_error /= 1) error stop 'wall path lost failed step status'
@@ -312,9 +312,9 @@ contains
         kt = 0_int64
         hold_streak = 0
         recovery = rk_recovery_state_t(failures=1, symplectic_steps=1)
-        call macrostep_with_wall_check(norb, z, kt, step_error, 1, 1, x_previous, &
-                           hold_streak=hold_streak, numerical_hold_any=numerical_hold, &
-                                       rk_recovery=recovery)
+        call macrostep(norb, z, kt, step_error, 1, ipart=1, x_prev_m=x_previous, &
+                       hold_streak=hold_streak, numerical_hold_any=numerical_hold, &
+                       rk_recovery=recovery)
         if (step_error /= 0) error stop 'isolated wall warning stopped orbit'
         if (kt /= 1_int64) error stop 'isolated wall hold lost its interval'
         if (.not. numerical_hold .or. hold_streak /= 1) &
@@ -325,9 +325,9 @@ contains
             error stop 'isolated wall hold changed the last accepted state'
         end if
 
-        call macrostep_with_wall_check(norb, z, kt, step_error, 1, 1, x_previous, &
-                           hold_streak=hold_streak, numerical_hold_any=numerical_hold, &
-                                       rk_recovery=recovery)
+        call macrostep(norb, z, kt, step_error, 1, ipart=1, x_prev_m=x_previous, &
+                       hold_streak=hold_streak, numerical_hold_any=numerical_hold, &
+                       rk_recovery=recovery)
         if (step_error == 0) error stop 'repeated wall failure was hidden'
         if (kt /= 1_int64) error stop 'repeated wall failure consumed another interval'
         if (numerical_hold .or. hold_streak /= 1) &
@@ -407,10 +407,10 @@ contains
                            hold_streak=hold_streak, numerical_hold_any=numerical_hold, &
                                    rk_recovery=recovery)
                 else
-                    call macrostep_with_wall_check(local_orbit, z, kt, &
-                                step_error, 1, 1, x_previous, hold_streak=hold_streak, &
-                                                   numerical_hold_any=numerical_hold, &
-                                                   rk_recovery=recovery)
+                    call macrostep(local_orbit, z, kt, &
+                 step_error, 1, ipart=1, x_prev_m=x_previous, hold_streak=hold_streak, &
+                                   numerical_hold_any=numerical_hold, &
+                                   rk_recovery=recovery)
                 end if
                 if (successful_drift_calls /= 1) &
                     error stop 'Collision caller fixture did not complete its drift'
@@ -508,8 +508,8 @@ contains
                         if (wall_path == 0) then
                             call macrostep(local_orbit, z, kt, step_error, 1, exit_step)
                         else
-                            call macrostep_with_wall_check(local_orbit, z, kt, &
-                                                step_error, 1, 1, x_previous, exit_step)
+                            call macrostep(local_orbit, z, kt, &
+                       step_error, 1, ipart=1, x_prev_m=x_previous, exit_step=exit_step)
                         end if
                         if (excessive /= 1) then
                             cached_ratio = injected_momentum_ratio
@@ -662,9 +662,9 @@ contains
                 call macrostep(local_orbit, z, kt, step_error, 1, &
                                rk_recovery=recovery)
             else
-                call macrostep_with_wall_check(local_orbit, z, kt, &
-                                               step_error, 1, 1, x_previous, &
-                                               rk_recovery=recovery)
+                call macrostep(local_orbit, z, kt, &
+                               step_error, 1, ipart=1, x_prev_m=x_previous, &
+                               rk_recovery=recovery)
             end if
             if (step_error /= 0 .or. kt /= 1_int64) &
                 error stop 'successful recovery probe did not advance'
@@ -685,9 +685,9 @@ contains
                     call macrostep(local_orbit, z, kt, step_error, 1, &
                                    rk_recovery=recovery)
                 else
-                    call macrostep_with_wall_check(local_orbit, z, kt, &
-                                                   step_error, 1, 1, x_previous, &
-                                                   rk_recovery=recovery)
+                    call macrostep(local_orbit, z, kt, &
+                                   step_error, 1, ipart=1, x_prev_m=x_previous, &
+                                   rk_recovery=recovery)
                 end if
                 if (step_error /= 0) &
                     error stop 'stable symplectic recovery probe failed'
@@ -773,8 +773,9 @@ contains
                         call macrostep(local_orbit, z, kt, step_error, 1, &
                                        rk_recovery=recovery)
                     else
-                        call macrostep_with_wall_check(local_orbit, z, kt, &
-                                     step_error, 1, 1, x_previous, rk_recovery=recovery)
+                        call macrostep(local_orbit, z, kt, step_error, 1, &
+                                       ipart=1, x_prev_m=x_previous, &
+                                       rk_recovery=recovery)
                     end if
                     if (step_error /= 0 .or. kt /= 1_int64) &
                         error stop 'Magnetic-moment recovery fixture did not advance'
