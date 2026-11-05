@@ -517,6 +517,17 @@ if (ENABLE_OPENMP)
         LABELS "integration"
         TIMEOUT 120)
 
+    add_executable(test_axis_crossing_gauss.x test_axis_crossing_gauss.f90)
+    target_link_libraries(test_axis_crossing_gauss.x simple)
+    foreach(scheme gauss1 gauss2 gauss3 gauss4 lobatto3)
+        add_test(NAME test_axis_crossing_${scheme}
+            COMMAND test_axis_crossing_gauss.x ${scheme}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+        set_tests_properties(test_axis_crossing_${scheme} PROPERTIES
+            LABELS "integration"
+            TIMEOUT 120)
+    endforeach()
+
     add_executable(test_axis_regular_rhs.x test_axis_regular_rhs.f90)
     target_link_libraries(test_axis_regular_rhs.x simple)
     add_test(NAME test_axis_regular_rhs
