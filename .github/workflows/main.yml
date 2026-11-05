@@ -631,6 +631,61 @@ jobs:
 
   # Matrix job names gain a shard suffix. Preserve the branch rule's exact
   # Build and Test context and require every shard to succeed.
+  performance:
+    permissions:
+      contents: read
+    name: Performance
+    # GitHub-hosted, so no other job shares the machine. Base and candidate
+    # run side by side in every repetition and see the same load.
+    runs-on: ubuntu-24.04
+    if: >-
+      (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]')) && (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch')
+    timeout-minutes: 75
+    env:
+      BASE_SHA: ${{ github.event.merge_group.base_sha }}
+      FLAGS: >-
+        -DCMAKE_BUILD_TYPE=Release -DENABLE_COVERAGE=OFF
+        -DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gfortran git-lfs cmake ninja-build pkg-config \
+            libgsl-dev libhdf5-dev libfftw3-dev libnetcdf-dev libnetcdff-dev \
+            libopenblas-dev liblapack-dev openmpi-bin libopenmpi-dev python3-venv
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/python" -m pip install numpy netCDF4
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+
+      - name: Build base and candidate
+        run: |
+          base=${BASE_SHA:-$(git merge-base HEAD origin/main)}
+          echo "base $base"
+          git worktree add "$RUNNER_TEMP/base" "$base"
+          for tree in "$PWD" "$RUNNER_TEMP/base"; do
+            cmake -S "$tree" -B "$tree/build" -GNinja $FLAGS
+            cmake --build "$tree/build" --target simple.x
+          done
+
+      - name: Compare run times
+        run: |
+          python3 test/performance/benchmark.py \
+            "$RUNNER_TEMP/base/build/simple.x" build/simple.x --work performance-runs
+
+      - name: Upload timings
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: performance
+          path: performance-runs/benchmark.json
+          if-no-files-found: ignore
+
   build-and-test-result:
     permissions: {}
     name: Build and Test
@@ -653,7 +708,7 @@ jobs:
     name: CI result
     if: >-
       (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-merge-queue[bot]')) && (always())
-    needs: [build-and-test-result, gcc-matrix, cgal-wall, vmecpp]
+    needs: [build-and-test-result, gcc-matrix, cgal-wall, vmecpp, performance]
     runs-on:
       - self-hosted
       - itp-light
