@@ -93,6 +93,7 @@ option(SIMPLE_ENABLE_OPENACC "Enable OpenACC offload (NVHPC only)" OFF)
 option(SIMPLE_ENABLE_CUDA
     "Build direct-CUDA guiding-center kernels" OFF)
 option(SIMPLE_ENABLE_DEBUG_OUTPUT "Enable debug output in hot loops" OFF)
+option(SIMPLE_ENABLE_MPI "Distribute particles over MPI ranks" OFF)
 option(SIMPLE_ENABLE_VMECPP "Enable direct VMEC++ input-file geometry" OFF)
 
 if(SIMPLE_ENABLE_VMECPP)

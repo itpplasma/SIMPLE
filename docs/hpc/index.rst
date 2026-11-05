@@ -2,10 +2,12 @@ Clusters
 ========
 
 This page shows how to run SIMPLE under Slurm and which job scripts in the
-repository fit which machine. One SIMPLE process traces all markers of a run
-with OpenMP on one node, or on one GPU; there is no MPI decomposition. Scale
-out by submitting independent jobs (equilibria, seeds, ``batch_size``
-batches), each in its own run directory, because output file names are fixed.
+repository fit which machine. One SIMPLE process traces its markers with
+OpenMP on one node or on the GPUs it sees. A build with MPI spreads the
+markers of one run over several processes and nodes (`MPI and several
+GPUs`_). Independent runs (equilibria, seeds, ``batch_size`` batches) go into
+separate jobs, each in its own run directory, because output file names are
+fixed.
 
 Job pattern
 -----------
@@ -51,6 +53,37 @@ On Perlmutter the GNU environment suffices for the Fortran host code:
 
 Request the GPU with ``--gpus-per-task=1`` (Perlmutter) or ``--gres=gpu:1``
 (aCluster, sCluster).
+
+MPI and several GPUs
+--------------------
+
+Configure with ``-DSIMPLE_ENABLE_MPI=ON`` (needs an MPI Fortran compiler
+wrapper; the option changes nothing when off). Marker ``i`` goes to rank
+``mod(i - 1, nranks)``; every rank reads the input and sets up the field,
+rank 0 broadcasts the start positions, collects the results and alone writes
+the output files, which equal those of a run with one process byte for byte.
+
+.. code-block:: bash
+
+   #SBATCH --nodes=4
+   #SBATCH --ntasks-per-node=1
+   #SBATCH --cpus-per-task=<cores>
+   export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+   mpirun -np $SLURM_NTASKS --map-by ppr:1:node:pe=$SLURM_CPUS_PER_TASK \
+     -x OMP_NUM_THREADS /path/to/build-mpi/simple.x simple.in
+
+Several ranks reject ``gpu_mode = 'benchmark'``, orbit output,
+``class_plot``, ``restart`` and ``gpu_particle_profile``, and need at least
+one marker per rank.
+
+On the GPU (``gpu_mode = 'production'``) a process uses ``gpu_num_devices``
+GPUs, all visible ones for ``0``, with one host thread per GPU and the
+markers dealt to them in turn. Ranks on one node start at different GPUs, so
+one rank per GPU (``gpu_num_devices = 1``) and one rank per node with all its
+GPUs both work. The early stop (``gpu_maxloss``) is decided by each GPU and
+rank for its own markers, so a split run equals the single-GPU run only with
+``gpu_maxloss = 1``; with a smaller threshold a process traces on one GPU,
+and several ranks stop at input validation.
 
 Job scripts
 -----------

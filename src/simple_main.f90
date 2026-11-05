@@ -11,6 +11,9 @@ module simple_main
                           configure_lorentz_nustar, stost_lorentz
     use magfie_sub, only: ALBERT, SPECTRE
     use samplers, only: sample
+    use simple_mpi, only: mpi_rank, mpi_ranks, mpi_is_root, mpi_owned_count, &
+                          mpi_broadcast_r64, mpi_sum_r64, mpi_gather_r64, &
+                          mpi_gather_int, mpi_reduce_sum_r64, mpi_reduce_sum_int
     use field_can_mod, only: field_can_t, evaluate_field => evaluate, &
                              integ_to_ref, ref_to_integ, init_field_can
     use callback, only: output_orbits_macrostep
@@ -305,9 +308,12 @@ contains
         end if
 
         call load_config(config_file)
+        call validate_mpi_config
         call init_run(norb)
         call init_sampling_field
         call sample_start
+        ! Ranks that sampled with their own random state trace root's markers.
+        if (mpi_ranks > 1) call mpi_broadcast_r64(zstart, size(zstart))
         if (generate_start_only) stop 'stopping after generating start.dat'
         call init_tracing_field
         call init_counters
@@ -334,14 +340,20 @@ contains
         if (trim(gpu_mode) == 'production') then
             call trace_gpu_production(norb)
         else
-            call progress_init(checkpoint_interval, ntestpart)
+            if (mpi_ranks > 1) print '(a,i0,a,i0)', ' MPI ranks = ', mpi_ranks, &
+                ', particles on this rank = ', mpi_owned_count(mpi_rank, ntestpart)
+            call progress_init(checkpoint_interval, &
+                               mpi_owned_count(mpi_rank, ntestpart))
             call trace_parallel(norb)
             call progress_finalize
         end if
         call print_phase_time('Particle tracing completed')
 
-        call write_output
-        call print_phase_time('Output writing completed')
+        call gather_results
+        if (mpi_is_root()) then
+            call write_output
+            call print_phase_time('Output writing completed')
+        end if
 
         call stl_wall_finalize(wall)
     end subroutine main
@@ -957,7 +969,7 @@ contains
         ! dynamic chunks keep unfinished work available to every thread instead
         ! of queueing it behind a pathological marker in a static block.
         !$omp do schedule(dynamic, 1)
-        do i = 1, ntestpart
+        do i = mpi_rank + 1, ntestpart, mpi_ranks
             if (allocated(particle_done)) then
                 if (particle_done(i)) then
                     call progress_tick
@@ -995,6 +1007,72 @@ contains
         end if
     end subroutine trace_parallel
 
+    subroutine validate_mpi_config
+        ! Several ranks write no per-particle files while tracing; rank 0
+        ! writes all results once they are gathered.
+        use params, only: restart, gpu_particle_profile
+
+        if (mpi_ranks == 1) return
+        if (ntestpart < mpi_ranks) &
+            error stop 'MPI: ntestpart must be at least the number of ranks'
+        if (trim(gpu_mode) == 'benchmark' .or. output_orbits_macrostep .or. &
+            class_plot .or. restart .or. len_trim(gpu_particle_profile) > 0) &
+           error stop 'MPI with several ranks does not support gpu_mode=benchmark, '// &
+            'orbit output, class_plot, restart or gpu_particle_profile'
+        ! Each rank stops on the loss threshold of its own particles.
+        if (trim(gpu_mode) == 'production' .and. gpu_landreman .and. &
+            gpu_maxloss < 1.0_dp) &
+            error stop 'MPI with several ranks needs gpu_maxloss >= 1'
+    end subroutine validate_mpi_config
+
+    subroutine gather_results
+        ! Rank 0 receives the per-particle results of every rank and the sums
+        ! of the per-time-step counters.
+        use params, only: class_passing, class_lost
+
+        if (mpi_ranks == 1) return
+        call mpi_gather_r64(zend, size(zend, 1), ntestpart)
+        call mpi_gather_r64(times_lost, 1, ntestpart)
+        call mpi_gather_r64(trap_par, 1, ntestpart)
+        call mpi_gather_r64(perp_inv, 1, ntestpart)
+        call mpi_gather_r64(boundary_event_radial_residual, 1, ntestpart)
+        call mpi_gather_r64(boundary_event_time_width, 1, ntestpart)
+        call mpi_gather_int(orbit_exit_code, 1, ntestpart)
+        if (allocated(orbit_warning_hold_count)) then
+            call mpi_gather_int(orbit_warning_hold_count, 1, ntestpart)
+            call mpi_gather_int(orbit_first_warning_step, 1, ntestpart)
+            call mpi_gather_int(orbit_terminal_exit_code, 1, ntestpart)
+            call mpi_gather_r64(orbit_terminal_time, 1, ntestpart)
+        end if
+        call mpi_gather_int(iclass, 3, ntestpart)
+        call mpi_gather_r64(class_scores, size(class_scores, 1), ntestpart)
+        call gather_logical(class_passing)
+        call gather_logical(class_lost)
+        call mpi_gather_int(wall_hit_triangle, 1, ntestpart)
+        block
+            integer, allocatable :: hit(:)
+            hit = int(wall_hit)
+            call mpi_gather_int(hit, 1, ntestpart)
+            wall_hit = int(hit, kind(wall_hit))
+        end block
+        call mpi_gather_r64(wall_hit_cart, 3, ntestpart)
+        call mpi_gather_r64(wall_hit_normal_cart, 3, ntestpart)
+        call mpi_gather_r64(wall_hit_cos_incidence, 1, ntestpart)
+        call mpi_gather_r64(wall_hit_angle_rad, 1, ntestpart)
+        call mpi_reduce_sum_r64(confpart_pass, ntimstep)
+        call mpi_reduce_sum_r64(confpart_trap, ntimstep)
+        call mpi_reduce_sum_int(unresolved_orbits, ntimstep)
+    contains
+        subroutine gather_logical(a)
+            logical, intent(inout) :: a(:)
+            integer, allocatable :: b(:)
+
+            b = merge(1, 0, a)
+            call mpi_gather_int(b, 1, ntestpart)
+            a = b /= 0
+        end subroutine gather_logical
+    end subroutine gather_results
+
     subroutine trace_gpu_production(norb)
         ! End-to-end loss-tracing path used by the Landreman comparison. This
         ! related optimization and loss-threshold protocol is described at
@@ -1025,7 +1103,7 @@ contains
         logical, allocatable :: passing(:)
         character(32) :: backend_name
         character(32) :: start_coordinates
-        integer :: method, init_mode, i, it
+        integer :: method, init_mode, i, it, k, nloc
         integer :: particle_profile_unit
         integer(8) :: nfev_total, warp_nfev_slots
         real(dp) :: z(5), total_time_normalized, t0, t_init, t_trace, t_finish
@@ -1091,9 +1169,11 @@ contains
         init_mode = method
         if (method == CASH_KARP .or. method == DORMAND_PRINCE) &
             init_mode = EXPL_IMPL_EULER
-        allocate (si_gpu(ntestpart), f_gpu(ntestpart), loss_step(ntestpart), &
-                  nfev(ntestpart), loss_time_normalized(ntestpart), &
-                  zcanonical(4, ntestpart), passing(ntestpart))
+        ! This rank traces particles i = mpi_rank + 1 + (k - 1)*mpi_ranks.
+        nloc = mpi_owned_count(mpi_rank, ntestpart)
+        allocate (si_gpu(nloc), f_gpu(nloc), loss_step(nloc), &
+                  nfev(nloc), loss_time_normalized(nloc), &
+                  zcanonical(4, nloc), passing(nloc))
 
         start_coordinates = trim(gpu_start_coordinates)
         if (trim(start_coordinates) /= 'reference' .and. &
@@ -1101,7 +1181,8 @@ contains
             error stop 'gpu_start_coordinates must be reference or boozer'
 
         t0 = get_wtime()
-        do i = 1, ntestpart
+        do k = 1, nloc
+            i = mpi_rank + 1 + (k - 1)*mpi_ranks
             if (trim(start_coordinates) == 'boozer') then
                 z(1:3) = zstart(1:3, i)
             else
@@ -1110,16 +1191,16 @@ contains
             z(4:5) = zstart(4:5, i)
             if (gpu_compact_init .and. cuda_native_backend) then
 #ifdef SIMPLE_ENABLE_CUDA_NATIVE
-                call initialize_cuda_native_particle(si_gpu(i), f_gpu(i), z, &
+                call initialize_cuda_native_particle(si_gpu(k), f_gpu(k), z, &
                                                      dtaumin, relerr)
-                passing(i) = .false.
+                passing(k) = .false.
                 trap_par(i) = 0.0_dp
-                perp_inv(i) = z(4)**2*(1.0_dp - z(5)**2)/f_gpu(i)%Bmod
+                perp_inv(i) = z(4)**2*(1.0_dp - z(5)**2)/f_gpu(k)%Bmod
 #endif
             else
-                call init_sympl(si_gpu(i), f_gpu(i), z, dtaumin, dtaumin, &
+                call init_sympl(si_gpu(k), f_gpu(k), z, dtaumin, dtaumin, &
                                 relerr, init_mode)
-                call compute_pitch_angle_params(z, passing(i), trap_par(i), &
+                call compute_pitch_angle_params(z, passing(k), trap_par(i), &
                                                 perp_inv(i))
             end if
         end do
@@ -1155,22 +1236,24 @@ contains
             if (cuda_native_backend) then
 #ifdef SIMPLE_ENABLE_CUDA_NATIVE
                 call trace_orbits_cuda_native_landreman(si_gpu, f_gpu, &
-                                             ntestpart, method, total_time_normalized, &
+                                                  nloc, method, total_time_normalized, &
                                  block_time/time_scale, time_scale, loss_tau, maxloss, &
                                                minimum_timestep/time_scale, loss_step, &
                             loss_time_normalized, zcanonical, nfev, observed_duration, &
                                  energy_loss_fraction, warp_nfev_slots, cuda_profile_ms)
 #endif
             else
-                call trace_orbits_gpu_landreman(si_gpu, f_gpu, ntestpart, &
+                call trace_orbits_gpu_landreman(si_gpu, f_gpu, nloc, &
                                   ntimstep, ntau_macro, method, block_time/time_scale, &
                                                 time_scale, loss_tau, maxloss, &
                                                minimum_timestep/time_scale, loss_step, &
                             loss_time_normalized, zcanonical, nfev, observed_duration, &
                                                 energy_loss_fraction, warp_nfev_slots)
             end if
+            if (mpi_ranks > 1) energy_loss_fraction = &
+                mpi_sum_r64(energy_loss_fraction*nloc)/ntestpart
         else
-            call trace_orbits_gpu_method(si_gpu, f_gpu, ntestpart, ntimstep, &
+            call trace_orbits_gpu_method(si_gpu, f_gpu, nloc, ntimstep, &
                   ntau_macro, method, loss_step, loss_time_normalized, zcanonical, nfev)
             observed_duration = &
                 real(sum(ntau_macro(2:ntimstep)), dp)*si_gpu(1)%dt
@@ -1184,29 +1267,30 @@ contains
         unresolved_orbits = 0
         nfev_total = 0_8
         t0 = get_wtime()
-        do i = 1, ntestpart
-            nfev_total = nfev_total + int(nfev(i), 8)
-            si_gpu(i)%z = zcanonical(:, i)
+        do k = 1, nloc
+            i = mpi_rank + 1 + (k - 1)*mpi_ranks
+            nfev_total = nfev_total + int(nfev(k), 8)
+            si_gpu(k)%z = zcanonical(:, k)
             if (gpu_compact_init .and. cuda_native_backend) then
 #ifdef SIMPLE_ENABLE_CUDA_NATIVE
-                call evaluate_cuda_native_particle(f_gpu(i), zcanonical(1, i), &
-                                                   zcanonical(2, i), zcanonical(3, i))
+                call evaluate_cuda_native_particle(f_gpu(k), zcanonical(1, k), &
+                                                   zcanonical(2, k), zcanonical(3, k))
 #endif
             else
-                call eval_field_booz(f_gpu(i), zcanonical(1, i), &
-                                     zcanonical(2, i), zcanonical(3, i), 0)
+                call eval_field_booz(f_gpu(k), zcanonical(1, k), &
+                                     zcanonical(2, k), zcanonical(3, k), 0)
             end if
-            call get_val(f_gpu(i), zcanonical(4, i))
-            call integ_to_ref(zcanonical(1:3, i), zend(1:3, i))
-            zend(4, i) = si_gpu(i)%pabs
-            zend(5, i) = f_gpu(i)%vpar/(si_gpu(i)%pabs*sqrt2)
+            call get_val(f_gpu(k), zcanonical(4, k))
+            call integ_to_ref(zcanonical(1:3, k), zend(1:3, i))
+            zend(4, i) = si_gpu(k)%pabs
+            zend(5, i) = f_gpu(k)%vpar/(si_gpu(k)%pabs*sqrt2)
 
-            if (loss_step(i) < 0) then
+            if (loss_step(k) < 0) then
                 times_lost(i) = quiet_nan()
                 orbit_exit_code(i) = ORBIT_EXIT_NUMERICAL_EVENT
-            else if (loss_time_normalized(i) < total_time_normalized - &
+            else if (loss_time_normalized(k) < total_time_normalized - &
                      16.0_dp*epsilon(1.0_dp)*max(total_time_normalized, 1.0_dp)) then
-                times_lost(i) = loss_time_normalized(i)*sqrt2/v0
+                times_lost(i) = loss_time_normalized(k)*sqrt2/v0
                 orbit_exit_code(i) = ORBIT_EXIT_LCFS
             else
                 times_lost(i) = trace_time
@@ -1215,13 +1299,13 @@ contains
             do it = 1, ntimstep
                 if (orbit_exit_code(i) == ORBIT_EXIT_COMPLETED .or. &
                     times_lost(i) >= real(kt_macro(it), dp)*dtaumin/v0) &
-                    call increase_confined_count(it, passing(i))
+                    call increase_confined_count(it, passing(k))
             end do
         end do
         if (.not. landreman_mode) then
-            do i = 1, ntestpart, 32
+            do i = 1, nloc, 32
                 warp_nfev_slots = warp_nfev_slots + 32_8*int( &
-                                  maxval(nfev(i:min(i + 31, ntestpart))), 8)
+                                  maxval(nfev(i:min(i + 31, nloc))), 8)
             end do
         end if
         t_finish = get_wtime() - t0
@@ -1233,12 +1317,14 @@ contains
         if (cuda_native_backend) then
 #ifdef SIMPLE_ENABLE_CUDA_NATIVE
             print '(a,i0)', ' GPU devices = ', &
-                cuda_native_device_count(ntestpart, gpu_maxloss)
+                cuda_native_device_count(nloc, gpu_maxloss)
 #endif
         else
             print '(a,i0)', ' GPU devices = ', &
-                merge(1, gpu_device_count(ntestpart), landreman_mode)
+                merge(1, gpu_device_count(nloc), landreman_mode)
         end if
+        if (mpi_ranks > 1) print '(a,i0,a,i0)', ' MPI ranks = ', mpi_ranks, &
+            ', particles on this rank = ', nloc
         print '(a,a)', ' start coordinates = ', trim(start_coordinates)
         print '(a,f12.6,a)', ' initialization = ', t_init, ' s'
         print '(a,f12.6,a)', ' tracing        = ', t_trace, ' s'
@@ -1681,6 +1767,7 @@ contains
             real(dp), intent(in) :: zs(:, :)
             integer :: i, unit
 
+            if (.not. mpi_is_root()) return
             open (newunit=unit, file='start.dat', recl=1024)
             do i = 1, size(zs, 2)
                 write (unit, *) zs(:, i)
