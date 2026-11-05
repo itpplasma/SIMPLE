@@ -341,7 +341,9 @@ finish_attempt(const double y[4], double h, const double k[7][4],
     for (int q = 0; q < 4; ++q) {
       const double atol = q == 3 ? tolerance * momentum_atol_scale : tolerance;
       const double scale = atol + tolerance * (fabs(y[q]) + h * fabs(k[0][q]));
-      norm = fmax(norm, fabs(error[q]) / scale);
+      const double ratio = fabs(error[q]) / scale;
+      // fmax drops NaN; keep it so a non-finite step fails the marker.
+      norm = ratio > norm || isnan(ratio) ? ratio : norm;
     }
     return norm;
   } else {
@@ -431,6 +433,7 @@ static __device__ void trace_particle(const float *__restrict__ field_table,
           y, h, k, trial, geometry.tolerance, momentum_atol_scale);
       if (!isfinite(error)) {
         particle_status = 1;
+        lost_at = current_time + segment_time;
         break;
       }
 
@@ -481,8 +484,10 @@ static __device__ void trace_particle(const float *__restrict__ field_table,
         after_reject = true;
       }
       h = hnew;
-      if (attempt == kMaximumAttempts - 1)
+      if (attempt == kMaximumAttempts - 1) {
         particle_status = 2;
+        lost_at = current_time + segment_time;
+      }
     }
     if (particle_status != 0 || lost_at < geometry.total_duration)
       break;
