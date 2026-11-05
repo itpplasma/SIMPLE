@@ -2773,15 +2773,15 @@ contains
             if (.not. reference_boundary .or. ierr /= 1) return
         end if
 
-        ! Euler's carried field is extrapolated before the angular update; it
-        ! is not the field at si%z. Validate a copy at the accepted endpoint,
-        ! without changing the next map's carried field or public coordinates.
+        ! The bound only catches non-local jumps, so the carried field is
+        ! close enough at an ordinary endpoint; Euler's extrapolation error is
+        ! O(dt). A located boundary event needs the field at the event point.
         endpoint_field = anorb%f
-        pphi = anorb%si%z(4)
-        if (reference_boundary) pphi = si_start%z(4) + &
-                                       event_fraction*(pphi - si_start%z(4))
-        call evaluate_field(endpoint_field, z(1), z(2), z(3), 0)
-        call get_val(endpoint_field, pphi)
+        if (reference_boundary) then
+            pphi = si_start%z(4) + event_fraction*(anorb%si%z(4) - si_start%z(4))
+            call evaluate_field(endpoint_field, z(1), z(2), z(3), 0)
+            call get_val(endpoint_field, pphi)
+        end if
         z_physical = z
         z_physical(4) = sqrt(endpoint_field%mu*endpoint_field%Bmod + &
                              0.5_dp*endpoint_field%vpar**2)
