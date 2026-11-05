@@ -1442,7 +1442,8 @@ contains
         use params, only: ntestpart, ntimstep, ntau, nplagr, nder, npl_half, nfp, &
                           fper, num_surf, bmin, bmax, notrace_passing, contr_pp, &
                           class_plot, dtaumin, relerr, v0, zstart, times_lost, &
-                          orbit_exit_code, unresolved_orbits, reallocate_arrays
+                          orbit_exit_code, unresolved_orbits, reallocate_arrays, &
+                          ntau_macro
         type(tracer_t) :: local_orbit
         type(classification_result_t) :: class_result
         real(dp) :: saved_ro0
@@ -1456,6 +1457,10 @@ contains
         ntestpart = 1
         ntimstep = 3
         ntau = 2
+        ! The classifier advances macrostep it by ntau_macro(it) (#705).
+        if (allocated(ntau_macro)) deallocate (ntau_macro)
+        allocate (ntau_macro(ntimstep))
+        ntau_macro = ntau
         nplagr = 4
         nder = 0
         npl_half = 2
