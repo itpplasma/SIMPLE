@@ -1,0 +1,14 @@
+&config
+notrace_passing = 1      ! skip tracing passing prts if notrace_passing=1
+ntestpart = 32           ! number of test particles
+num_surf = 0             ! number of start surfaces, start points everywhere if 0
+sbeg = 0.6               ! marker 4 is J_parallel-regular here and stops early
+npoiper2 = 128           ! integration steps per field period
+netcdffile = 'wout.nc'   ! name of VMEC file in NETCDF format
+isw_field_type = 2       ! -1: Testing, 0: Canonical, 1: VMEC, 2: Boozer
+trace_time = 1.5d-2      ! tracing time
+tcut = -1.0              ! no fractal cut
+class_plot = .False.     ! without class_plot, regular orbits stop after classification
+fast_class = .True.      ! stop tracing orbits once classified regular
+deterministic = .True.
+/

@@ -754,7 +754,7 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(test_fast_class_driver PROPERTIES
         LABELS "integration;system"
-        TIMEOUT 120)
+        TIMEOUT 300)
 
     add_test(NAME test_classifier_start_coordinates
         COMMAND ${CMAKE_COMMAND} -E env

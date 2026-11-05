@@ -181,7 +181,8 @@ compare_cases() {
                 failed_cases=$((failed_cases + 1))
             fi
         # Check if this is a classifier case with multiple files
-        elif [ "$CASE" = "classifier_fast" ] || [ "$CASE" = "classifier_combined" ]; then
+        elif [ "$CASE" = "classifier_fast" ] || [ "$CASE" = "classifier_combined" ] || \
+             [ "$CASE" = "classifier_fast_early_stop" ]; then
             # List of files to compare for the classifier cases (excluding
             # simple.in and wout.nc). fort.* are excluded because of
             # non-deterministic ordering in parallel execution.
