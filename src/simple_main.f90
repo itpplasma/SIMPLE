@@ -2894,7 +2894,7 @@ contains
 
     logical function crosses_reference_boundary(z_start, z_end)
         use finite_check, only: is_finite
-        use field_can_albert, only: integ_to_ref_radius_albert
+        use field_can_albert, only: integ_to_ref_radius_albert, albert_psi_inside
 
         real(dp), intent(in) :: z_start(5), z_end(5)
         real(dp) :: s_start, s_end
@@ -2902,6 +2902,8 @@ contains
         crosses_reference_boundary = .false.
         if (.not. all(is_finite(z_start)) .or. &
             .not. all(is_finite(z_end))) return
+        ! Most steps end well inside the plasma; no radius map is needed there.
+        if (albert_psi_inside(z_end(1))) return
         ! Only the radius decides the crossing; skip the angular splines.
         s_start = integ_to_ref_radius_albert(z_start(1:3))
         s_end = integ_to_ref_radius_albert(z_end(1:3))
