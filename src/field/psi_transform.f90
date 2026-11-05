@@ -50,7 +50,7 @@ module psi_transform
 !
 ! Equidistant grid in psi:
 !
-      n_psi = n_r   !This needs not to be the same*****
+        n_psi = size(r_of_xc, 1)
 !
       i_phi = n_phi/2
       i_th = n_th/2

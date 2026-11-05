@@ -401,7 +401,11 @@ iterations). `diag_meiss.x` plots the stored components.
 A_\vartheta(r)/A_\text{norm}$ with $A_\text{norm} = \pm\max|A_\vartheta|$
 (`src/field/psi_transform.f90`) and regrids all components to $\psi$. Then
 $A_\vartheta = A_\text{norm}\psi$ and $\partial_\psi A_\vartheta = A_\text{norm}$
-are exact. `diag_albert.x` plots the four stored components at three radii
+are exact. $A_\vartheta$ is not a flux function, so the $\psi$ grid runs up to
+the largest edge value over all angles, with at most the spacing of the range
+that every angle covers (up to $4 n_r$ points); it contains the whole plasma,
+and at angles whose edge $\psi$ is smaller the components beyond the edge are
+extrapolated. `diag_albert.x` plots the four stored components at three radii
 with fortplot (disabled without fortplot).
 
 ## 6. SPECTRE

@@ -191,6 +191,16 @@ main() {
            2>/dev/null; then
         baseline_set=symplectic_jump
     fi
+    # A reference whose Albert psi grid stops at the smallest edge value of
+    # A_theta, inside the plasma, is compared through the records of the grid
+    # that contains the whole plasma, only for a candidate that has it.
+    local albert_marker=src/field/field_can_albert.f90
+    if [ -z "$baseline_set" ] && \
+       grep -q psi_edge_any "$PROJECT_ROOT_CUR/$albert_marker" && \
+       ! grep -q psi_edge_any "$PROJECT_ROOT_REF/$albert_marker" \
+           2>/dev/null; then
+        baseline_set=albert_plasma_grid
+    fi
     if [ -n "$baseline_set" ]; then
         comparison_ref="$RUN_DIR_CUR.reference"
         local case_name baseline
