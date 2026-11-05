@@ -12,6 +12,7 @@ module classification
         ORBIT_EXIT_COMPLETED, ORBIT_EXIT_LCFS, ORBIT_EXIT_SKIPPED, &
         ORBIT_EXIT_NUMERICAL_DOMAIN, ORBIT_EXIT_NUMERICAL_MAXITER, &
         ORBIT_EXIT_NUMERICAL_LINEAR, ORBIT_EXIT_NUMERICAL_EVENT
+    use params, only: ntau_macro
     use util, only: twopi, sqrt2
     use velo_mod,   only : isw_field_type
     use orbit_symplectic, only : advance_symplectic_with_retry, &
@@ -275,10 +276,10 @@ contains
                     !$omp atomic
                     confpart_trap(it)=confpart_trap(it)+1.d0
                 endif
-                kt = kt+ntau
+                kt = kt + ntau_macro(it)
                 cycle
             endif
-            do ktau=1,ntau
+            do ktau = 1, ntau_macro(it)
                 z_step_start = z
                 if (integmode <= 0) then
                     call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr)
