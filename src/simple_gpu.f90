@@ -44,7 +44,7 @@ module simple_gpu
     use boozer_rk_tables, only: rk_tables_ready, splint_boozer_rk_table_device
     use params, only: gpu_num_devices, gpu_pilot_fraction, gpu_work_order
     use simple_mpi, only: mpi_node_rank
-!$  use omp_lib, only: omp_get_thread_num, omp_in_parallel
+!$  use omp_lib, only: omp_get_thread_num, omp_get_num_threads, omp_in_parallel
 #ifdef _OPENACC
     use openacc, only: acc_get_num_devices, acc_set_device_num, acc_device_nvidia
 #endif
@@ -1637,7 +1637,7 @@ contains
         type(field_can_t), allocatable :: f_d(:)
         integer, allocatable :: loss_step_d(:), nfev_d(:)
         real(dp), allocatable :: loss_time_d(:), zend_d(:, :)
-        integer :: ngpu, dev, n
+        integer :: ngpu, dev, n, first_dev, team_size
 
         ngpu = gpu_device_count(npart)
         if (ngpu == 1) then
@@ -1648,23 +1648,30 @@ contains
         end if
 
         !$omp parallel num_threads(ngpu) default(shared) &
-        !$omp&   private(dev, n, si_d, f_d, loss_step_d, nfev_d, loss_time_d, zend_d)
-        dev = 0
-!$      dev = omp_get_thread_num()
-        call gpu_use_device(dev, ngpu)
-        n = (npart - dev - 1)/ngpu + 1
-        allocate (si_d(n), f_d(n), loss_step_d(n), nfev_d(n), loss_time_d(n), &
-                  zend_d(4, n))
-        si_d = si(dev + 1:npart:ngpu)
-        f_d = f(dev + 1:npart:ngpu)
-        call trace_orbits_gpu_method_device(si_d, f_d, n, ntimstep, ntau_macro, &
+        !$omp&   private(dev, n, si_d, f_d, loss_step_d, nfev_d, loss_time_d, zend_d, &
+        !$omp&           first_dev, team_size)
+        first_dev = 0
+        team_size = 1
+!$      first_dev = omp_get_thread_num()
+!$      team_size = omp_get_num_threads()
+        ! OpenMP may grant fewer threads than devices, so threads share them.
+        do dev = first_dev, ngpu - 1, team_size
+            call gpu_use_device(dev, ngpu)
+            n = (npart - dev - 1)/ngpu + 1
+            allocate (si_d(n), f_d(n), loss_step_d(n), nfev_d(n), loss_time_d(n), &
+                      zend_d(4, n))
+            si_d = si(dev + 1:npart:ngpu)
+            f_d = f(dev + 1:npart:ngpu)
+            call trace_orbits_gpu_method_device(si_d, f_d, n, ntimstep, ntau_macro, &
                                        method, loss_step_d, loss_time_d, zend_d, nfev_d)
-        si(dev + 1:npart:ngpu) = si_d
-        f(dev + 1:npart:ngpu) = f_d
-        loss_step(dev + 1:npart:ngpu) = loss_step_d
-        nfev(dev + 1:npart:ngpu) = nfev_d
-        loss_time(dev + 1:npart:ngpu) = loss_time_d
-        zend(:, dev + 1:npart:ngpu) = zend_d
+            si(dev + 1:npart:ngpu) = si_d
+            f(dev + 1:npart:ngpu) = f_d
+            loss_step(dev + 1:npart:ngpu) = loss_step_d
+            nfev(dev + 1:npart:ngpu) = nfev_d
+            loss_time(dev + 1:npart:ngpu) = loss_time_d
+            zend(:, dev + 1:npart:ngpu) = zend_d
+            deallocate (si_d, f_d, loss_step_d, nfev_d, loss_time_d, zend_d)
+        end do
         !$omp end parallel
     end subroutine trace_orbits_gpu_method
 
