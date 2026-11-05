@@ -139,9 +139,12 @@ contains
             num_surf = 2
         end if
 
-        ! Clamp lower bound to s_min to avoid axis singularity
+        ! Clamp lower bound to s_min to avoid axis singularity; a range that
+        ! lies below the clamp cannot be honoured.
+        if (s_outer < s_min) error stop &
+            'startmode 5 needs an upper s bound of at least 0.01'
         s_lo = max(s_inner, s_min)
-        s_hi = max(s_outer, s_min)
+        s_hi = s_outer
 
         do ipart = 1, size(zstart, 2)
             call random_number(tmp_rand)

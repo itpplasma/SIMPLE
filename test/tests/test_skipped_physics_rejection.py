@@ -4,7 +4,8 @@
 Each configuration requests physics that the selected path does not apply:
 collisions with SPECTRE fields, a wall with orbit classification, a radial
 electric potential with RK recovery, and classification with full orbits.
-The oracle is the documented contract: simple.x must stop with the matching
+A volume start whose upper bound lies below the s >= 0.01 clamp would place
+every marker outside the requested range. The oracle is the documented contract: simple.x must stop with the matching
 message before tracing.
 """
 
@@ -45,6 +46,10 @@ CASES = (
      "netcdffile = 'wout.nc'\nisw_field_type = 2\norbit_model = 7\n"
      "orbit_coord = 1\ntcut = 5d-7",
      "does not support orbit classification"),
+    ("volume_start_below_clamp",
+     "netcdffile = 'wout.nc'\nisw_field_type = 2\nstartmode = 5\n"
+     "num_surf = 1\nsbeg = 0.005d0\ngenerate_start_only = .True.",
+     "startmode 5 needs an upper s bound of at least 0.01"),
 )
 
 
