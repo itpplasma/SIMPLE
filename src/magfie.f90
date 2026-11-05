@@ -482,6 +482,8 @@ end function cross_product
                       Bcovar_r,Bcovar_vartheta,Bcovar_varphi
   real(dp) :: cjac,bcov_s_vmec,bcov_t_vmec,bcov_p_vmec
   real(dp) :: dhs_dt,dhs_dp,dht_ds,dht_dp,dhp_ds,dhp_dt
+  real(dp) :: b_side(0:2), ht_side(0:2), hp_side(0:2)
+  integer :: k
   real(dp), dimension(3), intent(in) :: x
   real(dp), dimension(3), intent(out) :: bder,hcovar,hctrvr,hcurl
   !
@@ -489,6 +491,7 @@ end function cross_product
   !
   theta=x(2)
   varphi=x(3)
+  if (x(1) >= hs) then
   s=x(1)+hs
   !
   call vmec_field(s,theta,varphi,A_theta,A_phi,dA_theta_ds,dA_phi_ds,aiota,     &
@@ -516,6 +519,22 @@ end function cross_product
   bder(1)=(bder(1)-bmod)/(2.d0*hs)
   dht_ds=(dht_ds-bcov_t_vmec/bmod)/(2.d0*hs)
   dhp_ds=(dhp_ds-bcov_p_vmec/bmod)/(2.d0*hs)
+  else
+            ! Within hs of the axis the central stencil would sample s < 0; use the
+            ! one-sided second-order stencil (-3 f(s) + 4 f(s+hs) - f(s+2 hs))/(2 hs).
+            do k = 0, 2
+                s = x(1) + k*hs
+      call vmec_field(s, theta, varphi, A_theta, A_phi, dA_theta_ds, dA_phi_ds, aiota, &
+                       sqg, alam, dl_ds, dl_dt, dl_dp, Bctrvr_vartheta, Bctrvr_varphi, &
+                                Bcovar_r, Bcovar_vartheta, Bcovar_varphi)
+         b_side(k) = sqrt(Bctrvr_vartheta*Bcovar_vartheta + Bctrvr_varphi*Bcovar_varphi)
+                ht_side(k) = (1.d0 + dl_dt)*Bcovar_vartheta/b_side(k)
+                hp_side(k) = (Bcovar_varphi + dl_dp*Bcovar_vartheta)/b_side(k)
+            end do
+            bder(1) = (-3.d0*b_side(0) + 4.d0*b_side(1) - b_side(2))/(2.d0*hs)
+            dht_ds = (-3.d0*ht_side(0) + 4.d0*ht_side(1) - ht_side(2))/(2.d0*hs)
+            dhp_ds = (-3.d0*hp_side(0) + 4.d0*hp_side(1) - hp_side(2))/(2.d0*hs)
+  end if
   !
   ! End derivatives over s
   !

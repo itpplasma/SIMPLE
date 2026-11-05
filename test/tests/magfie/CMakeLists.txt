@@ -16,6 +16,9 @@ target_link_libraries(test_coils_field_compare.x simple)
 add_executable(test_magfie_refcoords_vmec.x test_magfie_refcoords_vmec.f90)
 target_link_libraries(test_magfie_refcoords_vmec.x simple)
 
+add_executable(test_magfie_vmec_axis_stencil.x test_magfie_vmec_axis_stencil.f90)
+target_link_libraries(test_magfie_vmec_axis_stencil.x simple)
+
 add_executable(test_refcoords_vmec_start.x test_refcoords_vmec_start.f90)
 target_link_libraries(test_refcoords_vmec_start.x simple)
 
@@ -51,6 +54,12 @@ add_dependencies(test_orbit_chartmap_comparison.x chartmap_test_data)
 add_executable(test_chartmap_wall_losses.x test_chartmap_wall_losses.f90)
 target_link_libraries(test_chartmap_wall_losses.x simple)
 add_dependencies(test_chartmap_wall_losses.x chartmap_test_data)
+
+add_test(NAME test_magfie_vmec_axis_stencil
+    COMMAND $<TARGET_FILE:test_magfie_vmec_axis_stencil.x>
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
+)
+set_tests_properties(test_magfie_vmec_axis_stencil PROPERTIES LABELS "unit")
 
 add_test(NAME test_magfie_refcoords_vmec
     COMMAND $<TARGET_FILE:test_magfie_refcoords_vmec.x>
