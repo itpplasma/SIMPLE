@@ -1,0 +1,373 @@
+date	fp_index	sha	case	total_s	preprocessing_s	trace_s	info_trace_s	markers	mparticle_steps_per_s	markers_per_s	repeats	method	subject
+2022-06-29	562	8e19626104	boozer	3.235	1.099	2.136	None	32	0.8989	14.98	3	difference	Removed bmod_ref
+2024-05-25	498	579874be4a	boozer	3.2	1.178	2.022	None	32	0.9496	15.83	3	difference	Shorten module name
+2025-08-12	398	d798fc0113	boozer	9.457	7.843	1.615	None	32	1.189	19.82	3	difference	Refactor Boozer coordinate converter (#94)
+2025-08-12	396	d03d4ff891	boozer	9.551	8.007	1.544	None	32	1.2434	20.72	3	difference	format: Clean up comment formatting in orbit_symplectic.f90 (#99 Part
+2025-08-12	394	f35dd01fd2	boozer	9.972	7.895	2.077	None	32	0.9242	15.4	3	difference	format: Clean up comment formatting in field_can.f90 (#101 Part 1) (#1
+2025-08-12	392	df168bcb8f	boozer	9.489	8.005	1.483	None	32	1.2942	21.57	3	difference	format: Clean up comment formatting in sub_alpha_lifetime_can.f90 (#10
+2025-08-12	390	a9911a0c71	boozer	9.548	7.729	1.819	None	32	1.0556	17.6	3	difference	format: Clean up comment formatting in find_bminmax.f90 (#108 Part 1)
+2025-08-12	388	98e1a418b4	boozer	9.59	7.894	1.696	None	32	1.1319	18.87	3	difference	format: Clean up comment formatting in orbit_symplectic_base.f90 (#110
+2025-08-12	386	79b173df34	boozer	9.86	7.403	2.457	None	32	0.7813	13.02	3	difference	Modernize double precision declarations in orbit_symplectic.f90 (#124)
+2025-08-12	384	bc1b29e2fd	boozer	10.381	7.809	2.572	None	32	0.7465	12.44	3	difference	Modernize double precision declarations in get_canonical_coordinates.F
+2025-08-12	382	5b8f286634	boozer	9.5	7.883	1.617	None	32	1.1874	19.79	3	difference	Modernize double precision declarations in sub_alpha_lifetime_can.f90
+2025-08-12	380	98f9dc4b2a	boozer	9.324	7.917	1.407	None	32	1.3643	22.74	3	difference	Modernize type declarations in samplers.f90 (#132)
+2025-08-12	378	575f204401	boozer	10.037	7.871	2.166	None	32	0.8862	14.77	3	difference	Modernize type declarations in simple_main.f90 (#131)
+2025-08-12	374	0fcf94b182	boozer	9.681	8.37	1.311	None	32	1.4647	24.41	3	difference	fix: Use explicit imports to avoid dp conflicts after type modernizati
+2025-08-12	372	bc6de7534a	boozer	9.727	7.837	1.89	None	32	1.0159	16.93	3	difference	Modernize type declarations in classification.f90 (issue #109) (#135)
+2025-08-12	368	efefc51af0	boozer	9.96	7.369	2.591	None	32	0.741	12.35	3	difference	feat: Add timing diagnostics for execution phases (#142) (#143)
+2025-08-12	366	4c36d9b3c4	boozer	9.502	7.285	2.217	None	32	0.866	14.43	3	difference	timing output
+2025-08-13	363	f5a0c0c65e	boozer	9.47	7.7	1.77	None	32	1.0845	18.08	3	difference	feat: Add comprehensive unit tests for core modules (#162)
+2025-08-22	357	0016bff6a4	boozer	6.816	5.204	1.613	None	32	1.1904	19.84	3	difference	test: Add Python batch API test infrastructure for Issue #90 (#172)
+2025-09-05	356	493afe3afc	boozer	6.869	5.267	1.602	None	32	1.1985	19.98	3	difference	feat: implement comprehensive batch spline optimization system (#174)
+2026-08-13	175	99bc0e4cd0	boozer	7.657	4.219	3.474	3.514	32	0.5526	9.21	3	timer	Configure GPU execution from simple.in (#519)
+2026-10-03	162	212b6e6b38	boozer	7.915	4.48	3.515	3.373	32	0.5461	9.1	3	timer	Share dependency versions and update merged upstream fixes (#523)
+2026-10-13	160	dcdeeb6440	boozer	7.829	4.434	3.435	3.41	32	0.5589	9.32	3	timer	Fortran library API, config-file init for pysimple, and API/doc/test c
+2026-10-14	157	cbb4a7a0fd	boozer	8.102	4.514	3.575	3.431	32	0.5369	8.95	3	timer	Document trapping parameter definition
+2026-10-15	154	2297745141	boozer	8.072	4.606	3.502	3.389	32	0.5482	9.14	3	timer	Fix canonical GC field extrapolation after Newton solves (#535)
+2026-10-15	153	81b2eca646	boozer	8.119	4.499	3.717	3.467	32	0.5166	8.61	3	timer	Speed SPECTRE full orbit with per-volume splines and logical position
+2026-10-15	152	e132b55bd1	boozer	8.027	4.622	3.328	3.463	32	0.5769	9.62	3	timer	fix: resolve particle-wall losses in the multi-volume SPECTRE hybrid (
+2026-10-16	148	db681d8a38	boozer	8.043	4.537	3.428	3.428	32	0.56	9.33	3	timer	fix: enter SPECTRE full orbit at 1.5 radial gyroradii by default
+2026-10-16	146	cbf2b45526	boozer	8.1	4.576	3.592	3.549	32	0.5345	8.91	3	timer	perf: test the SPECTRE full-orbit exit distance once per radian
+2026-10-16	144	2a0c51782d	boozer	6.828	4.481	2.284	2.354	32	0.8404	14.01	3	timer	perf: drop the IEEE intrinsic modules from SIMPLE sources (#538)
+2026-10-16	143	ffd7f4a197	boozer	7.076	4.606	2.473	2.397	32	0.7763	12.94	3	timer	fix: drop the RK momentum gate on accepted symplectic steps (#540)
+2026-10-18	141	9eae6072a0	boozer	7.128	4.661	2.494	2.46	32	0.7697	12.83	3	timer	Add per-triangle STL wall heat loads (#545)
+2026-10-18	134	5d29f57dc8	boozer	7.067	4.535	2.613	2.495	32	0.7347	12.25	3	timer	Test collisional alpha tracing with an STL wall (#546)
+2026-10-18	131	76f989ce39	boozer	6.797	4.305	2.462	2.451	32	0.7797	13.0	3	timer	docs: rewrite user, developer and model documentation (#565)
+2026-10-19	128	4bfb7f1a9c	boozer	6.831	4.528	2.292	2.329	32	0.8376	13.96	3	timer	Add IMAS IDS input/output and a guiding-centre workflow actor (#562)
+2026-10-19	126	d42194797a	boozer	6.884	4.531	2.318	2.437	32	0.8282	13.81	3	timer	Collisions: evaluate profiles at toroidal flux s for every integ_coord
+2026-10-19	125	7dc178536d	boozer	6.937	4.532	2.339	2.346	32	0.8209	13.68	3	timer	Replace per-step dgesv in Newton solves with small in-house LU (#579)
+2026-10-19	124	aa1d30bdf2	boozer	6.881	4.495	2.343	2.467	32	0.8194	13.66	3	timer	Let fast_class enable classification on its own (#512)
+2026-10-19	122	6da8670473	boozer	6.863	4.486	2.348	2.449	32	0.8177	13.63	3	timer	Count field evaluations by derivative depth, and on the magfie path (#
+2026-10-19	118	19198d90eb	boozer	6.951	4.472	2.522	2.438	32	0.7611	12.69	3	timer	Fix main build: count regular-axis Boozer evaluations via count_field_
+2026-10-19	117	61d7aaddd6	boozer	6.79	4.442	2.427	2.421	32	0.791	13.18	3	timer	Add explicit-energy monoenergetic Lorentz collisions (#522)
+2026-10-19	115	3e91819022	boozer	7.138	4.582	2.579	2.435	32	0.7443	12.41	3	timer	field: use VMEC++ geometry jets through ISO C (#521)
+2026-10-19	114	7b4207fb6d	boozer	6.81	4.411	2.399	2.432	32	0.8003	13.34	3	timer	Report the Gauss endpoint radius and field cache by Hermite extrapolat
+2026-10-19	112	212edee8dc	boozer	6.687	4.346	2.407	2.447	32	0.7975	13.29	3	timer	Expose the continuous margins behind the orbit classes (#513)
+2026-10-19	107	fd33f76a8f	boozer	6.857	4.42	2.487	2.444	32	0.7721	12.87	3	timer	fix: keep classifier surface extrema per particle (#589)
+2026-10-20	98	20c897d098	boozer	6.976	4.41	2.436	2.454	32	0.7881	13.14	3	timer	Fix midpoint momentum after axis chart switches (#566)
+2026-10-23	88	30316e5422	boozer	8.147	4.449	3.592	3.634	32	0.5345	8.91	3	timer	Use configured test-ion mass and charge in Coulomb collisions (#608)
+2026-10-23	86	8263951ff6	boozer	8.043	4.423	3.66	3.575	32	0.5245	8.74	3	timer	Take the collision profile radius from a tabulated label at the physic
+2026-10-23	85	b09d279f9d	boozer	8.217	4.538	3.564	3.677	32	0.5387	8.98	3	timer	Regular low-speed collision substep in stost (#615)
+2026-10-23	84	a28d02ed6a	boozer	8.615	4.844	3.873	3.767	32	0.4956	8.26	3	timer	Keep the default near-axis regularization radius on rho-native charts
+2026-10-23	80	caabbb50d5	boozer	8.661	4.57	3.877	4.07	32	0.4952	8.25	3	timer	Bump libneo pin to the Boozer net-current fix (libneo#452) (#614)
+2026-10-23	78	fb8152483c	boozer	8.151	4.468	3.965	3.99	32	0.4842	8.07	3	timer	Format adaptive RK changes for changed-line lint (#621)
+2026-10-27	72	0a176137d5	boozer	7.961	4.577	3.443	3.438	32	0.5576	9.3	3	timer	Preserve magnetic moment across symplectic RK recovery (#629)
+2026-10-29	66	389775536a	boozer	7.362	4.377	2.889	3.421	32	0.6645	11.08	3	timer	Differentiate physical field direction before the coordinate pullback
+2026-10-29	64	244f237b0d	boozer	7.695	4.443	3.038	3.383	32	0.6319	10.53	3	timer	Read relative marker weights from a file in simple.x (#632)
+2026-10-30	62	f8eddbc488	boozer	7.533	4.354	3.152	3.096	32	0.6091	10.15	3	timer	Sample chart coil fields over the chart's own field period (#641)
+2026-10-30	60	452542c412	boozer	7.216	4.339	2.75	3.3	32	0.698	11.63	3	timer	Expose held symplectic SPECTRE intervals as unresolved orbit history (
+2026-10-31	59	00a2b30f48	boozer	7.516	4.364	3.058	3.115	32	0.6279	10.47	3	timer	Boozer axis continuation: evaluate negative labels at (|s|, theta+pi)
+2026-11-02	58	b6dc7f9be9	boozer	12.639	9.974	3.193	3.058	32	0.6013	10.02	3	timer	Bump fortnum to d40be6d for the hybrd1 multiroot_hybrids (#643)
+2026-11-03	56	8da6de6d59	boozer	13.094	10.091	3.208	3.111	32	0.5984	9.97	3	timer	Keep the quasi Gauss stage fields local to each solve (#645)
+2026-11-03	54	0155903b1f	boozer	12.519	10.165	2.398	2.522	32	0.8006	13.34	3	timer	Start Newton from extrapolated states and stop on the contraction rate
+2026-11-03	53	9088aaeef1	boozer	12.516	9.981	2.575	2.586	32	0.7455	12.43	3	timer	Optimise the Fast build and the Newton LU solve (#649)
+2026-11-03	52	5c5b7bf3e5	boozer	12.412	10.213	2.235	2.487	32	0.8588	14.32	3	timer	Stop a composed symplectic step at the first failed stage (#650)
+2026-11-03	50	e240abebc8	boozer	13.099	11.003	2.322	2.44	32	0.8268	13.78	3	timer	Use the extrapolated guess and the rate stop in the OpenACC Newton ste
+2026-11-03	48	af9c334654	boozer	11.401	9.534	1.937	1.885	32	0.9911	16.52	3	timer	Store the canonical-flux metric and field components as one spline (#6
+2026-11-03	47	a8eb199321	boozer	11.185	9.469	1.771	1.777	32	1.0842	18.07	3	timer	Evaluate the Boozer field of the GPU Euler Newton step as one record (
+2026-11-03	46	8e9a4ce93a	boozer	11.638	9.918	1.775	1.766	32	1.0817	18.03	3	timer	Generate the implicit-scheme residuals and Jacobians from one source (
+2026-11-03	44	d5111a870e	boozer	10.911	9.502	1.556	1.776	32	1.2341	20.57	3	timer	Keep the OpenACC per-particle state in private copies (#658)
+2026-11-03	42	bdc5c4b6e5	boozer	11.36	9.594	1.814	1.825	32	1.0583	17.64	3	timer	Halve the near-axis midpoint step on CPU and GPU alike (#662)
+2026-11-03	40	5a0c385c7a	boozer	11.205	9.288	1.798	1.78	32	1.0677	17.8	3	timer	Keep native RK54 source compatible with CuMetal (#666)
+2026-11-04	37	7a5f22e55e	boozer	11.235	9.489	1.797	1.77	32	1.0681	17.8	3	timer	Pass OpenMP driver flags to mixed CGAL C++ links (#667)
+2026-11-04	36	d2294eb41a	boozer	11.182	9.468	1.722	1.731	32	1.1148	18.58	3	timer	Evaluate collision coefficients at the local flux instead of a 101-poi
+2026-11-04	35	9df5740a43	boozer	11.481	9.656	1.792	1.788	32	1.0713	17.86	3	timer	Pin the golden-record libneo to the production revision (#670)
+2026-11-04	33	db1014ac7c	boozer	10.707	9.197	1.76	1.779	32	1.0907	18.18	3	timer	fix: transport Gauss stage gradients before endpoint extrapolation (#6
+2026-11-05	31	359ec8c432	boozer	10.612	9.122	1.596	1.816	32	1.2027	20.05	3	timer	Use species-resolved, speed-dependent Coulomb logarithms in collisions
+2026-11-05	29	17ef6bca8c	boozer	11.273	9.515	1.803	1.739	32	1.0649	17.75	3	timer	Stop collisional markers below thermal_stop_factor times T_i (#676)
+2026-11-05	28	3d1bddfc18	boozer	11.072	9.366	1.764	1.728	32	1.0884	18.14	3	timer	Share the selected canonical-flux field across OpenMP threads (#677)
+2026-11-05	27	b420006baf	boozer	11.864	9.788	1.904	1.78	32	1.0085	16.81	3	timer	Use the FortNum Cash–Karp time-progress guard (#678)
+2022-06-29	562	8e19626104	canonical	6.229	2.45	3.779	None	32	0.508	8.47	3	difference	Removed bmod_ref
+2024-05-25	498	579874be4a	canonical	6.03	2.456	3.575	None	32	0.5211	8.95	3	difference	Shorten module name
+2025-08-12	398	d798fc0113	canonical	12.628	9.302	3.326	None	32	0.5773	9.62	3	difference	Refactor Boozer coordinate converter (#94)
+2025-08-12	396	d03d4ff891	canonical	12.673	9.242	3.431	None	32	0.5596	9.33	3	difference	format: Clean up comment formatting in orbit_symplectic.f90 (#99 Part
+2025-08-12	394	f35dd01fd2	canonical	12.989	9.689	3.3	None	32	0.5818	9.7	3	difference	format: Clean up comment formatting in field_can.f90 (#101 Part 1) (#1
+2025-08-12	392	df168bcb8f	canonical	13.002	9.453	3.55	None	32	0.5408	9.01	3	difference	format: Clean up comment formatting in sub_alpha_lifetime_can.f90 (#10
+2025-08-12	390	a9911a0c71	canonical	13.241	9.49	3.75	None	32	0.5119	8.53	3	difference	format: Clean up comment formatting in find_bminmax.f90 (#108 Part 1)
+2025-08-12	388	98e1a418b4	canonical	13.061	9.691	3.37	None	32	0.5696	9.49	3	difference	format: Clean up comment formatting in orbit_symplectic_base.f90 (#110
+2025-08-12	386	79b173df34	canonical	12.918	9.654	3.263	None	32	0.5883	9.81	3	difference	Modernize double precision declarations in orbit_symplectic.f90 (#124)
+2025-08-12	384	bc1b29e2fd	canonical	12.98	9.339	3.642	None	32	0.5272	8.79	3	difference	Modernize double precision declarations in get_canonical_coordinates.F
+2025-08-12	382	5b8f286634	canonical	13.155	9.537	3.618	None	32	0.5307	8.85	3	difference	Modernize double precision declarations in sub_alpha_lifetime_can.f90
+2025-08-12	380	98f9dc4b2a	canonical	13.556	9.803	3.753	None	32	0.5115	8.53	3	difference	Modernize type declarations in samplers.f90 (#132)
+2025-08-12	378	575f204401	canonical	13.147	9.164	3.983	None	32	0.482	8.03	3	difference	Modernize type declarations in simple_main.f90 (#131)
+2025-08-12	374	0fcf94b182	canonical	13.16	9.385	3.775	None	32	0.5086	8.48	3	difference	fix: Use explicit imports to avoid dp conflicts after type modernizati
+2025-08-12	372	bc6de7534a	canonical	13.831	9.386	4.445	None	32	0.4319	7.2	3	difference	Modernize type declarations in classification.f90 (issue #109) (#135)
+2025-08-12	368	efefc51af0	canonical	12.768	9.72	3.048	None	32	0.6299	10.5	3	difference	feat: Add timing diagnostics for execution phases (#142) (#143)
+2025-08-12	366	4c36d9b3c4	canonical	12.764	9.386	3.377	None	32	0.5684	9.47	3	difference	timing output
+2025-08-13	363	f5a0c0c65e	canonical	12.764	9.358	3.406	None	32	0.5637	9.4	3	difference	feat: Add comprehensive unit tests for core modules (#162)
+2025-08-22	357	0016bff6a4	canonical	9.859	6.824	3.035	None	32	0.6326	10.54	3	difference	test: Add Python batch API test infrastructure for Issue #90 (#172)
+2025-09-05	356	493afe3afc	canonical	10.395	6.981	3.414	None	32	0.5623	9.37	3	difference	feat: implement comprehensive batch spline optimization system (#174)
+2026-08-13	175	99bc0e4cd0	canonical	13.797	6.768	7.002	7.364	32	0.2742	4.57	3	timer	Configure GPU execution from simple.in (#519)
+2026-10-03	162	212b6e6b38	canonical	13.181	6.513	6.7	7.093	32	0.2866	4.78	3	timer	Share dependency versions and update merged upstream fixes (#523)
+2026-10-13	160	dcdeeb6440	canonical	13.83	6.83	7.027	7.288	32	0.2732	4.55	3	timer	Fortran library API, config-file init for pysimple, and API/doc/test c
+2026-10-14	157	cbb4a7a0fd	canonical	13.776	6.755	6.99	7.253	32	0.2746	4.58	3	timer	Document trapping parameter definition
+2026-10-15	154	2297745141	canonical	14.009	6.766	7.333	7.318	32	0.2618	4.36	3	timer	Fix canonical GC field extrapolation after Newton solves (#535)
+2026-10-15	153	81b2eca646	canonical	13.824	6.78	6.983	6.984	32	0.2749	4.58	3	timer	Speed SPECTRE full orbit with per-volume splines and logical position
+2026-10-15	152	e132b55bd1	canonical	13.766	6.722	7.165	7.099	32	0.268	4.47	3	timer	fix: resolve particle-wall losses in the multi-volume SPECTRE hybrid (
+2026-10-16	148	db681d8a38	canonical	13.514	6.643	7.089	6.942	32	0.2708	4.51	3	timer	fix: enter SPECTRE full orbit at 1.5 radial gyroradii by default
+2026-10-16	146	cbf2b45526	canonical	13.647	6.705	7.048	6.97	32	0.2724	4.54	3	timer	perf: test the SPECTRE full-orbit exit distance once per radian
+2026-10-16	144	2a0c51782d	canonical	12.987	6.689	6.408	6.194	32	0.2996	4.99	3	timer	perf: drop the IEEE intrinsic modules from SIMPLE sources (#538)
+2026-10-16	143	ffd7f4a197	canonical	12.121	6.62	5.596	5.478	32	0.3431	5.72	3	timer	fix: drop the RK momentum gate on accepted symplectic steps (#540)
+2026-10-18	141	9eae6072a0	canonical	12.027	6.684	5.436	5.494	32	0.3532	5.89	3	timer	Add per-triangle STL wall heat loads (#545)
+2026-10-18	134	5d29f57dc8	canonical	11.966	6.515	5.462	5.433	32	0.3515	5.86	3	timer	Test collisional alpha tracing with an STL wall (#546)
+2026-10-18	131	76f989ce39	canonical	11.652	6.551	5.162	5.376	32	0.3719	6.2	3	timer	docs: rewrite user, developer and model documentation (#565)
+2026-10-19	128	4bfb7f1a9c	canonical	11.957	6.555	5.417	5.492	32	0.3544	5.91	3	timer	Add IMAS IDS input/output and a guiding-centre workflow actor (#562)
+2026-10-19	126	d42194797a	canonical	12.06	6.794	5.255	5.393	32	0.3654	6.09	3	timer	Collisions: evaluate profiles at toroidal flux s for every integ_coord
+2026-10-19	125	7dc178536d	canonical	11.95	6.756	5.315	5.249	32	0.3612	6.02	3	timer	Replace per-step dgesv in Newton solves with small in-house LU (#579)
+2026-10-19	124	aa1d30bdf2	canonical	11.79	6.602	5.219	5.522	32	0.3678	6.13	3	timer	Let fast_class enable classification on its own (#512)
+2026-10-19	122	6da8670473	canonical	12.094	6.68	5.404	5.372	32	0.3552	5.92	3	timer	Count field evaluations by derivative depth, and on the magfie path (#
+2026-10-19	118	19198d90eb	canonical	12.111	6.725	5.462	5.134	32	0.3515	5.86	3	timer	Fix main build: count regular-axis Boozer evaluations via count_field_
+2026-10-19	117	61d7aaddd6	canonical	11.885	6.605	5.242	5.527	32	0.3663	6.1	3	timer	Add explicit-energy monoenergetic Lorentz collisions (#522)
+2026-10-19	115	3e91819022	canonical	12.217	6.757	5.553	5.543	32	0.3457	5.76	3	timer	field: use VMEC++ geometry jets through ISO C (#521)
+2026-10-19	114	7b4207fb6d	canonical	12.395	6.808	5.686	5.36	32	0.3376	5.63	3	timer	Report the Gauss endpoint radius and field cache by Hermite extrapolat
+2026-10-19	112	212edee8dc	canonical	12.241	6.758	5.578	5.508	32	0.3442	5.74	3	timer	Expose the continuous margins behind the orbit classes (#513)
+2026-10-19	107	fd33f76a8f	canonical	12.011	6.677	5.372	5.437	32	0.3574	5.96	3	timer	fix: keep classifier surface extrema per particle (#589)
+2026-10-20	98	20c897d098	canonical	11.895	6.495	5.479	5.371	32	0.3504	5.84	3	timer	Fix midpoint momentum after axis chart switches (#566)
+2026-10-23	88	30316e5422	canonical	15.038	6.732	8.453	8.435	32	0.2271	3.79	3	timer	Use configured test-ion mass and charge in Coulomb collisions (#608)
+2026-10-23	86	8263951ff6	canonical	15.051	6.721	8.807	8.548	32	0.218	3.63	3	timer	Take the collision profile radius from a tabulated label at the physic
+2026-10-23	85	b09d279f9d	canonical	14.811	6.606	8.305	7.973	32	0.2312	3.85	3	timer	Regular low-speed collision substep in stost (#615)
+2026-10-23	84	a28d02ed6a	canonical	14.721	6.617	8.114	8.73	32	0.2366	3.94	3	timer	Keep the default near-axis regularization radius on rho-native charts
+2026-10-23	80	caabbb50d5	canonical	14.98	6.675	8.495	8.27	32	0.226	3.77	3	timer	Bump libneo pin to the Boozer net-current fix (libneo#452) (#614)
+2026-10-23	78	fb8152483c	canonical	15.384	6.892	8.693	8.559	32	0.2209	3.68	3	timer	Format adaptive RK changes for changed-line lint (#621)
+2026-10-27	72	0a176137d5	canonical	12.088	5.696	6.532	6.555	32	0.2939	4.9	3	timer	Preserve magnetic moment across symplectic RK recovery (#629)
+2026-10-29	66	389775536a	canonical	12.638	5.717	6.779	6.741	32	0.2832	4.72	3	timer	Differentiate physical field direction before the coordinate pullback
+2026-10-29	64	244f237b0d	canonical	11.85	5.495	6.544	6.285	32	0.2934	4.89	3	timer	Read relative marker weights from a file in simple.x (#632)
+2026-10-30	62	f8eddbc488	canonical	11.208	5.594	5.644	5.813	32	0.3401	5.67	3	timer	Sample chart coil fields over the chart's own field period (#641)
+2026-10-30	60	452542c412	canonical	10.833	5.288	5.783	5.718	32	0.332	5.53	3	timer	Expose held symplectic SPECTRE intervals as unresolved orbit history (
+2026-10-31	59	00a2b30f48	canonical	11.661	5.617	6.08	5.862	32	0.3158	5.26	3	timer	Boozer axis continuation: evaluate negative labels at (|s|, theta+pi)
+2026-11-02	58	b6dc7f9be9	canonical	10.848	5.574	5.537	5.802	32	0.3468	5.78	3	timer	Bump fortnum to d40be6d for the hybrd1 multiroot_hybrids (#643)
+2026-11-03	56	8da6de6d59	canonical	11.344	5.796	5.597	5.678	32	0.343	5.72	3	timer	Keep the quasi Gauss stage fields local to each solve (#645)
+2026-11-03	54	0155903b1f	canonical	10.276	5.699	4.669	4.962	32	0.4112	6.85	3	timer	Start Newton from extrapolated states and stop on the contraction rate
+2026-11-03	53	9088aaeef1	canonical	10.606	5.58	5.07	4.75	32	0.3787	6.31	3	timer	Optimise the Fast build and the Newton LU solve (#649)
+2026-11-03	52	5c5b7bf3e5	canonical	10.34	5.661	4.602	4.595	32	0.4172	6.95	3	timer	Stop a composed symplectic step at the first failed stage (#650)
+2026-11-03	50	e240abebc8	canonical	10.345	5.61	4.769	4.947	32	0.4025	6.71	3	timer	Use the extrapolated guess and the rate stop in the OpenACC Newton ste
+2026-11-03	48	af9c334654	canonical	8.638	5.486	3.153	3.282	32	0.6088	10.15	3	timer	Store the canonical-flux metric and field components as one spline (#6
+2026-11-03	47	a8eb199321	canonical	8.895	5.682	3.226	3.098	32	0.5951	9.92	3	timer	Evaluate the Boozer field of the GPU Euler Newton step as one record (
+2026-11-03	46	8e9a4ce93a	canonical	8.975	5.712	3.311	3.303	32	0.5799	9.67	3	timer	Generate the implicit-scheme residuals and Jacobians from one source (
+2026-11-03	44	d5111a870e	canonical	8.766	5.726	3.16	3.354	32	0.6076	10.13	3	timer	Keep the OpenACC per-particle state in private copies (#658)
+2026-11-03	42	bdc5c4b6e5	canonical	8.727	5.637	3.207	3.31	32	0.5987	9.98	3	timer	Halve the near-axis midpoint step on CPU and GPU alike (#662)
+2026-11-03	40	5a0c385c7a	canonical	8.757	5.53	3.265	3.402	32	0.5881	9.8	3	timer	Keep native RK54 source compatible with CuMetal (#666)
+2026-11-04	37	7a5f22e55e	canonical	9.011	5.548	3.527	3.578	32	0.5443	9.07	3	timer	Pass OpenMP driver flags to mixed CGAL C++ links (#667)
+2026-11-04	36	d2294eb41a	canonical	9.073	5.678	3.4	3.204	32	0.5646	9.41	3	timer	Evaluate collision coefficients at the local flux instead of a 101-poi
+2026-11-04	35	9df5740a43	canonical	8.801	5.557	3.295	3.302	32	0.5826	9.71	3	timer	Pin the golden-record libneo to the production revision (#670)
+2026-11-04	33	db1014ac7c	canonical	8.834	5.544	3.227	3.396	32	0.5949	9.92	3	timer	fix: transport Gauss stage gradients before endpoint extrapolation (#6
+2026-11-05	31	359ec8c432	canonical	8.809	5.606	3.274	3.342	32	0.5863	9.77	3	timer	Use species-resolved, speed-dependent Coulomb logarithms in collisions
+2026-11-05	29	17ef6bca8c	canonical	9.021	5.691	3.389	3.458	32	0.5665	9.44	3	timer	Stop collisional markers below thermal_stop_factor times T_i (#676)
+2026-11-05	28	3d1bddfc18	canonical	9.128	5.689	3.498	3.325	32	0.5488	9.15	3	timer	Share the selected canonical-flux field across OpenMP threads (#677)
+2026-11-05	27	b420006baf	canonical	9.031	5.786	3.305	3.427	32	0.5808	9.68	3	timer	Use the FortNum Cash–Karp time-progress guard (#678)
+2022-06-29	562	8e19626104	collision	3.179	1.099	2.08	None	32	0.9123	15.39	3	difference	Removed bmod_ref
+2024-05-25	498	579874be4a	collision	3.233	1.206	2.027	None	32	0.9471	15.79	3	difference	Shorten module name
+2025-08-12	398	d798fc0113	collision	9.449	7.889	1.56	None	32	1.2306	20.51	3	difference	Refactor Boozer coordinate converter (#94)
+2025-08-12	396	d03d4ff891	collision	9.674	7.655	2.018	None	32	0.9513	15.86	3	difference	format: Clean up comment formatting in orbit_symplectic.f90 (#99 Part
+2025-08-12	394	f35dd01fd2	collision	9.636	7.498	2.138	None	32	0.8979	14.97	3	difference	format: Clean up comment formatting in field_can.f90 (#101 Part 1) (#1
+2025-08-12	392	df168bcb8f	collision	9.634	7.534	2.1	None	32	0.914	15.23	3	difference	format: Clean up comment formatting in sub_alpha_lifetime_can.f90 (#10
+2025-08-12	390	a9911a0c71	collision	9.757	7.458	2.3	None	32	0.8348	13.91	3	difference	format: Clean up comment formatting in find_bminmax.f90 (#108 Part 1)
+2025-08-12	388	98e1a418b4	collision	9.458	7.543	1.915	None	32	1.0026	16.71	3	difference	format: Clean up comment formatting in orbit_symplectic_base.f90 (#110
+2025-08-12	386	79b173df34	collision	9.845	7.856	1.989	None	32	0.9654	16.09	3	difference	Modernize double precision declarations in orbit_symplectic.f90 (#124)
+2025-08-12	384	bc1b29e2fd	collision	9.571	7.65	1.921	None	32	0.9994	16.66	3	difference	Modernize double precision declarations in get_canonical_coordinates.F
+2025-08-12	382	5b8f286634	collision	9.578	7.677	1.901	None	32	1.0099	16.83	3	difference	Modernize double precision declarations in sub_alpha_lifetime_can.f90
+2025-08-12	380	98f9dc4b2a	collision	9.266	8.096	1.17	None	32	1.6414	27.36	3	difference	Modernize type declarations in samplers.f90 (#132)
+2025-08-12	378	575f204401	collision	10.033	7.571	2.462	None	32	0.7799	13.0	3	difference	Modernize type declarations in simple_main.f90 (#131)
+2025-08-12	374	0fcf94b182	collision	9.706	7.796	1.91	None	32	1.0053	16.76	3	difference	fix: Use explicit imports to avoid dp conflicts after type modernizati
+2025-08-12	372	bc6de7534a	collision	9.466	7.863	1.603	None	32	1.1979	19.97	3	difference	Modernize type declarations in classification.f90 (issue #109) (#135)
+2025-08-12	368	efefc51af0	collision	9.596	8.009	1.587	None	32	1.2094	20.16	3	difference	feat: Add timing diagnostics for execution phases (#142) (#143)
+2025-08-12	366	4c36d9b3c4	collision	9.438	7.717	1.721	None	32	1.1156	18.6	3	difference	timing output
+2025-08-13	363	f5a0c0c65e	collision	9.565	7.891	1.674	None	32	1.1468	19.12	3	difference	feat: Add comprehensive unit tests for core modules (#162)
+2025-08-22	357	0016bff6a4	collision	6.738	5.048	1.691	None	32	1.1353	18.92	3	difference	test: Add Python batch API test infrastructure for Issue #90 (#172)
+2025-09-05	356	493afe3afc	collision	6.763	5.3	1.464	None	32	1.3117	21.86	3	difference	feat: implement comprehensive batch spline optimization system (#174)
+2026-08-13	175	99bc0e4cd0	collision	8.829	4.46	4.399	4.322	32	0.4364	7.27	3	timer	Configure GPU execution from simple.in (#519)
+2026-10-03	162	212b6e6b38	collision	8.463	4.356	4.164	4.154	32	0.4611	7.69	3	timer	Share dependency versions and update merged upstream fixes (#523)
+2026-10-13	160	dcdeeb6440	collision	8.531	4.47	4.058	4.139	32	0.4731	7.89	3	timer	Fortran library API, config-file init for pysimple, and API/doc/test c
+2026-10-14	157	cbb4a7a0fd	collision	8.508	4.479	4.095	4.121	32	0.4688	7.81	3	timer	Document trapping parameter definition
+2026-10-15	154	2297745141	collision	8.33	4.358	3.989	4.102	32	0.4813	8.02	3	timer	Fix canonical GC field extrapolation after Newton solves (#535)
+2026-10-15	153	81b2eca646	collision	8.673	4.526	4.176	3.976	32	0.4597	7.66	3	timer	Speed SPECTRE full orbit with per-volume splines and logical position
+2026-10-15	152	e132b55bd1	collision	8.538	4.528	4.04	4.068	32	0.4753	7.92	3	timer	fix: resolve particle-wall losses in the multi-volume SPECTRE hybrid (
+2026-10-16	148	db681d8a38	collision	8.149	4.32	3.991	4.156	32	0.481	8.02	3	timer	fix: enter SPECTRE full orbit at 1.5 radial gyroradii by default
+2026-10-16	146	cbf2b45526	collision	8.465	4.42	4.173	4.074	32	0.46	7.67	3	timer	perf: test the SPECTRE full-orbit exit distance once per radian
+2026-10-16	144	2a0c51782d	collision	7.406	4.515	2.941	2.828	32	0.6527	10.88	3	timer	perf: drop the IEEE intrinsic modules from SIMPLE sources (#538)
+2026-10-16	143	ffd7f4a197	collision	7.482	4.446	3.043	3.052	32	0.6308	10.51	3	timer	fix: drop the RK momentum gate on accepted symplectic steps (#540)
+2026-10-18	141	9eae6072a0	collision	7.469	4.467	3.084	3.091	32	0.6224	10.37	3	timer	Add per-triangle STL wall heat loads (#545)
+2026-10-18	134	5d29f57dc8	collision	7.265	4.374	2.929	2.963	32	0.6554	10.92	3	timer	Test collisional alpha tracing with an STL wall (#546)
+2026-10-18	131	76f989ce39	collision	7.638	4.439	3.099	3.158	32	0.6195	10.33	3	timer	docs: rewrite user, developer and model documentation (#565)
+2026-10-19	128	4bfb7f1a9c	collision	7.602	4.438	3.272	3.171	32	0.5868	9.78	3	timer	Add IMAS IDS input/output and a guiding-centre workflow actor (#562)
+2026-10-19	126	d42194797a	collision	7.545	4.381	3.142	3.124	32	0.6111	10.19	3	timer	Collisions: evaluate profiles at toroidal flux s for every integ_coord
+2026-10-19	125	7dc178536d	collision	7.287	4.278	3.243	3.002	32	0.592	9.87	3	timer	Replace per-step dgesv in Newton solves with small in-house LU (#579)
+2026-10-19	124	aa1d30bdf2	collision	7.494	4.362	3.241	3.233	32	0.5923	9.87	3	timer	Let fast_class enable classification on its own (#512)
+2026-10-19	122	6da8670473	collision	7.534	4.406	3.185	3.217	32	0.6028	10.05	3	timer	Count field evaluations by derivative depth, and on the magfie path (#
+2026-10-19	118	19198d90eb	collision	7.573	4.381	3.305	3.123	32	0.5809	9.68	3	timer	Fix main build: count regular-axis Boozer evaluations via count_field_
+2026-10-19	117	61d7aaddd6	collision	7.577	4.431	3.241	3.233	32	0.5923	9.87	3	timer	Add explicit-energy monoenergetic Lorentz collisions (#522)
+2026-10-19	115	3e91819022	collision	7.588	4.461	3.181	3.234	32	0.6036	10.06	3	timer	field: use VMEC++ geometry jets through ISO C (#521)
+2026-10-19	114	7b4207fb6d	collision	7.746	4.488	3.323	3.037	32	0.5778	9.63	3	timer	Report the Gauss endpoint radius and field cache by Hermite extrapolat
+2026-10-19	112	212edee8dc	collision	7.487	4.439	3.126	3.107	32	0.6142	10.24	3	timer	Expose the continuous margins behind the orbit classes (#513)
+2026-10-19	107	fd33f76a8f	collision	7.568	4.378	3.276	3.207	32	0.5859	9.77	3	timer	fix: keep classifier surface extrema per particle (#589)
+2026-10-20	98	20c897d098	collision	7.877	4.519	3.4	3.354	32	0.5647	9.41	3	timer	Fix midpoint momentum after axis chart switches (#566)
+2026-10-23	88	30316e5422	collision	8.921	4.37	4.655	4.542	32	0.4125	6.87	3	timer	Use configured test-ion mass and charge in Coulomb collisions (#608)
+2026-10-23	86	8263951ff6	collision	8.85	4.458	4.463	4.42	32	0.4301	7.17	3	timer	Take the collision profile radius from a tabulated label at the physic
+2026-10-23	85	b09d279f9d	collision	8.787	4.401	4.613	4.351	32	0.4161	6.94	3	timer	Regular low-speed collision substep in stost (#615)
+2026-10-23	84	a28d02ed6a	collision	8.876	4.598	4.684	4.658	32	0.4099	6.83	3	timer	Keep the default near-axis regularization radius on rho-native charts
+2026-10-23	80	caabbb50d5	collision	8.943	4.464	4.571	4.73	32	0.42	7.0	3	timer	Bump libneo pin to the Boozer net-current fix (libneo#452) (#614)
+2026-10-23	78	fb8152483c	collision	8.945	4.479	4.658	4.722	32	0.4122	6.87	3	timer	Format adaptive RK changes for changed-line lint (#621)
+2026-10-27	72	0a176137d5	collision	7.514	4.207	3.417	3.696	32	0.5618	9.36	3	timer	Preserve magnetic moment across symplectic RK recovery (#629)
+2026-10-29	66	389775536a	collision	7.73	4.212	3.624	3.586	32	0.5298	8.83	3	timer	Differentiate physical field direction before the coordinate pullback
+2026-10-29	64	244f237b0d	collision	8.195	4.198	4.164	4.047	32	0.4611	7.69	3	timer	Read relative marker weights from a file in simple.x (#632)
+2026-10-30	62	f8eddbc488	collision	8.915	4.413	4.099	4.303	32	0.4684	7.81	3	timer	Sample chart coil fields over the chart's own field period (#641)
+2026-10-30	60	452542c412	collision	8.302	4.388	3.889	4.204	32	0.4937	8.23	3	timer	Expose held symplectic SPECTRE intervals as unresolved orbit history (
+2026-10-31	59	00a2b30f48	collision	8.398	4.404	4.141	3.85	32	0.4636	7.73	3	timer	Boozer axis continuation: evaluate negative labels at (|s|, theta+pi)
+2026-11-02	58	b6dc7f9be9	collision	13.743	9.791	4.066	4.031	32	0.4721	7.87	3	timer	Bump fortnum to d40be6d for the hybrd1 multiroot_hybrids (#643)
+2026-11-03	56	8da6de6d59	collision	13.976	10.071	4.011	3.959	32	0.4786	7.98	3	timer	Keep the quasi Gauss stage fields local to each solve (#645)
+2026-11-03	54	0155903b1f	collision	12.968	9.669	3.53	3.512	32	0.5438	9.06	3	timer	Start Newton from extrapolated states and stop on the contraction rate
+2026-11-03	53	9088aaeef1	collision	13.322	10.067	3.272	3.258	32	0.5868	9.78	3	timer	Optimise the Fast build and the Newton LU solve (#649)
+2026-11-03	52	5c5b7bf3e5	collision	13.967	10.608	3.462	3.511	32	0.5546	9.24	3	timer	Stop a composed symplectic step at the first failed stage (#650)
+2026-11-03	50	e240abebc8	collision	13.102	9.874	3.345	3.457	32	0.5739	9.57	3	timer	Use the extrapolated guess and the rate stop in the OpenACC Newton ste
+2026-11-03	48	af9c334654	collision	12.243	9.591	2.749	2.606	32	0.6983	11.64	3	timer	Store the canonical-flux metric and field components as one spline (#6
+2026-11-03	47	a8eb199321	collision	11.756	9.401	2.444	2.307	32	0.7854	13.09	3	timer	Evaluate the Boozer field of the GPU Euler Newton step as one record (
+2026-11-03	46	8e9a4ce93a	collision	11.234	9.087	2.243	2.393	32	0.856	14.27	3	timer	Generate the implicit-scheme residuals and Jacobians from one source (
+2026-11-03	44	d5111a870e	collision	11.447	9.185	2.351	2.452	32	0.8167	13.61	3	timer	Keep the OpenACC per-particle state in private copies (#658)
+2026-11-03	42	bdc5c4b6e5	collision	11.977	9.765	2.428	2.473	32	0.7908	13.18	3	timer	Halve the near-axis midpoint step on CPU and GPU alike (#662)
+2026-11-03	40	5a0c385c7a	collision	11.822	9.006	2.499	2.534	32	0.7683	12.81	3	timer	Keep native RK54 source compatible with CuMetal (#666)
+2026-11-04	37	7a5f22e55e	collision	11.86	9.493	2.468	2.513	32	0.778	12.97	3	timer	Pass OpenMP driver flags to mixed CGAL C++ links (#667)
+2026-11-04	36	d2294eb41a	collision	11.771	9.395	2.587	2.426	32	0.7421	12.37	3	timer	Evaluate collision coefficients at the local flux instead of a 101-poi
+2026-11-04	35	9df5740a43	collision	11.58	9.34	2.372	2.601	32	0.8095	13.49	3	timer	Pin the golden-record libneo to the production revision (#670)
+2026-11-04	33	db1014ac7c	collision	12.142	9.523	2.687	2.623	32	0.7145	11.91	3	timer	fix: transport Gauss stage gradients before endpoint extrapolation (#6
+2026-11-05	31	359ec8c432	collision	11.517	8.927	2.689	2.656	32	0.714	11.9	3	timer	Use species-resolved, speed-dependent Coulomb logarithms in collisions
+2026-11-05	29	17ef6bca8c	collision	11.875	9.332	2.64	2.677	32	0.7273	12.12	3	timer	Stop collisional markers below thermal_stop_factor times T_i (#676)
+2026-11-05	28	3d1bddfc18	collision	11.776	9.292	2.578	2.463	32	0.7448	12.41	3	timer	Share the selected canonical-flux field across OpenMP threads (#677)
+2026-11-05	27	b420006baf	collision	11.962	9.353	2.683	2.888	32	0.7156	11.93	3	timer	Use the FortNum Cash–Karp time-progress guard (#678)
+2022-06-29	562	8e19626104	meiss	0.286	0.287	-0.002	None	0			3	difference	Removed bmod_ref
+2024-05-25	498	579874be4a	meiss	0.269	0.274	-0.005	None	0			3	difference	Shorten module name
+2025-08-12	398	d798fc0113	meiss	38.708	24.361	14.346	None	32	0.1338	2.23	3	difference	Refactor Boozer coordinate converter (#94)
+2025-08-12	396	d03d4ff891	meiss	39.412	24.223	15.189	None	32	0.1264	2.11	3	difference	format: Clean up comment formatting in orbit_symplectic.f90 (#99 Part
+2025-08-12	394	f35dd01fd2	meiss	39.58	24.331	15.249	None	32	0.1259	2.1	3	difference	format: Clean up comment formatting in field_can.f90 (#101 Part 1) (#1
+2025-08-12	392	df168bcb8f	meiss	39.237	24.125	15.113	None	32	0.127	2.12	3	difference	format: Clean up comment formatting in sub_alpha_lifetime_can.f90 (#10
+2025-08-12	390	a9911a0c71	meiss	40.222	23.556	16.666	None	32	0.1152	1.92	3	difference	format: Clean up comment formatting in find_bminmax.f90 (#108 Part 1)
+2025-08-12	388	98e1a418b4	meiss	39.1	24.436	14.664	None	32	0.1309	2.18	3	difference	format: Clean up comment formatting in orbit_symplectic_base.f90 (#110
+2025-08-12	386	79b173df34	meiss	40.768	24.929	15.84	None	32	0.1212	2.02	3	difference	Modernize double precision declarations in orbit_symplectic.f90 (#124)
+2025-08-12	384	bc1b29e2fd	meiss	39.236	24.46	14.776	None	32	0.1299	2.17	3	difference	Modernize double precision declarations in get_canonical_coordinates.F
+2025-08-12	382	5b8f286634	meiss	39.222	25.004	14.218	None	32	0.135	2.25	3	difference	Modernize double precision declarations in sub_alpha_lifetime_can.f90
+2025-08-12	380	98f9dc4b2a	meiss	39.094	24.643	14.451	None	32	0.1328	2.21	3	difference	Modernize type declarations in samplers.f90 (#132)
+2025-08-12	378	575f204401	meiss	39.79	23.847	15.944	None	32	0.1204	2.01	3	difference	Modernize type declarations in simple_main.f90 (#131)
+2025-08-12	374	0fcf94b182	meiss	39.86	24.533	15.328	None	32	0.1253	2.09	3	difference	fix: Use explicit imports to avoid dp conflicts after type modernizati
+2025-08-12	372	bc6de7534a	meiss	40.267	25.057	15.211	None	32	0.1262	2.1	3	difference	Modernize type declarations in classification.f90 (issue #109) (#135)
+2025-08-12	368	efefc51af0	meiss	39.165	24.471	14.694	None	32	0.1306	2.18	3	difference	feat: Add timing diagnostics for execution phases (#142) (#143)
+2025-08-12	366	4c36d9b3c4	meiss	40.7	24.511	16.189	None	32	0.1186	1.98	3	difference	timing output
+2025-08-13	363	f5a0c0c65e	meiss	39.669	24.07	15.599	None	32	0.1231	2.05	3	difference	feat: Add comprehensive unit tests for core modules (#162)
+2025-08-22	357	0016bff6a4	meiss	28.29	18.583	9.707	None	32	0.1978	3.3	3	difference	test: Add Python batch API test infrastructure for Issue #90 (#172)
+2025-09-05	356	493afe3afc	meiss	27.292	20.465	6.828	None	32	0.2812	4.69	3	difference	feat: implement comprehensive batch spline optimization system (#174)
+2026-08-13	175	99bc0e4cd0	meiss	26.839	16.646	10.325	10.21	32	0.1859	3.1	3	timer	Configure GPU execution from simple.in (#519)
+2026-10-03	162	212b6e6b38	meiss	25.592	16.039	9.896	10.221	32	0.194	3.23	3	timer	Share dependency versions and update merged upstream fixes (#523)
+2026-10-13	160	dcdeeb6440	meiss	26.832	16.401	10.606	10.404	32	0.181	3.02	3	timer	Fortran library API, config-file init for pysimple, and API/doc/test c
+2026-10-14	157	cbb4a7a0fd	meiss	26.693	16.591	10.194	10.367	32	0.1883	3.14	3	timer	Document trapping parameter definition
+2026-10-15	154	2297745141	meiss	26.513	16.416	10.054	10.052	32	0.191	3.18	3	timer	Fix canonical GC field extrapolation after Newton solves (#535)
+2026-10-15	153	81b2eca646	meiss	26.328	16.418	10.011	9.534	32	0.1918	3.2	3	timer	Speed SPECTRE full orbit with per-volume splines and logical position
+2026-10-15	152	e132b55bd1	meiss	26.218	16.191	9.844	10.216	32	0.195	3.25	3	timer	fix: resolve particle-wall losses in the multi-volume SPECTRE hybrid (
+2026-10-16	148	db681d8a38	meiss	25.517	16.108	9.777	10.321	32	0.1964	3.27	3	timer	fix: enter SPECTRE full orbit at 1.5 radial gyroradii by default
+2026-10-16	146	cbf2b45526	meiss	26.196	16.221	9.991	10.265	32	0.1922	3.2	3	timer	perf: test the SPECTRE full-orbit exit distance once per radian
+2026-10-16	144	2a0c51782d	meiss	24.506	16.416	8.059	7.762	32	0.2382	3.97	3	timer	perf: drop the IEEE intrinsic modules from SIMPLE sources (#538)
+2026-10-16	143	ffd7f4a197	meiss	23.864	16.508	7.514	7.488	32	0.2555	4.26	3	timer	fix: drop the RK momentum gate on accepted symplectic steps (#540)
+2026-10-18	141	9eae6072a0	meiss	23.732	16.132	7.235	7.137	32	0.2654	4.42	3	timer	Add per-triangle STL wall heat loads (#545)
+2026-10-18	134	5d29f57dc8	meiss	24.532	17.007	7.011	7.277	32	0.2738	4.56	3	timer	Test collisional alpha tracing with an STL wall (#546)
+2026-10-18	131	76f989ce39	meiss	23.169	16.167	7.141	7.146	32	0.2689	4.48	3	timer	docs: rewrite user, developer and model documentation (#565)
+2026-10-19	128	4bfb7f1a9c	meiss	23.145	16.32	6.881	7.09	32	0.279	4.65	3	timer	Add IMAS IDS input/output and a guiding-centre workflow actor (#562)
+2026-10-19	126	d42194797a	meiss	23.095	15.928	7.306	7.284	32	0.2628	4.38	3	timer	Collisions: evaluate profiles at toroidal flux s for every integ_coord
+2026-10-19	125	7dc178536d	meiss	23.483	16.332	7.262	6.776	32	0.2643	4.41	3	timer	Replace per-step dgesv in Newton solves with small in-house LU (#579)
+2026-10-19	124	aa1d30bdf2	meiss	23.35	16.199	7.198	7.107	32	0.2667	4.45	3	timer	Let fast_class enable classification on its own (#512)
+2026-10-19	122	6da8670473	meiss	23.397	16.19	7.36	7.393	32	0.2609	4.35	3	timer	Count field evaluations by derivative depth, and on the magfie path (#
+2026-10-19	118	19198d90eb	meiss	23.671	16.484	7.368	6.838	32	0.2605	4.34	3	timer	Fix main build: count regular-axis Boozer evaluations via count_field_
+2026-10-19	117	61d7aaddd6	meiss	23.386	16.333	7.287	7.276	32	0.2634	4.39	3	timer	Add explicit-energy monoenergetic Lorentz collisions (#522)
+2026-10-19	115	3e91819022	meiss	23.284	16.162	7.272	7.255	32	0.264	4.4	3	timer	field: use VMEC++ geometry jets through ISO C (#521)
+2026-10-19	114	7b4207fb6d	meiss	23.355	16.143	7.308	6.956	32	0.2627	4.38	3	timer	Report the Gauss endpoint radius and field cache by Hermite extrapolat
+2026-10-19	112	212edee8dc	meiss	23.339	16.172	7.273	7.194	32	0.264	4.4	3	timer	Expose the continuous margins behind the orbit classes (#513)
+2026-10-19	107	fd33f76a8f	meiss	23.896	16.131	7.854	7.658	32	0.2444	4.07	3	timer	fix: keep classifier surface extrema per particle (#589)
+2026-10-20	98	20c897d098	meiss	23.237	15.652	7.701	7.698	32	0.2493	4.16	3	timer	Fix midpoint momentum after axis chart switches (#566)
+2026-10-23	88	30316e5422	meiss	25.143	15.89	9.401	9.22	32	0.2042	3.4	3	timer	Use configured test-ion mass and charge in Coulomb collisions (#608)
+2026-10-23	86	8263951ff6	meiss	25.027	15.996	9.229	9.167	32	0.208	3.47	3	timer	Take the collision profile radius from a tabulated label at the physic
+2026-10-23	85	b09d279f9d	meiss	25.12	16.502	8.708	8.726	32	0.2205	3.67	3	timer	Regular low-speed collision substep in stost (#615)
+2026-10-23	84	a28d02ed6a	meiss	24.831	16.031	8.987	8.878	32	0.2136	3.56	3	timer	Keep the default near-axis regularization radius on rho-native charts
+2026-10-23	80	caabbb50d5	meiss	24.74	16.052	8.697	9.113	32	0.2207	3.68	3	timer	Bump libneo pin to the Boozer net-current fix (libneo#452) (#614)
+2026-10-23	78	fb8152483c	meiss	24.918	16.282	8.771	8.895	32	0.2189	3.65	3	timer	Format adaptive RK changes for changed-line lint (#621)
+2026-10-27	72	0a176137d5	meiss	24.265	15.788	8.613	8.76	32	0.2229	3.72	3	timer	Preserve magnetic moment across symplectic RK recovery (#629)
+2026-10-29	66	389775536a	meiss	24.211	15.592	8.786	8.882	32	0.2185	3.64	3	timer	Differentiate physical field direction before the coordinate pullback
+2026-10-29	64	244f237b0d	meiss	24.359	15.877	8.874	8.914	32	0.2163	3.61	3	timer	Read relative marker weights from a file in simple.x (#632)
+2026-10-30	62	f8eddbc488	meiss	24.085	16.143	7.815	8.066	32	0.2456	4.09	3	timer	Sample chart coil fields over the chart's own field period (#641)
+2026-10-30	60	452542c412	meiss	23.749	15.824	7.891	7.968	32	0.2433	4.06	3	timer	Expose held symplectic SPECTRE intervals as unresolved orbit history (
+2026-10-31	59	00a2b30f48	meiss	24.025	16.338	7.853	7.395	32	0.2445	4.07	3	timer	Boozer axis continuation: evaluate negative labels at (|s|, theta+pi)
+2026-11-02	58	b6dc7f9be9	meiss	24.522	16.421	8.074	8.036	32	0.2378	3.96	3	timer	Bump fortnum to d40be6d for the hybrd1 multiroot_hybrids (#643)
+2026-11-03	56	8da6de6d59	meiss	23.688	15.938	7.944	7.897	32	0.2417	4.03	3	timer	Keep the quasi Gauss stage fields local to each solve (#645)
+2026-11-03	54	0155903b1f	meiss	21.843	16.259	5.613	6.012	32	0.342	5.7	3	timer	Start Newton from extrapolated states and stop on the contraction rate
+2026-11-03	53	9088aaeef1	meiss	22.26	16.275	5.851	5.579	32	0.3281	5.47	3	timer	Optimise the Fast build and the Newton LU solve (#649)
+2026-11-03	52	5c5b7bf3e5	meiss	21.422	15.702	5.845	5.99	32	0.3285	5.47	3	timer	Stop a composed symplectic step at the first failed stage (#650)
+2026-11-03	50	e240abebc8	meiss	21.231	15.361	6.018	6.084	32	0.319	5.32	3	timer	Use the extrapolated guess and the rate stop in the OpenACC Newton ste
+2026-11-03	48	af9c334654	meiss	21.53	15.794	5.958	5.957	32	0.3222	5.37	3	timer	Store the canonical-flux metric and field components as one spline (#6
+2026-11-03	47	a8eb199321	meiss	22.626	16.47	6.27	5.926	32	0.3062	5.1	3	timer	Evaluate the Boozer field of the GPU Euler Newton step as one record (
+2026-11-03	46	8e9a4ce93a	meiss	21.48	15.682	5.805	5.973	32	0.3307	5.51	3	timer	Generate the implicit-scheme residuals and Jacobians from one source (
+2026-11-03	44	d5111a870e	meiss	22.029	16.335	5.867	6.009	32	0.3272	5.45	3	timer	Keep the OpenACC per-particle state in private copies (#658)
+2026-11-03	42	bdc5c4b6e5	meiss	21.995	16.08	5.885	6.007	32	0.3262	5.44	3	timer	Halve the near-axis midpoint step on CPU and GPU alike (#662)
+2026-11-03	40	5a0c385c7a	meiss	22.553	16.085	6.585	6.539	32	0.2915	4.86	3	timer	Keep native RK54 source compatible with CuMetal (#666)
+2026-11-04	37	7a5f22e55e	meiss	22.119	16.087	6.375	6.191	32	0.3012	5.02	3	timer	Pass OpenMP driver flags to mixed CGAL C++ links (#667)
+2026-11-04	36	d2294eb41a	meiss	22.138	16.232	6.022	5.622	32	0.3188	5.31	3	timer	Evaluate collision coefficients at the local flux instead of a 101-poi
+2026-11-04	35	9df5740a43	meiss	21.827	15.77	6.171	6.102	32	0.3111	5.19	3	timer	Pin the golden-record libneo to the production revision (#670)
+2026-11-04	33	db1014ac7c	meiss	21.705	16.19	5.791	6.014	32	0.3315	5.53	3	timer	fix: transport Gauss stage gradients before endpoint extrapolation (#6
+2026-11-05	31	359ec8c432	meiss	22.515	15.793	6.861	6.664	32	0.2798	4.66	3	timer	Use species-resolved, speed-dependent Coulomb logarithms in collisions
+2026-11-05	29	17ef6bca8c	meiss	21.845	15.928	6.077	6.092	32	0.3159	5.27	3	timer	Stop collisional markers below thermal_stop_factor times T_i (#676)
+2026-11-05	28	3d1bddfc18	meiss	22.372	15.976	6.329	5.689	32	0.3033	5.06	3	timer	Share the selected canonical-flux field across OpenMP threads (#677)
+2026-11-05	27	b420006baf	meiss	22.146	16.133	6.126	6.219	32	0.3134	5.22	3	timer	Use the FortNum Cash–Karp time-progress guard (#678)
+2022-06-29	562	8e19626104	tokamak	30.627	30.567	0.06	None	768		12865.5	3	difference	Removed bmod_ref
+2024-05-25	498	579874be4a	tokamak	30.283	30.921	-0.638	None	768			3	difference	Shorten module name
+2026-08-13	175	99bc0e4cd0	tokamak	5.157	0.003	5.141	4.919	768		149.39	3	timer	Configure GPU execution from simple.in (#519)
+2026-10-03	162	212b6e6b38	tokamak	5.096	0.004	5.082	4.961	768		151.13	3	timer	Share dependency versions and update merged upstream fixes (#523)
+2026-10-13	160	dcdeeb6440	tokamak	5.194	0.003	5.176	5.05	768		148.39	3	timer	Fortran library API, config-file init for pysimple, and API/doc/test c
+2026-10-14	157	cbb4a7a0fd	tokamak	5.018	0.005	5.003	5.054	768		153.5	3	timer	Document trapping parameter definition
+2026-10-15	154	2297745141	tokamak	5.017	0.004	5.003	5.049	768		153.49	3	timer	Fix canonical GC field extrapolation after Newton solves (#535)
+2026-10-15	153	81b2eca646	tokamak	5.189	0.003	5.176	4.563	768		148.37	3	timer	Speed SPECTRE full orbit with per-volume splines and logical position
+2026-10-15	152	e132b55bd1	tokamak	5.099	0.005	5.083	5.102	768		151.1	3	timer	fix: resolve particle-wall losses in the multi-volume SPECTRE hybrid (
+2026-10-16	148	db681d8a38	tokamak	5.132	0.004	5.119	5.028	768		150.04	3	timer	fix: enter SPECTRE full orbit at 1.5 radial gyroradii by default
+2026-10-16	146	cbf2b45526	tokamak	5.048	0.012	5.034	4.967	768		152.57	3	timer	perf: test the SPECTRE full-orbit exit distance once per radian
+2026-10-16	144	2a0c51782d	tokamak	3.557	0.004	3.505	3.097	768		219.14	3	timer	perf: drop the IEEE intrinsic modules from SIMPLE sources (#538)
+2026-10-16	143	ffd7f4a197	tokamak	3.39	0.003	3.369	3.297	768		227.96	3	timer	fix: drop the RK momentum gate on accepted symplectic steps (#540)
+2026-10-18	141	9eae6072a0	tokamak	3.333	0.004	3.306	3.31	768		232.28	3	timer	Add per-triangle STL wall heat loads (#545)
+2026-10-18	134	5d29f57dc8	tokamak	3.379	0.002	3.368	3.355	768		228.03	3	timer	Test collisional alpha tracing with an STL wall (#546)
+2026-10-18	131	76f989ce39	tokamak	3.418	0.005	3.409	3.349	768		225.3	3	timer	docs: rewrite user, developer and model documentation (#565)
+2026-10-19	128	4bfb7f1a9c	tokamak	3.363	0.003	3.345	3.356	768		229.61	3	timer	Add IMAS IDS input/output and a guiding-centre workflow actor (#562)
+2026-10-19	126	d42194797a	tokamak	3.454	0.004	3.442	3.326	768		223.1	3	timer	Collisions: evaluate profiles at toroidal flux s for every integ_coord
+2026-10-19	125	7dc178536d	tokamak	3.668	0.004	3.65	3.194	768		210.41	3	timer	Replace per-step dgesv in Newton solves with small in-house LU (#579)
+2026-10-19	124	aa1d30bdf2	tokamak	3.259	0.004	3.236	3.388	768		237.29	3	timer	Let fast_class enable classification on its own (#512)
+2026-10-19	122	6da8670473	tokamak	3.36	0.004	3.341	3.399	768		229.85	3	timer	Count field evaluations by derivative depth, and on the magfie path (#
+2026-10-19	118	19198d90eb	tokamak	3.42	0.006	3.388	3.092	768		226.71	3	timer	Fix main build: count regular-axis Boozer evaluations via count_field_
+2026-10-19	117	61d7aaddd6	tokamak	3.546	0.004	3.532	3.473	768		217.42	3	timer	Add explicit-energy monoenergetic Lorentz collisions (#522)
+2026-10-19	115	3e91819022	tokamak	3.636	0.004	3.62	3.527	768		212.14	3	timer	field: use VMEC++ geometry jets through ISO C (#521)
+2026-10-19	114	7b4207fb6d	tokamak	3.508	0.005	3.565	3.29	768		215.42	3	timer	Report the Gauss endpoint radius and field cache by Hermite extrapolat
+2026-10-19	112	212edee8dc	tokamak	3.584	0.003	3.569	3.523	768		215.17	3	timer	Expose the continuous margins behind the orbit classes (#513)
+2026-10-19	107	fd33f76a8f	tokamak	3.531	0.005	3.508	3.488	768		218.92	3	timer	fix: keep classifier surface extrema per particle (#589)
+2026-10-20	98	20c897d098	tokamak	3.523	0.004	3.508	3.489	768		218.94	3	timer	Fix midpoint momentum after axis chart switches (#566)
+2026-10-23	88	30316e5422	tokamak	5.485	0.006	5.465	5.528	768		140.53	3	timer	Use configured test-ion mass and charge in Coulomb collisions (#608)
+2026-10-23	86	8263951ff6	tokamak	5.656	0.004	5.656	5.591	768		135.78	3	timer	Take the collision profile radius from a tabulated label at the physic
+2026-10-23	85	b09d279f9d	tokamak	5.771	0.004	5.763	5.146	768		133.27	3	timer	Regular low-speed collision substep in stost (#615)
+2026-10-23	84	a28d02ed6a	tokamak	5.659	0.006	5.645	5.761	768		136.06	3	timer	Keep the default near-axis regularization radius on rho-native charts
+2026-10-23	80	caabbb50d5	tokamak	5.553	0.004	5.535	5.598	768		138.76	3	timer	Bump libneo pin to the Boozer net-current fix (libneo#452) (#614)
+2026-10-23	78	fb8152483c	tokamak	5.606	0.006	5.595	5.431	768		137.28	3	timer	Format adaptive RK changes for changed-line lint (#621)
+2026-10-27	72	0a176137d5	tokamak	2.201	0.004	2.182	2.342	768		352.0	3	timer	Preserve magnetic moment across symplectic RK recovery (#629)
+2026-10-29	66	389775536a	tokamak	2.26	0.003	2.232	2.307	768		344.1	3	timer	Differentiate physical field direction before the coordinate pullback
+2026-10-29	64	244f237b0d	tokamak	2.296	0.004	2.274	2.31	768		337.8	3	timer	Read relative marker weights from a file in simple.x (#632)
+2026-10-30	62	f8eddbc488	tokamak	2.172	0.004	2.15	2.33	768		357.27	3	timer	Sample chart coil fields over the chart's own field period (#641)
+2026-10-30	60	452542c412	tokamak	2.247	0.006	2.228	2.338	768		344.71	3	timer	Expose held symplectic SPECTRE intervals as unresolved orbit history (
+2026-10-31	59	00a2b30f48	tokamak	2.337	0.004	2.317	2.068	768		331.49	3	timer	Boozer axis continuation: evaluate negative labels at (|s|, theta+pi)
+2026-11-02	58	b6dc7f9be9	tokamak	2.265	0.005	2.241	2.317	768		342.66	3	timer	Bump fortnum to d40be6d for the hybrd1 multiroot_hybrids (#643)
+2026-11-03	56	8da6de6d59	tokamak	2.286	0.003	2.265	2.228	768		339.09	3	timer	Keep the quasi Gauss stage fields local to each solve (#645)
+2026-11-03	54	0155903b1f	tokamak	1.983	0.005	1.958	2.029	768		392.3	3	timer	Start Newton from extrapolated states and stop on the contraction rate
+2026-11-03	53	9088aaeef1	tokamak	2.038	0.004	2.014	1.783	768		381.26	3	timer	Optimise the Fast build and the Newton LU solve (#649)
+2026-11-03	52	5c5b7bf3e5	tokamak	1.956	0.004	1.933	2.057	768		397.28	3	timer	Stop a composed symplectic step at the first failed stage (#650)
+2026-11-03	50	e240abebc8	tokamak	1.949	0.007	1.924	2.085	768		399.11	3	timer	Use the extrapolated guess and the rate stop in the OpenACC Newton ste
+2026-11-03	48	af9c334654	tokamak	2.081	0.007	2.057	2.063	768		373.34	3	timer	Store the canonical-flux metric and field components as one spline (#6
+2026-11-03	47	a8eb199321	tokamak	2.016	0.006	1.991	1.901	768		385.79	3	timer	Evaluate the Boozer field of the GPU Euler Newton step as one record (
+2026-11-03	46	8e9a4ce93a	tokamak	1.878	0.004	1.855	2.117	768		413.91	3	timer	Generate the implicit-scheme residuals and Jacobians from one source (
+2026-11-03	44	d5111a870e	tokamak	2.004	0.007	1.977	2.077	768		388.38	3	timer	Keep the OpenACC per-particle state in private copies (#658)
+2026-11-03	42	bdc5c4b6e5	tokamak	2.021	0.006	1.996	2.066	768		384.74	3	timer	Halve the near-axis midpoint step on CPU and GPU alike (#662)
+2026-11-03	40	5a0c385c7a	tokamak	2.064	0.005	2.026	2.105	768		379.15	3	timer	Keep native RK54 source compatible with CuMetal (#666)
+2026-11-04	37	7a5f22e55e	tokamak	1.985	0.004	1.957	1.978	768		392.37	3	timer	Pass OpenMP driver flags to mixed CGAL C++ links (#667)
+2026-11-04	36	d2294eb41a	tokamak	2.107	0.004	2.083	1.9	768		368.76	3	timer	Evaluate collision coefficients at the local flux instead of a 101-poi
+2026-11-04	35	9df5740a43	tokamak	1.914	0.005	1.888	2.087	768		406.68	3	timer	Pin the golden-record libneo to the production revision (#670)
+2026-11-04	33	db1014ac7c	tokamak	1.949	0.004	1.929	2.077	768		398.13	3	timer	fix: transport Gauss stage gradients before endpoint extrapolation (#6
+2026-11-05	31	359ec8c432	tokamak	2.101	0.005	2.076	2.08	768		369.94	3	timer	Use species-resolved, speed-dependent Coulomb logarithms in collisions
+2026-11-05	29	17ef6bca8c	tokamak	1.964	0.005	1.938	2.062	768		396.38	3	timer	Stop collisional markers below thermal_stop_factor times T_i (#676)
+2026-11-05	28	3d1bddfc18	tokamak	2.141	0.006	2.114	1.973	768		363.32	3	timer	Share the selected canonical-flux field across OpenMP threads (#677)
+2026-11-05	27	b420006baf	tokamak	2.142	0.002	2.123	2.245	768		361.77	3	timer	Use the FortNum Cash–Karp time-progress guard (#678)
