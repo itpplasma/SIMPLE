@@ -1139,6 +1139,7 @@ contains
         use simple_cuda_native, only: trace_orbits_cuda_native_landreman, &
                                       cuda_native_device_count, &
                           initialize_cuda_native_particle, evaluate_cuda_native_particle
+        use simple_cuda_euler, only: trace_orbits_cuda_euler, cuda_euler_supported
 #endif
 
         type(tracer_t), intent(inout) :: norb
@@ -1156,7 +1157,7 @@ contains
         real(dp) :: block_time, loss_tau, maxloss, minimum_timestep
         real(dp) :: time_scale, observed_duration, energy_loss_fraction
         real(dp) :: cuda_profile_ms(5)
-        logical :: landreman_mode, cuda_native_backend
+        logical :: landreman_mode, cuda_native_backend, compact_init
 #ifdef SIMPLE_ENABLE_CUDA_NATIVE
         real(dp) :: surf_s, surf_bmin, surf_bmax
 #endif
@@ -1189,7 +1190,7 @@ contains
 
         select case (trim(gpu_method))
         case ('auto')
-            if (cuda_native_backend) then
+            if (cuda_native_backend .and. gpu_landreman) then
                 method = DORMAND_PRINCE
             else
                 method = EXPL_IMPL_EULER
@@ -1212,10 +1213,13 @@ contains
             method /= CASH_KARP .and. method /= DORMAND_PRINCE) &
             error stop 'gpu_method supports euler, midpoint, cash-karp, or dopri'
         if (cuda_native_backend .and. method /= CASH_KARP .and. &
-            method /= DORMAND_PRINCE) &
-            error stop 'cuda-native backend supports only cash-karp or dopri'
+            method /= DORMAND_PRINCE .and. method /= EXPL_IMPL_EULER) &
+            error stop 'cuda-native backend supports only euler, cash-karp or dopri'
 
         init_mode = method
+        ! The compact RK state lacks p_theta and the Newton history of Euler.
+        compact_init = gpu_compact_init .and. cuda_native_backend .and. &
+                       method /= EXPL_IMPL_EULER
         if (method == CASH_KARP .or. method == DORMAND_PRINCE) &
             init_mode = EXPL_IMPL_EULER
         ! This rank traces particles i = mpi_rank + 1 + (k - 1)*mpi_ranks.
@@ -1241,7 +1245,7 @@ contains
                 call ref_to_integ(zstart(1:3, i), z(1:3))
             end if
             z(4:5) = zstart(4:5, i)
-            if (gpu_compact_init .and. cuda_native_backend) then
+            if (compact_init) then
 #ifdef SIMPLE_ENABLE_CUDA_NATIVE
                 call initialize_cuda_native_particle(si_gpu(k), f_gpu(k), z, &
                                                      dtaumin, relerr)
@@ -1269,8 +1273,9 @@ contains
         t_init = get_wtime() - t0
 
         landreman_mode = gpu_landreman
-        if (cuda_native_backend .and. .not. landreman_mode) &
-            error stop 'gpu_landreman must be true for the native CUDA backend'
+        if (cuda_native_backend .and. (landreman_mode .eqv. &
+                                       (method == EXPL_IMPL_EULER))) &
+            error stop 'native CUDA traces euler without and RK with gpu_landreman'
 
         t0 = get_wtime()
         warp_nfev_slots = 0_8
@@ -1310,6 +1315,18 @@ contains
             end if
             if (mpi_ranks > 1) energy_loss_fraction = &
                 mpi_sum_r64(energy_loss_fraction*nloc)/ntestpart
+        else if (cuda_native_backend) then
+#ifdef SIMPLE_ENABLE_CUDA_NATIVE
+            if (.not. cuda_euler_supported()) error stop &
+                'native CUDA euler needs quintic Boozer splines with one |B| quantity'
+            call trace_orbits_cuda_euler(si_gpu, f_gpu, nloc, ntimstep, &
+                                         ntau_macro, loss_step, &
+                                         loss_time_normalized, zcanonical, &
+                                         nfev, cuda_profile_ms)
+#endif
+            observed_duration = &
+                real(sum(ntau_macro(2:ntimstep)), dp)*si_gpu(1)%dt
+            energy_loss_fraction = 0.0_dp
         else
             call trace_orbits_gpu_method(si_gpu, f_gpu, nloc, ntimstep, &
                   ntau_macro, method, loss_step, loss_time_normalized, zcanonical, nfev)
@@ -1329,7 +1346,7 @@ contains
             i = mpi_rank + 1 + (k - 1)*mpi_ranks
             nfev_total = nfev_total + int(nfev(k), 8)
             si_gpu(k)%z = zcanonical(:, k)
-            if (gpu_compact_init .and. cuda_native_backend) then
+            if (compact_init) then
 #ifdef SIMPLE_ENABLE_CUDA_NATIVE
                 call evaluate_cuda_native_particle(f_gpu(k), zcanonical(1, k), &
                                                    zcanonical(2, k), zcanonical(3, k))
@@ -1495,7 +1512,8 @@ contains
     end subroutine record_gpu_marker_outcome
 
     subroutine trace_compare_gpu(norb)
-        ! Validate and benchmark the OpenACC GPU tracing kernel against the CPU
+        ! Validate and benchmark the OpenACC GPU tracing kernel, and with CUDA
+        ! enabled the generated direct-CUDA Euler kernel, against the CPU
         ! symplectic integrator on identical per-particle initial states.
         ! Triggered by gpu_mode='benchmark' and restricted to the Boozer
         ! explicit-implicit Euler or midpoint path without wall, collision, or
@@ -1512,6 +1530,10 @@ contains
         use boozer_sub, only: sync_boozer_state
         use simple_gpu, only: evaluate_rhs_gpu, trace_orbits_gpu_method, &
                               gpu_device_count
+#ifdef SIMPLE_ENABLE_CUDA_NATIVE
+        use simple_cuda_euler, only: trace_orbits_cuda_euler, cuda_euler_supported, &
+                                     cuda_euler_system_probe
+#endif
 
         type(tracer_t), intent(inout) :: norb
 
@@ -1527,6 +1549,16 @@ contains
         integer :: cpu_lost, gpu_lost, flip
         logical :: newton_failed
         real(dp) :: t0, t1, t_cpu, t_gpu, maxz
+#ifdef SIMPLE_ENABLE_CUDA_NATIVE
+        type(symplectic_integrator_t), allocatable :: si_cuda(:)
+        type(field_can_t), allocatable :: f_cuda(:)
+        integer, allocatable :: cuda_loss(:), cuda_nfev(:)
+        real(dp), allocatable :: cuda_loss_time(:), cuda_zend(:, :)
+        real(dp) :: t_cuda, maxz_cuda, maxz_acc_cuda, cuda_profile(5)
+        real(dp) :: system_error
+        integer :: cuda_mismatch
+        logical :: run_cuda
+#endif
 
         if (isw_field_type /= BOOZER .or. &
            (integmode /= EXPL_IMPL_EULER .and. integmode /= MIDPOINT) .or. swcoll .or. &
@@ -1580,6 +1612,14 @@ contains
             print *, 'compact RHS = ', rhs_device(:, rhs_location(2))
             error stop 'compact GPU canonical RHS differs from host reference'
         end if
+
+#ifdef SIMPLE_ENABLE_CUDA_NATIVE
+        run_cuda = integmode == EXPL_IMPL_EULER .and. cuda_euler_supported()
+        if (run_cuda) then
+            si_cuda = si_gpu
+            f_cuda = f_gpu
+        end if
+#endif
 
         ! CPU reference (OpenMP over particles)
         t0 = get_wtime()
@@ -1635,6 +1675,32 @@ contains
         t1 = get_wtime()
         t_gpu = t1 - t0
 
+#ifdef SIMPLE_ENABLE_CUDA_NATIVE
+        if (run_cuda) then
+            call check_cuda_euler_system(si_cuda, f_cuda, system_error)
+            print '(a,es12.4)', ' CUDA generated Euler system relative error = ', &
+                system_error
+            allocate (cuda_loss(ntestpart), cuda_nfev(ntestpart), &
+                      cuda_loss_time(ntestpart), cuda_zend(4, ntestpart))
+            t0 = get_wtime()
+            call trace_orbits_cuda_euler(si_cuda, f_cuda, ntestpart, ntimstep, &
+                                         ntau_macro, cuda_loss, cuda_loss_time, &
+                                         cuda_zend, cuda_nfev, cuda_profile)
+            t1 = get_wtime()
+            t_cuda = t1 - t0
+            maxz_cuda = 0d0
+            maxz_acc_cuda = 0d0
+            cuda_mismatch = 0
+            do i = 1, ntestpart
+                maxz_cuda = max(maxz_cuda, maxval(abs(cpu_zend(:, i) - &
+                                                      cuda_zend(:, i))))
+                maxz_acc_cuda = max(maxz_acc_cuda, maxval(abs(gpu_zend(:, i) - &
+                                                              cuda_zend(:, i))))
+                if (cpu_loss(i) /= cuda_loss(i)) cuda_mismatch = cuda_mismatch + 1
+            end do
+        end if
+#endif
+
         ! Compare
         maxz = 0d0
         loss_mismatch = 0
@@ -1665,8 +1731,82 @@ contains
         print '(a,f10.4,a)', ' GPU time          = ', t_gpu, ' s'
         print '(a,i0)', ' GPU field evaluations = ', sum(gpu_nfev)
         if (t_gpu > 0d0) print '(a,f8.2,a)', ' speedup (CPU/GPU) = ', t_cpu/t_gpu, ' x'
+#ifdef SIMPLE_ENABLE_CUDA_NATIVE
+        if (run_cuda) then
+            print '(a,es12.4)', ' CUDA max |z_cpu - z_cuda| (final state) = ', maxz_cuda
+            print '(a,es12.4)', ' CUDA max |z_gpu - z_cuda| (final state) = ', &
+                maxz_acc_cuda
+            print '(a,i0,a,i0)', ' CUDA loss-step mismatches = ', cuda_mismatch, &
+                ' / ', ntestpart
+            rhs_location = maxloc(abs(cpu_zend - cuda_zend))
+            print '(a,i0,a,i0)', ' CUDA largest difference: particle ', &
+                rhs_location(2), ' component ', rhs_location(1)
+            print '(a,4es24.16)', '   z_cpu  = ', cpu_zend(:, rhs_location(2))
+            print '(a,4es24.16)', '   z_gpu  = ', gpu_zend(:, rhs_location(2))
+            print '(a,4es24.16)', '   z_cuda = ', cuda_zend(:, rhs_location(2))
+            print '(a,f10.4,a)', ' CUDA time         = ', t_cuda, ' s'
+            print '(a,f10.4,a)', ' CUDA kernel time  = ', cuda_profile(3)*1d-3, ' s'
+            print '(a,i0)', ' CUDA field evaluations = ', sum(cuda_nfev)
+        end if
+#endif
         print *, '============================================================'
     end subroutine trace_compare_gpu
+
+#ifdef SIMPLE_ENABLE_CUDA_NATIVE
+    !> Largest error of the generated CUDA Euler system against the host field,
+    !> get_derivatives2 and the Euler residual and Jacobian, relative to each
+    !> output's largest magnitude. Each particle contributes its start and a
+    !> point across the axis (r < 0), with a residual away from zero.
+    subroutine check_cuda_euler_system(si, f, error)
+        use orbit_symplectic_base, only: symplectic_integrator_t
+        use orbit_symplectic_euler1, only: sympl_euler1_residual, sympl_euler1_jacobian
+        use field_can_mod, only: field_can_t, get_derivatives2
+        use field_can_boozer, only: eval_field_booz
+        use simple_cuda_euler, only: cuda_euler_system_probe
+
+        type(symplectic_integrator_t), intent(in) :: si(:)
+        type(field_can_t), intent(in) :: f(:)
+        real(dp), intent(out) :: error
+
+        real(dp), allocatable :: input(:, :), output(:, :), reference(:, :)
+        type(symplectic_integrator_t) :: s
+        type(field_can_t) :: g
+        real(dp) :: x(2), fvec(2), jac(2, 2), scale
+        integer :: i, j, k, n
+
+        n = 2*size(si)
+        allocate (input(9, n), output(21, n), reference(21, n))
+        do i = 1, size(si)
+            do j = 1, 2
+                k = 2*(i - 1) + j
+                x = [si(i)%z(1), si(i)%z(4)]
+                if (j == 2) x(1) = -0.5_dp*x(1)
+                s = si(i)
+                s%z(4) = si(i)%z(4)*(1.0_dp - 1.0e-3_dp)
+                s%pthold = f(i)%pth*(1.0_dp + 1.0e-3_dp)
+                input(:, k) = [x(1), s%z(2), s%z(3), x(2), f(i)%mu, f(i)%ro0, &
+                               s%dt, s%pthold, s%z(4)]
+                g = f(i)
+                call eval_field_booz(g, x(1), s%z(2), s%z(3), 2)
+                call get_derivatives2(g, x(2))
+                call sympl_euler1_residual(s, g, x, fvec)
+                call sympl_euler1_jacobian(s, g, x, jac)
+                reference(1:6, k) = [fvec, jac(:, 1), jac(:, 2)]
+                reference(7:14, k) = [g%pth, g%dpth(1), g%dpth(4), g%dH(1), &
+                                      g%d2H(1), g%d2H(7), g%d2pth(1), g%d2pth(7)]
+                reference(15:21, k) = [g%vpar, g%dvpar(1), g%dvpar(4), g%hth, &
+                                       g%dhth(1), g%hph, g%dhph(1)]
+            end do
+        end do
+        call cuda_euler_system_probe(n, input, output)
+        error = 0.0_dp
+        do k = 1, 21
+            scale = maxval(abs(reference(k, :)))
+            if (scale > 0.0_dp) error = max(error, maxval(abs(output(k, :) - &
+                                                              reference(k, :)))/scale)
+        end do
+    end subroutine check_cuda_euler_system
+#endif
 
     subroutine classify_parallel(norb)
         use classification, only: trace_orbit_with_classifiers, classification_result_t

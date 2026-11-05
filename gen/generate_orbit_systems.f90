@@ -8,7 +8,8 @@ program generate_orbit_systems
     ! guiding-centre rates of a Boozer field for OpenACC.
     use fortsym_arena, only: arena_t
     use fortsym_expr, only: expr_t, sym, num, func, func_in, operator(+), &
-                            operator(-), operator(*), operator(/), operator(**)
+                            operator(-), operator(*), operator(/), operator(**), &
+                            sqrt
     use fortsym_diff, only: diff, partial_derivative
     use fortsym_subs, only: subs_many
     use fortsym_chain, only: chain_t, fold_numbers
@@ -16,7 +17,11 @@ program generate_orbit_systems
                               KERNEL_SUBROUTINE
     use fortsym_kernel_ir, only: kernel_ir_t, lower_kernel_ir
     use fortsym_kernel_emit, only: kernel_emit_spec_t, emit_fortran_kernel_ir, &
-                                   TARGET_FORTRAN_OPENACC
+                                   emit_cuda_device_ir, TARGET_FORTRAN_OPENACC, &
+                                   TARGET_CUDA
+    use fortgen_horner_emit, only: horner_kernel_spec_t, emit_horner_kernel
+    use fortgen_kernel_target, only: HORNER_CUDA => TARGET_CUDA
+    use fortgen_string, only: fg_str => str, fg_chars => chars
     use fortsym_string, only: str_t, str, chars
     implicit none
 
@@ -71,6 +76,7 @@ program generate_orbit_systems
     close (unit)
 
     call emit_rates_boozer(output_dir)
+    call emit_cuda_euler1_boozer(output_dir)
 
     open (newunit=unit, file=trim(output_dir)//'/field_can_derivatives.inc', &
           status='replace', action='write')
@@ -320,13 +326,23 @@ contains
         dt = sym(arena, 'dt')
         pthold = sym(arena, 'pthold')
         f = stage('f', x(1), z(2), z(3), x(2))
-        res(1) = d(f%pth, 1)*(f%pth - pthold) &
-                 + dt*(d(f%H, 2)*d(f%pth, 1) - d(f%H, 1)*d(f%pth, 2))
-        res(2) = d(f%pth, 1)*(x(2) - z(4)) &
-                 + dt*(d(f%H, 3)*d(f%pth, 1) - d(f%H, 1)*d(f%pth, 3))
+        res = euler1_residual(f%pth, [d(f%H, 1), d(f%H, 2), d(f%H, 3)], &
+                              [d(f%pth, 1), d(f%pth, 2), d(f%pth, 3)], x(2), z(4), &
+                              pthold, dt)
         call emit_pair(unit, 'euler1', res, 2, ['f'], &
                        [character(6) :: 'dt', 'pthold', 'z', 'x'], ['(4)', '(2)'])
     end subroutine emit_euler1
+
+    !> Explicit-implicit Euler residual (Newton unknowns r and p_phi at fixed
+    !> angles) from p_theta and the gradients of H and p_theta at the new
+    !> state; the Fortran and CUDA kernels share this statement.
+    function euler1_residual(pth, dh, dpth, pph, pph_old, pthold, dt) result(res)
+        type(expr_t), intent(in) :: pth, dh(3), dpth(3), pph, pph_old, pthold, dt
+        type(expr_t) :: res(2)
+
+        res(1) = dpth(1)*(pth - pthold) + dt*(dh(2)*dpth(1) - dh(1)*dpth(2))
+        res(2) = dpth(1)*(pph - pph_old) + dt*(dh(3)*dpth(1) - dh(1)*dpth(3))
+    end function euler1_residual
 
     subroutine emit_euler2(unit)
         integer, intent(in) :: unit
@@ -496,9 +512,8 @@ contains
         call add_binding('ro0', [integer ::], 'f%ro0')
 
         call c%init(x)
-        q(1) = c%let('vpar', (x(4) - aph/ro0)/hph)
-        q(2) = q(1)**2/2 + mu*bmod + phie
-        q(3) = hth*q(1) + ath/ro0
+        call gc_quantities(c, x(4), aph, ath, hth, hph, bmod, phie, mu, ro0, &
+                           q(1), q(2), q(3))
         allocate (roots(0), refs(0))
         do m = 1, 3
             call add_root(roots, refs, q(m), 'f%'//trim(quantity(m)))
@@ -561,6 +576,19 @@ contains
         call emit_with_locals(unit, name, c, needed, roots, refs, c%defs(needed), &
                               reciprocal)
     end subroutine emit_field_derivatives
+
+    !> v_par = (p_phi - A_phi/ro0)/h_phi as a named intermediate of chain c,
+    !> H = v_par^2/2 + mu B + Phi_e and p_theta = h_theta v_par + A_theta/ro0.
+    subroutine gc_quantities(c, pph, aph, ath, hth, hph, bmod, phie, mu, ro0, &
+                             vpar, h, pth)
+        type(chain_t), intent(inout) :: c
+        type(expr_t), intent(in) :: pph, aph, ath, hth, hph, bmod, phie, mu, ro0
+        type(expr_t), intent(out) :: vpar, h, pth
+
+        vpar = c%let('vpar', (pph - aph/ro0)/hph)
+        h = vpar**2/2 + mu*bmod + phie
+        pth = hth*vpar + ath/ro0
+    end subroutine gc_quantities
 
     !> A value that an earlier kernel stored in field_can_t: an opaque
     !> application bound to its member.
@@ -812,6 +840,258 @@ contains
         call write_source(unit, chars(source))
         close (unit)
     end subroutine emit_rates_boozer
+
+    !> CUDA device kernels of the explicit-implicit Euler step on the quintic
+    !> Boozer splines (simple_cuda_euler.cu): the spline cell polynomials, and
+    !> the Newton residual, Jacobian and the quantities of the extrapolated
+    !> angle advance from the raw spline values. A_phi is a spline in
+    !> s = sigma r, B_vartheta, B_varphi and |B| are splines in rho = sqrt(s);
+    !> sigma = -1 is the axis continuation r < 0 of eval_field_booz.
+    subroutine emit_cuda_euler1_boozer(output_dir)
+        character(*), intent(in) :: output_dir
+        type(chain_t) :: c
+        type(expr_t) :: x(4), sigma, mu, ro0, torflux, dt, pthold, pph_old
+        type(expr_t) :: s, rho, aphi, bth, bph, bmod, hth, hph, vpar, h, pth
+        type(expr_t) :: dh(3), dpth(3), res(2), roots(21)
+        type(expr_t), allocatable :: old(:), new(:), values(:)
+        type(str_t), allocatable :: inputs(:), args(:), outputs(:)
+        integer, allocatable :: needed(:)
+        integer :: k, unit
+
+        call reset()
+        x = [sym(arena, 'r'), sym(arena, 'th'), sym(arena, 'ph'), sym(arena, 'pph')]
+        sigma = sym(arena, 'sigma')
+        mu = sym(arena, 'mu')
+        ro0 = sym(arena, 'ro0')
+        torflux = sym(arena, 'torflux')
+        dt = sym(arena, 'dt')
+        pthold = sym(arena, 'pthold')
+        pph_old = sym(arena, 'pph_old')
+        call c%init(x)
+        s = c%let('s', sigma*x(1))
+        rho = c%let('rho', sqrt(s))
+        aphi = func('aphi', [s])
+        bth = func('bth', [rho])
+        bph = func('bph', [rho])
+        bmod = func('bmod', [rho, x(2), x(3)])
+        hth = c%let('hth', bth/bmod)
+        hph = c%let('hph', bph/bmod)
+        call gc_quantities(c, x(4), aphi, torflux*s, hth, hph, bmod, num(arena, 0), &
+                           mu, ro0, vpar, h, pth)
+        do k = 1, 3
+            dh(k) = c%d(h, k)
+            dpth(k) = c%d(pth, k)
+        end do
+        res = euler1_residual(pth, dh, dpth, x(4), pph_old, pthold, dt)
+        roots = [res(1), res(2), c%d(res(1), 1), c%d(res(2), 1), c%d(res(1), 4), &
+                 c%d(res(2), 4), pth, dpth(1), c%d(pth, 4), dh(1), c%d(dh(1), 1), &
+                 c%d(dh(1), 4), c%d(dpth(1), 1), c%d(dpth(1), 4), vpar, c%d(vpar, 1), &
+                 c%d(vpar, 4), hth, c%d(hth, 1), hph, c%d(hph, 1)]
+
+        allocate (old(0), new(0), inputs(0))
+        call spline_inputs(aphi, 'aphi', 1, old, new, inputs)
+        call spline_inputs(bth, 'bth', 1, old, new, inputs)
+        call spline_inputs(bph, 'bph', 1, old, new, inputs)
+        call spline_inputs(bmod, 'bmod', 3, old, new, inputs)
+        do k = 1, size(roots)
+            roots(k) = subs_many(fold_numbers(roots(k)), old, new)
+        end do
+        needed = c%needed(roots)
+        values = c%defs(needed)
+        do k = 1, size(values)
+            values(k) = subs_many(values(k), old, new)
+        end do
+
+        open (newunit=unit, file=trim(output_dir)//'/cuda_euler1_boozer.cuh', &
+              status='replace', action='write')
+        first_in_file = .true.
+        write (unit, '(a)') '// Generated by gen/generate_orbit_systems.f90. '// &
+            'Do not edit.'
+        write (unit, '(a)') '#pragma once'
+        call emit_cuda_spline_leaves(unit)
+        args = [words('r th ph pph sigma mu ro0 torflux dt pthold pph_old'), inputs]
+        outputs = [words('fvec1 fvec2 jac11 jac21 jac12 jac22'), aux_names()]
+        call emit_cuda(unit, 'euler1_boozer_system', roots, c%names(needed), values, &
+                       args, outputs)
+        call emit_cuda_euler1_advance(unit)
+        close (unit)
+    end subroutine emit_cuda_euler1_boozer
+
+    !> The values and radial-mixed derivatives of spline `q` become the
+    !> inputs <name>, <name>_r, <name>_t, <name>_p, <name>_rr, <name>_rt and
+    !> <name>_rp (first argument r, then t and p).
+    subroutine spline_inputs(q, name, nargs, old, new, inputs)
+        type(expr_t), intent(in) :: q
+        character(*), intent(in) :: name
+        integer, intent(in) :: nargs
+        type(expr_t), allocatable, intent(inout) :: old(:), new(:)
+        type(str_t), allocatable, intent(inout) :: inputs(:)
+        character(1), parameter :: axis(3) = ['r', 't', 'p']
+        type(expr_t) :: d1, d1i
+        integer :: i
+
+        call add_input(q, name, old, new, inputs)
+        do i = 1, nargs
+            call add_input(partial_derivative(q, i), name//'_'//axis(i), old, new, &
+                           inputs)
+        end do
+        d1 = partial_derivative(q, 1)
+        call add_input(partial_derivative(d1, 1), name//'_rr', old, new, inputs)
+        do i = 2, nargs
+            d1i = partial_derivative(d1, i)
+            call add_input(d1i, name//'_r'//axis(i), old, new, inputs)
+            old = [old, partial_derivative(partial_derivative(q, i), 1)]
+            new = [new, sym(arena, name//'_r'//axis(i))]
+        end do
+    end subroutine spline_inputs
+
+    subroutine add_input(e, input, old, new, inputs)
+        type(expr_t), intent(in) :: e
+        character(*), intent(in) :: input
+        type(expr_t), allocatable, intent(inout) :: old(:), new(:)
+        type(str_t), allocatable, intent(inout) :: inputs(:)
+
+        old = [old, e]
+        new = [new, sym(arena, input)]
+        inputs = [inputs, str(input)]
+    end subroutine add_input
+
+    !> After convergence the CUDA step moves p_theta and the field quantities
+    !> of the last Newton evaluation to the converged (r, p_phi) to first order,
+    !> as sympl_euler1_extrapolate_field, and advances the angles, as
+    !> sympl_euler1_advance_angles. The Fortran CPU step keeps its own copy
+    !> because a different rounding changes the golden-record orbits.
+    !> The field quantities that euler1_boozer_system returns after its
+    !> residual and Jacobian and euler1_boozer_advance reads.
+    function aux_names() result(names)
+        type(str_t), allocatable :: names(:)
+        names = [words('pth dpth_r dpth_p dh_r d2h_rr d2h_rp d2pth_rr d2pth_rp'), &
+                 words('vpar dvpar_r dvpar_p hth dhth_r hph dhph_r')]
+    end function aux_names
+
+    !> Space-separated names as strings.
+    function words(text) result(list)
+        character(*), intent(in) :: text
+        type(str_t), allocatable :: list(:)
+        integer :: first, last
+
+        allocate (list(0))
+        last = 0
+        do
+            first = verify(text(last + 1:), ' ')
+            if (first == 0) exit
+            first = last + first
+            last = index(text(first:)//' ', ' ') + first - 2
+            list = [list, str(text(first:last))]
+        end do
+    end function words
+
+    function named(name) result(e)
+        character(*), intent(in) :: name
+        type(expr_t) :: e
+        e = sym(arena, name)
+    end function named
+
+    subroutine emit_cuda_euler1_advance(unit)
+        integer, intent(in) :: unit
+        type(expr_t) :: dr, dp, pth, dh1, dpth1, vpar, hth, hph, hp, roots(3)
+
+        dr = named('dr')
+        dp = named('dp')
+        pth = named('pth') + named('dpth_r')*dr + named('dpth_p')*dp
+        dh1 = named('dh_r') + named('d2h_rr')*dr + named('d2h_rp')*dp
+        dpth1 = named('dpth_r') + named('d2pth_rr')*dr + named('d2pth_rp')*dp
+        vpar = named('vpar') + named('dvpar_r')*dr + named('dvpar_p')*dp
+        hth = named('hth') + named('dhth_r')*dr
+        hph = named('hph') + named('dhph_r')*dr
+        hp = dh1/dpth1
+        roots(1) = pth
+        roots(2) = named('z2') + named('dt')*hp
+        roots(3) = named('z3') + named('dt')*(vpar - hp*hth)/hph
+        call emit_cuda(unit, 'euler1_boozer_advance', roots, [expr_t ::], [expr_t ::], &
+                       [words('dr dp dt z2 z3'), aux_names()], &
+                       words('pth_new z2_new z3_new'))
+    end subroutine emit_cuda_euler1_advance
+
+    !> FortGen Horner cell kernels of the libneo quintic batch splines, with
+    !> libneo's coefficient layout: |B| value, gradient and the three
+    !> second derivatives with a radial index; 1D value and two derivatives
+    !> for one and two quantities.
+    subroutine emit_cuda_spline_leaves(unit)
+        integer, intent(in) :: unit
+        type(horner_kernel_spec_t) :: spec
+
+        spec%target = HORNER_CUDA
+        spec%name = fg_str('spline3d_o555_rmix_nq1')
+        spec%dimension = 3
+        spec%degree = [5, 5, 5]
+        spec%nq = 1
+        spec%orders = reshape([0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, &
+                               2, 0, 0, 1, 1, 0, 1, 0, 1], [3, 7])
+        call emit_horner(unit, spec)
+        deallocate (spec%orders)
+        spec%dimension = 1
+        spec%degree = [5, 0, 0]
+        spec%max_order = 2
+        spec%name = fg_str('spline1d_o5_d2_nq1')
+        call emit_horner(unit, spec)
+        spec%nq = 2
+        spec%name = fg_str('spline1d_o5_d2_nq2')
+        call emit_horner(unit, spec)
+    end subroutine emit_cuda_spline_leaves
+
+    subroutine emit_horner(unit, spec)
+        integer, intent(in) :: unit
+        type(horner_kernel_spec_t), intent(in) :: spec
+        character(:), allocatable :: source, message
+        logical :: ok
+
+        source = fg_chars(emit_horner_kernel(spec, ok, message))
+        if (.not. ok) then
+            print *, 'Horner emission failed: ', message
+            error stop 1
+        end if
+        call write_source(unit, source)
+    end subroutine emit_horner
+
+    subroutine emit_cuda(unit, name, roots, locals, values, args, outputs)
+        integer, intent(in) :: unit
+        character(*), intent(in) :: name
+        type(expr_t), intent(in) :: roots(:), locals(:), values(:)
+        type(str_t), intent(in) :: args(:), outputs(:)
+        type(kernel_ir_t) :: ir
+        type(kernel_emit_spec_t) :: spec
+        type(str_t) :: source
+        character(:), allocatable :: message
+        logical :: good
+
+        if (size(locals) > 0) then
+            call lower_kernel_ir(roots, ir, good, message, locals, values, &
+                                 share_products=.true.)
+        else
+            call lower_kernel_ir(roots, ir, good, message, share_products=.true.)
+        end if
+        if (.not. good) then
+            print *, 'lowering of ', name, ' failed: ', message
+            error stop 1
+        end if
+        spec%name = str(name)
+        spec%args = args
+        spec%outputs = outputs
+        spec%temp_prefix = str('t')
+        spec%generator = str('gen/generate_orbit_systems.f90')
+        if (len_trim(fortsym_revision) > 0) &
+            spec%generator_revision = str('fortsym '//trim(fortsym_revision))
+        spec%regenerate_command = str('generate_orbit_systems src/generated '// &
+                                      trim(fortsym_revision))
+        spec%target = TARGET_CUDA
+        source = emit_cuda_device_ir(ir, spec, good, message)
+        if (.not. good) then
+            print *, 'CUDA emission of ', name, ' failed: ', message
+            error stop 1
+        end if
+        call write_source(unit, chars(source))
+    end subroutine emit_cuda
 
     subroutine write_source(unit, source)
         integer, intent(in) :: unit

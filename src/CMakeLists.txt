@@ -86,7 +86,7 @@
     endif()
 
     if(SIMPLE_ENABLE_CUDA)
-        list(APPEND SOURCES simple_cuda_native.f90)
+        list(APPEND SOURCES simple_cuda_native.f90 simple_cuda_euler.f90)
     endif()
 
     if(SIMPLE_ENABLE_CGAL)
@@ -129,7 +129,7 @@ list(APPEND SOURCES
 
     if(SIMPLE_ENABLE_CUDA)
         target_compile_definitions(simple PRIVATE SIMPLE_ENABLE_CUDA_NATIVE)
-        target_link_libraries(simple PUBLIC simple_cuda_native_rk54)
+        target_link_libraries(simple PUBLIC simple_cuda_native_rk54 simple_cuda_euler)
     endif()
 
     target_include_directories(simple PUBLIC
