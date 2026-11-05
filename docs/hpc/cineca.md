@@ -3,8 +3,9 @@
 This page builds, tests and runs SIMPLE on the CINECA machines Leonardo and
 Pitagora. Tested on Leonardo (CPU, GCC 12.2, OpenMP) at SIMPLE `ffd7f4a`:
 build, the test selection and the smoke run below pass, also as a batch job.
-The CUDA build compiles but was not run on a GPU. The Pitagora recipe has not
-been run.
+The CUDA build compiles but was not run on a GPU there. On the Pitagora
+Booster the CUDA build and its GPU tests pass on an H100 at SIMPLE `29eaf52`;
+the Pitagora CPU partition and the batch templates have not been run.
 
 ## Access
 
@@ -129,16 +130,33 @@ NVFORTRAN returns kind `-3`. Use GNU Fortran with `nvcc`.
   `openssh` dependency loads an older Kerberos). Use `/usr/bin/git` after
   `module purge`.
 
-## Pitagora (untested)
+## Pitagora
 
 Consult the current [Pitagora guide](https://docs.hpc.cineca.it/hpc/pitagora.html).
 Use `login-dcgp.pitagora.cineca.it` for the AMD Turin CPU partition and
-`login-boost.pitagora.cineca.it` for the Intel/H100 Booster. Leonardo's
-module names are not known to exist there: find GCC, CMake, Ninja, Python,
-OpenBLAS and NetCDF-C with `modmap -m <name>`, write the loads into an
-environment script like `leonardo-gcc-env.sh`, export its absolute path as
-`SIMPLE_ENV`, and repeat the Leonardo build, test selection and smoke run on
-the destination partition. For the H100 use `-DCMAKE_CUDA_ARCHITECTURES=90`.
+`login-boost.pitagora.cineca.it` for the Intel/H100 Booster. Compute nodes
+cannot reach GitHub, so configure on a login node, where CMake fetches the
+dependencies.
+
+On the Booster, `examples/hpc/cineca/pitagora-boost-env.sh` loads GCC 12.3,
+CUDA 12.6, CMake, Ninja, OpenBLAS, Python and NetCDF-C. From the SIMPLE root:
+
+```bash
+source examples/hpc/cineca/pitagora-boost-env.sh
+cmake -S . -B build-cuda -G Ninja -DCMAKE_BUILD_TYPE=Release \
+    -DSIMPLE_ENABLE_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=90 \
+    -DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF
+cmake --build build-cuda -j 4
+```
+
+On one H100 in `boost_fua_dbg`, `ctest --test-dir build-cuda/test -R "cuda|gpu"`
+passed all 10 selected tests; `test_gpu_two_devices` skips itself with one GPU.
+The debug partitions have a group node limit, so a job can wait with reason
+`QOSGrpNodeLimit` while other jobs of the project run.
+
+For the CPU partition, find the corresponding modules with `modmap -m <name>`,
+write them into a script like `leonardo-gcc-env.sh`, export its absolute path
+as `SIMPLE_ENV`, and repeat the Leonardo build, test selection and smoke run.
 
 | Partition | Nodes | Max. nodes/job | Max. wall time |
 | --- | --- | ---: | --- |
