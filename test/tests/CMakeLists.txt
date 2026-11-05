@@ -1297,18 +1297,21 @@ set_tests_properties(test_gpu_two_devices PROPERTIES
     SKIP_REGULAR_EXPRESSION "GPU devices = 1"
     FAIL_REGULAR_EXPRESSION "loss-step mismatches = *[1-9];final state\\) = +[1-9][0-9.]*E([+]|-0[0-8])"
     TIMEOUT 120)
-# The same with one OpenMP thread for both devices.
-add_test(NAME test_gpu_two_devices_thread_limit
-    COMMAND $<TARGET_FILE:simple.x> test_gpu_two_devices.in
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gpu_two_devices)
-set_tests_properties(test_gpu_two_devices_thread_limit PROPERTIES
-    LABELS "unit;gpu"
-    ENVIRONMENT "OMP_THREAD_LIMIT=1"
-    RESOURCE_LOCK gpu_two_devices
-    PASS_REGULAR_EXPRESSION "GPU devices = 2"
-    SKIP_REGULAR_EXPRESSION "GPU devices = 1"
-    FAIL_REGULAR_EXPRESSION "loss-step mismatches = *[1-9];final state\\) = +[1-9][0-9.]*E([+]|-0[0-8])"
-    TIMEOUT 120)
+# The same with one OpenMP thread for both devices. Only OpenACC builds use
+# several devices; elsewhere the single-threaded CPU reference only costs time.
+if(SIMPLE_ENABLE_OPENACC)
+    add_test(NAME test_gpu_two_devices_thread_limit
+        COMMAND $<TARGET_FILE:simple.x> test_gpu_two_devices.in
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gpu_two_devices)
+    set_tests_properties(test_gpu_two_devices_thread_limit PROPERTIES
+        LABELS "unit;gpu"
+        ENVIRONMENT "OMP_THREAD_LIMIT=1"
+        RESOURCE_LOCK gpu_two_devices
+        PASS_REGULAR_EXPRESSION "GPU devices = 2"
+        SKIP_REGULAR_EXPRESSION "GPU devices = 1"
+        FAIL_REGULAR_EXPRESSION "loss-step mismatches = *[1-9];final state\\) = +[1-9][0-9.]*E([+]|-0[0-8])"
+        TIMEOUT 120)
+endif()
 
 if(SIMPLE_ENABLE_MPI)
     add_test(NAME test_mpi_two_ranks
