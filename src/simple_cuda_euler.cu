@@ -281,7 +281,6 @@ __device__ int timestep_euler(const Params &P, State &S, int *nfev) {
     const double accepted_pthold = S.pthold;
     S.pthold = S.pth;
     double z_start[4] = {S.z[0], S.z[1], S.z[2], S.z[3]};
-    const bool predicted = history_valid(S);
     double zg[4];
     predict_state(P, S, zg);
     double x[2] = {zg[0], zg[3]}, xlast[2];
@@ -289,13 +288,6 @@ __device__ int timestep_euler(const Params &P, State &S, int *nfev) {
     int n;
     int status = newton1(P, S, x, xlast, a, &n);
     *nfev += n;
-    if (status != kStepOk && predicted) {
-      S.pthold = accepted_pthold;
-      x[0] = S.z[0];
-      x[1] = S.z[3];
-      status = newton1(P, S, x, xlast, a, &n);
-      *nfev += n;
-    }
     if (status != kStepOk) {
       S.pthold = accepted_pthold;
       return status;
