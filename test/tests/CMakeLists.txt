@@ -399,6 +399,18 @@ if (ENABLE_OPENMP)
         LABELS "integration;canflux_threads" PROCESSORS 4 TIMEOUT 120
         ENVIRONMENT "OMP_NUM_THREADS=4;OPENBLAS_NUM_THREADS=1")
 
+    add_executable(test_canflux_axis_continuation.x
+        test_canflux_axis_continuation.f90)
+    target_link_libraries(test_canflux_axis_continuation.x simple)
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/canflux_axis)
+    file(CREATE_LINK ${WOUT_FILE}
+        ${CMAKE_CURRENT_BINARY_DIR}/canflux_axis/wout.nc SYMBOLIC)
+    add_test(NAME test_canflux_axis_continuation
+        COMMAND test_canflux_axis_continuation.x
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/canflux_axis)
+    set_tests_properties(test_canflux_axis_continuation PROPERTIES
+        LABELS "unit" TIMEOUT 120)
+
     add_executable (test_sympl_tok.x test_sympl.f90)
     target_link_libraries(test_sympl_tok.x simple)
     add_test(NAME test_sympl_tokamak

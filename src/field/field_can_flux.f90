@@ -16,7 +16,24 @@ contains
       real(dp), intent(in) :: r, th_c, ph_c
       integer, intent(in) :: mode_secders
 
-      call eval_field_can(f, r, th_c, ph_c, mode_secders)
+        ! Axis continuation (#370), as in the Boozer field: a negative radial
+        ! label s denotes the point (|s|, theta+pi), and the derivatives odd in
+        ! the radial direction change sign with the label.
+        if (r < 0.0_dp) then
+            call eval_field_can(f, -r, th_c + 0.5_dp*twopi, ph_c, mode_secders)
+            f%dAth(1) = -f%dAth(1)
+            f%dAph(1) = -f%dAph(1)
+            f%dBmod(1) = -f%dBmod(1)
+            f%dhth(1) = -f%dhth(1)
+            f%dhph(1) = -f%dhph(1)
+            f%d2Ath(2:3) = -f%d2Ath(2:3)
+            f%d2Aph(2:3) = -f%d2Aph(2:3)
+            f%d2Bmod(2:3) = -f%d2Bmod(2:3)
+            f%d2hth(2:3) = -f%d2hth(2:3)
+            f%d2hph(2:3) = -f%d2hph(2:3)
+        else
+            call eval_field_can(f, r, th_c, ph_c, mode_secders)
+        end if
 
         call count_field_evaluation(mode_secders)
    end subroutine evaluate_flux
