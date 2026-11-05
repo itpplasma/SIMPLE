@@ -1,32 +1,37 @@
 program test_collision_species
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use collis_alp, only: compute_collision_coeffs, loacol_alpha, &
-                          init_collision_profiles, efcolf, efcolf_grid
+                          init_collision_profiles, efcolf, get_local_coeffs
     use simple_main, only: init_collisions
     use params, only: n_d, n_e, v0, particle_energy_eV_effective
     use velo_mod, only: isw_field_type
     use magfie_sub, only: TEST
     implicit none
     real(dp), parameter :: energy = 55000.0_dp, temperature = 1000.0_dp
-    real(dp), parameter :: proton_mass = 1.6726e-24_dp, ev = 1.6022e-12_dp
+    real(dp), parameter :: proton_mass = 1.67262192369e-24_dp, ev = 1.602176634e-12_dp
     real(dp) :: alpha(3), coefficients(3), ratios(3), energies(3), speed
     real(dp) :: pitch_rate, drag_rate, pitch_norm, drag_norm
+    real(dp) :: local(3), local_ratios(3), local_energies(3), clog_alpha(3), clog(3)
     integer :: mass
 
     call compute_collision_coeffs(1.0_dp, 12.0_dp, 1.0_dp, 6.0_dp, &
                           1.0e13_dp, 1.0e12_dp, temperature, temperature, temperature, &
-                                  energy, speed, alpha, ratios, energies)
+                                  energy, speed, alpha, ratios, energies, &
+                                  clog_out=clog_alpha)
     do mass = 1, 4
         call compute_collision_coeffs(1.0_dp, 12.0_dp, 1.0_dp, 6.0_dp, &
                           1.0e13_dp, 1.0e12_dp, temperature, temperature, temperature, &
-                  energy, speed, coefficients, ratios, energies, real(mass, dp), 1.0_dp)
+                energy, speed, coefficients, ratios, energies, real(mass, dp), 1.0_dp, &
+                                      clog_out=clog)
         ! Kinetic energy and Maxwellian speeds are independent dimensional oracles.
         if (abs(0.5_dp*mass*proton_mass*speed**2/(energy*ev) - 1) > 1e-13_dp) &
             error stop 'Test-particle kinetic energy is wrong'
         if (maxval(abs(energies - energy/temperature)) > 1e-13_dp) &
             error stop 'Collision Maxwellian energy scale is wrong'
-        ! At fixed energy, the electron coefficient scales as Z_test^2/sqrt(A).
-        if (abs(coefficients(3)/alpha(3) - 0.5_dp/sqrt(real(mass, dp))) > &
+        ! At fixed energy, the electron coefficient per Coulomb logarithm
+        ! scales as Z_test^2/sqrt(A).
+        if (abs(coefficients(3)/alpha(3)*clog_alpha(3)/clog(3) - &
+                0.5_dp/sqrt(real(mass, dp))) > &
             1e-13_dp) error stop 'Electron collision mass/charge scaling is wrong'
         if (abs(ratios(1) - sqrt(energy/(mass*temperature))) > 1e-13_dp) &
             error stop 'Main-ion relative speed is wrong'
@@ -38,7 +43,8 @@ program test_collision_species
         if (any(efcolf /= coefficients)) error stop 'Scalar initialization lost species'
         call init_collision_profiles(1.0_dp, 12.0_dp, 1.0_dp, 6.0_dp, &
                                      energy, speed, real(mass, dp), 1.0_dp)
-        if (any(efcolf_grid <= 0)) error stop 'Profile initialization lost collisions'
+        call get_local_coeffs(0.0_dp, local, local_ratios, local_energies)
+        if (any(local <= 0)) error stop 'Profile initialization lost collisions'
         ! Exercise the production initializer, including its orbit-speed guard.
         n_d = real(mass, dp)
         n_e = 1
@@ -46,7 +52,8 @@ program test_collision_species
         v0 = speed
         isw_field_type = TEST
         call init_collisions
-        if (any(efcolf /= efcolf_grid(:, 1))) &
+        call get_local_coeffs(0.0_dp, local, local_ratios, local_energies)
+        if (any(efcolf /= local)) &
             error stop 'Scalar and profile species disagree'
     end do
     print *, 'PASS: H, D and variable charge Coulomb collision coefficients'

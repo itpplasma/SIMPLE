@@ -10,6 +10,10 @@ program test_orbit_netcdf_output
     integer :: n_particles, n_timesteps
     integer :: varid_time, varid_s, varid_theta, varid_phi, varid_p_abs, varid_v_par
     real(dp), allocatable :: time_data(:,:)
+    real(dp), allocatable :: first_position(:, :)
+    real(dp) :: start_state(5), angle_error(2), periods(2)
+    integer :: field_ncid, field_varid, nfp
+    integer :: start_unit, particle, component, position_ids(3)
     logical :: file_exists
     integer :: expected_particles = 32
     integer :: expected_timesteps = 10001
@@ -118,6 +122,41 @@ program test_orbit_netcdf_output
         error stop 1
     end if
     print *, 'PASS: All required variables exist'
+
+    status = nf90_open(test_dir//'/wout.nc', nf90_nowrite, field_ncid)
+    if (status /= nf90_noerr) error stop 'Cannot open orbit equilibrium'
+    status = nf90_inq_varid(field_ncid, 'nfp', field_varid)
+    if (status /= nf90_noerr) error stop 'Cannot find field-period count'
+    status = nf90_get_var(field_ncid, field_varid, nfp)
+    if (status /= nf90_noerr .or. nfp < 1) error stop 'Invalid field-period count'
+    status = nf90_close(field_ncid)
+    periods = 2.0_dp*acos(-1.0_dp)/[1.0_dp, real(nfp, dp)]
+
+    ! The writer must recover the reference birth within each field period.
+    allocate (first_position(n_particles, 3))
+    position_ids = [varid_s, varid_theta, varid_phi]
+    do component = 1, 3
+        status = nf90_get_var(ncid, position_ids(component), &
+                              first_position(:, component:component), &
+                              start=[1, 1], count=[n_particles, 1])
+        if (status /= nf90_noerr) error stop 'Cannot read first orbit position'
+    end do
+    open (newunit=start_unit, file=test_dir//'/start.dat', status='old')
+    do particle = 1, n_particles
+        read (start_unit, *) start_state
+        angle_error = modulo(first_position(particle, 2:3) - &
+                             start_state(2:3) + 0.5_dp*periods, periods) - &
+                      0.5_dp*periods
+        if (abs(first_position(particle, 1) - start_state(1)) > 1.0e-9_dp .or. &
+            any(abs(angle_error) > 1.0e-9_dp)) then
+            print *, 'Initial orbit sample differs from reference birth', particle
+            print *, 'Expected:', start_state(1:3)
+            print *, 'Actual:', first_position(particle, :)
+            error stop 'Initial orbit sample differs from reference birth'
+        end if
+    end do
+    close (start_unit)
+    deallocate (first_position)
 
     ! Read a sample of time data to verify it's not all NaN
     allocate(time_data(n_particles, n_timesteps))

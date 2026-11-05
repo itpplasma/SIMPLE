@@ -1,5 +1,5 @@
     set(SOURCES
-        ${CMAKE_BINARY_DIR}/version.f90
+        version.F90
         lapack_interfaces.f90
         finite_check.f90
         sorting_mod.f90
@@ -77,6 +77,8 @@
     simple_entry.f90
     )
 
+    set_source_files_properties(version.F90 PROPERTIES
+        COMPILE_DEFINITIONS "SIMPLE_VERSION_STRING=\"${SIMPLE_VERSION}\"")
     set_source_files_properties(magfie.f90 simple_main.f90
         PROPERTIES Fortran_PREPROCESS ON)
     if(SIMPLE_ENABLE_VMECPP)

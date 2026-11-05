@@ -3,7 +3,7 @@ program test_profiles
     use simple_profiles
     use collis_alp
     use params, only: facE_al, particle_energy_eV, resolve_particle_energy, &
-        deterministic, ran_seed, reset_seed_if_deterministic
+                      deterministic, ran_seed, reset_seed_if_deterministic
     implicit none
 
     logical :: all_passed
@@ -19,6 +19,7 @@ program test_profiles
     call test_zero_density_operator(all_passed, n_failed)
     call test_flat_profile_coefficients(all_passed, n_failed)
     call test_peaked_profile_collision_rates(all_passed, n_failed)
+    call test_steep_edge_coefficients(all_passed, n_failed)
     call test_flat_intermediate_values(all_passed, n_failed)
     call test_slowing_down_distribution(all_passed, n_failed)
     call test_loss_fraction_flat_vs_scalar(all_passed, n_failed)
@@ -163,7 +164,7 @@ contains
         nu = nustar*abs(iota)*vref/radius
         p1_exact = lambda0*exp(-nu*real(nstep, dp)*dt)
         p2_exact = 0.5_dp*(3.0_dp*lambda0**2 - 1.0_dp) &
-            *exp(-3.0_dp*nu*real(nstep, dp)*dt)
+                   *exp(-3.0_dp*nu*real(nstep, dp)*dt)
         if (abs(p1_mean - p1_exact) > moment_tolerance .or. &
             abs(p2_mean - p2_exact) > moment_tolerance) then
             print *, '  FAIL: moments numerical/exact', p1_mean, p1_exact, &
@@ -198,7 +199,7 @@ contains
         if (abs(ni2/1e18_dp - 0.5_dp) > 1e-14_dp) &
             error stop 'Exterior impurity density was clamped to LCFS'
         call init_collision_profiles(1.0_dp, 12.0_dp, 1.0_dp, 6.0_dp, &
-            55000.0_dp, 1.0_dp)
+                                     55000.0_dp, 1.0_dp)
         call get_local_coeffs(1.0_dp, edge, vr, er)
         call get_local_coeffs(1.5_dp, ef, vr, er)
         if (any(ef >= edge) .or. any(ef <= 0)) &
@@ -207,7 +208,7 @@ contains
         if (any(ef /= 0)) error stop 'Exterior vacuum was not retained'
         call reset_profiles()
         call init_collision_profiles(1.0_dp, 12.0_dp, 1.0_dp, 6.0_dp, &
-            55000.0_dp, 1.0_dp)
+                                     55000.0_dp, 1.0_dp)
         if (collision_s_max /= 1) error stop 'Profile reset retained exterior grid'
         open (newunit=unit, file='test-plasma.dat', status='old')
         close (unit, status='delete')
@@ -374,8 +375,8 @@ contains
         logical :: vacuum_ok
 
         call loacol_alpha(2.0_dp, 3.0_dp, 1.0_dp, 1.0_dp, 0.0_dp, 0.0_dp, &
-            1000.0_dp, 1000.0_dp, 1000.0_dp, 35000.0_dp, v0, &
-            rates(1), rates(2), rates(3), rates(4))
+                          1000.0_dp, 1000.0_dp, 1000.0_dp, 35000.0_dp, v0, &
+                          rates(1), rates(2), rates(3), rates(4))
         vacuum_ok = all(rates == 0.0_dp) .and. all(efcolf == 0.0_dp)
         active_profile = POWER_SERIES
         Te_scale = 1000.0_dp; Ti1_scale = 1000.0_dp; Ti2_scale = 1000.0_dp
@@ -392,7 +393,7 @@ contains
             vacuum_ok = vacuum_ok .and. ierr == 0 .and. all(z == initial)
         end do
         if (vacuum_ok) then
-            print *, '  PASS: zero-density rates and all collision modes are exact vacuum'
+          print *, '  PASS: zero-density rates and all collision modes are exact vacuum'
         else
             print *, '  FAIL: zero-density operator changes the particle state'
             passed = .false.
@@ -408,7 +409,7 @@ contains
         real(dp) :: densi1, densi2, tempi1, tempi2, tempe
         real(dp) :: dchichi, slowrate, dchichi_norm, slowrate_norm
         real(dp) :: efcolf_scalar(nsorts), velrat_scalar(nsorts), enrat_scalar(nsorts)
-        real(dp) :: efcolf_profile(nsorts), velrat_profile(nsorts), enrat_profile(nsorts)
+       real(dp) :: efcolf_profile(nsorts), velrat_profile(nsorts), enrat_profile(nsorts)
         real(dp), parameter :: tol = 1.0d-10
         integer :: i
 
@@ -426,7 +427,7 @@ contains
         ealpha = 3.5d6
 
         call loacol_alpha(am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, tempe, &
-            ealpha, v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
+                          ealpha, v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
         efcolf_scalar = efcolf
         velrat_scalar = velrat
         enrat_scalar = enrat
@@ -454,13 +455,13 @@ contains
         call get_local_coeffs(0.5d0, efcolf_profile, velrat_profile, enrat_profile)
 
         do i = 1, nsorts
-            if (abs(efcolf_profile(i) - efcolf_scalar(i))/abs(efcolf_scalar(i)) > tol) then
+         if (abs(efcolf_profile(i) - efcolf_scalar(i))/abs(efcolf_scalar(i)) > tol) then
                 print *, '  FAIL: efcolf mismatch for species', i
                 print *, '    scalar:', efcolf_scalar(i), 'profile:', efcolf_profile(i)
                 passed = .false.
                 nfail = nfail + 1
             end if
-            if (abs(velrat_profile(i) - velrat_scalar(i))/abs(velrat_scalar(i)) > tol) then
+         if (abs(velrat_profile(i) - velrat_scalar(i))/abs(velrat_scalar(i)) > tol) then
                 print *, '  FAIL: velrat mismatch for species', i
                 passed = .false.
                 nfail = nfail + 1
@@ -501,7 +502,7 @@ contains
         ealpha = 3.5d6
 
         call loacol_alpha(am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, tempe, &
-            ealpha, v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
+                          ealpha, v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
 
         profile_type = "two_power"
         active_profile = TWO_POWER
@@ -541,6 +542,49 @@ contains
         end if
     end subroutine test_peaked_profile_collision_rates
 
+    ! Between radial nodes the coefficients must follow the profile itself, not
+    ! a linear interpolation of coefficients, which fails on steep edges.
+    subroutine test_steep_edge_coefficients(passed, nfail)
+        logical, intent(inout) :: passed
+        integer, intent(inout) :: nfail
+
+        real(dp) :: ef(nsorts), vr(nsorts), er(nsorts)
+        real(dp) :: ef_ref(nsorts), vr_ref(nsorts), er_ref(nsorts)
+        real(dp) :: Te, Ti1, Ti2, ni1, ni2, v0, s
+        integer :: k
+
+        print *, 'Testing coefficients between nodes on a steep edge profile...'
+        profile_type = "two_power"
+        active_profile = TWO_POWER
+        Te_scale = 1.5d4; Te_p1 = 12.0d0; Te_p2 = 3.0d0
+        Ti1_scale = 1.5d4; Ti1_p1 = 12.0d0; Ti1_p2 = 3.0d0
+        Ti2_scale = 1.5d4; Ti2_p1 = 12.0d0; Ti2_p2 = 3.0d0
+        ni1_scale = 5.0d19; ni1_p1 = 12.0d0; ni1_p2 = 1.0d0
+        ni2_scale = 5.0d19; ni2_p1 = 12.0d0; ni2_p2 = 1.0d0
+        call init_collision_profiles(2.0_dp, 3.0_dp, 1.0_dp, 1.0_dp, 55000.0_dp, v0)
+        do k = 0, 9
+            s = 0.9905_dp + 0.001_dp*k
+            call get_local_coeffs(s, ef, vr, er)
+            call get_plasma_params(s, Te, Ti1, Ti2, ni1, ni2)
+            ni1 = max(ni1*1.0d-6, 1.0d0)
+            ni2 = max(ni2*1.0d-6, 1.0d0)
+            call compute_collision_coeffs(2.0_dp, 3.0_dp, 1.0_dp, 1.0_dp, ni1, ni2, &
+                                          max(Ti1, 1.0d0), max(Ti2, 1.0d0), &
+                                          max(Te, 1.0d0), 55000.0_dp, v0, &
+                                          ef_ref, vr_ref, er_ref, 4.0_dp, 2.0_dp)
+            if (maxval(abs(ef/ef_ref - 1)) > 1.0d-13 .or. &
+                maxval(abs(vr/vr_ref - 1)) > 1.0d-13 .or. &
+                maxval(abs(er/er_ref - 1)) > 1.0d-13) then
+                print *, '  FAIL: steep edge coefficients at s =', s
+                print *, '    relative error:', maxval(abs(ef/ef_ref - 1))
+                passed = .false.
+                nfail = nfail + 1
+                return
+            end if
+        end do
+        print *, '  PASS: coefficients follow the steep edge profile between nodes'
+    end subroutine test_steep_edge_coefficients
+
     ! Flat radial profiles must reproduce the scalar (constant-coefficient)
     ! collision operator to round-off. This checks every intermediate value the
     ! stochastic step depends on: the interpolated coefficients at off-node s
@@ -553,7 +597,7 @@ contains
         real(dp) :: densi1, densi2, tempi1, tempi2, tempe
         real(dp) :: dchichi, slowrate, dchichi_norm, slowrate_norm
         real(dp) :: efs(nsorts), vrs(nsorts), ers(nsorts)
-        real(dp) :: efl(nsorts), vrl(nsorts), erl(nsorts)
+        real(dp) :: efl(nsorts), vrl(nsorts), erl(nsorts), cll(nsorts), brl(nsorts)
         real(dp) :: dpp_s, dhh_s, fp_s, dpp_l, dhh_l, fp_l
         real(dp) :: s, p
         integer :: i, j, k
@@ -568,7 +612,7 @@ contains
         tempi1 = Ti1_scale; tempi2 = Ti2_scale; tempe = Te_scale
 
         call loacol_alpha(am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, tempe, &
-            ealpha, v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
+                          ealpha, v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
         efs = efcolf; vrs = velrat; ers = enrat
 
         call set_flat_two_power()
@@ -600,11 +644,11 @@ contains
         ! interpolated coefficients) over the full momentum range.
         oper_ok = .true.
         s = 0.413d0
-        call get_local_coeffs(s, efl, vrl, erl)
+        call get_local_coeffs(s, efl, vrl, erl, cll, brl)
         do k = 1, 200
             p = dble(k)/100.0d0
             call coleff(p, dpp_s, dhh_s, fp_s)
-            call coleff_local(p, efl, vrl, erl, dpp_l, dhh_l, fp_l)
+            call coleff_local(p, efl, vrl, erl, dpp_l, dhh_l, fp_l, cll, brl)
             if (.not. rel_close(dpp_l, dpp_s) .or. &
                 .not. rel_close(dhh_l, dhh_s) .or. &
                 .not. rel_close(fp_l, fp_s)) oper_ok = .false.
@@ -649,7 +693,7 @@ contains
         tempi1 = Ti1_scale; tempi2 = Ti2_scale; tempe = Te_scale
 
         call loacol_alpha(am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, tempe, &
-            ealpha, v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
+                          ealpha, v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
         call set_flat_two_power()
 
         dbin = (phi - plo)/dble(nbin)
@@ -757,7 +801,7 @@ contains
         tempi1 = Ti1_scale; tempi2 = Ti2_scale; tempe = Te_scale
 
         call loacol_alpha(am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, tempe, &
-            ealpha, v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
+                          ealpha, v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
         call set_flat_two_power()
 
         call coleff(1.0d0, dpp, dhh, fpeff)
@@ -816,7 +860,7 @@ contains
         densi1 = ni1_scale*1.0d-6; densi2 = ni2_scale*1.0d-6
 
         call loacol_alpha(am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, tempe, &
-            ealpha, v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
+                          ealpha, v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
         call set_flat_two_power()
         call init_collision_profiles(am1, am2, Z1, Z2, ealpha, v0)
 
@@ -878,7 +922,7 @@ contains
         do ib = 1, nbin
             if (h_init(ib) > 0.05d0) then
                 reldev_shape = max(reldev_shape, &
-                    abs(h_final(ib) - h_init(ib))/h_init(ib))
+                                   abs(h_final(ib) - h_init(ib))/h_init(ib))
                 reldev_ana = max(reldev_ana, abs(h_final(ib) - h_ana(ib))/h_ana(ib))
             end if
         end do
@@ -904,12 +948,7 @@ contains
     end subroutine set_flat_two_power
 
     subroutine fill_constant_grid()
-        integer :: i
-        do i = 1, N_S_GRID
-            efcolf_grid(:, i) = efcolf
-            velrat_grid(:, i) = velrat
-            enrat_grid(:, i) = enrat
-        end do
+        call set_uniform_coeffs(efcolf, velrat, enrat, clog_ref, clog_bratio)
     end subroutine fill_constant_grid
 
     subroutine drag_residence(dtauc, plo, phi, nbin, pstop, hist)
@@ -1024,7 +1063,7 @@ contains
         tempe = Te_scale
 
         call loacol_alpha(am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, tempe, &
-            ealpha, v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
+                          ealpha, v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
         efcolf_onaxis = efcolf(1)
 
         call init_collision_profiles(am1, am2, Z1, Z2, ealpha, v0)

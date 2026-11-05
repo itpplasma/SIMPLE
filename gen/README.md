@@ -94,7 +94,8 @@ the stage states. Their partial derivatives bind to the members of
 `field_can_t` (the packed Hessian order of `get_derivatives2`), and every
 `<scheme>_jacobian` is the symbolic derivative of `<scheme>_residual` with
 respect to the Newton unknowns. `gc_rates_canonical` gives the guiding-centre
-rates from the same field quantities. All kernels carry `!$acc routine seq`, so
+rates from the same field quantities; `gc_rates_canonical_jacobian` differentiates
+those rates for the two-derivative integrators. All kernels carry `!$acc routine seq`, so
 the CPU build and the OpenACC device code share them. The Runge-Kutta
 coefficients stay arguments, supplied by `coeff_rk_gauss` and
 `coeff_rk_lobatto`.
@@ -125,6 +126,11 @@ hand-written: the same kernel emitted for CUDA ran about 2 % slower there.
 `emit_field_derivatives` can also emit `get_val`, `get_derivatives` and
 `get_derivatives2`; the CPU chain stays hand-written because a different
 rounding changes the chaotic orbits of the golden-record classifier cases.
+
+`gc_geometry_gradient_transport` transports the gradients of A_theta,
+A_phi, h_theta, h_phi and B to the corrected Newton stage using the packed
+Hessians already stored in `field_can_t`. Gauss endpoint Hermite extrapolation
+uses those transported gradients, without another field evaluation.
 
 The optional second argument records the FortSym revision in the banner of
 every kernel. The emitted files are committed unformatted, so regenerating into

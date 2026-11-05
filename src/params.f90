@@ -56,6 +56,10 @@ module params
     ! physical loss and is conservatively counted confined, with the distinct
     ! code retained for auditability.
     integer, parameter :: ORBIT_EXIT_NUMERICAL_CONFINED = 4
+    ! A collisional marker whose kinetic energy fell below
+    ! thermal_stop_factor times the local main-ion temperature. It has joined
+    ! the thermal population and is counted confined, not lost.
+    integer, parameter :: ORBIT_EXIT_THERMALIZED = 5
     integer, parameter :: ORBIT_EXIT_NUMERICAL_DOMAIN = 101
     integer, parameter :: ORBIT_EXIT_NUMERICAL_MAXITER = 102
     integer, parameter :: ORBIT_EXIT_NUMERICAL_LINEAR = 103
@@ -170,6 +174,8 @@ module params
 
     ! > 'full' (Coulomb operator) or 'lorentz_nustar' (monoenergetic pitch scattering)
     character(24) :: collision_model = 'full'
+    ! Stop a collisional marker once E < thermal_stop_factor*T_i(s); 0 disables.
+    real(dp) :: thermal_stop_factor = 0.0d0
     ! > Lorentz mode: nu* = R0*nu/(abs(iota)*v0), must be >= 0
     real(dp) :: nu_star_standard = -1.0_dp
     ! > Lorentz mode: local major radius R0 in cm, must be > 0
@@ -263,7 +269,7 @@ module params
         canonical_ode_relerr, &
         tcut, nturns, debug, &
         class_plot, cut_in_per, fast_class, vmec_B_scale, &
-        vmec_RZ_scale, swcoll, collision_model, nu_star_standard, &
+        vmec_RZ_scale, swcoll, collision_model, thermal_stop_factor, nu_star_standard, &
         lorentz_major_radius_cm, lorentz_iota, radial_electric_potential_slope, &
         deterministic, old_axis_healing, &
         old_axis_healing_boundary, axis_healing_power_law, rho_axis_heal, &
@@ -362,6 +368,10 @@ contains
             error stop 'canonical_ode_relerr must be finite and positive'
         end if
 
+        if (.not. config_value_is_finite(thermal_stop_factor) .or. &
+            thermal_stop_factor < 0d0) then
+            error stop 'thermal_stop_factor must be finite and non-negative'
+        end if
         if (swcoll .and. (tcut > 0.0d0 .or. class_plot .or. fast_class)) then
             error stop 'Collisions are incompatible with classification'
         end if

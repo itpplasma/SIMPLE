@@ -3,11 +3,23 @@ module collis_alp
     implicit none
 
     integer, parameter :: nsorts = 3
-    integer, parameter :: N_S_GRID = 101
     real(wp) :: collision_s_max = 1.0_wp
 
     real(wp), dimension(nsorts) :: efcolf, velrat, enrat
-    real(wp), dimension(nsorts, N_S_GRID) :: efcolf_grid, velrat_grid, enrat_grid
+    ! Coulomb logarithm at the reference speed and the ratio of classical to
+    ! quantum minimum impact parameter there; a zero ratio keeps it constant.
+    real(wp), dimension(nsorts) :: clog_ref = 0.0_wp, clog_bratio = 0.0_wp
+    ! Species of the radial collision profile, set by init_collision_profiles.
+    real(wp) :: profile_am1 = 0.0_wp, profile_am2 = 0.0_wp
+    real(wp) :: profile_Z1 = 0.0_wp, profile_Z2 = 0.0_wp
+    real(wp) :: profile_ealpha = 0.0_wp
+    real(wp) :: profile_test_mass = 4.0_wp, profile_test_charge = 2.0_wp
+    logical :: profile_ready = .false.
+    ! Radially uniform coefficients override the profile when set.
+    logical :: uniform_ready = .false.
+    real(wp), dimension(nsorts) :: uniform_efcolf = 0.0_wp, &
+                                   uniform_velrat = 0.0_wp, uniform_enrat = 0.0_wp, &
+                                   uniform_clog = 0.0_wp, uniform_bratio = 0.0_wp
     real(wp) :: lorentz_nu = 0.0_wp
     real(wp) :: lorentz_dhh = 0.0_wp
 
@@ -64,16 +76,19 @@ contains
         real(wp), intent(in) :: p
         real(wp), intent(out) :: dpp, dhh, fpeff
 
-        call coleff_local(p, efcolf, velrat, enrat, dpp, dhh, fpeff)
+        call coleff_local(p, efcolf, velrat, enrat, dpp, dhh, fpeff, &
+                          clog_ref, clog_bratio)
     end subroutine coleff
 
-    subroutine coleff_local(p, efcolf_loc, velrat_loc, enrat_loc, dpp, dhh, fpeff)
+    subroutine coleff_local(p, efcolf_loc, velrat_loc, enrat_loc, dpp, dhh, fpeff, &
+                            clog_loc, bratio_loc)
         real(wp), intent(in) :: p
-        real(wp), intent(in) :: efcolf_loc(nsorts), velrat_loc(nsorts), enrat_loc(nsorts)
+       real(wp), intent(in) :: efcolf_loc(nsorts), velrat_loc(nsorts), enrat_loc(nsorts)
         real(wp), intent(out) :: dpp, dhh, fpeff
+        real(wp), intent(in), optional :: clog_loc(nsorts), bratio_loc(nsorts)
 
         integer :: i
-        real(wp) :: plim, xbeta, dp, dh, dpd
+        real(wp) :: plim, xbeta, dp, dh, dpd, f, df
 
         plim = max(p, 1.d-8)
 
@@ -84,9 +99,12 @@ contains
         do i = 1, nsorts
             xbeta = p*velrat_loc(i)
             call onseff(xbeta, dp, dh, dpd)
-            dpp = dpp + dp*efcolf_loc(i)
-            dhh = dhh + dh*efcolf_loc(i)
-            fpeff = fpeff + (dpd/plim - 2.0d0*dp*p*enrat_loc(i))*efcolf_loc(i)
+            call log_factor(i, p, velrat_loc, f, df, clog_loc, bratio_loc)
+            dpp = dpp + f*dp*efcolf_loc(i)
+            dhh = dhh + f*dh*efcolf_loc(i)
+            ! The speed derivative of the logarithm enters the Ito drift.
+            fpeff = fpeff + (f*(dpd/plim - 2.0d0*dp*p*enrat_loc(i)) + df*dp) &
+                    *efcolf_loc(i)
         end do
 
         dhh = dhh/plim**2
@@ -123,14 +141,15 @@ contains
     !> at p = 0: parallel diffusion dpar, perpendicular diffusion dperp and the
     !> drift a along the velocity, with fpeff = a + 2*dperp/p.
     subroutine coleff_cartesian(p, efcolf_loc, velrat_loc, enrat_loc, &
-                                dpar, dperp, a)
+                                dpar, dperp, a, clog_loc, bratio_loc)
         real(wp), intent(in) :: p
-        real(wp), intent(in) :: efcolf_loc(nsorts), velrat_loc(nsorts), enrat_loc(nsorts)
+       real(wp), intent(in) :: efcolf_loc(nsorts), velrat_loc(nsorts), enrat_loc(nsorts)
         real(wp), intent(out) :: dpar, dperp, a
+        real(wp), intent(in), optional :: clog_loc(nsorts), bratio_loc(nsorts)
 
         real(wp), parameter :: cons = 0.75225278d0
         integer :: i
-        real(wp) :: x, dp, dh, dpd, g
+        real(wp) :: x, dp, dh, dpd, g, f, df
 
         dpar = 0.0_wp
         dperp = 0.0_wp
@@ -145,11 +164,44 @@ contains
             else
                 g = (dpd - 2.0d0*dh)/x
             end if
-            dpar = dpar + dp*efcolf_loc(i)
-            dperp = dperp + dh*efcolf_loc(i)
-            a = a + efcolf_loc(i)*(velrat_loc(i)*g - 2.0d0*dp*p*enrat_loc(i))
+            call log_factor(i, p, velrat_loc, f, df, clog_loc, bratio_loc)
+            dpar = dpar + f*dp*efcolf_loc(i)
+            dperp = dperp + f*dh*efcolf_loc(i)
+            a = a + efcolf_loc(i)*(f*(velrat_loc(i)*g - 2.0d0*dp*p*enrat_loc(i)) &
+                                   + df*dp)
         end do
     end subroutine coleff_cartesian
+
+    !> Coulomb logarithm at speed p relative to the reference speed, f = L(p)/L(1),
+    !> and df = (dL/dp)/L(1). L = ln(lambda_D/b_min) with b_min the larger of the
+    !> classical and quantum impact parameters at the mean relative speed
+    !> vbar**2 = v0**2*(p**2 + 1/velrat**2).
+    subroutine log_factor(i, p, velrat_loc, f, df, clog_loc, bratio_loc)
+        integer, intent(in) :: i
+        real(wp), intent(in) :: p, velrat_loc(nsorts)
+        real(wp), intent(out) :: f, df
+        real(wp), intent(in), optional :: clog_loc(nsorts), bratio_loc(nsorts)
+
+        real(wp) :: w, q, lmin, lmin1
+
+        f = 1.0_wp
+        df = 0.0_wp
+        if (.not. (present(clog_loc) .and. present(bratio_loc))) return
+        if (bratio_loc(i) <= 0.0_wp .or. velrat_loc(i) <= 0.0_wp) return
+        w = p**2 + 1.0_wp/velrat_loc(i)**2
+        q = w/(1.0_wp + 1.0_wp/velrat_loc(i)**2)
+        ! Logarithms of b_min relative to the quantum value at p = 1.
+        lmin1 = max(log(bratio_loc(i)), 0.0_wp)
+        if (log(bratio_loc(i)) - log(q) >= -0.5_wp*log(q)) then
+            lmin = log(bratio_loc(i)) - log(q)
+            df = 2.0_wp*p/w
+        else
+            lmin = -0.5_wp*log(q)
+            df = p/w
+        end if
+        f = (clog_loc(i) - (lmin - lmin1))/clog_loc(i)
+        df = df/clog_loc(i)
+    end subroutine log_factor
 
     subroutine loacol_alpha(am1, am2, Z1, Z2, densi1, densi2, tempi1, tempi2, &
                             tempe, ealpha, v0, dchichi, slowrate, &
@@ -161,7 +213,8 @@ contains
 
         call compute_collision_coeffs(am1, am2, Z1, Z2, densi1, densi2, &
                                       tempi1, tempi2, tempe, ealpha, v0, &
-                                      efcolf, velrat, enrat, test_mass, test_charge)
+                                      efcolf, velrat, enrat, test_mass, test_charge, &
+                                      clog_ref, clog_bratio)
 
         call compute_rates(v0, dchichi, slowrate, dchichi_norm, slowrate_norm)
     end subroutine loacol_alpha
@@ -169,21 +222,21 @@ contains
     subroutine compute_collision_coeffs(am1, am2, Z1, Z2, densi1, densi2, &
                                         tempi1, tempi2, tempe, ealpha, v0, &
                                         efcolf_out, velrat_out, enrat_out, &
-                                        test_mass, test_charge)
+                                        test_mass, test_charge, clog_out, bratio_out)
+        use util, only: pi, hbar, pmass => p_mass, emass => e_mass, &
+                        e_cgs => e_charge, ev_cgs => ev
         real(wp), intent(in) :: am1, am2, Z1, Z2, densi1, densi2
         real(wp), intent(in) :: tempi1, tempi2, tempe, ealpha
         real(wp), intent(in), optional :: test_mass, test_charge
         real(wp), intent(out) :: v0
-        real(wp), intent(out) :: efcolf_out(nsorts), velrat_out(nsorts), enrat_out(nsorts)
-
-        real(wp), parameter :: pi = 3.14159265358979d0
-        real(wp), parameter :: pmass = 1.6726d-24
-        real(wp), parameter :: emass = 9.1094d-28
-        real(wp), parameter :: e_cgs = 4.8032d-10
-        real(wp), parameter :: ev_cgs = 1.6022d-12
+      real(wp), intent(out) :: efcolf_out(nsorts), velrat_out(nsorts), enrat_out(nsorts)
+        real(wp), intent(out), optional :: clog_out(nsorts), bratio_out(nsorts)
 
         real(wp) :: dense, vti1, vti2, vte
         real(wp) :: alami1, alami2, alame, frecol_base, mass, charge
+        real(wp) :: debye, field_mass(nsorts), field_charge(nsorts), vth2(nsorts)
+        real(wp) :: clog(nsorts), bratio(nsorts), reduced, vbar2, bcl, bqm
+        integer :: i
 
         mass = 4.0_wp
         charge = 2.0_wp
@@ -208,15 +261,33 @@ contains
         dense = densi1*Z1 + densi2*Z2
         if (dense == 0.0_wp) then
             efcolf_out = 0.0_wp
+            if (present(clog_out)) clog_out = 0.0_wp
+            if (present(bratio_out)) bratio_out = 0.0_wp
             return
         end if
-        alami1 = 23.d0 - log(max(epsilon(1.d0), &
-                                 sqrt(densi1*Z1**2/tempi1)*charge*Z1*(mass + am1)/ &
-                                 (mass*tempi1 + am1*ealpha)))
-        alami2 = 23.d0 - log(max(epsilon(1.d0), &
-                                 sqrt(densi2*Z2**2/tempi2)*charge*Z2*(mass + am2)/ &
-                                 (mass*tempi2 + am2*ealpha)))
-        alame = 24.d0 - log(sqrt(dense)/tempe)
+        ! ln(lambda_D/b_min) for each field species, with Debye screening by
+        ! electrons and both ions and b_min the larger of the classical and
+        ! quantum impact parameters at vbar**2 = v0**2 + vth**2.
+        debye = 1.0_wp/sqrt(4.0_wp*pi*e_cgs**2*(densi1*Z1**2/(tempi1*ev_cgs) &
+                                 + densi2*Z2**2/(tempi2*ev_cgs) + dense/(tempe*ev_cgs)))
+        field_mass = [am1*pmass, am2*pmass, emass]
+        field_charge = [Z1, Z2, 1.0_wp]
+        vth2 = [vti1**2, vti2**2, vte**2]
+        do i = 1, nsorts
+            reduced = mass*pmass*field_mass(i)/(mass*pmass + field_mass(i))
+            vbar2 = v0**2 + vth2(i)
+            bcl = charge*field_charge(i)*e_cgs**2/(reduced*vbar2)
+            bqm = hbar/(2.0_wp*reduced*sqrt(vbar2))
+            clog(i) = log(debye/max(bcl, bqm))
+            bratio(i) = bcl/bqm
+        end do
+        if (any(clog <= 0.0_wp)) error stop &
+            "Coulomb logarithm is not positive; plasma is not weakly coupled"
+        alami1 = clog(1)
+        alami2 = clog(2)
+        alame = clog(3)
+        if (present(clog_out)) clog_out = clog
+        if (present(bratio_out)) bratio_out = bratio
 
         frecol_base = 2.d0*pi*dense*e_cgs**4*charge**2/((mass*pmass)**2*v0**3)
         frecol_base = frecol_base/v0
@@ -245,63 +316,90 @@ contains
 
     subroutine init_collision_profiles(am1, am2, Z1, Z2, ealpha, v0, &
                                        test_mass, test_charge)
-        use simple_profiles, only: get_plasma_params, profile_max_s
+        use simple_profiles, only: profile_max_s
 
         real(wp), intent(in) :: am1, am2, Z1, Z2, ealpha, v0
         real(wp), intent(in), optional :: test_mass, test_charge
-        real(wp) :: s, Te, Ti1, Ti2, ni1, ni2
-        real(wp) :: densi1_loc, densi2_loc, tempi1_loc, tempi2_loc, tempe_loc
-        real(wp) :: v0_loc
-        integer :: i
 
         collision_s_max = profile_max_s()
-        do i = 1, N_S_GRID
-            s = collision_s_max*dble(i - 1)/dble(N_S_GRID - 1)
-
-            call get_plasma_params(s, Te, Ti1, Ti2, ni1, ni2)
-
-            tempe_loc = max(Te, 1.0d0)
-            tempi1_loc = max(Ti1, 1.0d0)
-            tempi2_loc = max(Ti2, 1.0d0)
-            ! Preserve exact vacuum; retain the floor for positive densities.
-            if (ni1 == 0.0_wp .and. ni2 == 0.0_wp) then
-                densi1_loc = 0.0_wp
-                densi2_loc = 0.0_wp
-            else
-                densi1_loc = max(ni1*1.0d-6, 1.0d0)
-                densi2_loc = max(ni2*1.0d-6, 1.0d0)
-            end if
-
-            call compute_collision_coeffs(am1, am2, Z1, Z2, &
-                                          densi1_loc, densi2_loc, &
-                                          tempi1_loc, tempi2_loc, tempe_loc, &
-                                          ealpha, v0_loc, &
-                               efcolf_grid(:, i), velrat_grid(:, i), enrat_grid(:, i), &
-                                          test_mass, test_charge)
-        end do
+        profile_am1 = am1
+        profile_am2 = am2
+        profile_Z1 = Z1
+        profile_Z2 = Z2
+        profile_ealpha = ealpha
+        profile_test_mass = 4.0_wp
+        profile_test_charge = 2.0_wp
+        if (present(test_mass)) profile_test_mass = test_mass
+        if (present(test_charge)) profile_test_charge = test_charge
+        if (profile_test_mass <= 0.0_wp .or. profile_test_charge <= 0.0_wp) &
+            error stop "Collision test species must have positive mass and charge"
+        profile_ready = .true.
+        uniform_ready = .false.
     end subroutine init_collision_profiles
 
-    subroutine get_local_coeffs(s, efcolf_loc, velrat_loc, enrat_loc)
+    !> Without clog_in and bratio_in the Coulomb logarithm is speed independent.
+    subroutine set_uniform_coeffs(efcolf_in, velrat_in, enrat_in, clog_in, bratio_in)
+        real(wp), intent(in) :: efcolf_in(nsorts), velrat_in(nsorts), enrat_in(nsorts)
+        real(wp), intent(in), optional :: clog_in(nsorts), bratio_in(nsorts)
+
+        uniform_efcolf = efcolf_in
+        uniform_velrat = velrat_in
+        uniform_enrat = enrat_in
+        uniform_clog = 0.0_wp
+        uniform_bratio = 0.0_wp
+        if (present(clog_in) .and. present(bratio_in)) then
+            uniform_clog = clog_in
+            uniform_bratio = bratio_in
+        end if
+        uniform_ready = .true.
+    end subroutine set_uniform_coeffs
+
+ subroutine get_local_coeffs(s, efcolf_loc, velrat_loc, enrat_loc, clog_loc, bratio_loc)
+        use simple_profiles, only: get_plasma_params
+
         real(wp), intent(in) :: s
-        real(wp), intent(out) :: efcolf_loc(nsorts), velrat_loc(nsorts), enrat_loc(nsorts)
+      real(wp), intent(out) :: efcolf_loc(nsorts), velrat_loc(nsorts), enrat_loc(nsorts)
+        real(wp), intent(out), optional :: clog_loc(nsorts), bratio_loc(nsorts)
 
-        real(wp) :: s_clamped, s_norm, weight
-        integer :: idx_lo, idx_hi
+        real(wp) :: s_clamped, Te, Ti1, Ti2, ni1, ni2, v0_loc
+        real(wp) :: densi1_loc, densi2_loc
 
+        if (uniform_ready) then
+            efcolf_loc = uniform_efcolf
+            if (present(clog_loc)) clog_loc = uniform_clog
+            if (present(bratio_loc)) bratio_loc = uniform_bratio
+            velrat_loc = uniform_velrat
+            enrat_loc = uniform_enrat
+            return
+        end if
+        if (.not. profile_ready) then
+            ! Without a plasma the operator is vacuum.
+            efcolf_loc = 0.0_wp
+            velrat_loc = 0.0_wp
+            enrat_loc = 0.0_wp
+            if (present(clog_loc)) clog_loc = 0.0_wp
+            if (present(bratio_loc)) bratio_loc = 0.0_wp
+            return
+        end if
+        ! Direct evaluation: a linear table in s misrepresents steep edge
+        ! profiles by up to 89 % in pitch frequency with 100 intervals.
         s_clamped = max(0.0d0, min(collision_s_max, s))
-        s_norm = s_clamped*dble(N_S_GRID - 1)/collision_s_max
-        idx_lo = max(1, min(N_S_GRID - 1, int(s_norm) + 1))
-        idx_hi = idx_lo + 1
-        weight = s_norm - dble(idx_lo - 1)
-
-        ! Stable interpolation form: reproduces a node value exactly when both
-        ! bracketing nodes are equal (flat profile -> scalar coefficients bitwise).
-        efcolf_loc = efcolf_grid(:, idx_lo) &
-                     + weight*(efcolf_grid(:, idx_hi) - efcolf_grid(:, idx_lo))
-        velrat_loc = velrat_grid(:, idx_lo) &
-                     + weight*(velrat_grid(:, idx_hi) - velrat_grid(:, idx_lo))
-        enrat_loc = enrat_grid(:, idx_lo) &
-                    + weight*(enrat_grid(:, idx_hi) - enrat_grid(:, idx_lo))
+        call get_plasma_params(s_clamped, Te, Ti1, Ti2, ni1, ni2)
+        ! Preserve exact vacuum; retain the floor for positive densities.
+        if (ni1 == 0.0_wp .and. ni2 == 0.0_wp) then
+            densi1_loc = 0.0_wp
+            densi2_loc = 0.0_wp
+        else
+            densi1_loc = max(ni1*1.0d-6, 1.0d0)
+            densi2_loc = max(ni2*1.0d-6, 1.0d0)
+        end if
+        call compute_collision_coeffs(profile_am1, profile_am2, profile_Z1, &
+                                      profile_Z2, densi1_loc, densi2_loc, &
+                                      max(Ti1, 1.0d0), max(Ti2, 1.0d0), &
+                                      max(Te, 1.0d0), profile_ealpha, v0_loc, &
+                                      efcolf_loc, velrat_loc, enrat_loc, &
+                                      profile_test_mass, profile_test_charge, &
+                                      clog_loc, bratio_loc)
     end subroutine get_local_coeffs
 
     subroutine stost(z, dtauc, iswmode, ierr, max_substep_fraction, s_profile)
@@ -324,6 +422,7 @@ contains
         real(wp) :: alam, angle, azimuth
         real(wp) :: p_switch, dpar, dperp, adrift, vhat(2), vnew(3), xi(3)
         real(wp) :: efcolf_loc(nsorts), velrat_loc(nsorts), enrat_loc(nsorts)
+        real(wp) :: clog_loc(nsorts), bratio_loc(nsorts)
         real :: ur
         integer :: substep, i
         logical :: pitch, energy, diffusion, cartesian_ok
@@ -349,9 +448,11 @@ contains
                 ierr = 1
                 return
             end if
-            call get_local_coeffs(s_profile, efcolf_loc, velrat_loc, enrat_loc)
+            call get_local_coeffs(s_profile, efcolf_loc, velrat_loc, enrat_loc, &
+                                  clog_loc, bratio_loc)
         else
-            call get_local_coeffs(z(1), efcolf_loc, velrat_loc, enrat_loc)
+            call get_local_coeffs(z(1), efcolf_loc, velrat_loc, enrat_loc, &
+                                  clog_loc, bratio_loc)
         end if
         ! A vacuum neither advances the state nor consumes random numbers.
         if (all(efcolf_loc == 0.0_wp)) return
@@ -372,7 +473,7 @@ contains
             p = z(4)
             if (cartesian_ok .and. p < p_switch) then
                 call coleff_cartesian(p, efcolf_loc, velrat_loc, enrat_loc, &
-                                      dpar, dperp, adrift)
+                                      dpar, dperp, adrift, clog_loc, bratio_loc)
                 if (.not. all(is_finite([dpar, dperp, adrift])) .or. &
                     dpar < 0.0_wp .or. dperp < 0.0_wp) then
                     ierr = 1
@@ -380,7 +481,7 @@ contains
                 end if
                 step = remaining
                 if (max(dpar, dperp) > 0.0_wp) step = min(step, &
-                    fraction**2*p_switch**2/(6.0_wp*max(dpar, dperp)))
+                                      fraction**2*p_switch**2/(6.0_wp*max(dpar, dperp)))
                 if (abs(adrift) > 0.0_wp) &
                     step = min(step, fraction*p_switch/abs(adrift))
                 if (step <= 0.0_wp .or. remaining - step == remaining) then
@@ -394,7 +495,7 @@ contains
                     xi(i) = real(ur, wp)
                 end do
                 vnew(1:2) = p*vhat + (adrift*step + &
-                            sqrt(2.0_wp*dpar*step)*xi(1))*vhat + &
+                                      sqrt(2.0_wp*dpar*step)*xi(1))*vhat + &
                             sqrt(2.0_wp*dperp*step)*xi(2)*[-vhat(2), vhat(1)]
                 vnew(3) = sqrt(2.0_wp*dperp*step)*xi(3)
                 z(4) = sqrt(sum(vnew**2))
@@ -409,7 +510,8 @@ contains
                 if (remaining == 0.0_wp) return
                 cycle
             end if
-            call coleff_local(p, efcolf_loc, velrat_loc, enrat_loc, dpp, dhh, fpeff)
+            call coleff_local(p, efcolf_loc, velrat_loc, enrat_loc, dpp, dhh, fpeff, &
+                              clog_loc, bratio_loc)
             if (.not. all(is_finite([dpp, dhh, fpeff])) .or. &
                 dpp < 0.0_wp .or. dhh < 0.0_wp) then
                 ierr = 1

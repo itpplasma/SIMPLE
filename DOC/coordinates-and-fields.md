@@ -6,6 +6,10 @@ fit together.
 
 Update this file when coordinates or field-loading paths change.
 
+Macrostep trajectories, including the initial sample, are stored in integrator
+coordinates. The NetCDF writer converts every sample to reference coordinates;
+its time-zero position therefore recovers the reference birth in `start.dat`.
+
 The IMAS actor (`docs/user-guide/imas.rst`) loads an equilibrium IDS as a libneo
 Boozer chartmap. Its Cartesian geometry covers the full toroidal period even for
 an axisymmetric field; its covariant toroidal field is G, not the transform
@@ -323,6 +327,20 @@ module-level singletons: one canonical field per process
 ([#293](https://github.com/itpplasma/SIMPLE/issues/293)). They are written
 during initialisation and read-only during tracing.
 
+For a canonical guiding-centre state `(r, theta, phi, p_phi)`, the radial
+rate includes the toroidal derivative of the poloidal canonical momentum.
+Writing that momentum as `P` and the Hamiltonian as `H`, with subscripts
+denoting partial derivatives at fixed other state variables, the rate is
+`dr/dtau = -(H_theta + P_phi H_p_phi - P_p_phi H_phi)/P_r`.
+The explicit and two-derivative integrators share this expression and its
+symbolic Jacobian. In the Boozer special case, `P_phi` vanishes.
+
+Gauss collocation reports endpoint field values by Hermite extrapolation of
+its stage values and rates. After the final Newton correction, the geometric
+field gradients are transported with their existing Hessians to the same
+corrected stage coordinates before forming those rates; no additional field
+evaluation is needed.
+
 | Coordinates | File | $r$ | Construction |
 |---|---|---|---|
 | canonical flux | `src/field/field_can_flux.f90` | $s$ | libneo `vmec_to_can`, `can_to_vmec`, `splint_can_coord` |
@@ -331,6 +349,13 @@ during initialisation and read-only during tracing.
 | Albert | `src/field/field_can_albert.f90` | $\psi = A_\vartheta/A_\text{norm}$ | Meiss, then regrid |
 | SPECTRE | `src/field/field_can_spectre.f90` | $\rho_g$ | Meiss per volume (section 6) |
 | test | `src/field/field_can_test.f90` | $r$ | analytic circular tokamak |
+
+Canonical-flux construction and conversion share the selected, read-only field
+object across OpenMP threads. The construction/conversion phase flag is also
+shared and changes only outside the parallel regions; coordinate scratch
+values remain thread-local. Workers therefore use the same field dispatch and
+Newton stopping threshold as the calling thread. Field initialization must
+finish before concurrent conversions begin.
 
 For Boozer chartmaps the Boozer splines come from the chartmap
 (`load_boozer_from_chartmap`) and `integ_to_ref_boozer_chartmap` maps

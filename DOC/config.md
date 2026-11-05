@@ -105,6 +105,11 @@ Collision substeps are chosen automatically; their bounds are in
   `nu_star_standard >= 0`, `lorentz_major_radius_cm > 0` and nonzero
   `lorentz_iota`, with `nu_star_standard = R0*nu/(abs(iota)*v0)`. `p_abs`
   stays unchanged. See {doc}`/model/collisions`.
+- `thermal_stop_factor` (default `0`, disabled) stops a collisional marker
+  once its energy falls below `thermal_stop_factor` times the local main-ion
+  temperature `Ti1(s)`, as ASCOT5's `ENDCOND_MIN_THERMAL`. Such a marker has
+  joined the thermal population: it counts as confined from that time on,
+  with orbit-exit code 5.
 - `radial_electric_potential_slope` (default `0`) adds `Phi(s) = slope*s` to
   the Boozer canonical Hamiltonian. `Phi` is added directly to the normalized
   `H = vpar**2/2 + mu*B + Phi`, so it is in the units of `H`, and the slope is

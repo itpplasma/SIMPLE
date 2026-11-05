@@ -28,6 +28,7 @@ use orbit_symplectic_euler1, only: sympl_euler1_residual, sympl_euler1_jacobian,
   sympl_euler1_advance_angles
     use orbit_systems_generated, only: euler2_residual, euler2_jacobian, &
                                  midpoint_residual, midpoint_jacobian, lobatto3_jacobian
+    use orbit_systems_generated, only: gc_geometry_gradient_transport
 use orbit_rk_core, only: rk_gauss_residual, rk_gauss_jacobian, rk_solve, MODEL_GC
 use vector_potentail_mod, only: torflux
 use diag_counters, only: count_event, EVT_NEWTON1_MAXIT, EVT_NEWTON2_MAXIT, &
@@ -2052,6 +2053,7 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
   type(symplectic_integrator_t) :: accepted_integrator
   real(dp) :: a(s,s), b(s), c(s), Hprime(s), dz(4*s)
         real(dp) :: stage_value(s, 6), stage_rate(s, 6), endpoint_value(6)
+        real(dp) :: geometry_gradients(3, 5)
         real(dp) :: radius_end, r_rate, theta_rate, phi_rate, pphi_rate, canonical_pth
         real(dp) :: z_start(4)
 
@@ -2152,6 +2154,14 @@ recursive subroutine orbit_timestep_sympl_rk_gauss(si, f, s, ierr)
                                 + fs(k)%dAph(3)*dz(3)
                     fs(k)%Bmod = fs(k)%Bmod + fs(k)%dBmod(1)*dz(1) &
                                  + fs(k)%dBmod(2)*dz(2) + fs(k)%dBmod(3)*dz(3)
+                    ! Hermite chain rates need gradients at the corrected stage.
+                    call gc_geometry_gradient_transport(dz(1:3), fs(k), &
+                                                        geometry_gradients)
+                    fs(k)%dAth = geometry_gradients(:, 1)
+                    fs(k)%dAph = geometry_gradients(:, 2)
+                    fs(k)%dhth = geometry_gradients(:, 3)
+                    fs(k)%dhph = geometry_gradients(:, 4)
+                    fs(k)%dBmod = geometry_gradients(:, 5)
       end do
     else
       do k = 1, s

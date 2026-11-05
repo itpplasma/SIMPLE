@@ -4,13 +4,14 @@
 !> further time progress (ierr = 4). The Cartesian substep is regular there.
 program test_collision_low_speed
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use collis_alp, only: stost, coleff, efcolf, velrat, enrat, efcolf_grid, &
-                          velrat_grid, enrat_grid, N_S_GRID, &
-                          compute_collision_coeffs
+    use collis_alp, only: stost, coleff, efcolf, velrat, enrat, &
+                          set_uniform_coeffs, compute_collision_coeffs, &
+                          clog_ref, clog_bratio, log_factor, nsorts
     implicit none
 
     real(dp), parameter :: ealpha = 55.0e3_dp, temp = 20.0_dp
-    real(dp) :: p_switch, rate, v0
+    real(dp) :: p_switch, rate, v0, f, df
+    integer :: i
     integer :: nseed
     integer, allocatable :: seed(:)
 
@@ -18,7 +19,13 @@ program test_collision_low_speed
     allocate (seed(nseed))
     call setup_cold_plasma()
     p_switch = 1.0_dp/maxval(velrat)
-    rate = sum(efcolf*enrat)*2.0_dp*0.75225278_dp
+    ! Energy relaxation rate at p -> 0, with each logarithm at that speed.
+    rate = 0.0_dp
+    do i = 1, nsorts
+        call log_factor(i, 0.0_dp, velrat, f, df, clog_ref, clog_bratio)
+        rate = rate + efcolf(i)*enrat(i)*f
+    end do
+    rate = rate*2.0_dp*0.75225278_dp
     print '(a,es10.3,a,es10.3)', 'p_switch = ', p_switch, ', rate = ', rate
 
     call check_tiny_speed_start()
@@ -30,17 +37,13 @@ contains
     subroutine setup_cold_plasma()
         ! H test ion in a 20 eV H plasma with 2.5% C6+, n_e = 2e19 m^-3.
         real(dp) :: ni1, ni2
-        integer :: node
         ni1 = 2.0e13_dp/(1.0_dp + 6.0_dp*0.025_dp)
         ni2 = 0.025_dp*ni1
         call compute_collision_coeffs(1.0_dp, 12.0_dp, 1.0_dp, 6.0_dp, ni1, ni2, &
                                       temp, temp, temp, ealpha, v0, &
-                                      efcolf, velrat, enrat)
-        do node = 1, N_S_GRID
-            efcolf_grid(:, node) = efcolf
-            velrat_grid(:, node) = velrat
-            enrat_grid(:, node) = enrat
-        end do
+                                      efcolf, velrat, enrat, &
+                                      clog_out=clog_ref, bratio_out=clog_bratio)
+        call set_uniform_coeffs(efcolf, velrat, enrat, clog_ref, clog_bratio)
     end subroutine setup_cold_plasma
 
     subroutine check_tiny_speed_start()
