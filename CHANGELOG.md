@@ -5,6 +5,7 @@ compared to earlier versions.
 
 | Differing behavior | commit hash / tag and timestamp | Summary |
 | ---------------- | ------------------------------- | ------- |
+| Y | 2026-11-05 | Multithreaded classification counts every confined marker (#693). Passing markers skipped by `contr_pp` incremented the confined counters in a critical section while traced markers used atomics, which do not exclude each other; with 32 threads about 0.5 % of the passing confined count was lost (20000 markers, QA case). The classification loop also uses a dynamic schedule. Single-thread results are unchanged. |
 | Y | 2026-11-05 | `class_plot` writes each classified marker once to the Minkowski, J_parallel and topology files (`fort.100xx`, `fort.400xx`, `fort.500xx`). Since d607ec1d (#184) traced markers were written by the classifier and again by `write_classification_results`. |
 | Y | 2026-11-05 | Classification on a logarithmic macrostep grid (`macrostep_time_grid = 'log'`) advances each macrostep by its own number of microsteps, so the rows of `confined_fraction.dat` match their times. Since #314 the classifier used the uniform count while the rows were labelled with logarithmic times. Linear grids are unchanged. |
 | Y | 2026-11-05 | Runs with an STL wall in Albert coordinates report `boundary_event_radial_residual` of a boundary event during warning-mode RK recovery in the reference radius $s$, as runs without a wall do (#740). It was $\lvert z_1 - 1\rvert$ in the Albert radius $z_1 = A_\vartheta/A_\mathrm{norm}$, up to about 0.3 on the test equilibrium. |
