@@ -7,7 +7,6 @@
         wall/stl_wall_intersection.F90
         coordinates/coordinates.f90
         coordinates/stencil_utils.f90
-        coordinates/array_utils.f90
         coordinates/reference_coordinates.f90
         coordinates/coordinate_scaling.f90
         coordinates/scaled_chartmap_coordinates.f90
