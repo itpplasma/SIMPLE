@@ -2616,29 +2616,30 @@ contains
 
     logical function crosses_reference_boundary(z_start, z_end)
         use finite_check, only: is_finite
+        use field_can_albert, only: integ_to_ref_radius_albert
 
         real(dp), intent(in) :: z_start(5), z_end(5)
-        real(dp) :: u_start(3), u_end(3)
+        real(dp) :: s_start, s_end
 
         crosses_reference_boundary = .false.
         if (.not. all(is_finite(z_start)) .or. &
             .not. all(is_finite(z_end))) return
-        call integ_to_ref(z_start(1:3), u_start)
-        call integ_to_ref(z_end(1:3), u_end)
-        if (.not. all(is_finite(u_start)) .or. &
-            .not. all(is_finite(u_end))) return
-        crosses_reference_boundary = u_start(1) < 1.0_dp .and. &
-                                     u_end(1) >= 1.0_dp
+        ! Only the radius decides the crossing; skip the angular splines.
+        s_start = integ_to_ref_radius_albert(z_start(1:3))
+        s_end = integ_to_ref_radius_albert(z_end(1:3))
+        if (.not. is_finite(s_start) .or. .not. is_finite(s_end)) return
+        crosses_reference_boundary = s_start < 1.0_dp .and. s_end >= 1.0_dp
     end function crosses_reference_boundary
 
     subroutine locate_reference_crossing(z_start, z_end, field_period, &
                                          z_event, event_fraction, found)
         use finite_check, only: is_finite
+        use field_can_albert, only: integ_to_ref_radius_albert
 
         real(dp), intent(in) :: z_start(5), z_end(5), field_period
         real(dp), intent(out) :: z_event(5), event_fraction
         logical, intent(out) :: found
-        real(dp) :: delta(5), z_trial(5), u_start(3), u_end(3), u_trial(3)
+        real(dp) :: delta(5), z_trial(5), s_start, s_end, s_trial, u_event(3)
         real(dp) :: fraction_low, fraction_high, fraction_mid
         integer :: iteration
 
@@ -2647,11 +2648,10 @@ contains
         event_fraction = 0.0_dp
         if (.not. all(is_finite(z_start)) .or. &
             .not. all(is_finite(z_end))) return
-        call integ_to_ref(z_start(1:3), u_start)
-        call integ_to_ref(z_end(1:3), u_end)
-        if (.not. all(is_finite(u_start)) .or. &
-            .not. all(is_finite(u_end))) return
-        if (u_start(1) >= 1.0_dp .or. u_end(1) < 1.0_dp) return
+        s_start = integ_to_ref_radius_albert(z_start(1:3))
+        s_end = integ_to_ref_radius_albert(z_end(1:3))
+        if (.not. is_finite(s_start) .or. .not. is_finite(s_end)) return
+        if (s_start >= 1.0_dp .or. s_end < 1.0_dp) return
 
         delta = z_end - z_start
         delta(2) = modulo(delta(2) + 0.5_dp*twopi, twopi) - 0.5_dp*twopi
@@ -2662,9 +2662,9 @@ contains
         do iteration = 1, 64
             fraction_mid = 0.5_dp*(fraction_low + fraction_high)
             z_trial = z_start + fraction_mid*delta
-            call integ_to_ref(z_trial(1:3), u_trial)
-            if (.not. all(is_finite(u_trial))) return
-            if (u_trial(1) >= 1.0_dp) then
+            s_trial = integ_to_ref_radius_albert(z_trial(1:3))
+            if (.not. is_finite(s_trial)) return
+            if (s_trial >= 1.0_dp) then
                 fraction_high = fraction_mid
             else
                 fraction_low = fraction_mid
@@ -2672,9 +2672,9 @@ contains
         end do
         event_fraction = fraction_high
         z_event = z_start + event_fraction*delta
-        call integ_to_ref(z_event(1:3), u_trial)
-        if (.not. all(is_finite(u_trial))) return
-        if (abs(u_trial(1) - 1.0_dp) > 0.05_dp) return
+        call integ_to_ref(z_event(1:3), u_event)
+        if (.not. all(is_finite(u_event))) return
+        if (abs(u_event(1) - 1.0_dp) > 0.05_dp) return
         found = .true.
     end subroutine locate_reference_crossing
 
