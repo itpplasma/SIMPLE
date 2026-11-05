@@ -32,18 +32,14 @@ module orbit_newton
                                   WARNING_NONFINITE = 5, &
                                   WARNING_AXIS_ACCEPT = 6
 
+    ! No default initialization: newton_begin sets every component, and type
+    ! initializers in device routines trip nvfortran (redefinition of global).
     type, public :: newton_state_t
-        integer :: system = 0, n = 0, s = 0, nradial = 0
-        integer :: kit = 0, maxit = 0
-        integer :: status = SYMPLECTIC_STEP_MAXITER
-        integer :: warning = WARNING_NONE
-        integer :: radial_indices(NEWTON_NMAX) = 0
-        real(dp) :: atol = 0d0, rtol = 0d0, warning_factor = 0d0
-        real(dp) :: radius_start = 0d0, dnorm_prev = 0d0
-        real(dp) :: tolref(NEWTON_NMAX) = 1d0
-        logical :: warning_mode = .false.
-        logical :: boundary_limited = .false., step_limited = .false.
-        logical :: maxit_reached = .false.
+        integer :: system, n, s, nradial, kit, maxit, status, warning
+        integer :: radial_indices(NEWTON_NMAX)
+        real(dp) :: atol, rtol, warning_factor, radius_start, dnorm_prev
+        real(dp) :: tolref(NEWTON_NMAX)
+        logical :: warning_mode, boundary_limited, step_limited, maxit_reached
     end type newton_state_t
 
     public :: newton_begin, newton_advance
@@ -111,6 +107,8 @@ contains
             do ks = 2, s
                 state%radial_indices(ks) = 4*ks - 5
             end do
+        case default
+            state%nradial = 0
         end select
     end subroutine newton_begin
 
