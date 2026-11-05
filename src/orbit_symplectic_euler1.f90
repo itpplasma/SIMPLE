@@ -8,7 +8,7 @@ implicit none
 private
 
 public :: sympl_euler1_residual, sympl_euler1_jacobian
-public :: sympl_euler1_newton_iter, sympl_euler1_extrapolate_field
+  public :: sympl_euler1_newton_iter, sympl_euler1_solve, sympl_euler1_extrapolate_field
 public :: sympl_euler1_advance_angles
 
 contains
@@ -41,32 +41,21 @@ subroutine sympl_euler1_jacobian(si, f, x, jac)
         call euler1_jacobian(si%dt, si%pthold, z, x, f, jac)
 end subroutine sympl_euler1_jacobian
 
-subroutine sympl_euler1_newton_iter(si, f, x, tolref, xlast, converged, &
-        linear_failed, boundary_limited)
+    subroutine sympl_euler1_solve(fjac, fvec, correction, failed)
+        ! Newton correction J^{-1} F of the two-variable Euler system.
     !$acc routine seq
-    type(symplectic_integrator_t), intent(in) :: si
-    type(field_can_t), intent(in) :: f
-    real(dp), intent(inout) :: x(2)
-    real(dp), intent(inout) :: tolref(2)
-    real(dp), intent(out) :: xlast(2)
-    logical, intent(out) :: converged
-    logical, intent(out) :: linear_failed
-    logical, intent(out) :: boundary_limited
+        real(dp), intent(in) :: fjac(2, 2), fvec(2)
+        real(dp), intent(out) :: correction(2)
+        logical, intent(out) :: failed
 
-    real(dp) :: fvec(2), fjac(2, 2), ijac(2, 2)
-    real(dp) :: correction(2), determinant, matrix_scale, step_scale
-
-    call sympl_euler1_residual(si, f, x, fvec)
-    call sympl_euler1_jacobian(si, f, x, fjac)
+        real(dp) :: ijac(2, 2), determinant, matrix_scale
 
     determinant = fjac(1, 1)*fjac(2, 2) - fjac(1, 2)*fjac(2, 1)
     matrix_scale = maxval(abs(fjac))
-    linear_failed = matrix_scale == 0d0 .or. &
+        failed = matrix_scale == 0d0 .or. &
         abs(determinant) <= epsilon(1d0)*matrix_scale**2
-    if (linear_failed) then
-        converged = .false.
-        boundary_limited = .false.
-        xlast = x
+        if (failed) then
+            correction = 0d0
         return
     end if
 
@@ -84,9 +73,37 @@ subroutine sympl_euler1_newton_iter(si, f, x, tolref, xlast, converged, &
         ijac(2, 2) = fjac(1, 1)/determinant
     end if
 
-    xlast = x
     correction(1) = ijac(1, 1)*fvec(1) + ijac(1, 2)*fvec(2)
     correction(2) = ijac(2, 1)*fvec(1) + ijac(2, 2)*fvec(2)
+    end subroutine sympl_euler1_solve
+
+    subroutine sympl_euler1_newton_iter(si, f, x, tolref, xlast, converged, &
+                                        linear_failed, boundary_limited)
+        !$acc routine seq
+        type(symplectic_integrator_t), intent(in) :: si
+        type(field_can_t), intent(in) :: f
+        real(dp), intent(inout) :: x(2)
+        real(dp), intent(inout) :: tolref(2)
+        real(dp), intent(out) :: xlast(2)
+        logical, intent(out) :: converged
+        logical, intent(out) :: linear_failed
+        logical, intent(out) :: boundary_limited
+
+        real(dp) :: fvec(2), fjac(2, 2)
+        real(dp) :: correction(2), step_scale
+
+        call sympl_euler1_residual(si, f, x, fvec)
+        call sympl_euler1_jacobian(si, f, x, fjac)
+
+        call sympl_euler1_solve(fjac, fvec, correction, linear_failed)
+        if (linear_failed) then
+            converged = .false.
+            boundary_limited = .false.
+            xlast = x
+            return
+        end if
+
+        xlast = x
     step_scale = 1d0
     if (sympl_rmax <= 1d0 .and. correction(1) < 0d0) then
         step_scale = min(1d0, &
