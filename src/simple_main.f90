@@ -47,12 +47,13 @@ module simple_main
                       ORBIT_EXIT_NUMERICAL_EVENT, ORBIT_EXIT_NUMERICAL_FULL_ORBIT
     use params, only: radial_electric_potential_slope
     use params, only: thermal_stop_factor, ORBIT_EXIT_THERMALIZED
+    use params, only: max_rk_recoveries, ORBIT_EXIT_RECOVERY_STORM
     use params, only: orbit_warning_hold_count, orbit_first_warning_step, &
                       orbit_terminal_exit_code, orbit_terminal_time
     use params, only: canonical_grid_nr, canonical_grid_ntheta, &
                       canonical_grid_nphi, canonical_ode_relerr
     use diag_counters, only: diag_counters_init, count_event, &
-                             EVT_WARNING_STEP_SKIP, EVT_SYMPLECTIC_RK_RECOVERY, &
+                EVT_WARNING_STEP_SKIP, EVT_SYMPLECTIC_RK_RECOVERY, EVT_RECOVERY_STORM, &
                              EVT_SYMPLECTIC_RESUME, EVT_TOROIDAL_REGULARIZATION, &
                              EVT_AXIS_FO_BRIDGE
     use progress_monitor, only: progress_init, progress_tick, progress_finalize
@@ -124,6 +125,8 @@ module simple_main
         integer :: failures = 0
         integer :: symplectic_steps = 0
         real(dp) :: momentum_reference = 0.0_dp
+        ! Recoveries of this marker so far; survives the reset after resumption.
+        integer :: total_activations = 0
     end type rk_recovery_state_t
 
 contains
@@ -234,6 +237,7 @@ contains
         state%symplectic_steps = 0
         state%momentum_reference = momentum_reference
         state%failures = min(state%failures + 1, 9)
+        state%total_activations = state%total_activations + 1
         if (x_reference(1) < RK_AXIS_ENTER) then
             state%reason = RK_RECOVERY_AXIS
         else if (x_reference(1) > RK_EDGE_ENTER) then
@@ -251,7 +255,8 @@ contains
         state%has_momentum_reference = .false.
         if (state%failures == 0) return
         state%symplectic_steps = state%symplectic_steps + 1
-        if (state%symplectic_steps >= 2) state = rk_recovery_state_t()
+        if (state%symplectic_steps >= 2) state = rk_recovery_state_t( &
+                                              total_activations=state%total_activations)
     end subroutine record_symplectic_success
 
     logical function should_resume_symplectic(state, z)
@@ -2419,7 +2424,7 @@ contains
         integer :: first_unresolved_it, hold_streak
         integer(8) :: kt
         logical :: passing, faulted, numerical_hold, physical_exit
-        logical :: numerically_confined, thermalized_exit
+        logical :: numerically_confined, thermalized_exit, recovery_storm
         type(rk_recovery_state_t) :: rk_recovery
         type(classification_result_t) :: class_result
 
@@ -2428,6 +2433,7 @@ contains
         physical_exit = .false.
         numerically_confined = .false.
         thermalized_exit = .false.
+        recovery_storm = .false.
         first_unresolved_it = 0
         hold_streak = 0
         rk_recovery = rk_recovery_state_t()
@@ -2510,6 +2516,12 @@ contains
                                    numerical_hold_any=numerical_hold, &
                                    rk_recovery=rk_recovery)
                 end if
+                if (rk_recovery%total_activations > max_rk_recoveries .and. &
+                    .not. recovery_storm) then
+                    recovery_storm = .true.
+                    call count_event(EVT_RECOVERY_STORM)
+                    if (first_unresolved_it == 0) first_unresolved_it = it
+                end if
             end if
 
             if (ierr_orbit .ne. 0) then
@@ -2577,6 +2589,7 @@ contains
             faulted = .true.
             if (orbit_exit_code(ipart) < ORBIT_EXIT_NUMERICAL_DOMAIN) &
                 orbit_exit_code(ipart) = ORBIT_EXIT_NUMERICAL_EVENT
+            if (recovery_storm) orbit_exit_code(ipart) = ORBIT_EXIT_RECOVERY_STORM
         end if
 
         ! Fill remaining timesteps with NaN if particle left domain early

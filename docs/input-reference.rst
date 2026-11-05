@@ -25,7 +25,7 @@ and ``DOC/config.md`` for additional usage, units and option interactions.
 &config
 -------
 
-Source: ``src/params.f90:260``.
+Source: ``src/params.f90:266``.
 
 .. list-table::
    :header-rows: 1
@@ -307,6 +307,12 @@ Source: ``src/params.f90:260``.
      - ``scalar``
      - ``.true.``
      -
+   * - ``max_rk_recoveries``
+     - ``integer``
+     - ``default``
+     - ``scalar``
+     - ``1000``
+     - RK recoveries one marker may need before it counts as unresolved.
    * - ``boundary_event_fraction_tolerance``
      - ``real``
      - ``dp``
