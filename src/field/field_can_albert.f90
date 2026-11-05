@@ -304,7 +304,9 @@ contains
             end do
             if (inside) exit
         end do
-        i_r = max(i_r, 1)
+        ! Between grid nodes that surface may reach slightly beyond s = 1; one
+        ! surface further in keeps the bound inside.
+        i_r = max(i_r - 1, 1)
         if (dpsi_dr_positive) then
             psi_inside_bound = minval(psi_of_x(i_r, :, :))
         else
