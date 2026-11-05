@@ -95,11 +95,13 @@ Adaptive Runge–Kutta (``integmode = 0``)
 ----------------------------------------
 
 The adaptive error scale has an absolute floor of one for the dimensionless
-radial coordinate and pitch. Cartesian axis variables use the regularization
-disc's radius, :math:`\sqrt{s_\mathrm{floor}}` on flux charts and
+radial coordinate, both angles and pitch. Cartesian axis variables use the
+regularization disc's radius, :math:`\sqrt{s_\mathrm{floor}}` on flux charts and
 :math:`\rho_\mathrm{floor}` on rho charts. Their error bound therefore remains
-finite when they pass through zero, while the remaining state components retain
-their relative error scale.
+finite when they pass through zero, while the momentum retains its relative
+error scale. For the angles this matters at :math:`0 = 2\pi`, where the
+periodic splines meet with a small jump that a purely relative scale cannot
+step over.
 
 The Cash–Karp RK5(4) integrator of libneo (``odeint_allroutines``) solves the
 non-canonical guiding-centre equations in any coordinates, with relative
