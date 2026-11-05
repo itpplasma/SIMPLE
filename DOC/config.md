@@ -115,9 +115,10 @@ Collision substeps are chosen automatically; their bounds are in
   `H = vpar**2/2 + mu*B + Phi`, so it is in the units of `H`, and the slope is
   per unit of the Boozer radial variable `r = s` (normalized toroidal flux).
   A nonzero slope requires `integ_coords = 2` (Boozer), a symplectic
-  `integmode > 0`, `orbit_model = 0` and `gpu_mode = 'off'`; other
-  configurations stop with an error, since only the Boozer canonical field
-  applies the potential.
+  `integmode > 0`, `orbit_model = 0`, `gpu_mode = 'off'` and
+  `symplectic_newton_warning_mode = .false.` (the RK recovery of warning mode
+  has no potential); other configurations stop with an error, since only the
+  Boozer canonical field applies the potential.
 - With `output_results_netcdf` and `output_orbits_macrostep`, `results.nc` and
   `orbits.nc` carry the effective energy, collision model and these values as
   global attributes.

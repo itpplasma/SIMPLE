@@ -5,6 +5,7 @@ compared to earlier versions.
 
 | Differing behavior | commit hash / tag and timestamp | Summary |
 | ---------------- | ------------------------------- | ------- |
+| Y | 2026-11-05 | Input validation stops runs whose tracing path would silently skip requested physics: `swcoll` with SPECTRE fields, `wall_input` with orbit classification, `orbit_model = 7` with `tcut > 0`, and `radial_electric_potential_slope` together with `symplectic_newton_warning_mode = .true.` (RK recovery has no potential). Such inputs previously ran without collisions, wall, full orbit or potential, respectively. |
 | Y | 2026-11-05 | Fusion-birth starts (`startmode = 7`) require a 3.5 MeV particle energy from `particle_energy_eV` as well as `facE_al`. Since #522 an explicit `particle_energy_eV` passed the check, so markers of another energy were written as 3.5 MeV alpha births. |
 | Y | 2026-11-05 | ANTS starts (`startmode = 3`) read one marker per input line again (#685). Since the sampler interface of c6de2792 (2025-03-18) every marker started from the first line. |
 | Y | 2026-11-05 | Trace the starting field line with one VMEC field evaluation per point instead of seven (#683). The sampling phase of a VMEC-backed run drops from 3.9 s to 0.6 s on the QA reactor-scale case; `bmod00` and volume-sampled start points change at round-off level (1e-14). |
