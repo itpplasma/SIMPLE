@@ -12,6 +12,14 @@ endif()
 ##################################################
 # DOWNLOAD TEST DATA
 ##################################################
+if(SIMPLE_ENABLE_CGAL AND ENABLE_OPENMP)
+    add_executable(test_cgal_openmp_link.x test_cgal_openmp_link.f90)
+    target_link_libraries(test_cgal_openmp_link.x simple)
+    add_test(NAME test_cgal_openmp_link COMMAND test_cgal_openmp_link.x)
+    set_tests_properties(test_cgal_openmp_link PROPERTIES
+        ENVIRONMENT "OMP_TARGET_OFFLOAD=DISABLED")
+endif()
+
 # Download VMEC test file to unified test_data directory (shared with Python tests)
 set(TEST_DATA_DIR "${CMAKE_SOURCE_DIR}/test/test_data")
 set(WOUT_FILE "${TEST_DATA_DIR}/wout.nc")
@@ -380,6 +388,17 @@ endif()
 # TEST EXECUTABLES
 ##################################################
 if (ENABLE_OPENMP)
+    add_executable(test_canflux_threads.x test_canflux_threads.f90)
+    target_link_libraries(test_canflux_threads.x simple)
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/canflux_threads)
+    file(CREATE_LINK ${WOUT_FILE}
+        ${CMAKE_CURRENT_BINARY_DIR}/canflux_threads/wout.nc SYMBOLIC)
+    add_test(NAME test_canflux_threads COMMAND test_canflux_threads.x
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/canflux_threads)
+    set_tests_properties(test_canflux_threads PROPERTIES
+        LABELS "integration;canflux_threads" PROCESSORS 4 TIMEOUT 120
+        ENVIRONMENT "OMP_NUM_THREADS=4;OPENBLAS_NUM_THREADS=1")
+
     add_executable (test_sympl_tok.x test_sympl.f90)
     target_link_libraries(test_sympl_tok.x simple)
     add_test(NAME test_sympl_tokamak
@@ -557,10 +576,21 @@ set_tests_properties(test_particle_rng PROPERTIES
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/particle_rng
     ENVIRONMENT "OMP_DYNAMIC=FALSE")
 
+add_test(NAME test_thermal_stop
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_thermal_stop.py
+        $<TARGET_FILE:simple.x> ${WOUT_FILE}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_thermal_stop PROPERTIES
+    LABELS "integration;python;collisions" TIMEOUT 900)
 add_executable(test_collision_species.x test_collision_species.f90)
 target_link_libraries(test_collision_species.x simple)
 add_test(NAME test_collision_species COMMAND test_collision_species.x)
 set_tests_properties(test_collision_species PROPERTIES
+    LABELS "unit;collisions;physics" TIMEOUT 30)
+add_executable(test_collision_coulomb_log.x test_collision_coulomb_log.f90)
+target_link_libraries(test_collision_coulomb_log.x simple)
+add_test(NAME test_collision_coulomb_log COMMAND test_collision_coulomb_log.x)
+set_tests_properties(test_collision_coulomb_log PROPERTIES
     LABELS "unit;collisions;physics" TIMEOUT 30)
 
 add_executable(test_collision_substeps.x test_collision_substeps.f90)

@@ -119,6 +119,8 @@ swcoll = .false.                 ! .true.: collisions with the background plasma
 !                                  incompatible with classification and full orbit
 collision_model = 'full'         ! 'full': Coulomb operator; 'lorentz_nustar': monoenergetic
 !                                  pitch-angle scattering, p_abs unchanged
+thermal_stop_factor = 0d0        ! stop a collisional marker once E < factor*T_i(s),
+!                                  counted confined (classification 5); 0 disables
 nu_star_standard = -1d0          ! Lorentz mode: nu* = R0*nu/(abs(iota)*v0), >= 0
 lorentz_major_radius_cm = -1d0   ! Lorentz mode: local major radius R0, cm, > 0
 lorentz_iota = 0d0               ! Lorentz mode: local rotational transform, nonzero

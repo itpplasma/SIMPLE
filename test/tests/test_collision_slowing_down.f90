@@ -6,13 +6,13 @@ program test_collision_slowing_down
     ! the code. The ODE is integrated independently in physical time.
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use collis_alp, only: stost, loacol_alpha, efcolf, velrat, enrat, &
-        efcolf_grid, velrat_grid, enrat_grid, N_S_GRID
+                          set_uniform_coeffs
     implicit none
 
     integer, parameter :: npart = 10000, ncheck = 3
     real(dp), parameter :: pi = acos(-1.0_dp)
-    real(dp), parameter :: pmass = 1.6726d-24, emass = 9.1094d-28
-    real(dp), parameter :: e_cgs = 4.8032d-10, ev_cgs = 1.6022d-12
+    real(dp), parameter :: pmass = 1.67262192369d-24, emass = 9.1093837015d-28
+    real(dp), parameter :: e_cgs = 4.803204712570263d-10, ev_cgs = 1.602176634d-12
     ! 55 keV H+ in an H+/C6+ plasma at 2 keV, ne = 5.6e13 cm^-3 (Zeff = 1.6).
     real(dp), parameter :: am1 = 1.0_dp, am2 = 12.0_dp, z1 = 1.0_dp, z2 = 6.0_dp
     real(dp), parameter :: densi1 = 5.0d13, densi2 = 1.0d12
@@ -25,13 +25,9 @@ program test_collision_slowing_down
     integer, allocatable :: seed(:)
 
     call loacol_alpha(am1, am2, z1, z2, densi1, densi2, tempi, tempi, tempe, &
-        energy0, v0, dchichi, slowrate, dchichi_norm, &
-        slowrate_norm, test_mass, test_charge)
-    do i = 1, N_S_GRID
-        efcolf_grid(:, i) = efcolf
-        velrat_grid(:, i) = velrat
-        enrat_grid(:, i) = enrat
-    end do
+                      energy0, v0, dchichi, slowrate, dchichi_norm, &
+                      slowrate_norm, test_mass, test_charge)
+    call set_uniform_coeffs(efcolf, velrat, enrat)
 
     ! Checkpoints at 10, 30 and 60 % of the initial energy-loss time.
     times = [0.1_dp, 0.3_dp, 0.6_dp]/loss_rate(energy0)
@@ -84,12 +80,11 @@ contains
         qb = [z1, z2, -1.0_dp]*e_cgs
         nb = [densi1, densi2, dense]
         tb = [tempi, tempi, tempe]
-        ! Coulomb logarithms are inputs of the model; same expressions as the code.
-        lam(1) = 23.0_dp - log(sqrt(densi1*z1**2/tempi)*test_charge*z1* &
-            (test_mass + am1)/(test_mass*tempi + am1*energy0))
-        lam(2) = 23.0_dp - log(sqrt(densi2*z2**2/tempi)*test_charge*z2* &
-            (test_mass + am2)/(test_mass*tempi + am2*energy0))
-        lam(3) = 24.0_dp - log(sqrt(dense)/tempe)
+        ! Coulomb logarithms are inputs of the model: ln(lambda_D/b_min) at the
+        ! initial energy, as held fixed by the uniform coefficients.
+        do b = 1, 3
+            lam(b) = coulomb_log(b)
+        end do
         nu = 0.0_dp
         do b = 1, 3
             x = mb(b)*v**2/(2.0_dp*tb(b)*ev_cgs)
@@ -97,6 +92,24 @@ contains
             nu = nu + 2.0_dp*(m/mb(b)*psi(x) - dpsi(x))*nu0
         end do
     end function loss_rate
+
+    real(dp) function coulomb_log(b)
+        integer, intent(in) :: b
+        real(dp), parameter :: hbar = 1.054571817d-27
+        real(dp) :: m, v2, mb(3), zb(3), tb(3), debye, mr, bcl, bqm, dense
+        m = test_mass*pmass
+        dense = z1*densi1 + z2*densi2
+        mb = [am1*pmass, am2*pmass, emass]
+        zb = [z1, z2, 1.0_dp]
+        tb = [tempi, tempi, tempe]
+        debye = 1.0_dp/sqrt(4.0_dp*pi*e_cgs**2/ev_cgs*(densi1*z1**2/tempi + &
+                                                      densi2*z2**2/tempi + dense/tempe))
+        v2 = 2.0_dp*energy0*ev_cgs/m + 2.0_dp*tb(b)*ev_cgs/mb(b)
+        mr = m*mb(b)/(m + mb(b))
+        bcl = test_charge*zb(b)*e_cgs**2/(mr*v2)
+        bqm = hbar/(2.0_dp*mr*sqrt(v2))
+        coulomb_log = log(debye/max(bcl, bqm))
+    end function coulomb_log
 
     real(dp) function psi(x)
         real(dp), intent(in) :: x

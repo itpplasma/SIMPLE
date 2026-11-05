@@ -300,7 +300,7 @@ contains
     end subroutine test_failed_step_preserves_state
 
     subroutine test_collision_failure_propagation
-        use collis_alp, only: efcolf_grid, velrat_grid, enrat_grid, stost
+        use collis_alp, only: set_uniform_coeffs, stost
         use parmot_mod, only: ro0
         use finite_check, only: is_finite
         use reference_coordinates, only: ref_coords
@@ -327,9 +327,8 @@ contains
         saved_ro0 = ro0
         saved_dtaumin = dtaumin
         ro0 = 1.0_dp ! TEST field uses explicit normalized finite units.
-        efcolf_grid = -1.0_dp
-        velrat_grid = 1.0_dp
-        enrat_grid = 1.0_dp
+        call set_uniform_coeffs([-1.0_dp, -1.0_dp, -1.0_dp], [1.0_dp, 1.0_dp, 1.0_dp], &
+                                [1.0_dp, 1.0_dp, 1.0_dp])
         dtaumin = 1.0e-3_dp
         saved_wall_gate = wall_query_rho_lcfs
         ! TEST field initialization supplies no reference coordinate object.
@@ -403,7 +402,8 @@ contains
         call move_alloc(saved_ref_coords, ref_coords)
         ro0 = saved_ro0
         dtaumin = saved_dtaumin
-        efcolf_grid = 0.0_dp
+        call set_uniform_coeffs([0.0_dp, 0.0_dp, 0.0_dp], [1.0_dp, 1.0_dp, 1.0_dp], &
+                                [1.0_dp, 1.0_dp, 1.0_dp])
         swcoll = .false.
     end subroutine test_collision_failure_propagation
 

@@ -65,6 +65,7 @@ program generate_orbit_systems
     end do
     call emit_lobatto(unit, 3)
     call emit_rates_canonical(unit)
+    call emit_geometry_gradient_transport(unit)
     close (unit)
 
     open (newunit=unit, file=trim(output_dir)//'/gpu_derivatives2_radial_mixed.inc', &
@@ -230,7 +231,8 @@ contains
         type(expr_t) :: rates(4), hp
 
         hp = dH(1)/dpth(1)
-        rates(1) = -(dH(2) - q%hth/q%hph*dH(3))/dpth(1)
+        rates(1) = -(dH(2) + (dpth(3)*q%vpar - q%hth*dH(3))/q%hph) &
+                   /dpth(1)
         rates(2) = hp
         rates(3) = (q%vpar - hp*q%hth)/q%hph
         rates(4) = -(dH(3) - hp*dpth(3))
@@ -239,13 +241,14 @@ contains
     subroutine emit_rates_canonical(unit)
         integer, intent(in) :: unit
         type(stage_t) :: f
-        type(expr_t) :: rates(4)
+        type(expr_t) :: rates(4), jac(16), state(4)
         type(str_t), allocatable :: refs(:)
-        integer :: i
+        integer :: i, j
 
         call reset()
-        f = stage('f', sym(arena, 'r_'), sym(arena, 'th_'), sym(arena, 'ph_'), &
-                  sym(arena, 'pph_'))
+        state = [sym(arena, 'r_'), sym(arena, 'th_'), sym(arena, 'ph_'), &
+                 sym(arena, 'pph_')]
+        f = stage('f', state(1), state(2), state(3), state(4))
         rates = gc_rates(f, [d(f%H, 1), d(f%H, 2), d(f%H, 3)], &
                          [d(f%pth, 1), d(f%pth, 2), d(f%pth, 3)])
         allocate (refs(4))
@@ -254,7 +257,47 @@ contains
         end do
         call emit_one(unit, 'gc_rates_canonical', rates, refs, 'zdot', '(4)', &
                       ['f'], [character(6) ::], [character(6) ::])
+        deallocate (refs)
+        allocate (refs(16))
+        do j = 1, 4
+            do i = 1, 4
+                jac(i + 4*(j - 1)) = diff(rates(i), state(j))
+                refs(i + 4*(j - 1)) = str('jac('//itoa(i)//', '//itoa(j)//')')
+            end do
+        end do
+        call emit_one(unit, 'gc_rates_canonical_jacobian', jac, refs, 'jac', &
+                      '(4, 4)', ['f'], [character(6) ::], [character(6) ::])
     end subroutine emit_rates_canonical
+
+    !> Transport geometric gradients to the corrected Newton stage using
+    !> the Hessians already evaluated for the implicit solve.
+    subroutine emit_geometry_gradient_transport(unit)
+        integer, intent(in) :: unit
+        character(4), parameter :: names(5) = &
+                                   [character(4) :: 'Ath', 'Aph', 'hth', 'hph', 'Bmod']
+        type(expr_t) :: state(3), quantity, gradient, roots(15)
+        type(str_t) :: refs(15)
+        integer :: i, j, q, k
+
+        call reset()
+        state = [sym(arena, 'r_'), sym(arena, 'th_'), sym(arena, 'ph_')]
+        do q = 1, 5
+            quantity = func('geometry_'//trim(names(q)), state)
+            call bind_quantity('geometry_'//trim(names(q)), 'f%', trim(names(q)), 3)
+            do i = 1, 3
+                k = i + 3*(q - 1)
+                gradient = diff(quantity, state(i))
+                roots(k) = gradient
+                do j = 1, 3
+                    roots(k) = roots(k) + diff(gradient, state(j)) &
+                               *sym(arena, 'dz('//itoa(j)//')')
+                end do
+                refs(k) = str('gradients('//itoa(i)//', '//itoa(q)//')')
+            end do
+        end do
+        call emit_one(unit, 'gc_geometry_gradient_transport', roots, refs, &
+                      'gradients', '(3, 5)', ['f'], ['dz'], ['(3)'])
+    end subroutine emit_geometry_gradient_transport
 
     subroutine emit_euler1(unit)
         integer, intent(in) :: unit

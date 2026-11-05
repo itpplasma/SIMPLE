@@ -11,7 +11,8 @@ use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_
                                      EXPL_IMPL_EULER, IMPL_EXPL_EULER
     use orbit_systems_generated, only: euler1_residual, euler2_residual, &
                  midpoint_residual, gauss1_residual, gauss2_residual, gauss3_residual, &
-                                       gauss4_residual, gc_rates_canonical
+                                       gauss4_residual, gc_rates_canonical, &
+                                       gc_rates_canonical_jacobian
 use fortnum_multiroot, only: multiroot_hybrids, multiroot_hybrids_warm_t
     use fortnum_status, only: fortnum_status_t, FORTNUM_OK, FORTNUM_DOMAIN_ERROR
     use vector_potentail_mod, only: torflux
@@ -778,103 +779,19 @@ subroutine f_ode(tau, z, zdot)
 
 end subroutine f_ode
 
-    !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-    !
-! Index into the packed symmetric second-derivative arrays d2H, d2pth, d2vpar.
-!
-! field_can_base documents the order as
-!   1:(r,r) 2:(r,th) 3:(r,ph) 4:(th,th) 5:(th,ph) 6:(ph,ph)
-!   7:(pph,r) 8:(pph,th) 9:(pph,ph) 10:(pph,pph)
-! over the variables (r, th, ph, pph) = (1, 2, 3, 4).
-    pure function d2idx(i, j) result(k)
-        integer, intent(in) :: i, j
-        integer :: k
-        integer :: lo, hi
-
-        lo = min(i, j)
-        hi = max(i, j)
-
-        if (hi == 4) then
-            k = 6 + lo            ! (r,pph)=7, (th,pph)=8, (ph,pph)=9, (pph,pph)=10
-        else if (lo == 1) then
-            k = hi                ! (r,r)=1, (r,th)=2, (r,ph)=3
-        else if (lo == 2) then
-            k = hi + 2            ! (th,th)=4, (th,ph)=5
-        else
-            k = 6                 ! (ph,ph)
-        end if
-    end function d2idx
-
-    !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-    !
-! Second time derivative of the canonical guiding-centre state,
-!
-!   G(z) = F'(z) F(z),
-!
-! which is what a two-derivative Runge-Kutta method integrates in place of F.
-!
-! The derivation and its verification live in the study repo at
-! derivation/tdrk_guiding_center_G.wl: Mathematica differentiates f_ode's F
-! symbolically and compares against this closed form. The symbolic residual is
-! exactly zero and a numeric spot-check with nonlinear, fully coupled test
-! functions agrees to 3.6e-15.
-!
-! The cost argument rests on which derivatives appear. That check is in the same
-! file and reports second derivatives of H and pth, first of vpar, hth and hph,
-! and no third derivatives anywhere -- so G needs exactly one mode_secders = 2
-! evaluation and no extra F evaluations. Note also that only d2H indices 1 to 9
-! are touched: F depends on H solely through dH(1:3), so differentiating it can
-! never raise index 10, which get_derivatives2 does not fill.
-!
-! hth and hph are geometric and carry no pph dependence, hence the explicit zero
-! in the fourth slot of their gradients rather than an out-of-bounds read of a
-! three-element array.
+    !> Second time derivative F'(z) F(z), sharing the canonical RHS and its
+    !> generated Jacobian so explicit integrators use the same equations.
     subroutine g_ode(tau, z, g)
         real(dp), intent(in)  :: tau
         real(dp), intent(in)  :: z(:)
         real(dp), intent(out) :: g(:)
 
-        real(dp) :: Hprime, dHprime(4), dhth4(4), dhph4(4)
         real(dp) :: zdot(4), dF(4, 4)
-        integer  :: j
 
         call eval_field(f, z(1), z(2), z(3), 2)
         call get_derivatives2(f, z(4))
-
-        Hprime = f%dH(1)/f%dpth(1)
-
-        dhth4(1:3) = f%dhth
-        dhth4(4) = 0d0
-        dhph4(1:3) = f%dhph
-        dhph4(4) = 0d0
-
-        zdot(1) = -(f%dH(2) - f%hth/f%hph*f%dH(3))/f%dpth(1)
-        zdot(2) = Hprime
-        zdot(3) = (f%vpar - Hprime*f%hth)/f%hph
-        zdot(4) = -(f%dH(3) - Hprime*f%dpth(3))
-
-        ! Hprime is a quotient of two state-dependent quantities, so both numerator
-        ! and denominator contribute. This is the term a hand derivation usually drops.
-        do j = 1, 4
-            dHprime(j) = (f%d2H(d2idx(1, j))*f%dpth(1) &
-                          - f%dH(1)*f%d2pth(d2idx(1, j)))/f%dpth(1)**2
-        end do
-
-        do j = 1, 4
-            dF(1, j) = -((f%d2H(d2idx(2, j)) &
-                          - (dhth4(j)/f%hph - f%hth*dhph4(j)/f%hph**2)*f%dH(3) &
-                          - f%hth/f%hph*f%d2H(d2idx(3, j)))*f%dpth(1) &
-                         - (f%dH(2) - f%hth/f%hph*f%dH(3))*f%d2pth(d2idx(1, j))) &
-                       /f%dpth(1)**2
-
-            dF(2, j) = dHprime(j)
-
-            dF(3, j) = ((f%dvpar(j) - dHprime(j)*f%hth - Hprime*dhth4(j))*f%hph &
-                        - (f%vpar - Hprime*f%hth)*dhph4(j))/f%hph**2
-
-            dF(4, j) = -(f%d2H(d2idx(3, j)) - dHprime(j)*f%dpth(3) &
-                         - Hprime*f%d2pth(d2idx(3, j)))
-        end do
+        call gc_rates_canonical(f, zdot)
+        call gc_rates_canonical_jacobian(f, dF)
 
         g(1:4) = matmul(dF, zdot)
     end subroutine g_ode

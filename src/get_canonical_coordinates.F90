@@ -9,7 +9,7 @@ module exchange_get_cancoord_mod
                         Bcovar_varphi, A_theta, A_phi, theta, Bctrvr_vartheta, &
                         Bctrvr_varphi
 
-!$omp threadprivate(onlytheta, vartheta_c, varphi_c, sqg, aiota)
+!$omp threadprivate(vartheta_c, varphi_c, sqg, aiota)
 !$omp threadprivate(Bcovar_vartheta, Bcovar_varphi, A_theta, A_phi)
 !$omp threadprivate(theta, Bctrvr_vartheta, Bctrvr_varphi)
 
@@ -41,9 +41,8 @@ module get_can_sub
     ! Constants
     real(dp), parameter :: TWOPI = 2.0_dp*3.14159265358979_dp
 
-    ! Module variable to store the field for use in subroutines
+    ! Workers share the read-only field selected before chart construction.
     class(magnetic_field_t), allocatable :: current_field
-!$omp threadprivate(current_field)
 
     ! Batch spline for A_phi (vector potential)
     type(BatchSplineData1D), save :: aphi_batch_spline

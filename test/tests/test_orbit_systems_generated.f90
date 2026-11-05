@@ -4,6 +4,7 @@ program test_orbit_systems_generated
     ! random field values. Every field_can_t entry is drawn independently, so
     ! a missing, extra or misindexed term changes the result at O(1).
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use field_can_base, only: field_can_t
     use orbit_symplectic_base, only: coeff_rk_gauss, coeff_rk_lobatto
     use orbit_systems_generated
@@ -27,7 +28,12 @@ program test_orbit_systems_generated
         call check_rates()
         call check_radial_mixed()
         call check_rates_boozer()
+        call check_random_jacobian()
+
+        call check_geometry_transport()
     end do
+
+    call check_canonical_jacobian()
 
     if (errors /= 0) then
         print *, 'test_orbit_systems_generated: ', errors, ' mismatches'
@@ -91,6 +97,11 @@ contains
         real(dp), intent(in) :: new(:), old(:)
         real(dp) :: scale
 
+        if (.not. all(ieee_is_finite(new)) .or. .not. all(ieee_is_finite(old))) then
+            errors = errors + 1
+            print *, name, ': nonfinite comparison'
+            return
+        end if
         scale = max(1d0, maxval(abs(old)))
         if (maxval(abs(new - old)) > tol*scale) then
             errors = errors + 1
@@ -408,17 +419,166 @@ contains
 
     subroutine check_rates()
         type(field_can_t) :: f
-        real(dp) :: zdot(4), ref(4), hp
+        real(dp) :: zdot(4), ref(4)
 
         call random_field(f)
         call gc_rates_canonical(f, zdot)
-        hp = f%dH(1)/f%dpth(1)
-        ref(1) = -(f%dH(2) - f%hth/f%hph*f%dH(3))/f%dpth(1)
-        ref(2) = hp
-        ref(3) = (f%vpar - hp*f%hth)/f%hph
-        ref(4) = -(f%dH(3) - hp*f%dpth(3))
-        call compare('guiding-centre rates', zdot, ref)
+        ref(1) = f%dpth(1)*zdot(1) + f%dpth(3)*zdot(3) + &
+                 f%hth/f%hph*zdot(4) + f%dH(2)
+        ref(2) = f%dpth(1)*zdot(2) - f%dH(1)
+        ref(3) = zdot(3) + f%hth/f%hph*zdot(2) - f%vpar/f%hph
+        ref(4) = zdot(4) - f%dpth(3)*zdot(2) + f%dH(3)
+        call compare('Euler-Lagrange rates', ref, [0d0, 0d0, 0d0, 0d0])
+        f%dH(4) = f%vpar/f%hph
+        call compare('canonical energy derivative', [dot_product(f%dH, zdot)], &
+                     [0d0])
     end subroutine check_rates
+
+    subroutine check_random_jacobian()
+        type(field_can_t) :: f, fp, fm
+        real(dp) :: jac(4, 4), plus(4), minus(4), numeric(4), step
+        integer, parameter :: packed(4, 4) = reshape( &
+                              [1, 2, 3, 7, 2, 4, 5, 8, &
+                               3, 5, 6, 9, 7, 8, 9, 10], [4, 4])
+        integer :: i, j
+
+        call random_field(f)
+        call gc_rates_canonical_jacobian(f, jac)
+        if (.not. all(ieee_is_finite(jac))) error stop 'nonfinite canonical Jacobian'
+        step = 1d-5
+        do j = 1, 4
+            fp = f
+            fm = f
+            do i = 1, 3
+                fp%dH(i) = f%dH(i) + step*f%d2H(packed(i, j))
+                fm%dH(i) = f%dH(i) - step*f%d2H(packed(i, j))
+                fp%dpth(i) = f%dpth(i) + step*f%d2pth(packed(i, j))
+                fm%dpth(i) = f%dpth(i) - step*f%d2pth(packed(i, j))
+            end do
+            fp%vpar = f%vpar + step*f%dvpar(j)
+            fm%vpar = f%vpar - step*f%dvpar(j)
+            if (j <= 3) then
+                fp%hth = f%hth + step*f%dhth(j)
+                fm%hth = f%hth - step*f%dhth(j)
+                fp%hph = f%hph + step*f%dhph(j)
+                fm%hph = f%hph - step*f%dhph(j)
+            end if
+            call gc_rates_canonical(fp, plus)
+            call gc_rates_canonical(fm, minus)
+            numeric = (plus - minus)/(2d0*step)
+            if (.not. all(ieee_is_finite(numeric))) then
+                error stop 'nonfinite Jacobian reference'
+            end if
+            if (maxval(abs(jac(:, j) - numeric)) > &
+                2d-8*max(1d0, maxval(abs(jac(:, j))))) then
+                errors = errors + 1
+                print *, 'random canonical Jacobian: ', j, &
+                    maxval(abs(jac(:, j) - numeric))
+            end if
+        end do
+    end subroutine check_random_jacobian
+
+    !> Independent polynomial Lagrangian with toroidal momentum dependence:
+    !> P = r + phi*p + theta**2, H = (p-r)**2/2 + r + theta + phi**2.
+    subroutine polynomial_field(z, f)
+        real(dp), intent(in) :: z(4)
+        type(field_can_t), intent(out) :: f
+
+        f%vpar = z(4) - z(1)
+        f%hth = z(3)
+        f%hph = 1d0
+        f%dhth = [0d0, 0d0, 1d0]
+        f%dhph = 0d0
+        f%dvpar = [-1d0, 0d0, 0d0, 1d0]
+        f%H = f%vpar**2/2d0 + z(1) + z(2) + z(3)**2
+        f%pth = z(1) + z(3)*z(4) + z(2)**2
+        f%dH = [1d0 - f%vpar, 1d0, 2d0*z(3), f%vpar]
+        f%dpth = [1d0, 2d0*z(2), z(4), z(3)]
+        f%d2H = 0d0
+        f%d2H(1) = 1d0
+        f%d2H(6) = 2d0
+        f%d2H(7) = -1d0
+        f%d2H(10) = 1d0
+        f%d2pth = 0d0
+        f%d2pth(4) = 2d0
+        f%d2pth(9) = 1d0
+    end subroutine polynomial_field
+
+    subroutine check_canonical_jacobian()
+        type(field_can_t) :: f, fp, fm
+        real(dp) :: z(4), zp(4), zm(4), rates(4), plus(4), minus(4)
+        real(dp) :: jac(4, 4), numeric(4, 4), step, energy(1)
+        integer :: j
+
+        z = [1d0, 2d0, 3d0, 4d0]
+        call polynomial_field(z, f)
+        call gc_rates_canonical(f, rates)
+        call compare('polynomial exact rates', rates, [5d0, -2d0, 9d0, -14d0])
+        energy = [dot_product(f%dH, rates)]
+        call compare('polynomial energy derivative', energy, [0d0])
+
+        call gc_rates_canonical_jacobian(f, jac)
+        if (.not. all(ieee_is_finite(jac))) error stop 'nonfinite canonical Jacobian'
+        do j = 1, 4
+            step = 1d-4
+            zp = z
+            zm = z
+            zp(j) = z(j) + step
+            zm(j) = z(j) - step
+            call polynomial_field(zp, fp)
+            call polynomial_field(zm, fm)
+            call gc_rates_canonical(fp, plus)
+            call gc_rates_canonical(fm, minus)
+            numeric(:, j) = (plus - minus)/(2d0*step)
+        end do
+        if (.not. all(ieee_is_finite(numeric))) then
+            error stop 'nonfinite Jacobian reference'
+        end if
+        if (maxval(abs(jac - numeric)) > 1d-9) then
+            errors = errors + 1
+            print *, 'canonical Jacobian finite difference: ', &
+                maxval(abs(jac - numeric))
+        end if
+    end subroutine check_canonical_jacobian
+
+    subroutine check_geometry_transport()
+        type(field_can_t) :: f
+        real(dp) :: state(3), delta(3), old(3, 5), expected(3, 5)
+        real(dp) :: hessian(6, 5), actual(3, 5)
+        integer :: q
+
+        call random_vector(state)
+        call random_vector(delta)
+        do q = 1, 5
+            old(:, q) = quadratic_gradient(state, q)
+            expected(:, q) = quadratic_gradient(state + delta, q)
+            hessian(:, q) = q*[2d0, 1d0, 2d0, 4d0, 3d0, 6d0]
+        end do
+        f%dAth = old(:, 1)
+        f%dAph = old(:, 2)
+        f%dhth = old(:, 3)
+        f%dhph = old(:, 4)
+        f%dBmod = old(:, 5)
+        f%d2Ath = hessian(:, 1)
+        f%d2Aph = hessian(:, 2)
+        f%d2hth = hessian(:, 3)
+        f%d2hph = hessian(:, 4)
+        f%d2Bmod = hessian(:, 5)
+        call gc_geometry_gradient_transport(delta, f, actual)
+        call compare('transported geometry gradients', reshape(actual, [15]), &
+                     reshape(expected, [15]))
+    end subroutine check_geometry_transport
+
+    !> Independent derivative of a quadratic field with every mixed term.
+    function quadratic_gradient(state, q) result(gradient)
+        real(dp), intent(in) :: state(3)
+        integer, intent(in) :: q
+        real(dp) :: gradient(3)
+
+        gradient = [q*(2*state(1) + state(2) + 2*state(3)) + 1, &
+                    q*(4*state(2) + state(1) + 3*state(3)) + q + 1, &
+                    q*(6*state(3) + 2*state(1) + 3*state(2)) + q + 2]
+    end function quadratic_gradient
 
     !> Base field members of field_can_t, drawn independently.
     subroutine random_base_field(f)

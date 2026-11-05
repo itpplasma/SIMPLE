@@ -25,12 +25,6 @@ if(NOT SIMPLE_VERSION)
 endif()
 message(STATUS "SIMPLE version: ${SIMPLE_VERSION}")
 
-# Generate version.f90 from template
-configure_file(
-    ${CMAKE_SOURCE_DIR}/src/version.f90.in
-    ${CMAKE_BINARY_DIR}/version.f90
-    @ONLY
-)
 
 add_compile_options(-g)
 
@@ -479,6 +473,18 @@ if (ENABLE_OPENMP)
 	# add_link_options(-fopenmp)
     find_package(OpenMP REQUIRED)
     link_libraries(OpenMP::OpenMP_Fortran)
+    if(SIMPLE_ENABLE_CGAL)
+        # CGAL selects the C++ linker, which also needs the OpenMP driver flags.
+        link_libraries(OpenMP::OpenMP_CXX)
+        separate_arguments(SIMPLE_OPENMP_LINK_FLAGS NATIVE_COMMAND "${OpenMP_CXX_FLAGS}")
+        foreach(flag IN LISTS SIMPLE_OPENMP_LINK_FLAGS)
+            add_link_options("$<$<LINK_LANGUAGE:CXX>:${flag}>")
+        endforeach()
+        if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+            # GCC appends offload registration objects after the OpenMP library.
+            add_link_options("$<$<LINK_LANGUAGE:CXX>:-Wl,--no-as-needed>")
+        endif()
+    endif()
 endif()
 
 # Coverage analysis uses the selected build profile, including normal Fast builds.

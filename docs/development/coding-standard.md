@@ -141,8 +141,8 @@ unchanged).
 
 ### Generated code
 
-The physics kernels in `src/` are handwritten. CMake generates the version
-module in the build tree from `src/version.f90.in`. Prototypes under
+The physics kernels in `src/` are handwritten. CMake passes the git version to
+`src/version.F90` as a preprocessor definition. Prototypes under
 `concept/` generate kernels at build time from symbolic derivations. If
 generated kernels are added to `src/`, check in both the generator and its
 output, mark the output as generated and do not edit it by hand **(new code)**.
