@@ -8,7 +8,7 @@ program test_collision_species
     use magfie_sub, only: TEST
     implicit none
     real(dp), parameter :: energy = 55000.0_dp, temperature = 1000.0_dp
-    real(dp), parameter :: proton_mass = 1.6726e-24_dp, ev = 1.6022e-12_dp
+    real(dp), parameter :: proton_mass = 1.67262192369e-24_dp, ev = 1.602176634e-12_dp
     real(dp) :: alpha(3), coefficients(3), ratios(3), energies(3), speed
     real(dp) :: pitch_rate, drag_rate, pitch_norm, drag_norm
     real(dp) :: local(3), local_ratios(3), local_energies(3), clog_alpha(3), clog(3)
