@@ -39,6 +39,8 @@ module field_can_albert
     real(dp), dimension(:, :, :), allocatable :: psi_of_x
     real(dp), dimension(:), allocatable :: psi_grid
     logical :: dpsi_dr_positive
+    ! Every point with psi on the inner side of this value lies inside s = 1.
+    real(dp) :: psi_inside_bound
 
 ! For splining field components over canonical coordinates
     real(dp), dimension(:, :, :), allocatable :: r_of_xc, &
@@ -273,11 +275,52 @@ contains
             psi_outer = psi_axis
         end if
 
+        call set_psi_inside_bound
+
         allocate (psi_grid(n_psi))
         do i_r = 1, n_psi
             psi_grid(i_r) = psi_inner + (psi_outer - psi_inner)*(i_r - 1)/(n_psi - 1)
         end do
     end subroutine init_psi_grid
+
+    subroutine set_psi_inside_bound
+        ! psi is monotonic along each radial grid line, so the extreme psi of the
+        ! outermost grid surface that lies entirely within s <= 1 bounds the
+        ! plasma from inside at every angle.
+        use field_can_meiss, only: integ_to_ref_radius_meiss
+        real(dp) :: x(3)
+        integer :: i_r, i_th, i_phi
+        logical :: inside
+
+        do i_r = n_r, 1, -1
+            inside = .true.
+            do i_phi = 1, n_phi
+                do i_th = 1, n_th
+                    x = [xmin(1) + (i_r - 1)*(xmax(1) - xmin(1))/(n_r - 1), &
+                         xmin(2) + (i_th - 1)*(xmax(2) - xmin(2))/(n_th - 1), &
+                         xmin(3) + (i_phi - 1)*(xmax(3) - xmin(3))/(n_phi - 1)]
+                    if (integ_to_ref_radius_meiss(x) > 1.0_dp) inside = .false.
+                end do
+            end do
+            if (inside) exit
+        end do
+        i_r = max(i_r, 1)
+        if (dpsi_dr_positive) then
+            psi_inside_bound = minval(psi_of_x(i_r, :, :))
+        else
+            psi_inside_bound = maxval(psi_of_x(i_r, :, :))
+        end if
+    end subroutine set_psi_inside_bound
+
+    pure logical function albert_psi_inside(psi)
+        real(dp), intent(in) :: psi
+
+        if (dpsi_dr_positive) then
+            albert_psi_inside = psi < psi_inside_bound
+        else
+            albert_psi_inside = psi > psi_inside_bound
+        end if
+    end function albert_psi_inside
 
     subroutine magfie_albert(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
 !  Computes magnetic field and derivatives with bmod in units of the magnetic code
