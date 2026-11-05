@@ -42,6 +42,7 @@
     orbit_symplectic_quasi.f90
     orbit_symplectic_euler1.f90
     orbit_rk_core.f90
+    orbit_newton.f90
     orbit_symplectic.f90
     orbit_fo_field.f90
     orbit_fo_boris.f90
@@ -116,7 +117,7 @@ list(APPEND SOURCES
     # could overflow OpenMP thread stacks.
     if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
         set_source_files_properties(orbit_rk_core.f90 orbit_symplectic.f90
-            orbit_symplectic_base.f90 orbit_symplectic_euler1.f90
+            orbit_symplectic_base.f90 orbit_symplectic_euler1.f90 orbit_newton.f90
             PROPERTIES COMPILE_OPTIONS -fstack-arrays)
     endif()
 
