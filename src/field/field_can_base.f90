@@ -106,4 +106,19 @@ subroutine identity_transform(xfrom, xto)
     xto = xfrom
 end subroutine identity_transform
 
+    !> Reference VMEC (s, theta, phi) to the rho = sqrt(s) chart of a splined field.
+    subroutine ref_to_integ_sqrt_s(xfrom, xto)
+        real(dp), intent(in) :: xfrom(3)
+        real(dp), intent(out) :: xto(3)
+
+        xto = [sqrt(max(xfrom(1), 0.0_dp)), xfrom(2), xfrom(3)]
+    end subroutine ref_to_integ_sqrt_s
+
+    subroutine integ_to_ref_sqrt_s(xfrom, xto)
+        real(dp), intent(in) :: xfrom(3)
+        real(dp), intent(out) :: xto(3)
+
+        xto = [xfrom(1)**2, xfrom(2), xfrom(3)]
+    end subroutine integ_to_ref_sqrt_s
+
 end module field_can_base

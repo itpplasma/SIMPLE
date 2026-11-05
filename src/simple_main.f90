@@ -607,7 +607,9 @@ contains
         use field_vmec, only: vmec_field_t
         use reference_coordinates, only: init_reference_coordinates, ref_coords
         use params, only: coord_input, field_input, wall_input, wall_units
-        use field_can_mod, only: init_field_can_boozer_chartmap_compact
+        use field_can_mod, only: init_field_can_boozer_chartmap_compact, &
+                                 set_refcoords_transform
+        use libneo_coordinates, only: vmec_coordinate_system_t
         use new_vmec_stuff_mod, only: nper
         use orbit_symplectic_base, only: sympl_rmax
 
@@ -627,6 +629,8 @@ contains
         map_boundary_exit_code = ORBIT_EXIT_LCFS
         chart_boundary_kind_effective = 'lcfs'
         invariant_edge_radius = 1.0_dp
+        ! Drop a chart left by a previous library run; canonical fields set their own.
+        call set_refcoords_transform(.false.)
 
         ! Check if field_input is a Boozer chartmap or SPECTRE file (no VMEC needed)
         use_boozer_chartmap = .false.
@@ -725,6 +729,12 @@ contains
                 call print_phase_time('Field from file loading completed')
 
                 if (isw_field_type == REFCOORDS) then
+                    ! Both branches spline on rho = sqrt(s), while start.dat and
+                    ! all output hold VMEC s.
+                    select type (ref_coords)
+                    class is (vmec_coordinate_system_t)
+                        call set_refcoords_transform(.true.)
+                    end select
                     select type (field_temp)
                     type is (splined_field_t)
                         call set_magfie_refcoords_field(field_temp)

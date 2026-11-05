@@ -49,6 +49,21 @@ contains
         ref_to_integ => ref_to_integ_boozer_chartmap
     end subroutine init_field_can_boozer_chartmap_compact
 
+    !> Integration chart of REFCOORDS: rho = sqrt(s) for a field splined on VMEC
+    !> reference coordinates, otherwise the reference coordinates themselves.
+    subroutine set_refcoords_transform(sqrt_s_chart)
+        use field_can_base, only: ref_to_integ_sqrt_s, integ_to_ref_sqrt_s
+        logical, intent(in) :: sqrt_s_chart
+
+        if (sqrt_s_chart) then
+            integ_to_ref => integ_to_ref_sqrt_s
+            ref_to_integ => ref_to_integ_sqrt_s
+        else
+            integ_to_ref => identity_transform
+            ref_to_integ => identity_transform
+        end if
+    end subroutine set_refcoords_transform
+
 subroutine field_can_from_name(field_name, field_noncan, n_r, n_th, n_phi, &
     transformation_relerr)
 
