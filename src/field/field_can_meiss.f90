@@ -132,15 +132,15 @@ subroutine rh_can_wrapper(r_c, z, dz, context)
     real(dp), dimension(:), intent(in) :: z
     real(dp), dimension(:), intent(out) :: dz
     class(*), intent(in) :: context
-    
+
     integer :: i_th, i_phi
-    
+
     select type(context)
     type is (grid_indices_t)
         i_th = context%i_th
         i_phi = context%i_phi
     end select
-    
+
     call rh_can(r_c, z, dz, i_th, i_phi)
 end subroutine rh_can_wrapper
 
@@ -262,17 +262,17 @@ end subroutine choose_default_scaling
 subroutine cleanup_meiss()
     ! Clean up batch splines to prevent memory leaks
     use interpolate, only: destroy_batch_splines_3d
-    
+
     if (batch_splines_initialized) then
         call destroy_batch_splines_3d(spl_field_batch)
         batch_splines_initialized = .false.
     end if
-    
+
     if (transform_splines_initialized) then
         call destroy_batch_splines_3d(spl_transform_batch)
         transform_splines_initialized = .false.
     end if
-    
+
     ! Clean up allocated arrays
     if (allocated(lam_phi)) deallocate(lam_phi)
     if (allocated(chi_gauge)) deallocate(chi_gauge)
@@ -397,7 +397,7 @@ subroutine init_transformation_arrays()
     if (allocated(lam_phi)) deallocate(lam_phi)
     if (allocated(chi_gauge)) deallocate(chi_gauge)
     allocate(lam_phi(n_r, n_th, n_phi), chi_gauge(n_r, n_th, n_phi))
-    
+
     ! Initialize to zero (boundary conditions)
     lam_phi = 0.0_dp
     chi_gauge = 0.0_dp
@@ -442,13 +442,13 @@ subroutine compute_phi_slice(i_phi, ierr)
 #ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
     call print_progress(i_phi)
 #endif
-    
+
     ierr = 0
     do i_th = 1, n_th
         lam_phi(1, i_th, i_phi) = 0d0
         chi_gauge(1, i_th, i_phi) = 0d0
         y = 0d0
-        
+
         if (is_hr_zero_on_slice(i_th, i_phi)) then
             call set_identity_slice(i_th, i_phi)
         else
@@ -462,7 +462,7 @@ subroutine set_identity_slice(i_th, i_phi)
 !> Set identity transformation for radial slice where hr ≈ 0
     integer, intent(in) :: i_th, i_phi
     integer :: i_r
-    
+
     do i_r = 2, n_r
         lam_phi(i_r, i_th, i_phi) = 0d0
         chi_gauge(i_r, i_th, i_phi) = 0d0
@@ -490,7 +490,7 @@ end subroutine integrate_radial_slice
 subroutine print_progress(i_phi)
 !> Print integration progress
     integer, intent(in) :: i_phi
-    
+
 #ifndef SIMPLE_ENABLE_DEBUG_OUTPUT
     return
 #endif
@@ -546,40 +546,43 @@ subroutine integrate(i_r, i_th, i_phi, y, ierr)
 
 end subroutine integrate
 
-subroutine rh_can(r_c, z, dz, i_th, i_phi)
-    real(dp), intent(in) :: r_c
-    real(dp), dimension(2), intent(in) :: z  ! lam_phi, chi_gauge
-    real(dp), dimension(2), intent(out) :: dz
-    integer, intent(in) :: i_th, i_phi
-    real(dp) :: phi_c
-    real(dp) :: Ar, Ap, hr, hp
-    real(dp), parameter :: hp_min = 1d-14
-    real(dp) :: hp_safe
+    subroutine rh_can(r_c, z, dz, i_th, i_phi)
+        real(dp), intent(in) :: r_c
+        real(dp), dimension(2), intent(in) :: z  ! lam_phi, chi_gauge
+        real(dp), dimension(2), intent(out) :: dz
+        integer, intent(in) :: i_th, i_phi
+        real(dp) :: phi_c
+        real(dp) :: Ar, Ap, hr, hp
 
-    phi_c = xmin(3) + h_phi*(i_phi-1)
-    call ah_cov_on_slice(r_c, modulo(phi_c + z(1), twopi), i_th, Ar, Ap, hr, hp)
+        phi_c = xmin(3) + h_phi*(i_phi - 1)
+        call ah_cov_on_slice(r_c, modulo(phi_c + z(1), twopi), i_th, Ar, Ap, hr, hp)
 
-    hp_safe = hp
-    if (abs(hp_safe) < hp_min) then
-        hp_safe = sign(hp_min, hp_safe + 0.5d0*hp_min)
-    end if
+        dz(1) = -hr/floored_hph(hp)
+        dz(2) = Ar + Ap*dz(1)
+    end subroutine rh_can
 
-    dz(1) = -hr / hp_safe
-    dz(2) = Ar + Ap * dz(1)
-end subroutine rh_can
+!> h_phi bounded away from zero with its sign kept, so the angle shift
+!> lambda' = -h_r/h_phi keeps its direction.
+    pure real(dp) function floored_hph(hp)
+        real(dp), intent(in) :: hp
+        real(dp), parameter :: hp_min = 1d-14
+
+        floored_hph = hp
+        if (abs(hp) < hp_min) floored_hph = sign(hp_min, hp)
+    end function floored_hph
 
 
 subroutine spline_transformation
     real(dp), dimension(:,:,:,:), allocatable :: y_batch
     integer :: dims(3)
-    
+
     ! Construct batch spline for transformation components (2: lam_phi, chi_gauge)
     dims = shape(lam_phi)
     allocate(y_batch(dims(1), dims(2), dims(3), 2))
-    
+
     y_batch(:,:,:,1) = lam_phi
     y_batch(:,:,:,2) = chi_gauge
-    
+
     call construct_batch_splines_3d(xmin, xmax, y_batch, order, periodic, spl_transform_batch)
     transform_splines_initialized = .true.
 end subroutine spline_transformation
@@ -635,30 +638,30 @@ logical function is_hr_zero_on_slice(i_th, i_phi) result(is_zero)
 !> Check if hr ≈ 0 along the entire radial direction for given (i_th, i_phi)
 !> Sample hr at several radial points to make this determination
     integer, intent(in) :: i_th, i_phi
-    
+
     real(dp), parameter :: hr_slice_threshold = 1d-9
     integer, parameter :: n_sample_points = 32
     real(dp) :: r_sample, phi_c, Ar, Ap, hr, hp
     integer :: i_sample
     logical :: all_zero
-    
+
     phi_c = xmin(3) + h_phi*(i_phi-1)
     all_zero = .true.
-    
+
     ! Sample hr at several radial points
     do i_sample = 1, n_sample_points
         ! Distribute sample points across radial range
         r_sample = xmin(1) + (xmax(1) - xmin(1)) * real(i_sample-1, dp) / real(n_sample_points-1, dp)
-        
+
         ! Evaluate field at this point (using lam_phi=0 for sampling)
         call ah_cov_on_slice(r_sample, phi_c, i_th, Ar, Ap, hr, hp)
-        
+
         if (abs(hr) >= hr_slice_threshold) then
             all_zero = .false.
             exit  ! Found non-zero hr, no need to check further
         endif
     enddo
-    
+
     is_zero = all_zero
 end function is_hr_zero_on_slice
 
@@ -683,7 +686,7 @@ subroutine init_canonical_field_components
                     real(dp) :: y_trans(2), dy_trans(3,2)
                     call evaluate_batch_splines_3d_der(spl_transform_batch, xcan, y_trans, dy_trans)
                     lam = y_trans(1)    ! lam_phi
-                    chi = y_trans(2)    ! chi_gauge  
+                    chi = y_trans(2)    ! chi_gauge
                     dlam = dy_trans(:,1)  ! derivatives of lam_phi
                     dchi = dy_trans(:,2)  ! derivatives of chi_gauge
                 end block
@@ -799,18 +802,18 @@ end subroutine magfie_meiss
 subroutine evaluate_meiss_batch_der(f, x)
     type(field_can_t), intent(inout) :: f
     real(dp), intent(in) :: x(3)
-    
+
     real(dp) :: y_batch(5), dy_batch(3, 5)
-    
+
     call evaluate_batch_splines_3d_der(spl_field_batch, x, y_batch, dy_batch)
-    
+
     ! Unpack results: order is [Ath, Aph, hth, hph, Bmod]
     f%Ath = y_batch(1)
-    f%Aph = y_batch(2) 
+    f%Aph = y_batch(2)
     f%hth = y_batch(3)
     f%hph = y_batch(4)
     f%Bmod = y_batch(5)
-    
+
     f%dAth = dy_batch(:, 1)
     f%dAph = dy_batch(:, 2)
     f%dhth = dy_batch(:, 3)
@@ -819,28 +822,28 @@ subroutine evaluate_meiss_batch_der(f, x)
 end subroutine evaluate_meiss_batch_der
 
 
-! Batch evaluation helper for second derivatives  
+! Batch evaluation helper for second derivatives
 subroutine evaluate_meiss_batch_der2(f, x)
     type(field_can_t), intent(inout) :: f
     real(dp), intent(in) :: x(3)
-    
+
     real(dp) :: y_batch(5), dy_batch(3, 5), d2y_batch(6, 5)
-    
+
     call evaluate_batch_splines_3d_der2(spl_field_batch, x, y_batch, dy_batch, d2y_batch)
-    
+
     ! Unpack results: order is [Ath, Aph, hth, hph, Bmod]
     f%Ath = y_batch(1)
     f%Aph = y_batch(2)
-    f%hth = y_batch(3) 
+    f%hth = y_batch(3)
     f%hph = y_batch(4)
     f%Bmod = y_batch(5)
-    
+
     f%dAth = dy_batch(:, 1)
     f%dAph = dy_batch(:, 2)
     f%dhth = dy_batch(:, 3)
     f%dhph = dy_batch(:, 4)
     f%dBmod = dy_batch(:, 5)
-    
+
     f%d2Ath = d2y_batch(:, 1)
     f%d2Aph = d2y_batch(:, 2)
     f%d2hth = d2y_batch(:, 3)
