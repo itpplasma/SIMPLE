@@ -245,71 +245,71 @@ subroutine magfie_refcoords(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
   error stop
 end subroutine magfie_refcoords
 
-subroutine magfie_splined_refcoords(field, x, bmod, sqrtg, bder, hcovar, &
-    hctrvr, hcurl)
-  type(splined_field_t), intent(in) :: field
-  real(dp), intent(in) :: x(3)
-  real(dp), intent(out) :: bmod, sqrtg
-  real(dp), intent(out) :: bder(3), hcovar(3), hctrvr(3), hcurl(3)
-  real(dp) :: Acov(3), Bmod_local
-  real(dp) :: dAcov(3, 3), dhcov(3, 3), dBmod(3)
-  real(dp) :: g(3, 3), ginv_u(3, 3), ginv_x(3, 3)
-  real(dp) :: u_ref(3), J
-  real(dp) :: e_cov(3, 3), jac_signed
-  real(dp) :: sqrtg_abs
+    subroutine magfie_splined_refcoords(field, x, bmod, sqrtg, bder, hcovar, &
+                                        hctrvr, hcurl)
+        type(splined_field_t), intent(in) :: field
+        real(dp), intent(in) :: x(3)
+        real(dp), intent(out) :: bmod, sqrtg
+        real(dp), intent(out) :: bder(3), hcovar(3), hctrvr(3), hcurl(3)
+        real(dp) :: Acov(3), Bmod_local
+        real(dp) :: dAcov(3, 3), dhcov(3, 3), dBmod(3)
+        real(dp) :: g(3, 3), ginv_u(3, 3), ginv_x(3, 3)
+        real(dp) :: u_ref(3), J
+        real(dp) :: e_cov(3, 3), jac_signed
+        real(dp) :: sqrtg_abs
 
-  call field%evaluate_with_der(x, Acov, hcovar, Bmod_local, dAcov, dhcov, &
-    dBmod)
-  bmod = Bmod_local
-  bder = dBmod/max(bmod, 1.0d-30)
+        call field%evaluate_with_der(x, Acov, hcovar, Bmod_local, dAcov, dhcov, &
+                                     dBmod)
+        bmod = Bmod_local
+        bder = dBmod/max(bmod, 1.0d-30)
 
-  call scaled_to_ref_coords(field%coords, x, u_ref, J)
-  call field%coords%metric_tensor(u_ref, g, ginv_u, sqrtg_abs)
-  call field%coords%covariant_basis(u_ref, e_cov)
+        call scaled_to_ref_coords(field%coords, x, u_ref, J)
+        call field%coords%covariant_basis(u_ref, e_cov)
+        call metric_from_basis(e_cov, g, ginv_u, sqrtg_abs)
 
-  jac_signed = signed_jacobian(e_cov)
-  sqrtg = jac_signed*J
+        jac_signed = signed_jacobian(e_cov)
+        sqrtg = jac_signed*J
 
-  call inverse_metric_scaled(J, ginv_u, ginv_x)
-  hctrvr = matmul(ginv_x, hcovar)
+        call inverse_metric_scaled(J, ginv_u, ginv_x)
+        hctrvr = matmul(ginv_x, hcovar)
 
-  call compute_hcurl(sqrtg, dhcov, hcurl)
-end subroutine magfie_splined_refcoords
+        call compute_hcurl(sqrtg, dhcov, hcurl)
+    end subroutine magfie_splined_refcoords
 
-subroutine magfie_generic_refcoords(field, x, bmod, sqrtg, bder, hcovar, &
-    hctrvr, hcurl)
-  class(magnetic_field_t), intent(in) :: field
-  real(dp), intent(in) :: x(3)
-  real(dp), intent(out) :: bmod, sqrtg
-  real(dp), intent(out) :: bder(3), hcovar(3), hctrvr(3), hcurl(3)
-  real(dp), parameter :: derivative_step = 1.0e-5_dp
-  real(dp) :: Acov(3), dBmod(3), dhcov(3, 3)
-  real(dp) :: ap(3), hp(3), bp, am(3), hm(3), bm
-  real(dp) :: xp(3), xm(3), denominator
-  real(dp) :: g(3, 3), ginv(3, 3), e_cov(3, 3)
-  real(dp) :: sqrtg_abs
-  integer :: i
+    subroutine magfie_generic_refcoords(field, x, bmod, sqrtg, bder, hcovar, &
+                                        hctrvr, hcurl)
+        class(magnetic_field_t), intent(in) :: field
+        real(dp), intent(in) :: x(3)
+        real(dp), intent(out) :: bmod, sqrtg
+        real(dp), intent(out) :: bder(3), hcovar(3), hctrvr(3), hcurl(3)
+        real(dp), parameter :: derivative_step = 1.0e-5_dp
+        real(dp) :: Acov(3), dBmod(3), dhcov(3, 3)
+        real(dp) :: ap(3), hp(3), bp, am(3), hm(3), bm
+        real(dp) :: xp(3), xm(3), denominator
+        real(dp) :: g(3, 3), ginv(3, 3), e_cov(3, 3)
+        real(dp) :: sqrtg_abs
+        integer :: i
 
-  call field%evaluate(x, Acov, hcovar, bmod)
-  do i = 1, 3
-    xp = x
-    xm = x
-    xp(i) = x(i) + derivative_step
-    xm(i) = x(i) - derivative_step
-    if (i == 1 .and. xm(i) < 0.0_dp) xm(i) = x(i)
-    call field%evaluate(xp, ap, hp, bp)
-    call field%evaluate(xm, am, hm, bm)
-    denominator = xp(i) - xm(i)
-    dBmod(i) = (bp - bm)/denominator
-    dhcov(i, :) = (hp - hm)/denominator
-  end do
-  bder = dBmod/max(bmod, 1.0d-30)
-  call field%coords%metric_tensor(x, g, ginv, sqrtg_abs)
-  call field%coords%covariant_basis(x, e_cov)
-  sqrtg = sign(sqrtg_abs, signed_jacobian(e_cov))
-  hctrvr = matmul(ginv, hcovar)
-  call compute_hcurl(sqrtg, dhcov, hcurl)
-end subroutine magfie_generic_refcoords
+        call field%evaluate(x, Acov, hcovar, bmod)
+        do i = 1, 3
+            xp = x
+            xm = x
+            xp(i) = x(i) + derivative_step
+            xm(i) = x(i) - derivative_step
+            if (i == 1 .and. xm(i) < 0.0_dp) xm(i) = x(i)
+            call field%evaluate(xp, ap, hp, bp)
+            call field%evaluate(xm, am, hm, bm)
+            denominator = xp(i) - xm(i)
+            dBmod(i) = (bp - bm)/denominator
+            dhcov(i, :) = (hp - hm)/denominator
+        end do
+        bder = dBmod/max(bmod, 1.0d-30)
+        call field%coords%covariant_basis(x, e_cov)
+        call metric_from_basis(e_cov, g, ginv, sqrtg_abs)
+        sqrtg = sign(sqrtg_abs, signed_jacobian(e_cov))
+        hctrvr = matmul(ginv, hcovar)
+        call compute_hcurl(sqrtg, dhcov, hcurl)
+    end subroutine magfie_generic_refcoords
 
 subroutine evaluate_magfie_refcoords_field(x, Acov, hcov, Bmod, status)
   real(dp), intent(in) :: x(3)
@@ -427,6 +427,35 @@ subroutine compute_hcurl(sqrtg, dh, hcurl)
   hcurl(3) = (dh(1, 2) - dh(2, 1))/sqrtg
 end subroutine compute_hcurl
 
+
+!> Metric, inverse metric and |sqrt(g)| from a covariant basis already
+!> evaluated, in the arithmetic of libneo's metric_tensor, which would
+!> evaluate the same basis again.
+    pure subroutine metric_from_basis(e_cov, g, ginv, sqrtg)
+        real(dp), intent(in) :: e_cov(3, 3)
+        real(dp), intent(out) :: g(3, 3), ginv(3, 3), sqrtg
+        real(dp) :: det
+        integer :: i, j
+
+        do i = 1, 3
+            do j = 1, 3
+                g(i, j) = dot_product(e_cov(:, i), e_cov(:, j))
+            end do
+        end do
+        det = g(1, 1)*(g(2, 2)*g(3, 3) - g(2, 3)*g(3, 2)) &
+              - g(1, 2)*(g(2, 1)*g(3, 3) - g(2, 3)*g(3, 1)) &
+              + g(1, 3)*(g(2, 1)*g(3, 2) - g(2, 2)*g(3, 1))
+        sqrtg = sqrt(abs(det))
+        ginv(1, 1) = (g(2, 2)*g(3, 3) - g(2, 3)*g(3, 2))/det
+        ginv(1, 2) = (g(1, 3)*g(3, 2) - g(1, 2)*g(3, 3))/det
+        ginv(1, 3) = (g(1, 2)*g(2, 3) - g(1, 3)*g(2, 2))/det
+        ginv(2, 1) = (g(2, 3)*g(3, 1) - g(2, 1)*g(3, 3))/det
+        ginv(2, 2) = (g(1, 1)*g(3, 3) - g(1, 3)*g(3, 1))/det
+        ginv(2, 3) = (g(1, 3)*g(2, 1) - g(1, 1)*g(2, 3))/det
+        ginv(3, 1) = (g(2, 1)*g(3, 2) - g(2, 2)*g(3, 1))/det
+        ginv(3, 2) = (g(1, 2)*g(3, 1) - g(1, 1)*g(3, 2))/det
+        ginv(3, 3) = (g(1, 1)*g(2, 2) - g(1, 2)*g(2, 1))/det
+    end subroutine metric_from_basis
 
 pure function signed_jacobian(e_cov) result(jac)
   real(dp), intent(in) :: e_cov(3, 3)
