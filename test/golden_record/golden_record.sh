@@ -263,6 +263,13 @@ build() {
             -e 's/p_mass=1.6726d-24/p_mass=1.67262192369d-24/' \
             -e 's/ev=1.6022d-12/ev=1.602176634d-12/' src/util.F90
     fi
+    if grep -q 'pmass = 1.6726d-24' src/collis_alphas.f90 2>/dev/null; then
+        sed -i -e 's/pi = 3.14159265358979d0/pi = 3.141592653589793d0/' \
+            -e 's/pmass = 1.6726d-24/pmass = 1.67262192369d-24/' \
+            -e 's/emass = 9.1094d-28/emass = 9.1093837015d-28/' \
+            -e 's/e_cgs = 4.8032d-10/e_cgs = 4.803204712570263d-10/' \
+            -e 's/ev_cgs = 1.6022d-12/ev_cgs = 1.602176634d-12/' src/collis_alphas.f90
+    fi
 
     # For older versions, check if libneo is needed as a sibling directory
     if [ -f "SRC/CMakeLists.txt" ] && grep -q "../libneo" "SRC/CMakeLists.txt" 2>/dev/null; then
