@@ -19,6 +19,9 @@ target_link_libraries(test_magfie_refcoords_vmec.x simple)
 add_executable(test_magfie_vmec_axis_stencil.x test_magfie_vmec_axis_stencil.f90)
 target_link_libraries(test_magfie_vmec_axis_stencil.x simple)
 
+add_executable(test_magfie_vmec_rho_stencil.x test_magfie_vmec_rho_stencil.f90)
+target_link_libraries(test_magfie_vmec_rho_stencil.x simple)
+
 add_executable(test_refcoords_vmec_start.x test_refcoords_vmec_start.f90)
 target_link_libraries(test_refcoords_vmec_start.x simple)
 
@@ -60,6 +63,12 @@ add_test(NAME test_magfie_vmec_axis_stencil
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
 )
 set_tests_properties(test_magfie_vmec_axis_stencil PROPERTIES LABELS "unit")
+
+add_test(NAME test_magfie_vmec_rho_stencil
+    COMMAND $<TARGET_FILE:test_magfie_vmec_rho_stencil.x>
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
+)
+set_tests_properties(test_magfie_vmec_rho_stencil PROPERTIES LABELS "unit")
 
 add_test(NAME test_magfie_refcoords_vmec
     COMMAND $<TARGET_FILE:test_magfie_refcoords_vmec.x>
