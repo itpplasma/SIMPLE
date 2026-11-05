@@ -21,7 +21,8 @@ fusion_grid = 128, 32, 32        ! mode 7 midpoint cells: s, poloidal, toroidal 
 sbeg = 1024*0.5d0                ! start surfaces: normalized toroidal flux s (SPECTRE: rho_g
 !                                  unless spectre_sbeg_is_toroidal_flux; TEST field: r/a)
 num_surf = 1                     ! startmode 5/7 range: 0 = [0,1], 1 = [0,sbeg(1)],
-!                                  2 = [sbeg(1),sbeg(2)]; mode 5 clamps s >= 0.01.
+!                                  2 = [sbeg(1),sbeg(2)]; mode 5 clamps s >= 0.01
+!                                  and stops if the upper bound is below 0.01.
 !                                  /= 1: Bmin/Bmax per surface
 phibeg = 0d0                     ! toroidal angle of the start field line, rad (startmode 1)
 thetabeg = 0d0                   ! poloidal angle of the start field line, rad (startmode 1)

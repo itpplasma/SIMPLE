@@ -86,7 +86,8 @@ Start positions
      - Uniform random :math:`s` in the range set by ``num_surf`` (0:
        :math:`[0,1]`, 1: :math:`[0,` ``sbeg(1)`` :math:`]`, 2:
        :math:`[` ``sbeg(1)``, ``sbeg(2)`` :math:`]`), clamped to
-       :math:`s \ge 0.01`; random angles.
+       :math:`s \ge 0.01`; random angles. An upper bound below 0.01 stops
+       the run.
    * - 6
      - Read ``start.dat`` with positions in integration coordinates.
    * - 7
