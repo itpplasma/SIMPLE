@@ -159,6 +159,7 @@ program test_sympl_testfield
         error stop 'unconverged Euler test-field step changed accepted position'
     end if
 
+    call test_integrators_keep_their_scheme
     call test_macrostep_lcfs_event
     call test_failed_step_preserves_state
     call test_collision_failure_propagation
@@ -179,6 +180,43 @@ program test_sympl_testfield
     print *, 'TEST field symplectic step succeeded'
 
 contains
+
+    ! An integrator keeps the scheme it was initialised with when another
+    ! integrator is initialised with a different scheme afterwards.
+    subroutine test_integrators_keep_their_scheme
+        use orbit_symplectic_base, only: symplectic_integrator_t, &
+                                         EXPL_IMPL_EULER, MIDPOINT
+        use field_can_mod, only: field_can_t
+        use parmot_mod, only: ro0
+        type(symplectic_integrator_t) :: si_euler, si_midpoint
+        type(field_can_t) :: f_euler, f_midpoint
+        real(dp), parameter :: z0(5) = [0.15_dp, 0.5_dp, 0.3_dp, 1.0_dp, 0.3_dp]
+        real(dp) :: z_alone(4)
+        integer :: status_alone, status_mixed
+        real(dp) :: ro0_saved
+
+        ro0_saved = ro0
+        ro0 = 1.0e-2_dp
+        f_euler = norb%f
+        call init_sympl(si_euler, f_euler, z0, 1.0e-4_dp, 1.0e-4_dp, &
+                        1.0e-12_dp, EXPL_IMPL_EULER)
+        call orbit_timestep_sympl(si_euler, f_euler, status_alone)
+        z_alone = si_euler%z
+
+        f_euler = norb%f
+        f_midpoint = norb%f
+        call init_sympl(si_euler, f_euler, z0, 1.0e-4_dp, 1.0e-4_dp, &
+                        1.0e-12_dp, EXPL_IMPL_EULER)
+        call init_sympl(si_midpoint, f_midpoint, z0, 1.0e-4_dp, 1.0e-4_dp, &
+                        1.0e-12_dp, MIDPOINT)
+        call orbit_timestep_sympl(si_euler, f_euler, status_mixed)
+        ro0 = ro0_saved
+
+        if (status_alone /= SYMPLECTIC_STEP_OK) &
+            error stop 'Euler step on the TEST field did not converge'
+        if (status_mixed /= status_alone .or. any(si_euler%z /= z_alone)) &
+            error stop 'Euler integrator stepped with another integrator''s scheme'
+    end subroutine test_integrators_keep_their_scheme
 
     subroutine test_macrostep_lcfs_event
         real(dp) :: z(5), exit_step

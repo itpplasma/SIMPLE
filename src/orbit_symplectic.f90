@@ -2,6 +2,7 @@ module orbit_symplectic
 
 use, intrinsic :: iso_fortran_env, only: dp => real64, int64
 use util, only: pi, twopi
+!$  use omp_lib, only: omp_in_parallel
 use field_can_mod, only: field_can_t, get_val, get_derivatives, get_derivatives2, &
   eval_field => evaluate
 use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
@@ -40,8 +41,9 @@ use diag_counters, only: count_event, EVT_NEWTON1_MAXIT, EVT_NEWTON2_MAXIT, &
 
 implicit none
 
-procedure(orbit_timestep_sympl_i), pointer :: orbit_timestep_sympl => null()
-procedure(orbit_timestep_sympl_i), pointer, private :: raw_timestep_sympl => null()
+! Tests may substitute a stepper; production code never reassigns it.
+    procedure(orbit_timestep_sympl_i), pointer :: orbit_timestep_sympl => &
+        orbit_timestep_sympl_dispatch
 
 contains
 
@@ -256,59 +258,48 @@ recursive subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
   call get_val(f, si%z(4)) ! for pth
   si%pthold = f%pth
 
-  select case (mode_init)
+        if (.not. any(mode_init == [RK45, EXPL_IMPL_EULER, IMPL_EXPL_EULER, MIDPOINT, &
+                                    GAUSS1, GAUSS2, GAUSS3, GAUSS4, LOBATTO3, RADAU15, &
+                                    GBS16, TDRK24, TDRK24A, CASHKARP45])) then
+            print *, 'invalid mode for orbit_timestep_sympl: ', mode_init
+            error stop
+        end if
+        ! The quasi stepper pointer is shared module state used only by serial
+        ! tests; the symplectic step dispatches on si%mode instead.
+!$      if (omp_in_parallel()) return
+        select case (mode_init)
     case (RK45)
-      nullify(raw_timestep_sympl)
-      nullify(orbit_timestep_sympl)
       orbit_timestep_quasi => orbit_timestep_rk45
     case (EXPL_IMPL_EULER)
-      raw_timestep_sympl => orbit_timestep_sympl_expl_impl_euler
       orbit_timestep_quasi => timestep_expl_impl_euler_quasi
     case (IMPL_EXPL_EULER)
-      raw_timestep_sympl => orbit_timestep_sympl_impl_expl_euler
       orbit_timestep_quasi => timestep_impl_expl_euler_quasi
     case (MIDPOINT)
-      raw_timestep_sympl => orbit_timestep_sympl_midpoint
       orbit_timestep_quasi => timestep_midpoint_quasi
     case (GAUSS1)
-      raw_timestep_sympl => orbit_timestep_sympl_gauss1
       orbit_timestep_quasi => orbit_timestep_quasi_gauss1
     case (GAUSS2)
-      raw_timestep_sympl => orbit_timestep_sympl_gauss2
       orbit_timestep_quasi => orbit_timestep_quasi_gauss2
     case (GAUSS3)
-      raw_timestep_sympl => orbit_timestep_sympl_gauss3
       orbit_timestep_quasi => orbit_timestep_quasi_gauss3
     case (GAUSS4)
-      raw_timestep_sympl => orbit_timestep_sympl_gauss4
       orbit_timestep_quasi => orbit_timestep_quasi_gauss4
     case (LOBATTO3)
-      raw_timestep_sympl => orbit_timestep_sympl_lobatto3
       orbit_timestep_quasi => orbit_timestep_quasi_lobatto3
         case (RADAU15)
-            raw_timestep_sympl => orbit_timestep_sympl_radau15
             orbit_timestep_quasi => orbit_timestep_radau15
         case (GBS16)
-            raw_timestep_sympl => orbit_timestep_sympl_gbs16
             orbit_timestep_quasi => orbit_timestep_gbs16
         case (TDRK24)
-            raw_timestep_sympl => orbit_timestep_sympl_tdrk24
             orbit_timestep_quasi => orbit_timestep_tdrk24
         case (TDRK24A)
-            raw_timestep_sympl => orbit_timestep_sympl_tdrk24a
             orbit_timestep_quasi => orbit_timestep_tdrk24a
         case (CASHKARP45)
-            raw_timestep_sympl => orbit_timestep_sympl_cashkarp45
             orbit_timestep_quasi => orbit_timestep_cashkarp45
     case default
       print *, 'invalid mode for orbit_timestep_sympl: ', mode_init
       error stop
   end select
-  if (mode_init /= RK45 .and. sympl_rmax <= 1d0) then
-    orbit_timestep_sympl => orbit_timestep_sympl_with_boundary
-  else if (mode_init /= RK45) then
-    orbit_timestep_sympl => raw_timestep_sympl
-  end if
 end subroutine orbit_sympl_init
 
     !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -1296,33 +1287,9 @@ recursive subroutine orbit_sympl_init_multi(mi, f, z, dtau, ntau, rtol_init, alp
     call orbit_sympl_init(mi%stages(2*ks), f, z, &
       beta(ks)*dtau, ntau, rtol_init, 2)
   end do
-        orbit_timestep_sympl => orbit_timestep_sympl_stage
 end subroutine orbit_sympl_init_multi
 
 
-! One stage of a composition method, with the Euler variant its own
-! orbit_sympl_init chose rather than the one initialised last.
-    recursive subroutine orbit_timestep_sympl_stage(si, f, ierr)
-        type(symplectic_integrator_t), intent(inout) :: si
-        type(field_can_t), intent(inout) :: f
-        integer, intent(out) :: ierr
-
-        procedure(orbit_timestep_sympl_i), pointer :: raw_step
-
-        select case (si%mode)
-        case (EXPL_IMPL_EULER)
-            raw_step => orbit_timestep_sympl_expl_impl_euler
-        case (IMPL_EXPL_EULER)
-            raw_step => orbit_timestep_sympl_impl_expl_euler
-        case default
-            error stop 'composition stage needs an Euler method'
-        end select
-        if (sympl_rmax <= 1d0) then
-            call advance_symplectic_with_boundary(si, f, raw_step, ierr)
-        else
-            call raw_step(si, f, ierr)
-        end if
-    end subroutine orbit_timestep_sympl_stage
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !
@@ -1895,16 +1862,65 @@ recursive subroutine orbit_timestep_sympl_midpoint(si, f, ierr)
   call attempt_midpoint_step(si, f, ierr)
 end subroutine orbit_timestep_sympl_midpoint
 
-recursive subroutine orbit_timestep_sympl_with_boundary(si, f, ierr)
-  type(symplectic_integrator_t), intent(inout) :: si
-  type(field_can_t), intent(inout) :: f
-  integer, intent(out) :: ierr
+    recursive subroutine orbit_timestep_sympl_with_boundary(si, f, ierr)
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        integer, intent(out) :: ierr
 
-  if (.not. associated(raw_timestep_sympl)) then
-    error stop 'symplectic timestep implementation is not initialized'
-  end if
-  call advance_symplectic_with_boundary(si, f, raw_timestep_sympl, ierr)
-end subroutine orbit_timestep_sympl_with_boundary
+        call advance_symplectic_with_boundary(si, f, raw_timestep_sympl, ierr)
+    end subroutine orbit_timestep_sympl_with_boundary
+
+!> Advance si by one step of the scheme it was initialised with. Dispatching
+!> on si%mode keeps integrators of different schemes independent and avoids
+!> shared mutable state between OpenMP threads.
+    recursive subroutine orbit_timestep_sympl_dispatch(si, f, ierr)
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        integer, intent(out) :: ierr
+
+        if (sympl_rmax <= 1d0) then
+            call advance_symplectic_with_boundary(si, f, raw_timestep_sympl, ierr)
+        else
+            call raw_timestep_sympl(si, f, ierr)
+        end if
+    end subroutine orbit_timestep_sympl_dispatch
+
+    recursive subroutine raw_timestep_sympl(si, f, ierr)
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        integer, intent(out) :: ierr
+
+        select case (si%mode)
+        case (EXPL_IMPL_EULER)
+            call orbit_timestep_sympl_expl_impl_euler(si, f, ierr)
+        case (IMPL_EXPL_EULER)
+            call orbit_timestep_sympl_impl_expl_euler(si, f, ierr)
+        case (MIDPOINT)
+            call orbit_timestep_sympl_midpoint(si, f, ierr)
+        case (GAUSS1)
+            call orbit_timestep_sympl_gauss1(si, f, ierr)
+        case (GAUSS2)
+            call orbit_timestep_sympl_gauss2(si, f, ierr)
+        case (GAUSS3)
+            call orbit_timestep_sympl_gauss3(si, f, ierr)
+        case (GAUSS4)
+            call orbit_timestep_sympl_gauss4(si, f, ierr)
+        case (LOBATTO3)
+            call orbit_timestep_sympl_lobatto3(si, f, ierr)
+        case (RADAU15)
+            call orbit_timestep_sympl_radau15(si, f, ierr)
+        case (GBS16)
+            call orbit_timestep_sympl_gbs16(si, f, ierr)
+        case (TDRK24)
+            call orbit_timestep_sympl_tdrk24(si, f, ierr)
+        case (TDRK24A)
+            call orbit_timestep_sympl_tdrk24a(si, f, ierr)
+        case (CASHKARP45)
+            call orbit_timestep_sympl_cashkarp45(si, f, ierr)
+        case default
+            error stop 'symplectic timestep implementation is not initialized'
+        end select
+    end subroutine raw_timestep_sympl
 
 subroutine advance_symplectic_with_boundary(si, f, raw_step, ierr)
   type(symplectic_integrator_t), intent(inout) :: si
