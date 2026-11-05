@@ -479,19 +479,17 @@ contains
         character(len=maxlen) :: line
         real(8) :: v_par, v_perp, u, v, s
         real(8) :: th, ph
-        integer :: ipart
+        integer :: ipart, unit
 
+        if (use_special_ants_file) then
+            open (newunit=unit, file=START_FILE_ANTS, recl=1024, status='old', &
+                  action='read')
+        else
+            open (newunit=unit, file=START_FILE, recl=1024, status='old', &
+                  action='read')
+        end if
         do ipart = 1, ntestpart
-            if (use_special_ants_file) then
-                open (1, file=START_FILE_ANTS, recl=1024)
-                read (1, '(A)') line
-                close (1)
-            else
-                open (1, file=START_FILE, recl=1024)
-                read (1, '(A)') line
-                close (1)
-            end if
-
+            read (unit, '(A)') line
             call process_line(line, v_par, v_perp, u, v, s)
             ! In the test case, u runs from 0 to 1 and v from 0 to 4
             th = 2d0*pi*u
@@ -502,6 +500,7 @@ contains
             zstart(4, ipart) = 1.d0
             zstart(5, ipart) = v_par/sqrt(v_par**2 + v_perp**2)
         end do
+        close (unit)
     end subroutine sample_points_ants
 
 end module samplers

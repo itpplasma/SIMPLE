@@ -5,6 +5,7 @@ compared to earlier versions.
 
 | Differing behavior | commit hash / tag and timestamp | Summary |
 | ---------------- | ------------------------------- | ------- |
+| Y | 2026-11-05 | ANTS starts (`startmode = 3`) read one marker per input line again (#685). Since the sampler interface of c6de2792 (2025-03-18) every marker started from the first line. |
 | Y | 2026-11-05 | Trace the starting field line with one VMEC field evaluation per point instead of seven (#683). The sampling phase of a VMEC-backed run drops from 3.9 s to 0.6 s on the QA reactor-scale case; `bmod00` and volume-sampled start points change at round-off level (1e-14). |
 | Y | 2026-11-05 | Classification (`tcut > 0`, `fast_class`, `class_plot`) maps start points into, and end points out of, Meiss, Albert and Boozer-chartmap coordinates as plain tracing does. Since v1.4.0 these markers were traced from untransformed reference coordinates (#681). Canonical-flux, VMEC-Boozer and TEST classification is bitwise unchanged. |
 | Y | 2026-11-05 | Share the selected canonical-flux field and construction phase across OpenMP threads. Workers now use the calling thread's coordinate inversion instead of a legacy fallback with a different Newton threshold. |
