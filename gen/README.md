@@ -123,9 +123,22 @@ guiding-centre rates of `gc_rates_canonical` to a Boozer field; p_phi -
 A_phi/ro0 stays a named difference, so no rewrite expands it where v_par is
 close to zero. The CUDA rates in `simple_cuda_native_rk54.cu` stay
 hand-written: the same kernel emitted for CUDA ran about 2 % slower there.
-`emit_field_derivatives` can also emit `get_val`, `get_derivatives` and
-`get_derivatives2`; the CPU chain stays hand-written because a different
-rounding changes the chaotic orbits of the golden-record classifier cases.
+The same statement of v_par, H and p_theta, emitted in full and with divisions
+instead of reciprocal temporaries, gives `get_val`, `get_derivatives` and
+`get_derivatives2` (`src/generated/field_can_derivatives.inc`, included in
+`field_can_mod`) for the CPU and every OpenACC path that calls them.
+
+`boozer_h_first`, `boozer_h_rr`, `boozer_h_rmix` and `boozer_h_all`
+(`src/generated/boozer_h_derivatives.inc`) state h_theta = B_theta/B and
+h_phi = B_phi/B once, with B_theta(r) and B_phi(r) passed as arguments and
+B read from `field_can_t`, and give their gradients and no, the rr, the
+radial-mixed or all packed Hessian entries. h_theta and h_phi are named
+intermediates of `fortsym_chain`, so every derivative is
+(D B_theta - h_theta D B)/B with the lower derivatives of h reused.
+`field_can_boozer` includes them for `eval_field_booz` and
+`eval_field_booz_device`, and `simple_gpu` includes them again for
+`gpu_eval_field_rmix`, because nvfortran inlines device routines only within
+one file.
 
 `gc_geometry_gradient_transport` transports the gradients of A_theta,
 A_phi, h_theta, h_phi and B to the corrected Newton stage using the packed

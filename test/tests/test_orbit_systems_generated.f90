@@ -8,7 +8,8 @@ program test_orbit_systems_generated
     use field_can_base, only: field_can_t
     use orbit_symplectic_base, only: coeff_rk_gauss, coeff_rk_lobatto
     use orbit_systems_generated
-    use field_can_mod, only: get_derivatives
+    use field_can_mod, only: get_val, get_derivatives, get_derivatives2
+    use field_can_boozer, only: boozer_h_first, boozer_h_rr, boozer_h_rmix, boozer_h_all
     use simple_gpu, only: gpu_get_derivatives2_radial_mixed, gc_rates_boozer
     implicit none
 
@@ -27,6 +28,8 @@ program test_orbit_systems_generated
         call check_lobatto()
         call check_rates()
         call check_radial_mixed()
+        call check_field_derivatives()
+        call check_boozer_h()
         call check_rates_boozer()
         call check_random_jacobian()
 
@@ -644,6 +647,153 @@ contains
         call old_radial_mixed(old, pphi)
         call compare_fields('gpu_get_derivatives2_radial_mixed', new, old, 2)
     end subroutine check_radial_mixed
+
+    subroutine check_field_derivatives()
+        type(field_can_t) :: f, new, old
+        real(dp) :: pphi
+
+        call random_base_field(f)
+        pphi = uniform(-1d0, 1d0)
+        new = f
+        old = f
+        call get_val(new, pphi)
+        call old_derivatives2(old, pphi, 0)
+        call compare_fields('get_val', new, old, 0)
+        new = f
+        old = f
+        call get_derivatives(new, pphi)
+        call old_derivatives2(old, pphi, 1)
+        call compare_fields('get_derivatives', new, old, 1)
+        new = f
+        old = f
+        call get_derivatives2(new, pphi)
+        call old_derivatives2(old, pphi, 2)
+        call compare_fields('get_derivatives2', new, old, 2)
+    end subroutine check_field_derivatives
+
+    !> The hand-written get_val, get_derivatives and get_derivatives2 of
+    !> SIMPLE 7460ae9d through `order`.
+    subroutine old_derivatives2(f, pphi, order)
+        type(field_can_t), intent(inout) :: f
+        real(dp), intent(in) :: pphi
+        integer, intent(in) :: order
+
+        f%vpar = (pphi - f%Aph/f%ro0)/f%hph
+        f%H = f%vpar**2/2d0 + f%mu*f%Bmod + f%Phie
+        f%pth = f%hth*f%vpar + f%Ath/f%ro0
+        if (order < 1) return
+        f%dvpar(1:3) = -(f%dAph/f%ro0 + f%dhph*f%vpar)/f%hph
+        f%dvpar(4) = 1d0/f%hph
+        f%dH(1:3) = f%vpar*f%dvpar(1:3) + f%mu*f%dBmod + f%dPhie
+        f%dH(4) = f%vpar/f%hph
+        f%dpth(1:3) = f%dvpar(1:3)*f%hth + f%vpar*f%dhth + f%dAth/f%ro0
+        f%dpth(4) = f%hth/f%hph
+        if (order < 2) return
+        f%d2vpar(1:6) = -f%d2Aph/f%ro0 - f%d2hph*f%vpar
+        f%d2vpar(1) = f%d2vpar(1) - 2d0*f%dhph(1)*f%dvpar(1)
+        f%d2vpar(2) = f%d2vpar(2) - (f%dhph(1)*f%dvpar(2) + f%dhph(2)*f%dvpar(1))
+        f%d2vpar(3) = f%d2vpar(3) - (f%dhph(1)*f%dvpar(3) + f%dhph(3)*f%dvpar(1))
+        f%d2vpar(4) = f%d2vpar(4) - 2d0*f%dhph(2)*f%dvpar(2)
+        f%d2vpar(5) = f%d2vpar(5) - (f%dhph(2)*f%dvpar(3) + f%dhph(3)*f%dvpar(2))
+        f%d2vpar(6) = f%d2vpar(6) - 2d0*f%dhph(3)*f%dvpar(3)
+        f%d2vpar(1:6) = f%d2vpar(1:6)/f%hph
+        f%d2H(1:6) = f%vpar*f%d2vpar(1:6) + f%mu*f%d2Bmod + f%d2Phie
+        f%d2H(1) = f%d2H(1) + f%dvpar(1)**2
+        f%d2H(2) = f%d2H(2) + f%dvpar(1)*f%dvpar(2)
+        f%d2H(3) = f%d2H(3) + f%dvpar(1)*f%dvpar(3)
+        f%d2H(4) = f%d2H(4) + f%dvpar(2)**2
+        f%d2H(5) = f%d2H(5) + f%dvpar(2)*f%dvpar(3)
+        f%d2H(6) = f%d2H(6) + f%dvpar(3)**2
+        f%d2pth(1:6) = f%d2vpar(1:6)*f%hth + f%vpar*f%d2hth + f%d2Ath/f%ro0
+        f%d2pth(1) = f%d2pth(1) + 2d0*f%dvpar(1)*f%dhth(1)
+        f%d2pth(2) = f%d2pth(2) + f%dvpar(1)*f%dhth(2) + f%dvpar(2)*f%dhth(1)
+        f%d2pth(3) = f%d2pth(3) + f%dvpar(1)*f%dhth(3) + f%dvpar(3)*f%dhth(1)
+        f%d2pth(4) = f%d2pth(4) + 2d0*f%dvpar(2)*f%dhth(2)
+        f%d2pth(5) = f%d2pth(5) + f%dvpar(2)*f%dhth(3) + f%dvpar(3)*f%dhth(2)
+        f%d2pth(6) = f%d2pth(6) + 2d0*f%dvpar(3)*f%dhth(3)
+        f%d2vpar(7:9) = -f%dhph/f%hph**2
+        f%d2H(7:9) = f%dvpar(1:3)/f%hph + f%vpar*f%d2vpar(7:9)
+        f%d2pth(7:9) = f%dhth/f%hph + f%hth*f%d2vpar(7:9)
+    end subroutine old_derivatives2
+
+    !> The generated h_theta = B_theta/B and h_phi = B_phi/B kernels against
+    !> the hand-written chain of SIMPLE 7460ae9d. Untouched Hessian entries
+    !> must keep their previous values.
+    subroutine check_boozer_h()
+        type(field_can_t) :: f, new, old
+        real(dp) :: b(6)
+        integer :: k
+
+        call random_base_field(f)
+        do k = 1, 6
+            b(k) = uniform(-1d0, 1d0)
+        end do
+        new = f
+        old = f
+        call boozer_h_first(new, b(1), b(2), b(4), b(5))
+        call old_boozer_h(old, b, [integer ::])
+        call compare_h('boozer_h_first', new, old)
+        new = f
+        old = f
+        call boozer_h_rr(new, b(1), b(2), b(3), b(4), b(5), b(6))
+        call old_boozer_h(old, b, [1])
+        call compare_h('boozer_h_rr', new, old)
+        new = f
+        old = f
+        call boozer_h_rmix(new, b(1), b(2), b(3), b(4), b(5), b(6))
+        call old_boozer_h(old, b, [1, 2, 3])
+        call compare_h('boozer_h_rmix', new, old)
+        new = f
+        old = f
+        call boozer_h_all(new, b(1), b(2), b(3), b(4), b(5), b(6))
+        call old_boozer_h(old, b, [1, 2, 3, 4, 5, 6])
+        call compare_h('boozer_h_all', new, old)
+    end subroutine check_boozer_h
+
+    subroutine compare_h(name, new, old)
+        character(*), intent(in) :: name
+        type(field_can_t), intent(in) :: new, old
+
+        call compare(name, [new%hth, new%dhth, new%d2hth, new%hph, new%dhph, &
+                            new%d2hph], [old%hth, old%dhth, old%d2hth, old%hph, &
+                                         old%dhph, old%d2hph])
+    end subroutine compare_h
+
+    !> The hand-written chain of eval_field_booz, SIMPLE 7460ae9d, with
+    !> b = (B_theta, dB_theta/dr, d2B_theta/dr2, B_phi, ...), restricted to
+    !> the packed Hessian entries `hessian`.
+    subroutine old_boozer_h(f, b, hessian)
+        type(field_can_t), intent(inout) :: f
+        real(dp), intent(in) :: b(6)
+        integer, intent(in) :: hessian(:)
+        real(dp) :: bmod2, d2th(6), d2ph(6)
+
+        bmod2 = f%Bmod**2
+        f%hth = b(1)/f%Bmod
+        f%hph = b(4)/f%Bmod
+        f%dhth(1) = b(2)/f%Bmod - b(1)*f%dBmod(1)/bmod2
+        f%dhph(1) = b(5)/f%Bmod - b(4)*f%dBmod(1)/bmod2
+        f%dhth(2:3) = -b(1)*f%dBmod(2:3)/bmod2
+        f%dhph(2:3) = -b(4)*f%dBmod(2:3)/bmod2
+        d2th(1) = b(3)/f%Bmod - 2d0*b(2)*f%dBmod(1)/bmod2 + &
+                  b(1)/bmod2*(2d0*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
+        d2ph(1) = b(6)/f%Bmod - 2d0*b(5)*f%dBmod(1)/bmod2 + &
+                  b(4)/bmod2*(2d0*f%dBmod(1)**2/f%Bmod - f%d2Bmod(1))
+        d2th([4, 6]) = b(1)/bmod2*(2d0*f%dBmod([2, 3])**2/f%Bmod - f%d2Bmod([4, 6]))
+        d2ph([4, 6]) = b(4)/bmod2*(2d0*f%dBmod([2, 3])**2/f%Bmod - f%d2Bmod([4, 6]))
+        d2th(2) = -b(2)*f%dBmod(2)/bmod2 &
+                  + b(1)/bmod2*(2d0*f%dBmod(1)*f%dBmod(2)/f%Bmod - f%d2Bmod(2))
+        d2ph(2) = -b(5)*f%dBmod(2)/bmod2 &
+                  + b(4)/bmod2*(2d0*f%dBmod(1)*f%dBmod(2)/f%Bmod - f%d2Bmod(2))
+        d2th(3) = -b(2)*f%dBmod(3)/bmod2 &
+                  + b(1)/bmod2*(2d0*f%dBmod(1)*f%dBmod(3)/f%Bmod - f%d2Bmod(3))
+        d2ph(3) = -b(5)*f%dBmod(3)/bmod2 &
+                  + b(4)/bmod2*(2d0*f%dBmod(1)*f%dBmod(3)/f%Bmod - f%d2Bmod(3))
+        d2th(5) = b(1)/bmod2*(2d0*f%dBmod(2)*f%dBmod(3)/f%Bmod - f%d2Bmod(5))
+        d2ph(5) = b(4)/bmod2*(2d0*f%dBmod(2)*f%dBmod(3)/f%Bmod - f%d2Bmod(5))
+        f%d2hth(hessian) = d2th(hessian)
+        f%d2hph(hessian) = d2ph(hessian)
+    end subroutine old_boozer_h
 
     !> The hand-written OpenACC subset of SIMPLE d5111a87, which omits
     !> d2Phie: SIMPLE's electric potential is linear in s.
