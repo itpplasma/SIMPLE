@@ -90,6 +90,7 @@ contains
         use field_vmec, only: vmec_field_t
         use field_splined, only: splined_field_t
         use reference_coordinates, only: ref_coords
+        use libneo_coordinates, only: vmec_coordinate_system_t
         use params, only: coord_input, profile_label_file
         use profile_label, only: load_profile_label
 
@@ -113,7 +114,13 @@ contains
         case (REFCOORDS)
             if (.not. allocated(ref_coords)) &
                 error stop 'init_profile_radius: no reference coordinates'
-            call from_coordinates(ref_coords, .false.)
+            select type (cs => ref_coords)
+            class is (vmec_coordinate_system_t)
+                ! REFCOORDS integrates VMEC references in rho = sqrt(s).
+                call set_profile_radius(RADIUS_RHO_TOR, .false.)
+            class default
+                call from_coordinates(ref_coords, .false.)
+            end select
         case (MEISS, ALBERT)
             if (.not. allocated(field_noncan)) &
                 error stop 'init_profile_radius: canonical source field not set'
@@ -234,11 +241,13 @@ contains
     function label_s_refcoords(z) result(s)
         use reference_coordinates, only: ref_coords
         use profile_label, only: profile_label_at
+        use field_can_mod, only: integ_to_ref
         real(dp), intent(in) :: z(3)
         real(dp) :: s
-        real(dp) :: x(3)
+        real(dp) :: u(3), x(3)
 
-        call ref_coords%evaluate_cyl(z, x)
+        call integ_to_ref(z, u)
+        call ref_coords%evaluate_cyl(u, x)
         s = profile_label_at(x)
     end function label_s_refcoords
 

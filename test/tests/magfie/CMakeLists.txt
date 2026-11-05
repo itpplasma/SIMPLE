@@ -16,6 +16,9 @@ target_link_libraries(test_coils_field_compare.x simple)
 add_executable(test_magfie_refcoords_vmec.x test_magfie_refcoords_vmec.f90)
 target_link_libraries(test_magfie_refcoords_vmec.x simple)
 
+add_executable(test_refcoords_vmec_start.x test_refcoords_vmec_start.f90)
+target_link_libraries(test_refcoords_vmec_start.x simple)
+
 add_executable(test_jacobian_conventions_vmec.x test_jacobian_conventions_vmec.f90)
 target_link_libraries(test_jacobian_conventions_vmec.x simple)
 
@@ -53,6 +56,14 @@ add_test(NAME test_magfie_refcoords_vmec
     COMMAND $<TARGET_FILE:test_magfie_refcoords_vmec.x>
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
 )
+
+add_test(NAME test_refcoords_vmec_start
+    COMMAND $<TARGET_FILE:test_refcoords_vmec_start.x>
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
+)
+# Peak RSS rounded up in GiB: init_field splines the full VMEC field.
+set_tests_properties(test_refcoords_vmec_start PROPERTIES
+    LABELS "unit" RESOURCE_GROUPS "mem_gb:7")
 
 add_test(NAME test_jacobian_conventions_vmec
     COMMAND $<TARGET_FILE:test_jacobian_conventions_vmec.x>

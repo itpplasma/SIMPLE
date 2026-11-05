@@ -36,7 +36,8 @@ Collisions evaluate `&profiles` at `profile_s(z)` (`src/profile_radius.f90`),
 which maps the integration radius to toroidal flux `s`: `z(1)` for
 `integ_coords` -1, 0, 1, 2; the source-field radius after `integ_to_ref` for
 3 and 4 (Meiss `r = sqrt(s)` on VMEC, chartmap `rho` on splined fields; the
-Albert radius `psi/Ath_norm` is not `s`); the reference radius for 5; the
+Albert radius `psi/Ath_norm` is not `s`); for 5, `s = z(1)^2` on a VMEC
+reference and the reference radius on a chartmap; the
 enclosed toroidal flux of `rho_g` for 6. Chartmap radii use `s = rho^2`, or
 `(rho/rho_lcfs)^2` for `vmec_extended`/`vmec_to_wall` charts.
 
@@ -298,6 +299,11 @@ global ([#292](https://github.com/itpplasma/SIMPLE/issues/292)).
    index first). Fields without analytic derivatives go through
    `magfie_generic_refcoords`, which builds the same array by central
    differences.
+
+On a VMEC reference the REFCOORDS state therefore carries $x_1 = \sqrt s$:
+`set_refcoords_transform` points `ref_to_integ`/`integ_to_ref` at the
+$s \leftrightarrow \sqrt s$ map, so `start.dat`, `sbeg` and all output keep
+VMEC $s$. On a chartmap reference both maps are the identity.
 
 ## 4. Sampling a field on reference coordinates
 
