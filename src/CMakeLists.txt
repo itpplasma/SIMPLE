@@ -121,10 +121,6 @@ list(APPEND SOURCES
             PROPERTIES COMPILE_OPTIONS -fstack-arrays)
     endif()
 
-    if(SIMPLE_ENABLE_OPENACC AND CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
-        target_compile_options(simple PRIVATE "${SIMPLE_OPENACC_GPU_FLAG}")
-    endif()
-
     if(SIMPLE_ENABLE_MPI)
         find_package(MPI REQUIRED COMPONENTS Fortran)
         target_compile_definitions(simple PRIVATE SIMPLE_ENABLE_MPI)
