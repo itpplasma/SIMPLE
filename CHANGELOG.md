@@ -5,6 +5,7 @@ compared to earlier versions.
 
 | Differing behavior | commit hash / tag and timestamp | Summary |
 | ---------------- | ------------------------------- | ------- |
+| Y | 2026-11-05 | RK45 (`integmode = 0`) and RK recovery on the analytic TEST field use the non-canonical form of the same field as the symplectic schemes. Since 2fdf99fb (#216) `magfie_test` had inconsistent covariant and contravariant components (`h_i h^i` far from 1) and no curl, so TEST RK45 orbits were wrong. TEST symplectic runs are unchanged. |
 | Y | 2026-11-05 | Volume starts (`startmode = 5`) in Meiss and Albert coordinates on a VMEC reference draw s uniformly in the requested range, as documented. The radius was drawn in integration coordinates and mapped, so `sbeg = 0.5` gave s in [0, 0.25] for Meiss and up to 0.71 for Albert. Boozer, canonical-flux and chartmap starts are unchanged. |
 | Y | 2026-11-05 | Multithreaded classification counts every confined marker (#693). Passing markers skipped by `contr_pp` incremented the confined counters in a critical section while traced markers used atomics, which do not exclude each other; with 32 threads about 0.5 % of the passing confined count was lost (20000 markers, QA case). The classification loop also uses a dynamic schedule. Single-thread results are unchanged. |
 | Y | 2026-11-05 | `class_plot` writes each classified marker once to the Minkowski, J_parallel and topology files (`fort.100xx`, `fort.400xx`, `fort.500xx`). Since d607ec1d (#184) traced markers were written by the classifier and again by `write_classification_results`. |
