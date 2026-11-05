@@ -25,7 +25,7 @@ and ``DOC/config.md`` for additional usage, units and option interactions.
 &config
 -------
 
-Source: ``src/params.f90:250``.
+Source: ``src/params.f90:256``.
 
 .. list-table::
    :header-rows: 1
@@ -403,6 +403,12 @@ Source: ``src/params.f90:250``.
      - ``scalar``
      - ``'full'``
      - 'full' (Coulomb operator) or 'lorentz_nustar' (monoenergetic pitch scattering)
+   * - ``thermal_stop_factor``
+     - ``real``
+     - ``dp``
+     - ``scalar``
+     - ``0.0d0``
+     - Stop a collisional marker once E < thermal_stop_factor\*T_i(s); 0 disables.
    * - ``nu_star_standard``
      - ``real``
      - ``dp``

@@ -565,6 +565,12 @@ set_tests_properties(test_particle_rng PROPERTIES
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/particle_rng
     ENVIRONMENT "OMP_DYNAMIC=FALSE")
 
+add_test(NAME test_thermal_stop
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_thermal_stop.py
+        $<TARGET_FILE:simple.x> ${WOUT_FILE}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_thermal_stop PROPERTIES
+    LABELS "integration;python;collisions" TIMEOUT 900)
 add_executable(test_collision_species.x test_collision_species.f90)
 target_link_libraries(test_collision_species.x simple)
 add_test(NAME test_collision_species COMMAND test_collision_species.x)
