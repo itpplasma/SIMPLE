@@ -154,8 +154,13 @@ contains
             vartheta = twopi*tmp_rand
             call random_number(tmp_rand)
             varphi = twopi*tmp_rand
-            ! we store starting points in reference coordinates:
-            call integ_to_ref([r, vartheta, varphi], zstart(1:3, ipart))
+            ! Meiss and Albert radii are not s; on a VMEC reference s is the
+            ! reference radius, so draw the point there.
+            if (vmec_flux_reference()) then
+                zstart(1:3, ipart) = [r, vartheta, varphi]
+            else
+                call integ_to_ref([r, vartheta, varphi], zstart(1:3, ipart))
+            end if
             ! normalized velocity module z(4) = v / v_0:
             zstart(4, ipart) = 1.d0
             ! starting pitch z(5)=v_\parallel / v:
@@ -166,6 +171,21 @@ contains
         call save_starting_points(zstart)
 
     end subroutine sample_volume_single
+
+    logical function vmec_flux_reference()
+        use params, only: isw_field_type
+        use magfie_sub, only: MEISS, ALBERT
+        use reference_coordinates, only: ref_coords
+        use libneo_coordinates, only: vmec_coordinate_system_t
+
+        vmec_flux_reference = .false.
+        if (isw_field_type /= MEISS .and. isw_field_type /= ALBERT) return
+        if (.not. allocated(ref_coords)) return
+        select type (ref_coords)
+        type is (vmec_coordinate_system_t)
+            vmec_flux_reference = .true.
+        end select
+    end function vmec_flux_reference
 
     subroutine sample_fusion_birth(zstart, s_inner, s_outer, integration_coords)
         use params, only: fusion_grid, num_surf, n_d, n_e, &
