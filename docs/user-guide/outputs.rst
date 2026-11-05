@@ -34,7 +34,8 @@ Text files
    One row per marker: index, loss time, trapping parameter :math:`\kappa`,
    start radius, perpendicular invariant :math:`J_\perp`, end state (5
    columns). The loss time is ``trace_time`` for confined markers, ``-1``
-   for markers not traced (exit code 3) and ``NaN`` for unresolved ones.
+   for markers not traced (exit code 3) and ``NaN`` for unresolved ones and
+   for markers whose tracing stopped early (exit code 6).
 ``orbit_exit_code.dat``
    One row per marker: index, exit code, loss time, radial residual and time
    width of the located boundary crossing.
@@ -67,6 +68,9 @@ Code    Meaning
 3       not traced (``contr_pp``, ``notrace_passing``); counted confined
 4       all recovery methods failed for a collisionless marker in the core
         (:math:`s < 0.01`); counted confined
+6       GPU production: still inside when the weighted loss exceeded
+        ``gpu_maxloss`` and tracing stopped; confined until the stop,
+        unresolved afterwards
 101     unresolved: left the coordinate domain (``chart_boundary_kind = 'domain'``)
 102     unresolved: Newton iteration did not converge
 103     unresolved: linear solve failed
@@ -75,7 +79,8 @@ Code    Meaning
 ======  ======================================================================
 
 Unresolved markers (101–105) are excluded from the confined fractions and
-counted in ``unresolved_fraction.dat``. A large unresolved fraction means a
+counted in ``unresolved_fraction.dat`` from their last accepted state on;
+markers with exit code 6 likewise after the stop. A large unresolved fraction means a
 too large step (``npoiper2``), too coarse field splines or a bad equilibrium
 near the axis; it is not a physical loss.
 

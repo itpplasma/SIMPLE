@@ -60,6 +60,10 @@ module params
     ! thermal_stop_factor times the local main-ion temperature. It has joined
     ! the thermal population and is counted confined, not lost.
     integer, parameter :: ORBIT_EXIT_THERMALIZED = 5
+    ! A GPU production marker still inside when the weighted-loss threshold
+    ! gpu_maxloss ended the trace before trace_time: confined until the stop,
+    ! unresolved afterwards.
+    integer, parameter :: ORBIT_EXIT_STOPPED = 6
     integer, parameter :: ORBIT_EXIT_NUMERICAL_DOMAIN = 101
     integer, parameter :: ORBIT_EXIT_NUMERICAL_MAXITER = 102
     integer, parameter :: ORBIT_EXIT_NUMERICAL_LINEAR = 103

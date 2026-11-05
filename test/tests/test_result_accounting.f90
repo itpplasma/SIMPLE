@@ -7,9 +7,10 @@ program test_result_accounting
         times_lost, orbit_exit_code, trap_par, perp_inv, &
         zstart, zend, boundary_event_radial_residual, &
         boundary_event_time_width, isw_field_type, class_plot, &
-        ntcut, ORBIT_EXIT_COMPLETED, ORBIT_EXIT_LCFS, &
-        ORBIT_EXIT_NUMERICAL_CONFINED, ORBIT_EXIT_NUMERICAL_MAXITER
-    use simple_main, only: write_results
+                      ntcut, trace_time, ORBIT_EXIT_COMPLETED, ORBIT_EXIT_LCFS, &
+                      ORBIT_EXIT_NUMERICAL_CONFINED, ORBIT_EXIT_NUMERICAL_MAXITER, &
+                      ORBIT_EXIT_NUMERICAL_EVENT, ORBIT_EXIT_STOPPED
+    use simple_main, only: write_results, record_gpu_marker_outcome
     implicit none
 
     integer :: nerr
@@ -20,6 +21,7 @@ program test_result_accounting
     call test_numerically_confined_denominator()
     call test_zero_resolved()
     call teardown_results()
+    call test_gpu_marker_outcome()
 
     if (nerr > 0) error stop 1
     print *, 'All result accounting tests passed!'
@@ -141,6 +143,47 @@ contains
         deallocate (zstart, zend, boundary_event_radial_residual)
         deallocate (boundary_event_time_width)
     end subroutine teardown_results
+
+    subroutine test_gpu_marker_outcome()
+        ! Macrosteps at t = 0, 5, 10 with trace_time = 10 and normalized time
+        ! equal to time (v0 = dtaumin = sqrt(2)). Markers 1-3 come from a run
+        ! stopped at the weighted-loss threshold at t = 5: all of them are
+        ! unresolved after the stop, and the marker that failed at t = 4 is
+        ! confined before, never lost at t = 0.
+        ntestpart = 4
+        ntimstep = 3
+        dtaumin = sqrt(2.0_dp)
+        v0 = sqrt(2.0_dp)
+        trace_time = 10.0_dp
+        allocate (kt_macro(3), confpart_pass(3), confpart_trap(3))
+        allocate (unresolved_orbits(3), times_lost(4), orbit_exit_code(4))
+        kt_macro = [0_int64, 5_int64, 10_int64]
+        confpart_pass = 0.0_dp
+        confpart_trap = 0.0_dp
+        unresolved_orbits = 0
+
+        call record_gpu_marker_outcome(1, .true., -1, 4.0_dp, 5.0_dp, 10.0_dp)
+        call record_gpu_marker_outcome(2, .false., 0, 10.0_dp, 5.0_dp, 10.0_dp)
+        call record_gpu_marker_outcome(3, .true., 1, 3.0_dp, 5.0_dp, 10.0_dp)
+        call record_gpu_marker_outcome(4, .true., 0, 10.0_dp, 10.0_dp, 10.0_dp)
+
+        call assert_true(all(orbit_exit_code == [ORBIT_EXIT_NUMERICAL_EVENT, &
+                          ORBIT_EXIT_STOPPED, ORBIT_EXIT_LCFS, ORBIT_EXIT_COMPLETED]), &
+                         'GPU exit codes: failed, stopped, lost, completed')
+        call assert_true(ieee_is_nan(times_lost(1)) .and. &
+                     ieee_is_nan(times_lost(2)), 'failed and stopped have no loss time')
+        call assert_close(times_lost(3), 3.0_dp, 'GPU loss time')
+        call assert_close(times_lost(4), 10.0_dp, 'GPU completed time')
+        call assert_true(all(confpart_pass == [3.0_dp, 1.0_dp, 1.0_dp]), &
+                         'GPU passing confined counts')
+        call assert_true(all(confpart_trap == [1.0_dp, 1.0_dp, 0.0_dp]), &
+                         'GPU trapped confined counts')
+        call assert_true(all(unresolved_orbits == [0, 1, 3]), &
+                         'GPU unresolved counts')
+
+        deallocate (kt_macro, confpart_pass, confpart_trap, unresolved_orbits)
+        deallocate (times_lost, orbit_exit_code)
+    end subroutine test_gpu_marker_outcome
 
     subroutine assert_close(actual, expected, message)
         real(dp), intent(in) :: actual, expected

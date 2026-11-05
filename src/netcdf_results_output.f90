@@ -190,7 +190,8 @@ contains
         call check_nc(status, 'def_var orbit_exit_code')
         status = nf90_put_att(ncid, var_orbit_exit_code, 'description', &
             '0=completed, 1=LCFS, 2=wall, 3=skipped, ' // &
-            '4=numerically confined in core, 101-105=numerical failure')
+              '4=numerically confined in core, 6=GPU trace stopped at gpu_maxloss, '// &
+                              '101-105=numerical failure')
         call check_nc(status, 'put_att orbit_exit_code description')
 
         status = nf90_def_var(ncid, 'boundary_event_radial_residual', nf90_double, &

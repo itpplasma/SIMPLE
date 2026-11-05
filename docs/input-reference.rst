@@ -25,7 +25,7 @@ and ``DOC/config.md`` for additional usage, units and option interactions.
 &config
 -------
 
-Source: ``src/params.f90:256``.
+Source: ``src/params.f90:260``.
 
 .. list-table::
    :header-rows: 1

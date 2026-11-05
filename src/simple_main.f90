@@ -41,6 +41,7 @@ module simple_main
                       gpu_maxloss, gpu_min_timestep, gpu_particle_profile, &
                     ORBIT_GC, ORBIT_FULL_ORBIT, ORBIT_EXIT_COMPLETED, ORBIT_EXIT_LCFS, &
                    ORBIT_EXIT_WALL, ORBIT_EXIT_SKIPPED, ORBIT_EXIT_NUMERICAL_CONFINED, &
+                      ORBIT_EXIT_STOPPED, &
                       ORBIT_EXIT_NUMERICAL_DOMAIN, &
                       ORBIT_EXIT_NUMERICAL_MAXITER, ORBIT_EXIT_NUMERICAL_LINEAR, &
                       ORBIT_EXIT_NUMERICAL_EVENT, ORBIT_EXIT_NUMERICAL_FULL_ORBIT
@@ -497,7 +498,11 @@ contains
             call init_magfie(isw_field_type)
             call print_phase_time('Field type initialization completed')
         end if
-        if ((isw_field_type /= TEST) .and. needs_bminmax_cache()) then
+        ! The compact initializer loads no magfie field; trace_gpu_production
+        ! takes the surface extrema from the compact table instead.
+        if (gpu_compact_init) then
+            continue
+        else if ((isw_field_type /= TEST) .and. needs_bminmax_cache()) then
             call init_bminmax
             call print_phase_time('Bmin/Bmax initialization completed')
         else if (isw_field_type /= TEST) then
@@ -1103,7 +1108,6 @@ contains
         ! https://arxiv.org/abs/2606.19523.
         ! path deliberately excludes the separate continuous fast-classifier
         ! campaign (J_parallel and rotation only) and all unsupported physics.
-        use finite_check, only: quiet_nan
         use simple, only: init_sympl
         use simple_gpu, only: trace_orbits_gpu_landreman, trace_orbits_gpu_method, &
                               gpu_device_count
@@ -1127,7 +1131,7 @@ contains
         logical, allocatable :: passing(:)
         character(32) :: backend_name
         character(32) :: start_coordinates
-        integer :: method, init_mode, i, it, k, nloc
+        integer :: method, init_mode, i, k, nloc
         integer :: particle_profile_unit
         integer(8) :: nfev_total, warp_nfev_slots
         real(dp) :: z(5), total_time_normalized, t0, t_init, t_trace, t_finish
@@ -1135,6 +1139,9 @@ contains
         real(dp) :: time_scale, observed_duration, energy_loss_fraction
         real(dp) :: cuda_profile_ms(5)
         logical :: landreman_mode, cuda_native_backend
+#ifdef SIMPLE_ENABLE_CUDA_NATIVE
+        real(dp) :: surf_s, surf_bmin, surf_bmax
+#endif
 
         call validate_gpu_production_config
 
@@ -1204,6 +1211,9 @@ contains
             trim(start_coordinates) /= 'boozer') &
             error stop 'gpu_start_coordinates must be reference or boozer'
 
+#ifdef SIMPLE_ENABLE_CUDA_NATIVE
+        surf_s = -huge(1.0_dp)
+#endif
         t0 = get_wtime()
         do k = 1, nloc
             i = mpi_rank + 1 + (k - 1)*mpi_ranks
@@ -1217,8 +1227,14 @@ contains
 #ifdef SIMPLE_ENABLE_CUDA_NATIVE
                 call initialize_cuda_native_particle(si_gpu(k), f_gpu(k), z, &
                                                      dtaumin, relerr)
-                passing(k) = .false.
-                trap_par(i) = 0.0_dp
+                ! Markers usually share their start surface.
+                if (z(1) /= surf_s) then
+                    call compact_surface_bminmax(z(1), surf_bmin, surf_bmax)
+                    surf_s = z(1)
+                end if
+                passing(k) = z(5)**2 > 1.0_dp - f_gpu(k)%Bmod/surf_bmax
+                trap_par(i) = ((1.0_dp - z(5)**2)*surf_bmax/f_gpu(k)%Bmod - &
+                               1.0_dp)*surf_bmin/(surf_bmax - surf_bmin)
                 perp_inv(i) = z(4)**2*(1.0_dp - z(5)**2)/f_gpu(k)%Bmod
 #endif
             else
@@ -1309,22 +1325,9 @@ contains
             zend(4, i) = si_gpu(k)%pabs
             zend(5, i) = f_gpu(k)%vpar/(si_gpu(k)%pabs*sqrt2)
 
-            if (loss_step(k) < 0) then
-                times_lost(i) = quiet_nan()
-                orbit_exit_code(i) = ORBIT_EXIT_NUMERICAL_EVENT
-            else if (loss_time_normalized(k) < total_time_normalized - &
-                     16.0_dp*epsilon(1.0_dp)*max(total_time_normalized, 1.0_dp)) then
-                times_lost(i) = loss_time_normalized(k)*sqrt2/v0
-                orbit_exit_code(i) = ORBIT_EXIT_LCFS
-            else
-                times_lost(i) = trace_time
-                orbit_exit_code(i) = ORBIT_EXIT_COMPLETED
-            end if
-            do it = 1, ntimstep
-                if (orbit_exit_code(i) == ORBIT_EXIT_COMPLETED .or. &
-                    times_lost(i) >= real(kt_macro(it), dp)*dtaumin/v0) &
-                    call increase_confined_count(it, passing(k))
-            end do
+            call record_gpu_marker_outcome(i, passing(k), loss_step(k), &
+                                           loss_time_normalized(k), &
+                                           observed_duration, total_time_normalized)
         end do
         if (.not. landreman_mode) then
             do i = 1, nloc, 32
@@ -1362,6 +1365,8 @@ contains
         print '(a,i0)', ' physical losses = ', count(orbit_exit_code == ORBIT_EXIT_LCFS)
         print '(a,i0)', ' numerical failures = ', &
             count(orbit_exit_code >= ORBIT_EXIT_NUMERICAL_DOMAIN)
+        print '(a,i0)', ' stopped before trace_time = ', &
+            count(orbit_exit_code == ORBIT_EXIT_STOPPED)
         if (landreman_mode) then
             print '(a,f12.6,a)', ' observed until = ', &
                 observed_duration*sqrt2/v0, ' s'
@@ -1393,6 +1398,83 @@ contains
             close (particle_profile_unit)
         end if
     end subroutine trace_gpu_production
+
+    !> Extrema of |B| on flux surface s from the compact Boozer RK table, which
+    !> is the only field the compact initializer loads, sampled at twice the
+    !> table resolution in both angles.
+    subroutine compact_surface_bminmax(s, bmin, bmax)
+        use boozer_rk_tables, only: rk_num_points, rk_x_min, rk_period, &
+                                    splint_boozer_rk_table_device
+
+        real(dp), intent(in) :: s
+        real(dp), intent(out) :: bmin, bmax
+
+        real(dp) :: theta, phi, aphi, daphi, btheta, dbtheta, bphi, dbphi
+        real(dp) :: bmod, dbmod(3)
+        integer :: j, l, ntheta, nphi
+
+        ntheta = 2*rk_num_points(2)
+        nphi = 2*rk_num_points(3)
+        bmin = huge(1.0_dp)
+        bmax = -huge(1.0_dp)
+        do l = 0, nphi - 1
+            phi = rk_x_min(3) + rk_period(3)*real(l, dp)/real(nphi, dp)
+            do j = 0, ntheta - 1
+                theta = rk_x_min(2) + rk_period(2)*real(j, dp)/real(ntheta, dp)
+                call splint_boozer_rk_table_device(s, theta, phi, aphi, daphi, &
+                                                   btheta, dbtheta, bphi, dbphi, &
+                                                   bmod, dbmod)
+                bmin = min(bmin, bmod)
+                bmax = max(bmax, bmod)
+            end do
+        end do
+    end subroutine compact_surface_bminmax
+
+    !> Exit code, loss time and confined or unresolved counts of GPU marker i.
+    !> Normalized times: t_event is the loss time, or for a failed trace
+    !> (loss_step < 0) the time of its last accepted state, after which the
+    !> marker is unresolved. All markers are observed until t_observed, which
+    !> is below t_total when the weighted-loss threshold stopped the trace;
+    !> after that every marker is unresolved, so the confined fractions are
+    !> undefined rather than biased towards the markers lost before the stop.
+    subroutine record_gpu_marker_outcome(i, passing, loss_step, t_event, &
+                                         t_observed, t_total)
+        use finite_check, only: quiet_nan
+
+        integer, intent(in) :: i, loss_step
+        logical, intent(in) :: passing
+        real(dp), intent(in) :: t_event, t_observed, t_total
+
+        integer :: it
+        real(dp) :: tolerance, t_valid, t_macro
+
+        tolerance = 16.0_dp*epsilon(1.0_dp)*max(t_total, 1.0_dp)
+        t_valid = min(t_observed, t_total)
+        if (loss_step < 0) then
+            orbit_exit_code(i) = ORBIT_EXIT_NUMERICAL_EVENT
+            times_lost(i) = quiet_nan()
+            t_valid = min(t_event, t_valid)
+        else if (t_event < t_total - tolerance) then
+            orbit_exit_code(i) = ORBIT_EXIT_LCFS
+            times_lost(i) = t_event*sqrt2/v0
+        else if (t_observed < t_total - tolerance) then
+            orbit_exit_code(i) = ORBIT_EXIT_STOPPED
+            times_lost(i) = quiet_nan()
+        else
+            orbit_exit_code(i) = ORBIT_EXIT_COMPLETED
+            times_lost(i) = trace_time
+        end if
+        do it = 1, ntimstep
+            ! Macrostep time in normalized units, as t_event and t_observed.
+            t_macro = real(kt_macro(it), dp)*dtaumin/sqrt2
+            if (t_macro > t_valid + tolerance) then
+                unresolved_orbits(it) = unresolved_orbits(it) + 1
+            else if (orbit_exit_code(i) /= ORBIT_EXIT_LCFS .or. &
+                     times_lost(i) >= real(kt_macro(it), dp)*dtaumin/v0) then
+                call increase_confined_count(it, passing)
+            end if
+        end do
+    end subroutine record_gpu_marker_outcome
 
     subroutine trace_compare_gpu(norb)
         ! Validate and benchmark the OpenACC GPU tracing kernel against the CPU
