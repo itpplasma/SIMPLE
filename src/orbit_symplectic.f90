@@ -44,6 +44,8 @@ implicit none
     ! Implicit systems solved by newton_solve.
     integer, parameter :: SYSTEM_EULER1 = 1, SYSTEM_EULER2 = 2, SYSTEM_MIDPOINT = 3, &
                           SYSTEM_RK_GAUSS = 4, SYSTEM_RK_LOBATTO = 5
+    ! Largest system: four Gauss stages of four unknowns each.
+    integer, parameter :: NEWTON_NMAX = 16
 
 ! Tests may substitute a stepper; production code never reassigns it.
     procedure(orbit_timestep_sympl_i), pointer :: orbit_timestep_sympl => &
@@ -538,33 +540,37 @@ end subroutine jac_sympl_euler2
         real(dp), intent(out) :: xlast(2)
         integer, intent(out) :: status
 
-        call newton_solve(SYSTEM_EULER1, si, x, si%atol, si%rtol, maxit, xlast, &
+        call newton_solve(SYSTEM_EULER1, 2, si, x, si%atol, si%rtol, maxit, xlast, &
                           status, f=f)
     end subroutine newton1
 
     ! The damped Newton iteration of all implicit schemes. The scheme selects the
     ! system, the linear solve, the domain guard after the step and the tolerance
     ! references.
-    recursive subroutine newton_solve(scheme, si, x, atol, rtol, maxit, xlast, &
+    recursive subroutine newton_solve(scheme, n, si, x, atol, rtol, maxit, xlast, &
                                       status, f, fs, s)
-        integer, intent(in) :: scheme
+        integer, intent(in) :: scheme, n
         type(symplectic_integrator_t), intent(inout) :: si
-        real(dp), intent(inout) :: x(:)
+        real(dp), intent(inout) :: x(n)
         real(dp), intent(in) :: atol, rtol
         integer, intent(in) :: maxit
-        real(dp), intent(out) :: xlast(:)
+        real(dp), intent(out) :: xlast(n)
         integer, intent(out) :: status
         type(field_can_t), intent(inout), optional :: f
         type(field_can_t), intent(inout), optional :: fs(:)
         integer, intent(in), optional :: s
 
-        real(dp) :: fvec(size(x)), fjac(size(x), size(x)), correction(size(x))
-        real(dp) :: xabs(size(x)), tolref(size(x)), fabs(size(x))
+        ! Fixed-size work arrays: automatic or temporary arrays of size n are
+        ! heap-allocated by some compilers on every call, which tripled the CPU
+        ! cost of a step. The Jacobian is passed by sequence association.
+        real(dp) :: fvec(NEWTON_NMAX), fjac(NEWTON_NMAX*NEWTON_NMAX)
+        real(dp) :: correction(NEWTON_NMAX), xabs(NEWTON_NMAX), fabs(NEWTON_NMAX)
+        real(dp) :: tolref(NEWTON_NMAX), tolerance(NEWTON_NMAX)
         real(dp) :: step_scale, dnorm_prev
-        integer :: radial_indices(S_MAX), nradial, kit, ks
+        integer :: radial_indices(NEWTON_NMAX), nradial, kit, ks, info
         logical :: boundary_limited, step_limited, linear_failed, nonnegative
-        integer :: solve_status
 
+        if (n > NEWTON_NMAX) error stop 'newton_solve: system too large'
         xlast = x
         status = SYMPLECTIC_STEP_MAXITER
         boundary_limited = .false.
@@ -605,7 +611,7 @@ end subroutine jac_sympl_euler2
             ! A negative radial label is the axis continuation (#370): the field
             ! evaluation maps it to (|s|, theta+pi), and the caller commits the chart
             ! switch on the converged solution.
-            if (any(abs(x(radial_indices(:nradial))) > sympl_rmax)) then
+            if (radius_beyond(x, radial_indices(:nradial), .true.)) then
                 status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
                 return
             end if
@@ -628,7 +634,7 @@ end subroutine jac_sympl_euler2
                 call f_rk_lobatto(si, fs, s, x, fvec, 2)
                 call jac_rk_lobatto(si, fs, s, fjac)
             end select
-            fabs = dabs(fvec)
+            fabs(:n) = dabs(fvec(:n))
             xlast = x
 
             ! The Euler schemes keep their closed-form inverses: rk_solve would
@@ -639,25 +645,36 @@ end subroutine jac_sympl_euler2
             case (SYSTEM_EULER2)
                 call solve_euler2_system(fjac, fvec, correction, linear_failed)
             case default
-                correction = fvec
-                call solve_newton_system(fjac, correction, solve_status)
-                linear_failed = solve_status /= SYMPLECTIC_STEP_OK
+                correction(:n) = fvec(:n)
+                call rk_solve(n, fjac, correction, info)
+                linear_failed = info /= 0
             end select
             if (linear_failed) then
                 status = SYMPLECTIC_STEP_LINEAR_SOLVE
                 return
             end if
 
-            call limit_radial_newton_step(x, correction, radial_indices(:nradial), &
+            call limit_radial_newton_step(x, correction(:n), radial_indices(:nradial), &
                                           step_scale, step_limited)
             boundary_limited = boundary_limited .or. step_limited
-            x = x - step_scale*correction
+            x = x - step_scale*correction(:n)
 
-            if (left_domain_after_step(scheme, x, radial_indices(:nradial))) then
-                status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
-                return
-            end if
-            xabs = dabs(x - xlast)
+            ! Midpoint and Euler-1 bound |r| like the guard before the step, the
+            ! Runge-Kutta schemes only r itself, and Euler-2 leaves it to the next
+            ! guard.
+            select case (scheme)
+            case (SYSTEM_EULER1, SYSTEM_MIDPOINT)
+                if (radius_beyond(x, radial_indices(:nradial), .true.)) then
+                    status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+                    return
+                end if
+            case (SYSTEM_RK_GAUSS, SYSTEM_RK_LOBATTO)
+                if (radius_beyond(x, radial_indices(:nradial), .false.)) then
+                    status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
+                    return
+                end if
+            end select
+            xabs(:n) = dabs(x - xlast)
 
             select case (scheme)
             case (SYSTEM_EULER1)
@@ -682,21 +699,27 @@ end subroutine jac_sympl_euler2
                     tolref(4*ks - 2) = dabs(xlast(4*ks - 2))
                 end do
             end select
+            tolerance(:n) = rtol*tolref(:n)
 
             ! Gauss stages accept only nonnegative radii.
-            nonnegative = scheme /= SYSTEM_RK_GAUSS
-            if (.not. nonnegative) nonnegative = all(x(radial_indices(:nradial)) >= 0d0)
+            nonnegative = .true.
+            if (scheme == SYSTEM_RK_GAUSS) then
+                do ks = 1, nradial
+                    nonnegative = nonnegative .and. x(radial_indices(ks)) >= 0d0
+                end do
+            end if
 
-            if (.not. step_limited .and. nonnegative .and. all(fabs < atol)) then
+            if (.not. step_limited .and. nonnegative .and. all(fabs(:n) < atol)) then
                 status = SYMPLECTIC_STEP_OK
                 return
             end if
-            if (.not. step_limited .and. nonnegative .and. all(xabs < rtol*tolref)) then
+            if (.not. step_limited .and. nonnegative .and. &
+                all(xabs(:n) < tolerance(:n))) then
                 status = SYMPLECTIC_STEP_OK
                 return
             end if
-            if (accept_by_rate(xabs, rtol*tolref, step_limited, dnorm_prev) .and. &
-                nonnegative) then
+            if (accept_by_rate(xabs(:n), tolerance(:n), step_limited, dnorm_prev) &
+                .and. nonnegative) then
                 status = SYMPLECTIC_STEP_OK
                 return
             end if
@@ -727,26 +750,29 @@ end subroutine jac_sympl_euler2
         case (SYSTEM_RK_LOBATTO)
             call count_event(EVT_RK_LOBATTO_MAXIT)
         end select
-        if (accept_warning_maxiter(x, xlast, tolref, rtol, si%warning_factor)) &
+        if (accept_warning_maxiter(x, xlast, tolref(:n), rtol, si%warning_factor)) &
             status = SYMPLECTIC_STEP_OK
     end subroutine newton_solve
 
-    pure logical function left_domain_after_step(scheme, x, radial_indices)
-        ! Midpoint and Euler-1 bound |r| like the guard before the step, the Runge-
-        ! Kutta schemes only r itself, and Euler-2 leaves it to the next guard.
-        integer, intent(in) :: scheme
+    pure logical function radius_beyond(x, radial_indices, absolute)
+        ! A loop rather than any() over a vector subscript, which needs a
+        ! temporary array.
         real(dp), intent(in) :: x(:)
         integer, intent(in) :: radial_indices(:)
+        logical, intent(in) :: absolute
 
-        select case (scheme)
-        case (SYSTEM_EULER1, SYSTEM_MIDPOINT)
-            left_domain_after_step = any(abs(x(radial_indices)) > sympl_rmax)
-        case (SYSTEM_RK_GAUSS, SYSTEM_RK_LOBATTO)
-            left_domain_after_step = any(x(radial_indices) > sympl_rmax)
-        case default
-            left_domain_after_step = .false.
-        end select
-    end function left_domain_after_step
+        integer :: k
+
+        radius_beyond = .false.
+        do k = 1, size(radial_indices)
+            if (absolute) then
+                radius_beyond = abs(x(radial_indices(k))) > sympl_rmax
+            else
+                radius_beyond = x(radial_indices(k)) > sympl_rmax
+            end if
+            if (radius_beyond) return
+        end do
+    end function radius_beyond
 
     pure subroutine solve_euler2_system(fjac, fvec, correction, failed)
         real(dp), intent(in) :: fjac(3, 3), fvec(3)
@@ -788,7 +814,8 @@ end subroutine jac_sympl_euler2
         real(dp), intent(out) :: xlast(3)
         integer, intent(out) :: status
 
-        call newton_solve(SYSTEM_EULER2, si, x, atol, rtol, maxit, xlast, status, f=f)
+        call newton_solve(SYSTEM_EULER2, 3, si, x, atol, rtol, maxit, xlast, &
+                          status, f=f)
     end subroutine newton2
 
 pure logical function matrix3_near_singular(matrix, determinant)
@@ -870,8 +897,8 @@ end function radial_boundary_reached
         real(dp), intent(out) :: xlast(5)
         integer, intent(out) :: status
 
-        call newton_solve(SYSTEM_MIDPOINT, si, x, atol, rtol, maxit, xlast, status, &
-                          f=f)
+        call newton_solve(SYSTEM_MIDPOINT, 5, si, x, atol, rtol, maxit, xlast, &
+                          status, f=f)
     end subroutine newton_midpoint
 
     recursive subroutine midpoint_newton_system(si, f, x, fvec, jac)
@@ -927,8 +954,8 @@ end subroutine jac_rk_gauss
         real(dp), intent(out) :: xlast(4*s)
         integer, intent(out) :: status
 
-        call newton_solve(SYSTEM_RK_GAUSS, si, x, atol, rtol, maxit, xlast, status, &
-                          fs=fs, s=s)
+        call newton_solve(SYSTEM_RK_GAUSS, 4*s, si, x, atol, rtol, maxit, xlast, &
+                          status, fs=fs, s=s)
     end subroutine newton_rk_gauss
 
 recursive subroutine fixpoint_rk_gauss(si, fs, s, x, atol, rtol, maxit, xlast)
@@ -1066,8 +1093,8 @@ end subroutine guard_lobatto_stage_radii
         real(dp), intent(out) :: xlast(4*s - 2)
         integer, intent(out) :: status
 
-        call newton_solve(SYSTEM_RK_LOBATTO, si, x, atol, rtol, maxit, xlast, status, &
-                          fs=fs, s=s)
+        call newton_solve(SYSTEM_RK_LOBATTO, 4*s - 2, si, x, atol, rtol, maxit, &
+                          xlast, status, fs=fs, s=s)
     end subroutine newton_rk_lobatto
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
