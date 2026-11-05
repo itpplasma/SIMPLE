@@ -767,6 +767,18 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
         LABELS "integration;system"
         TIMEOUT 300)
 
+    add_test(NAME test_ants_start_rows
+        COMMAND ${CMAKE_COMMAND} -E env
+            CTEST_BINARY_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}
+            ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_ants_start_rows.py
+            $<TARGET_FILE:simple.x>
+            ${WOUT_FILE}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(test_ants_start_rows PROPERTIES
+        LABELS "integration;system"
+        TIMEOUT 120)
+
     add_test(NAME test_class_scores_driver
         COMMAND ${CMAKE_COMMAND} -E env
             CTEST_BINARY_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}
