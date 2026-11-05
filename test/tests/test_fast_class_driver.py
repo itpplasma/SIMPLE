@@ -10,7 +10,8 @@ kt == ntcut, and without disabling the early exit, which requires
 The oracle is the classification output itself: a classifying run owes a
 class_parts.dat with one row per test particle, and a non-classifying run owes
 none. Both expectations are independent of how the dispatch predicate is
-spelled.
+spelled. A restart that keeps every finished marker owes the same
+class_parts.dat and class_scores.dat as the run it resumes.
 
 The early exit itself is checked against the same markers traced with the
 Minkowski cut at trace_time instead: an orbit that fast classification stops
@@ -20,6 +21,7 @@ orbit must end where the full trace ends.
 
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -110,6 +112,26 @@ def table(path: Path) -> list[list[str]]:
             if line.strip()]
 
 
+def check_restart_keeps_classes(simple_x: Path, wout: Path) -> None:
+    case_dir = run_simple_case(simple_x, wout, "fast_class_restart",
+                               config_with("fast_class = .True.\ntcut = 5d-5"))
+    first = {name: (case_dir / name).read_text(encoding="utf-8")
+             for name in ("class_parts.dat", "class_scores.dat")}
+    if all(line.split()[-1] == "0" for line in first["class_parts.dat"].splitlines()):
+        raise AssertionError("fast_class_restart: no classified marker to restore")
+    (case_dir / "simple.in").write_text(
+        config_with("fast_class = .True.\ntcut = 5d-5\nrestart = .True."),
+        encoding="utf-8")
+    result = subprocess.run([str(simple_x)], cwd=case_dir, text=True,
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            timeout=90, check=False)
+    if result.returncode != 0:
+        raise AssertionError(f"fast_class_restart: restart failed\n{result.stdout}")
+    for name, text in first.items():
+        if (case_dir / name).read_text(encoding="utf-8") != text:
+            raise AssertionError(f"fast_class_restart: restart changed {name}")
+
+
 def main() -> int:
     if len(sys.argv) != 3:
         print("usage: test_fast_class_driver.py SIMPLE_X WOUT_FILE", file=sys.stderr)
@@ -126,6 +148,7 @@ def main() -> int:
             assert_file_absent(case_dir, "class_parts.dat")
 
     check_early_stop(simple_x, wout)
+    check_restart_keeps_classes(simple_x, wout)
     return 0
 
 

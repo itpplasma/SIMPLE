@@ -150,7 +150,8 @@ ran_seed = 42                    ! seed of the batch index draw and of determini
 particle_index_offset = 0       ! original rows before a contiguous external shard
 reuse_batch = .false.            ! .true.: reuse the batch indices from batch.dat if present
 restart = .false.                ! .true.: resume from times_lost.dat and orbit_exit_code.dat;
-!                                  particles that reached trace_time are not traced again
+!                                  particles that reached trace_time are not traced again;
+!                                  random starts need deterministic = .true.
 checkpoint_interval = 10d0       ! read for input compatibility; no effect
 
 ! Walls and charts

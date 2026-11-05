@@ -165,6 +165,10 @@ Restart and batches
 
 ``restart = .true.`` reads ``times_lost.dat`` and ``orbit_exit_code.dat``;
 markers with exit code 0, 1, 2 or 4 keep their result, the others are traced
-again. ``batch_size`` smaller than ``ntestpart`` traces a random subset of
+again. Classifying runs also read ``class_parts.dat`` and
+``class_scores.dat``; a finished marker without a class row for its start
+radius is traced again. Results are matched to start points by row, so random
+starts (``startmode`` 1, 5 or 7, or the TEST field) need ``deterministic =
+.true.``. ``batch_size`` smaller than ``ntestpart`` traces a random subset of
 the start positions, whose indices go to ``batch.dat`` (``reuse_batch =
 .true.`` reads them back).

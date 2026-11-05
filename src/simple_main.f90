@@ -377,6 +377,7 @@ contains
         call read_config(config_file)
         call validate_orbit_model_config
         call validate_skipped_physics
+        call validate_restart_starts
         call validate_gpu_production_config
         call print_phase_time('Configuration reading completed')
         call read_profiles_config(config_file)
@@ -555,6 +556,17 @@ contains
             'radial_electric_potential_slope needs '// &
             'symplectic_newton_warning_mode=.false. (RK recovery has no potential)'
     end subroutine validate_skipped_physics
+
+    !> Restart pairs old per-marker results with the current start points by
+    !> row, so those must be the starts of the first run.
+    subroutine validate_restart_starts
+        use params, only: restart, deterministic
+
+        if (.not. restart .or. deterministic) return
+        if (startmode == 1 .or. startmode == 5 .or. startmode == 7 .or. &
+            run_input_kind() == INPUT_TEST) error stop &
+            'restart with random start points needs deterministic=.true.'
+    end subroutine validate_restart_starts
 
     !> Reject unsupported gpu_mode='production' runs before any field setup.
     !> The native CUDA kernel reads compact RK tables that libneo fills only
