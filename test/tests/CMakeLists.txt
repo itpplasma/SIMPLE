@@ -570,6 +570,11 @@ target_link_libraries(test_collision_species.x simple)
 add_test(NAME test_collision_species COMMAND test_collision_species.x)
 set_tests_properties(test_collision_species PROPERTIES
     LABELS "unit;collisions;physics" TIMEOUT 30)
+add_executable(test_collision_coulomb_log.x test_collision_coulomb_log.f90)
+target_link_libraries(test_collision_coulomb_log.x simple)
+add_test(NAME test_collision_coulomb_log COMMAND test_collision_coulomb_log.x)
+set_tests_properties(test_collision_coulomb_log PROPERTIES
+    LABELS "unit;collisions;physics" TIMEOUT 30)
 
 add_executable(test_collision_substeps.x test_collision_substeps.f90)
 target_link_libraries(test_collision_substeps.x simple)

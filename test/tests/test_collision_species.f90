@@ -11,23 +11,27 @@ program test_collision_species
     real(dp), parameter :: proton_mass = 1.6726e-24_dp, ev = 1.6022e-12_dp
     real(dp) :: alpha(3), coefficients(3), ratios(3), energies(3), speed
     real(dp) :: pitch_rate, drag_rate, pitch_norm, drag_norm
-    real(dp) :: local(3), local_ratios(3), local_energies(3)
+    real(dp) :: local(3), local_ratios(3), local_energies(3), clog_alpha(3), clog(3)
     integer :: mass
 
     call compute_collision_coeffs(1.0_dp, 12.0_dp, 1.0_dp, 6.0_dp, &
                           1.0e13_dp, 1.0e12_dp, temperature, temperature, temperature, &
-                                  energy, speed, alpha, ratios, energies)
+                                  energy, speed, alpha, ratios, energies, &
+                                  clog_out=clog_alpha)
     do mass = 1, 4
         call compute_collision_coeffs(1.0_dp, 12.0_dp, 1.0_dp, 6.0_dp, &
                           1.0e13_dp, 1.0e12_dp, temperature, temperature, temperature, &
-                  energy, speed, coefficients, ratios, energies, real(mass, dp), 1.0_dp)
+                energy, speed, coefficients, ratios, energies, real(mass, dp), 1.0_dp, &
+                                      clog_out=clog)
         ! Kinetic energy and Maxwellian speeds are independent dimensional oracles.
         if (abs(0.5_dp*mass*proton_mass*speed**2/(energy*ev) - 1) > 1e-13_dp) &
             error stop 'Test-particle kinetic energy is wrong'
         if (maxval(abs(energies - energy/temperature)) > 1e-13_dp) &
             error stop 'Collision Maxwellian energy scale is wrong'
-        ! At fixed energy, the electron coefficient scales as Z_test^2/sqrt(A).
-        if (abs(coefficients(3)/alpha(3) - 0.5_dp/sqrt(real(mass, dp))) > &
+        ! At fixed energy, the electron coefficient per Coulomb logarithm
+        ! scales as Z_test^2/sqrt(A).
+        if (abs(coefficients(3)/alpha(3)*clog_alpha(3)/clog(3) - &
+                0.5_dp/sqrt(real(mass, dp))) > &
             1e-13_dp) error stop 'Electron collision mass/charge scaling is wrong'
         if (abs(ratios(1) - sqrt(energy/(mass*temperature))) > 1e-13_dp) &
             error stop 'Main-ion relative speed is wrong'

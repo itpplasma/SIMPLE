@@ -1,7 +1,7 @@
 program test_collision_substeps
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use collis_alp, only: stost, coleff, efcolf, velrat, enrat, &
-                          set_uniform_coeffs
+                          set_uniform_coeffs, clog_ref, clog_bratio
     implicit none
 
     integer, parameter :: npart = 8192
@@ -168,6 +168,6 @@ contains
     end function legendre4
 
     subroutine fill_grid()
-        call set_uniform_coeffs(efcolf, velrat, enrat)
+        call set_uniform_coeffs(efcolf, velrat, enrat, clog_ref, clog_bratio)
     end subroutine fill_grid
 end program test_collision_substeps
