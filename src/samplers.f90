@@ -165,7 +165,8 @@ contains
     end subroutine sample_volume_single
 
     subroutine sample_fusion_birth(zstart, s_inner, s_outer, integration_coords)
-        use params, only: fusion_grid, num_surf, facE_al, n_d, n_e, &
+        use params, only: fusion_grid, num_surf, n_d, n_e, &
+                          particle_energy_eV_effective, &
                           am1, am2, Z1, Z2, sbeg
         use fusion_source, only: build_birth_cdf, draw_birth, alpha_energy_joule
         use field_can_mod, only: integ_to_ref
@@ -177,8 +178,9 @@ contains
         real(dp) :: power, x(3)
         integer :: ipart, unit, n
 
-        if (facE_al /= 1.0_dp .or. n_d /= 4.0_dp .or. n_e /= 2) &
-            error stop 'fusion births require 3.5 MeV alphas: facE_al=1, n_d=4, n_e=2'
+        if (abs(particle_energy_eV_effective - 3.5e6_dp) > 3.5e-3_dp .or. &
+            n_d /= 4.0_dp .or. n_e /= 2) &
+            error stop 'fusion births require 3.5 MeV alphas with n_d=4, n_e=2'
         if (am1 /= 2.0_dp .or. am2 /= 3.0_dp .or. &
             Z1 /= 1.0_dp .or. Z2 /= 1.0_dp) &
             error stop 'fusion births require species 1=D and species 2=T'

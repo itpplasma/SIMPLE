@@ -4,7 +4,8 @@ program test_fusion_birth_equilibrium
         simple_trace, simple_write_output
     use params, only: field_input, coord_input, startmode, num_surf, &
         isw_field_type, integmode, nper, npoiper, ntimstep, deterministic, &
-        fusion_grid, facE_al, sbeg, trace_time, orbit_exit_code
+                      fusion_grid, facE_al, sbeg, trace_time, orbit_exit_code, &
+                      particle_energy_eV
     use magfie_sub, only: magfie
     use field_can_mod, only: ref_to_integ
     use fusion_source, only: alpha_energy_joule, dt_reactivity, &
@@ -73,6 +74,7 @@ program test_fusion_birth_equilibrium
         trace_time = 1.0e-8_dp
     end if
     if (trim(mode) == 'bad_energy') facE_al = 2.0_dp
+    if (trim(mode) == 'explicit_energy') particle_energy_eV = 1.0e4_dp
     call simple_init
     if (index(trim(mode), '_parallel') > 0) then
         call check_parallel
@@ -80,7 +82,7 @@ program test_fusion_birth_equilibrium
     end if
     allocate (z(5, np))
     call simple_sample(np, z)
-    if (trim(mode) == 'bad_energy') stop
+    if (trim(mode) == 'bad_energy' .or. trim(mode) == 'explicit_energy') stop
     ! Repeated API calls must preserve the requested full/interior volume.
     if (trim(mode) == 'vmec' .or. trim(mode) == 'interior') then
         call simple_sample(np, z)

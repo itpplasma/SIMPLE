@@ -649,7 +649,8 @@ set_tests_properties(test_api_repeated_sampling PROPERTIES LABELS "integration"
 add_executable(test_fusion_birth_equilibrium.x test_fusion_birth_equilibrium.f90)
 target_link_libraries(test_fusion_birth_equilibrium.x simple)
 add_dependencies(test_fusion_birth_equilibrium.x generate_test_boozer_chartmap)
-set(fusion_equilibrium_cases vmec vmec_peaked chartmap annulus interior trace bad_energy)
+set(fusion_equilibrium_cases vmec vmec_peaked chartmap annulus interior trace bad_energy
+    explicit_energy)
 if(ENABLE_OPENMP)
     list(APPEND fusion_equilibrium_cases vmec_parallel chartmap_parallel)
 endif()
@@ -665,7 +666,7 @@ foreach(case IN LISTS fusion_equilibrium_cases)
         TIMEOUT 120 ENVIRONMENT "OMP_NUM_THREADS=1"
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/fusion_${case})
 endforeach()
-set_tests_properties(test_fusion_bad_energy PROPERTIES
+set_tests_properties(test_fusion_bad_energy test_fusion_explicit_energy PROPERTIES
     PASS_REGULAR_EXPRESSION "fusion births require 3.5 MeV alphas")
 
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/start_integration_coordinates)
