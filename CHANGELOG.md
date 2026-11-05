@@ -5,6 +5,7 @@ compared to earlier versions.
 
 | Differing behavior | commit hash / tag and timestamp | Summary |
 | ---------------- | ------------------------------- | ------- |
+| Y | 2026-11-05 | Classification (`tcut > 0`, `fast_class`, `class_plot`) maps start points into, and end points out of, Meiss, Albert and Boozer-chartmap coordinates as plain tracing does. Since v1.4.0 these markers were traced from untransformed reference coordinates (#681). Canonical-flux, VMEC-Boozer and TEST classification is bitwise unchanged. |
 | Y | 2026-11-05 | Share the selected canonical-flux field and construction phase across OpenMP threads. Workers now use the calling thread's coordinate inversion instead of a legacy fallback with a different Newton threshold. |
 | Y | 2026-11-04 | Correct the radial guiding-centre rate for canonical fields with toroidally varying poloidal momentum. Explicit Runge–Kutta and two-derivative methods now include the missing momentum-gradient term; the Boozer special case is unchanged. |
 | Y | 2026-11-04 | Transport geometric field gradients to the corrected Gauss stages before Hermite endpoint extrapolation. This restores the expected endpoint field-cache accuracy without additional field evaluations. |
