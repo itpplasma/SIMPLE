@@ -367,6 +367,7 @@ contains
 
         call read_config(config_file)
         call validate_orbit_model_config
+        call validate_skipped_physics
         call validate_gpu_production_config
         call print_phase_time('Configuration reading completed')
         call read_profiles_config(config_file)
@@ -509,19 +510,38 @@ contains
     ! before any tracing starts. Only guiding-center (the default symplectic path)
     ! and full orbit (the gyro-resolved Boris pusher) are available here.
     subroutine validate_orbit_model_config
+        use params, only: tcut
+
         select case (orbit_model)
         case (ORBIT_GC)
             continue
         case (ORBIT_FULL_ORBIT)
             if (orbit_coord /= 1) error stop &
                 'orbit_model=ORBIT_FULL_ORBIT supports only orbit_coord=1 (Boozer)'
-            if (class_plot .or. fast_class) error stop &
+            if (class_plot .or. fast_class .or. tcut > 0.0_dp) error stop &
                 'orbit_model=ORBIT_FULL_ORBIT does not support orbit classification'
         case default
             error stop 'unsupported orbit_model (use 0 = guiding-center or '// &
                 '7 = full orbit)'
         end select
     end subroutine validate_orbit_model_config
+
+    !> Reject combinations in which the selected tracing path would silently
+    !> skip part of the requested physics.
+    subroutine validate_skipped_physics
+        use params, only: tcut, wall_input
+        use orbit_symplectic_base, only: symplectic_newton_warning_mode
+
+        if (swcoll .and. run_input_kind() == INPUT_SPECTRE) error stop &
+            'swcoll is not supported for SPECTRE fields (no collisions are applied)'
+        if (len_trim(wall_input) > 0 .and. &
+            (tcut > 0.0_dp .or. class_plot .or. fast_class)) error stop &
+            'wall_input is not supported with orbit classification (wall is ignored)'
+        if (radial_electric_potential_slope /= 0.0_dp .and. integmode > 0 .and. &
+            symplectic_newton_warning_mode) error stop &
+            'radial_electric_potential_slope needs '// &
+            'symplectic_newton_warning_mode=.false. (RK recovery has no potential)'
+    end subroutine validate_skipped_physics
 
     !> Reject unsupported gpu_mode='production' runs before any field setup.
     !> The native CUDA kernel reads compact RK tables that libneo fills only
