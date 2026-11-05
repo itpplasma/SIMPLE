@@ -162,17 +162,18 @@ contains
         real(dp), dimension(:, :, :, :), allocatable :: y_batch
    real(dp), dimension(:, :, :), allocatable :: Aphi_grid, hth_grid, hph_grid, Bmod_grid
         real(dp) :: x_grid(3), y_batch_temp(5)
-        integer :: i_r, i_th, i_phi, dims(3)
-
-        allocate ( &
-            r_of_xc(n_r, n_th, n_phi), &
-            Aph_of_xc(n_r, n_th, n_phi), &
-            hth_of_xc(n_r, n_th, n_phi), &
-            hph_of_xc(n_r, n_th, n_phi), &
-            Bmod_of_xc(n_r, n_th, n_phi) &
-            )
+        integer :: i_r, i_th, i_phi, dims(3), n_psi
 
         call init_psi_grid
+        n_psi = size(psi_grid)
+
+        allocate ( &
+            r_of_xc(n_psi, n_th, n_phi), &
+            Aph_of_xc(n_psi, n_th, n_phi), &
+            hth_of_xc(n_psi, n_th, n_phi), &
+            hph_of_xc(n_psi, n_th, n_phi), &
+            Bmod_of_xc(n_psi, n_th, n_phi) &
+            )
 
         ! For Albert coordinates, we need to reconstruct the field components from Meiss
         ! This requires grid evaluation - let's compute them explicitly
@@ -226,10 +227,10 @@ contains
 
     subroutine init_psi_grid
         use field_can_meiss, only: spl_field_batch
-        real(dp) :: x(3), y_batch_local(5)
-        integer :: i_r, i_th, i_phi
+        real(dp) :: x(3), y_batch_local(5), psi_axis, psi_edge_all, psi_edge_any
+        integer :: i_r, i_th, i_phi, n_psi
 
-        allocate (psi_of_x(n_r, n_th, n_phi), psi_grid(n_r))
+        allocate (psi_of_x(n_r, n_th, n_phi))
 
         ! Evaluate Meiss batch spline to get Ath (component 1) on grid
         do i_phi = 1, n_phi
@@ -247,21 +248,34 @@ contains
         Ath_norm = sign(maxval(abs(psi_of_x)), psi_of_x(n_r, n_th/2, n_phi/2))
         psi_of_x = psi_of_x/Ath_norm
 
-        ! Here we use the "safe side" approach (new grid is fully within the old grid).
-        ! For the risky approach (old grid within the new grid) exchange
-        ! "minval" and "maxval".
-        if (psi_of_x(n_r, n_th/2, n_phi/2) > psi_of_x(1, n_th/2, n_phi/2)) then
-            dpsi_dr_positive = .true.
-            psi_inner = maxval(psi_of_x(1, :, :))
-            psi_outer = minval(psi_of_x(n_r, :, :))
+        ! A_theta varies over the outer Meiss surface. The psi grid must reach
+        ! its extreme value there to contain the whole plasma, with the spacing
+        ! of the range that every angle covers; psi_transform extrapolates
+        ! beyond the outer surface, where markers are already lost.
+        dpsi_dr_positive = psi_of_x(n_r, n_th/2, n_phi/2) > psi_of_x(1, n_th/2, n_phi/2)
+        if (dpsi_dr_positive) then
+            psi_axis = maxval(psi_of_x(1, :, :))
+            psi_edge_all = minval(psi_of_x(n_r, :, :))
+            psi_edge_any = maxval(psi_of_x(n_r, :, :))
         else
-            dpsi_dr_positive = .false.
-            psi_inner = maxval(psi_of_x(n_r, :, :))
-            psi_outer = minval(psi_of_x(1, :, :))
+            psi_axis = minval(psi_of_x(1, :, :))
+            psi_edge_all = maxval(psi_of_x(n_r, :, :))
+            psi_edge_any = minval(psi_of_x(n_r, :, :))
+        end if
+        n_psi = ceiling((n_r - 1)*(psi_edge_any - psi_axis)/ &
+                        (psi_edge_all - psi_axis) - 1.0e-8_dp) + 1
+        n_psi = min(max(n_psi, n_r), 4*n_r)
+        if (dpsi_dr_positive) then
+            psi_inner = psi_axis
+            psi_outer = psi_edge_any
+        else
+            psi_inner = psi_edge_any
+            psi_outer = psi_axis
         end if
 
-        do i_r = 1, n_r
-            psi_grid(i_r) = psi_inner + (psi_outer - psi_inner)*(i_r - 1)/(n_r - 1)
+        allocate (psi_grid(n_psi))
+        do i_r = 1, n_psi
+            psi_grid(i_r) = psi_inner + (psi_outer - psi_inner)*(i_r - 1)/(n_psi - 1)
         end do
     end subroutine init_psi_grid
 

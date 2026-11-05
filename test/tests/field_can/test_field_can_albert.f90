@@ -13,7 +13,7 @@ program test_field_can_albert
         get_meiss_coordinates, ref_to_integ_meiss
     use field_can_mod, only: eval_field => evaluate, field_can_t, field_can_from_name
     use field_can_albert, only: ref_to_integ_albert, integ_to_ref_albert, &
-        r_of_xc, psi_of_x
+                                r_of_xc, psi_of_x, psi_inner, psi_outer
     use params, only: canonical_grid_nr, canonical_grid_ntheta, &
         canonical_grid_nphi, canonical_ode_relerr, field_input, coord_input
 
@@ -86,7 +86,30 @@ contains
         if (abs(periodic_value%Bmod - field_value%Bmod) > tolerance) then
             error stop 'Albert field-period seam failed'
         end if
+        call assert_albert_grid_contains_plasma
     end subroutine assert_albert_map
+
+    subroutine assert_albert_grid_contains_plasma
+        ! A_theta varies over a flux surface, so near the edge the radius psi of
+        ! some angles exceeds the edge psi of others; a grid that stops early
+        ! extrapolates the field inside the plasma.
+        integer, parameter :: n_angle = 16
+        real(dp), parameter :: s_edge = 0.98_dp
+        real(dp) :: xinteg(3)
+        integer :: i_th, i_ph
+
+        do i_ph = 0, n_angle - 1
+            do i_th = 0, n_angle - 1
+                call ref_to_integ_albert([s_edge, twopi*i_th/n_angle, &
+                                          twopi*i_ph/n_angle], xinteg)
+                if (xinteg(1) < psi_inner .or. xinteg(1) > psi_outer) then
+                    print *, 'theta, phi, psi, psi range:', twopi*i_th/n_angle, &
+                        twopi*i_ph/n_angle, xinteg(1), psi_inner, psi_outer
+                    error stop 'Albert psi grid does not contain the plasma'
+                end if
+            end do
+        end do
+    end subroutine assert_albert_grid_contains_plasma
 
     subroutine assert_albert_to_meiss_switch
         real(dp) :: xinteg(3)
