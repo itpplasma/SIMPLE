@@ -148,61 +148,30 @@ subroutine init_magfie(id)
 end subroutine init_magfie
 
 
-subroutine magfie_test(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
-  !> Magnetic field for analytic circular tokamak (TEST field).
-  !> Coordinates: x(1)=r (minor radius), x(2)=theta (poloidal), x(3)=phi (toroidal)
-  !> Uses same geometry as field_can_test: B0=1, R0=1, a=0.5, iota=1
-  !>
-  !> WARNING: hcurl is set to zero (curvature drift not computed).
-  !> This is acceptable for symplectic integration (integmode > 0) which uses
-  !> field_can_test instead. For RK45 integration (integmode=0), curvature
-  !> drift would be missing - use symplectic integration with TEST field.
-  implicit none
+    subroutine magfie_test(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+        !> Non-canonical form of the analytic TEST field of field_can_test, so that
+        !> RK45 and the symplectic integrators trace the same guiding-centre model.
+        !> x = (r, theta, phi); h_theta, h_phi, |B| and A come from eval_field_test,
+        !> B^theta = -dA_phi/dr/sqrtg and B^phi = dA_theta/dr/sqrtg, and sqrtg follows
+        !> from h_i h^i = 1.
+        use field_can_test, only: eval_field_test
+        use field_can_base, only: field_can_t
+        implicit none
 
-  real(dp), intent(in) :: x(3)
-  real(dp), intent(out) :: bmod, sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
+        real(dp), intent(in) :: x(3)
+        real(dp), intent(out) :: bmod, sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
+        type(field_can_t) :: f
 
-  real(dp), parameter :: B0 = 1.0_dp, R0 = 1.0_dp, a = 0.5_dp, iota0 = 1.0_dp
-  real(dp) :: r, theta, cth, sth, R_cyl, dBmod_dr, dBmod_dth
-
-  r = x(1)
-  theta = x(2)
-  cth = cos(theta)
-  sth = sin(theta)
-
-  ! Major radius at this point
-  R_cyl = R0 + r * cth
-
-  ! Magnetic field magnitude: B = B0 * (1 - r/R0 * cos(theta))
-  bmod = B0 * (1.0_dp - r / R0 * cth)
-
-  ! Jacobian sqrt(g) = r * R for circular tokamak
-  sqrtg = r * R_cyl
-
-  ! Derivatives of log(B)
-  dBmod_dr = -B0 / R0 * cth
-  dBmod_dth = B0 * r / R0 * sth
-  bder(1) = dBmod_dr / bmod
-  bder(2) = dBmod_dth / bmod
-  bder(3) = 0.0_dp
-
-  ! Covariant components of unit vector h = B/|B|
-  ! In (r, theta, phi) coordinates for circular tokamak with iota=1
-  hcovar(1) = 0.0_dp
-  hcovar(2) = iota0 * (1.0_dp - r**2 / a**2) * r**2 / R0 / bmod
-  hcovar(3) = R_cyl / bmod
-
-  ! Contravariant components
-  hctrvr(1) = 0.0_dp
-  hctrvr(2) = B0 * iota0 / (r * R_cyl * bmod)
-  hctrvr(3) = B0 / (r * R_cyl * bmod)
-
-  ! Curl of h (simplified - not fully computed for TEST field)
-  hcurl(1) = 0.0_dp
-  hcurl(2) = 0.0_dp
-  hcurl(3) = 0.0_dp
-
-end subroutine magfie_test
+        call eval_field_test(f, x(1), x(2), x(3), 0)
+        bmod = f%Bmod
+        sqrtg = (f%hph*f%dAth(1) - f%hth*f%dAph(1))/bmod
+        bder = f%dBmod/bmod
+        hcovar = [0.0_dp, f%hth, f%hph]
+        hctrvr = [0.0_dp, -f%dAph(1), f%dAth(1)]/(sqrtg*bmod)
+        hcurl(1) = (f%dhph(2) - f%dhth(3))/sqrtg
+        hcurl(2) = -f%dhph(1)/sqrtg
+        hcurl(3) = f%dhth(1)/sqrtg
+    end subroutine magfie_test
 
 
 subroutine magfie_refcoords(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
