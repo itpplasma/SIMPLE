@@ -26,6 +26,7 @@ program test_profiles
     call test_maxwellian_fixed_point(all_passed, n_failed)
     call test_explicit_particle_energy(all_passed, n_failed)
     call test_lorentz_legendre_relaxation(all_passed, n_failed)
+    call test_lorentz_large_steps(all_passed, n_failed)
     call test_deterministic_particle_streams(all_passed, n_failed)
     call plot_collision_frequency_comparison()
 
@@ -176,6 +177,71 @@ contains
                 p1_mean, p2_mean
         end if
     end subroutine test_lorentz_legendre_relaxation
+
+    !> A call spanning many collision times starts at the pole lambda = 1,
+    !> where the noise vanishes and one Euler drift kick of -nu*dt*lambda
+    !> leaves [-1, 1]. Pitch must stay there and P1, P2 must still decay as
+    !> exp(-nu t) and exp(-3 nu t), also on the uniform-equilibrium path.
+    subroutine test_lorentz_large_steps(passed, nfail)
+        logical, intent(inout) :: passed
+        integer, intent(inout) :: nfail
+
+        integer, parameter :: nparticle = 40000, ncase = 3
+        real(dp), parameter :: vref = 10.0_dp, radius = 5.0_dp
+        real(dp), parameter :: iota = 0.2_dp, nustar = 1.0_dp
+        real(dp), parameter :: moment_tolerance = 1.2e-2_dp
+        ! nu*dt per call and number of calls: 4 substepped calls up to
+        ! nu*t = 1, one substepped call with nu*dt = 10, one call past
+        ! the equilibrium threshold.
+        real(dp), parameter :: nudt(ncase) = [0.25_dp, 10.0_dp, 100.0_dp]
+        integer, parameter :: ncall(ncase) = [4, 1, 1]
+        real(dp) :: z(5), p1_mean, p2_mean, p1_exact, p2_exact, nu, nut
+        integer :: icase, i, k, ierr, seed_size
+        integer, allocatable :: seed(:)
+
+        print *, 'Testing Lorentz steps of many collision times...'
+        call random_seed(size=seed_size)
+        allocate (seed(seed_size))
+        seed = 314159
+        call random_seed(put=seed)
+        deallocate (seed)
+
+        call configure_lorentz_nustar(nustar, radius, iota, vref)
+        nu = nustar*abs(iota)*vref/radius
+        do icase = 1, ncase
+            p1_mean = 0.0_dp
+            p2_mean = 0.0_dp
+            do i = 1, nparticle
+                z = [0.5_dp, 0.0_dp, 0.0_dp, 1.0_dp, 1.0_dp]
+                do k = 1, ncall(icase)
+                    call stost_lorentz(z, vref*nudt(icase)/nu, ierr)
+                    if (ierr /= 0 .or. abs(z(5)) > 1.0_dp) then
+                        print *, '  FAIL: Lorentz step left pitch domain', &
+                            nudt(icase), ierr, z(5)
+                        passed = .false.
+                        nfail = nfail + 1
+                        return
+                    end if
+                end do
+                p1_mean = p1_mean + z(5)
+                p2_mean = p2_mean + 0.5_dp*(3.0_dp*z(5)**2 - 1.0_dp)
+            end do
+            p1_mean = p1_mean/real(nparticle, dp)
+            p2_mean = p2_mean/real(nparticle, dp)
+            nut = nudt(icase)*real(ncall(icase), dp)
+            p1_exact = exp(-nut)
+            p2_exact = exp(-3.0_dp*nut)
+            if (abs(p1_mean - p1_exact) > moment_tolerance .or. &
+                abs(p2_mean - p2_exact) > moment_tolerance) then
+                print *, '  FAIL: moments numerical/exact at nu*t =', nut, &
+                    p1_mean, p1_exact, p2_mean, p2_exact
+                passed = .false.
+                nfail = nfail + 1
+                return
+            end if
+            print *, '  PASS: nu*t, P1, P2 =', nut, p1_mean, p2_mean
+        end do
+    end subroutine test_lorentz_large_steps
 
     subroutine test_file_exterior_profiles()
         real(dp) :: te, ti1, ti2, ni1, ni2, ef(3), vr(3), er(3)
