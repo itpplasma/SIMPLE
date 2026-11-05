@@ -1823,7 +1823,8 @@ contains
 #endif
 
         !$omp parallel firstprivate(norb) private(class_result, i)
-        !$omp do
+        ! Classification costs differ by orders of magnitude between markers.
+        !$omp do schedule(dynamic, 1)
         do i = 1, ntestpart
 #ifdef SIMPLE_ENABLE_DEBUG_OUTPUT
             if (debug) then

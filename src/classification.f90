@@ -96,7 +96,7 @@ contains
         integer,          dimension(:),   allocatable :: ipoi
         real(dp), dimension(:),   allocatable :: xp
         real(dp), dimension(:,:), allocatable :: coef,orb_sten
-        real(dp), dimension(:,:), allocatable :: zpoipl_tip,zpoipl_per,dummy2d
+        real(dp), dimension(:, :), allocatable :: zpoipl_tip, zpoipl_per
         real(dp), dimension(n_tip_vars)       :: var_tip
         real(dp) :: phiper, alam_prev, par_inv
         integer :: iper, itip, kper, nfp_tip, nfp_per
@@ -189,11 +189,14 @@ contains
 
         ! Forced classification of passing as regular:
         if(passing .and. should_skip(ipart)) then
-            !$omp critical
-            confpart_pass=confpart_pass+1.d0
+            ! Elementwise atomics: the traced markers update the same counters
+            ! with atomics, which a critical section does not exclude.
+            do it = 1, ntimstep
+                !$omp atomic update
+                confpart_pass(it) = confpart_pass(it) + 1.d0
+            end do
             zend(:, ipart) = zstart(:, ipart)
             times_lost(ipart) = -1.d0
-            !$omp end critical
             if(class_plot) then
                 !$omp critical
                 write (iaaa_pnt,*) zstart(2,ipart),zstart(5,ipart),trap_par(ipart)
@@ -209,20 +212,16 @@ contains
         endif
         ! End forced classification of passing as regular
 
-        !$omp critical
         if (.not. allocated(ipoi)) &
             allocate(ipoi(nplagr),coef(0:nder,nplagr),orb_sten(6,nplagr),xp(nplagr))
-        !$omp end critical
         do it=1,nplagr
             ipoi(it)=it
         enddo
 
         nfp_tip=nfp !<= initial array dimension for tips
         nfp_per=nfp !<= initial array dimension for periods
-        !$omp critical
         if (.not. allocated(zpoipl_tip)) &
             allocate(zpoipl_tip(2,nfp_tip),zpoipl_per(2,nfp_per))
-        !$omp end critical
 
         !  open(unit=10000+ipart, recl=1024, position='append')
         !  open(unit=20000+ipart, recl=1024, position='append')
@@ -362,23 +361,8 @@ contains
                         !          write(10000+ipart,*) var_tip
 
                         ifp_tip=ifp_tip+1
-                        if(ifp_tip.gt.nfp_tip) then !<=increase the buffer for banana tips
-                            !$omp critical
-                            allocate(dummy2d(2,ifp_tip-1))
-                            !$omp end critical
-                            dummy2d=zpoipl_tip(:,1:ifp_tip-1)
-                            !$omp critical
-                            deallocate(zpoipl_tip)
-                            !$omp end critical
-                            nfp_tip=nfp_tip+nfp
-                            !$omp critical
-                            allocate(zpoipl_tip(2,nfp_tip))
-                            !$omp end critical
-                            zpoipl_tip(:,1:ifp_tip-1)=dummy2d
-                            !$omp critical
-                            deallocate(dummy2d)
-                            !$omp end critical
-                        endif
+                        if (ifp_tip .gt. nfp_tip) &
+                            call grow_columns(zpoipl_tip, ifp_tip - 1, nfp_tip)
                         zpoipl_tip(:,ifp_tip)=var_tip(1:2)
                         par_inv = par_inv - var_tip(6)
                         !
@@ -439,23 +423,8 @@ contains
                         var_tip(3)=modulo(var_tip(3),twopi)
                         ! write(20000+ipart,*) var_tip
                         ifp_per=ifp_per+1
-                        if(ifp_per.gt.nfp_per) then !<=increase the buffer for periodic boundary footprints
-                            !$omp critical
-                            allocate(dummy2d(2,ifp_per-1))
-                            !$omp end critical
-                            dummy2d=zpoipl_per(:,1:ifp_per-1)
-                            !$omp critical
-                            deallocate(zpoipl_per)
-                            !$omp end critical
-                            nfp_per=nfp_per+nfp
-                            !$omp critical
-                            allocate(zpoipl_per(2,nfp_per))
-                            !$omp end critical
-                            zpoipl_per(:,1:ifp_per-1)=dummy2d
-                            !$omp critical
-                            deallocate(dummy2d)
-                            !$omp end critical
-                        endif
+                        if (ifp_per .gt. nfp_per) &
+                            call grow_columns(zpoipl_per, ifp_per - 1, nfp_per)
                         zpoipl_per(:,ifp_per)=var_tip(1:2)
                     endif
                 endif
@@ -681,5 +650,19 @@ contains
         vmec_boozer = isw_field_type == BOOZER
         if (vmec_boozer) vmec_boozer = associated(ref_to_integ, ref_to_integ_boozer)
     end function vmec_boozer
+
+    !> Double the column capacity of a thread-local buffer, keeping the
+    !> first nused columns.
+    subroutine grow_columns(buffer, nused, capacity)
+        real(dp), allocatable, intent(inout) :: buffer(:, :)
+        integer, intent(in) :: nused
+        integer, intent(inout) :: capacity
+        real(dp), allocatable :: grown(:, :)
+
+        capacity = 2*capacity
+        allocate (grown(size(buffer, 1), capacity))
+        grown(:, 1:nused) = buffer(:, 1:nused)
+        call move_alloc(grown, buffer)
+    end subroutine grow_columns
 
 end module classification
