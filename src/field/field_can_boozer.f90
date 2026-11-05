@@ -84,12 +84,19 @@ contains
 
     subroutine ref_to_integ_boozer(xref, xinteg)
         use boozer_sub, only: vmec_to_boozer
+        use new_vmec_stuff_mod, only: nper
         real(dp), intent(in) :: xref(3)
         real(dp), intent(out) :: xinteg(3)
+        real(dp) :: phi_ref, fper
 
         xinteg(1) = xref(1)
+        phi_ref = mod(xref(3), twopi)
         call vmec_to_boozer( &
-            xref(1), mod(xref(2), twopi), mod(xref(3), twopi), xinteg(2), xinteg(3))
+            xref(1), mod(xref(2), twopi), phi_ref, xinteg(2), xinteg(3))
+        ! vmec_to_boozer returns phi_B in the first field period; restore the
+        ! whole periods of the reference angle so the start keeps its sector.
+        fper = twopi/real(nper, dp)
+        xinteg(3) = xinteg(3) + fper*real(nint((phi_ref - xinteg(3))/fper), dp)
         xinteg(2) = mod(xinteg(2), twopi)
         xinteg(3) = mod(xinteg(3), twopi)
     end subroutine ref_to_integ_boozer
