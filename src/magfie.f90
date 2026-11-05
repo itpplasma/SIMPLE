@@ -617,6 +617,31 @@ end function cross_product
   hcurl(3)=(dht_ds-dhs_dt)/sqrtg
   !
   end subroutine magfie_vmec
+
+    !> Field strength and contravariant direction for field-line tracing. The
+    !> VMEC derivatives in magfie_vmec take six further spline evaluations that
+    !> a field line does not use.
+    subroutine magfie_field_line(x, bmod, hctrvr)
+        real(dp), intent(in) :: x(3)
+        real(dp), intent(out) :: bmod, hctrvr(3)
+        real(dp) :: sqrtg, bder(3), hcovar(3), hcurl(3)
+        real(dp) :: A_theta, A_phi, dA_theta_ds, dA_phi_ds, aiota, sqg, alam, &
+                    dl_ds, dl_dt, dl_dp, Bctrvr_vartheta, Bctrvr_varphi, Bcovar_r, &
+                    Bcovar_vartheta, Bcovar_varphi, cjac
+
+        if (.not. associated(magfie, magfie_vmec)) then
+            call magfie(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
+            return
+        end if
+        call vmec_field(x(1), x(2), x(3), A_theta, A_phi, dA_theta_ds, dA_phi_ds, &
+                        aiota, sqg, alam, dl_ds, dl_dt, dl_dp, Bctrvr_vartheta, &
+                        Bctrvr_varphi, Bcovar_r, Bcovar_vartheta, Bcovar_varphi)
+        bmod = sqrt(Bctrvr_vartheta*Bcovar_vartheta + Bctrvr_varphi*Bcovar_varphi)
+        cjac = 1.d0 + dl_dt
+        hctrvr(1) = 0.d0
+        hctrvr(2) = (Bctrvr_vartheta - dl_dp*Bctrvr_varphi)/(cjac*bmod)
+        hctrvr(3) = Bctrvr_varphi/bmod
+    end subroutine magfie_field_line
   !
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   !

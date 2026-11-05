@@ -536,115 +536,113 @@ contains
         !
         !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
         !
-        subroutine rhs_mflint_can(phi,y,dery)
-            !
-            ! Computes the right hand side of the magnetic field line equation for
-            ! the integration over the toroidal angle, subintegrand for the flux tube
-            ! volume $1/B^\varphi$ and subintegrants for Boozer $B_{00}$ computation
-            ! $B^2/B^\varphi$ and $B^3/B^\varphi$                       -   dery
-            !
-            ! Oder of coordinates in magfie is the following: x(1)=R (big radius),
-            ! x(2)=phi (toroidal angle), x(3)=z (altitude).
-            !
-            !  Input parameters:
-            !            formal:
-            !                    y(1:2) - coordinates in the poloidal plane (phi=const)
-            !                    y(3:5) - integrals
-            !  Output parameters:
-            !            formal:
-            !                 dery(1:5) - vector of the right-hand side
-            !  Called routines:  magfie_vmec, magfie_can, magfie_boozer
-            !
-            use magfie_sub, only : magfie
-            !
-            real(dp), intent(in) :: phi
-            real(dp), intent(in) :: y(:)
-            real(dp), intent(out) :: dery(:)
-            real(dp) x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl
-            dimension x(3),bder(3),hcovar(3),hctrvr(3),hcurl(3)
-            !
-            x(1)=y(1)
-            x(2)=y(2)
-            x(3)=phi
-            !
-            call magfie(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
-            !
-            dery(1)=hctrvr(1)/hctrvr(3)
-            dery(2)=hctrvr(2)/hctrvr(3)
-            dery(3)=1.d0/(bmod*hctrvr(3))
-            dery(4)=bmod/hctrvr(3)
-            dery(5)=bmod**2/hctrvr(3)
-            !
-        end subroutine rhs_mflint_can
+            subroutine rhs_mflint_can(phi, y, dery)
+                !
+                ! Computes the right hand side of the magnetic field line equation for
+                ! the integration over the toroidal angle, subintegrand for the flux tube
+                ! volume $1/B^\varphi$ and subintegrants for Boozer $B_{00}$ computation
+                ! $B^2/B^\varphi$ and $B^3/B^\varphi$                       -   dery
+                !
+                ! Oder of coordinates in magfie is the following: x(1)=R (big radius),
+                ! x(2)=phi (toroidal angle), x(3)=z (altitude).
+                !
+                !  Input parameters:
+                !            formal:
+                !                    y(1:2) - coordinates in the poloidal plane (phi=const)
+                !                    y(3:5) - integrals
+                !  Output parameters:
+                !            formal:
+                !                 dery(1:5) - vector of the right-hand side
+                !  Called routines:  magfie_vmec, magfie_can, magfie_boozer
+                !
+                use magfie_sub, only: magfie_field_line
+                !
+                real(dp), intent(in) :: phi
+                real(dp), intent(in) :: y(:)
+                real(dp), intent(out) :: dery(:)
+                real(dp) :: x(3), bmod, hctrvr(3)
+                !
+                x(1) = y(1)
+                x(2) = y(2)
+                x(3) = phi
+                !
+                call magfie_field_line(x, bmod, hctrvr)
+                !
+                dery(1) = hctrvr(1)/hctrvr(3)
+                dery(2) = hctrvr(2)/hctrvr(3)
+                dery(3) = 1.d0/(bmod*hctrvr(3))
+                dery(4) = bmod/hctrvr(3)
+                dery(5) = bmod**2/hctrvr(3)
+                !
+            end subroutine rhs_mflint_can
         !
         !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
         !Integrates along a magnetic field line to generate equidistant homogeneous volumetric distribution on flux surface
-        subroutine integrate_mfl_can(npoi,dphi,rbeg,phibeg,zbeg,         &
-                xstart,bstart,volstart,bmod00,ierr)
-            !
-            use odeint_allroutines_sub, only : odeint_allroutines
-            use chamb_sub, only : chamb_can
-            use magfie_sub, only : magfie
-            !
-            implicit none
-            !
-            real(dp), intent(out) :: bmod00
-            !
-            integer, parameter          :: ndim=5
-            real(dp), parameter :: relerr=1d-10
-            integer :: i
-            integer, intent(in) :: npoi, ierr
-            real(dp) :: phi,phiold
-            real(dp) , intent(in):: dphi,rbeg,phibeg,zbeg
-            real(dp), dimension(3,npoi), intent(out) :: xstart
-            real(dp), dimension(npoi), intent(out)   :: bstart,volstart
-            real(dp), dimension(ndim)   :: y
-            !
-            real(dp) x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl
-            dimension x(3),bder(3),hcovar(3),hctrvr(3),hcurl(3)
-            !
-            phi=phibeg
-            y(1)=rbeg
-            y(2)=zbeg
-            y(3:5)=0.d0
-            !
-            call chamb_can(y(1:2),phi,ierr)
-            !
-            if(ierr.eq.1) return
-            x(1)=y(1)
-            x(2)=y(2)
-            x(3)=phi
-            !
-            call magfie(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
-            !
-            xstart(:,1)=x
-            bstart(1)=bmod
-            volstart(1)=y(3)
-            !
-            do i=2,npoi
-                phiold=phi
-                phi=phiold+dphi
+            subroutine integrate_mfl_can(npoi, dphi, rbeg, phibeg, zbeg, &
+                                         xstart, bstart, volstart, bmod00, ierr)
                 !
-                call odeint_allroutines(y,ndim,phiold,phi,relerr,rhs_mflint_can)
+                use odeint_allroutines_sub, only: odeint_allroutines
+                use chamb_sub, only: chamb_can
+                use magfie_sub, only: magfie_field_line
                 !
-                call chamb_can(y(1:2),phi,ierr)
+                implicit none
                 !
-                if(ierr.eq.1) return
-                x(1)=y(1)
-                x(2)=y(2)
-                x(3)=phi
+                real(dp), intent(out) :: bmod00
                 !
-                call magfie(x,bmod,sqrtg,bder,hcovar,hctrvr,hcurl)
+                integer, parameter          :: ndim = 5
+                real(dp), parameter :: relerr = 1d-10
+                integer :: i
+                integer, intent(in) :: npoi, ierr
+                real(dp) :: phi, phiold
+                real(dp), intent(in):: dphi, rbeg, phibeg, zbeg
+                real(dp), dimension(3, npoi), intent(out) :: xstart
+                real(dp), dimension(npoi), intent(out)   :: bstart, volstart
+                real(dp), dimension(ndim)   :: y
                 !
-                xstart(:,i)=x
-                bstart(i)=bmod
-                volstart(i)=y(3)
-            enddo
-            !
-            volstart=volstart/volstart(npoi)
-            bmod00=y(5)/y(4)
-            !
-        end subroutine integrate_mfl_can
+                real(dp) :: x(3), bmod, hctrvr(3)
+                !
+                phi = phibeg
+                y(1) = rbeg
+                y(2) = zbeg
+                y(3:5) = 0.d0
+                !
+                call chamb_can(y(1:2), phi, ierr)
+                !
+                if (ierr .eq. 1) return
+                x(1) = y(1)
+                x(2) = y(2)
+                x(3) = phi
+                !
+                call magfie_field_line(x, bmod, hctrvr)
+                !
+                xstart(:, 1) = x
+                bstart(1) = bmod
+                volstart(1) = y(3)
+                !
+                do i = 2, npoi
+                    phiold = phi
+                    phi = phiold + dphi
+                    !
+                   call odeint_allroutines(y, ndim, phiold, phi, relerr, rhs_mflint_can)
+                    !
+                    call chamb_can(y(1:2), phi, ierr)
+                    !
+                    if (ierr .eq. 1) return
+                    x(1) = y(1)
+                    x(2) = y(2)
+                    x(3) = phi
+                    !
+                    call magfie_field_line(x, bmod, hctrvr)
+                    !
+                    xstart(:, i) = x
+                    bstart(i) = bmod
+                    volstart(i) = y(3)
+                end do
+                !
+                volstart = volstart/volstart(npoi)
+                bmod00 = y(5)/y(4)
+                !
+            end subroutine integrate_mfl_can
         !
         !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
         !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
