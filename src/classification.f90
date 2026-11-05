@@ -20,6 +20,9 @@ module classification
     use orbit_symplectic_base, only: SYMPLECTIC_STEP_BOUNDARY, &
         SYMPLECTIC_STEP_OUTSIDE_DOMAIN, SYMPLECTIC_STEP_MAXITER, &
         SYMPLECTIC_STEP_LINEAR_SOLVE, symplectic_newton_warning_mode
+    use orbit_symplectic_base, only: SYMPLECTIC_STEP_EVENT_NOT_CONVERGED, &
+                                     symplectic_integrator_t
+    use field_can_base, only: field_can_t
     use simple, only : init_sympl, tracer_t
     use cut_detector, only : fract_dimension
     use diag_mod, only : icounter
@@ -85,6 +88,8 @@ contains
         type(classification_result_t), intent(out) :: class_result
         integer :: ierr
         real(dp), dimension(5) :: z, z_step_start
+        type(symplectic_integrator_t) :: si_step_start
+        type(field_can_t) :: f_step_start
         real(dp) :: bmod,sqrtg
         real(dp) :: surf_bmin, surf_bmax, boundary_x(3)
         real(dp), dimension(3) :: bder, hcovar, hctrvr, hcurl
@@ -282,6 +287,9 @@ contains
                 z_step_start = z
                 if (integmode <= 0) then
                     call orbit_timestep_axis(z, dtaumin, dtaumin, relerr, ierr)
+                    ! A chamber flag on a non-finite state is a numerical
+                    ! failure, never an LCFS loss.
+                    if (ierr == 1 .and. .not. all(is_finite(z))) ierr = 2
                     if (ierr /= 0 .and. ierr /= 1 .and. &
                         symplectic_newton_warning_mode) then
                         z = z_step_start
@@ -294,8 +302,16 @@ contains
                         hold_streak = 0
                     end if
                 else
+                    si_step_start = anorb%si
+                    f_step_start = anorb%f
                     call advance_symplectic_with_retry(anorb%si, anorb%f, &
                         orbit_timestep_sympl, ierr)
+                    if (ierr == SYMPLECTIC_STEP_BOUNDARY .and. &
+                        .not. all(is_finite(anorb%si%z))) then
+                        anorb%si = si_step_start
+                        anorb%f = f_step_start
+                        ierr = SYMPLECTIC_STEP_EVENT_NOT_CONVERGED
+                    end if
                     if (ierr /= 0 .and. ierr /= SYMPLECTIC_STEP_BOUNDARY .and. &
                         symplectic_newton_warning_mode) then
                         z = z_step_start

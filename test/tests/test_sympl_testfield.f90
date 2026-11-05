@@ -11,6 +11,7 @@ module failed_symplectic_step_backend
     real(dp) :: injected_momentum_ratio = 1d0
     real(dp) :: injected_radial_drift = 0.01d0
     logical :: injected_stale_cache = .false.
+    integer :: injected_nan_component = 4
 
 contains
 
@@ -80,6 +81,20 @@ contains
         ierr = 0
     end subroutine successful_drift_step
 
+    ! Stepper that reports injected_status with one non-finite coordinate.
+    subroutine nan_state_step(si, f, ierr)
+        use finite_check, only: quiet_nan
+        type(symplectic_integrator_t), intent(inout) :: si
+        type(field_can_t), intent(inout) :: f
+        integer, intent(out) :: ierr
+
+        si%z = [1.0d0, 0.2d0, 0.3d0, 0.4d0]
+        si%z(injected_nan_component) = quiet_nan()
+        si%last_step_fraction = 0.25d0
+        f%vpar = quiet_nan()
+        ierr = injected_status
+    end subroutine nan_state_step
+
 end module failed_symplectic_step_backend
 
 program test_sympl_testfield
@@ -89,7 +104,8 @@ program test_sympl_testfield
     use failed_symplectic_step_backend, only: wrong_energy_step, injected_status, &
                                               injected_momentum_ratio, &
                                               injected_stale_cache, &
-                                              injected_radial_drift
+                                              injected_radial_drift, &
+                                              nan_state_step, injected_nan_component
     use simple_main, only: update_momentum
     use classification, only: classify_classifier_exit
     use simple_main, only: classify_orbit_exit, init_field, locate_linear_lcfs, &
@@ -177,6 +193,8 @@ program test_sympl_testfield
     call test_recovery_preserves_magnetic_moment
     call test_collision_momentum_uses_current_field
     call test_albert_wall_boundary_residual
+    call test_nan_state_is_never_a_loss
+    call test_nan_state_classifier_is_never_a_loss
 
     print *, 'TEST field symplectic step succeeded'
 
@@ -1227,5 +1245,270 @@ contains
         if (events == 0 .or. .not. albert_radius_differs) &
             error stop 'Albert boundary fixture did not cross s = 1 off the Albert edge'
     end subroutine test_albert_wall_boundary_residual
+
+    ! A non-finite orbit state is a numerical failure, never an LCFS or wall
+    ! loss, on every boundary-location, stepping and recovery path.
+    subroutine test_nan_state_is_never_a_loss
+        use finite_check, only: is_finite, quiet_nan
+        use parmot_mod, only: ro0
+        use reference_coordinates, only: ref_coords
+        use libneo_coordinates, only: coordinate_system_t
+        use cartesian_coordinates, only: cartesian_coordinate_system_t
+        use params, only: wall_query_rho_lcfs, dtaumin, relerr
+        use simple_main, only: crosses_reference_boundary, locate_reference_crossing
+        real(dp), parameter :: z_before(5) = [0.9_dp, 0.2_dp, 0.3_dp, 1.0_dp, &
+                                              -0.5_dp]
+        real(dp), parameter :: z_crossing(5) = [1.1_dp, 0.4_dp, 0.5_dp, 1.004_dp, &
+                                                0.5_dp]
+        real(dp), parameter :: initial(5) = [0.2_dp, 1.0_dp, 0.2_dp, 1.0_dp, &
+                                             0.25_dp]
+        type(tracer_t) :: local_orbit
+        class(coordinate_system_t), allocatable :: saved_ref_coords
+        real(dp) :: z_start(5), z_end(5), z_event(5), z(5), event_fraction
+        real(dp) :: saved_ro0, saved_wall_gate, saved_dtaumin, saved_relerr
+        integer :: component, endpoint, warning, wall_path, path, mode
+        integer :: step_error, saved_integmode
+        logical :: found, numerical_hold, saved_warning_mode
+
+        do component = 1, 5
+            z_end = z_crossing
+            z_end(component) = quiet_nan()
+            z_start = z_before
+            z_start(component) = quiet_nan()
+
+            step_error = 1
+            call locate_validated_lcfs(z_before, z_end, 6.0_dp, z_event, &
+                                       event_fraction, step_error)
+            if (step_error /= 2 .or. any(z_event /= z_before)) &
+                error stop 'non-finite RK endpoint was located on the LCFS'
+            step_error = 1
+            call locate_validated_lcfs(z_start, z_crossing, 6.0_dp, z_event, &
+                                       event_fraction, step_error)
+            if (step_error /= 2) &
+                error stop 'non-finite RK start was located on the LCFS'
+
+            if (crosses_reference_boundary(z_before, z_end) .or. &
+                crosses_reference_boundary(z_start, z_crossing)) &
+                error stop 'non-finite state crossed the reference boundary'
+            call locate_reference_crossing(z_before, z_end, 6.0_dp, z_event, &
+                                           event_fraction, found)
+            if (found) error stop 'non-finite endpoint located a reference crossing'
+
+            z = z_end
+            step_error = 0
+            call validate_rk_state(z_before, z, step_error)
+            if (step_error /= 2 .or. any(z /= z_before)) &
+                error stop 'non-finite RK state was committed'
+            step_error = 0
+            call validate_rk_step_or_reference_boundary(z_before, z_end, &
+                                                        6.0_dp, 1.0_dp, z, &
+                                                        event_fraction, &
+                                                        step_error, found)
+            if (step_error /= 2 .or. found) &
+                error stop 'non-finite step was validated or became a boundary'
+        end do
+
+        saved_ro0 = ro0
+        ro0 = 1.0_dp
+        saved_wall_gate = wall_query_rho_lcfs
+        wall_query_rho_lcfs = 1.0_dp
+        saved_integmode = integmode
+        saved_warning_mode = symplectic_newton_warning_mode
+        saved_dtaumin = dtaumin
+        saved_relerr = relerr
+        dtaumin = 1.0e-3_dp
+        relerr = 1.0e-12_dp
+        call move_alloc(ref_coords, saved_ref_coords)
+        allocate (cartesian_coordinate_system_t :: ref_coords)
+        swcoll = .false.
+        orbit_model = ORBIT_GC
+
+        ! Symplectic map, with and without warning-mode RK recovery and wall.
+        integmode = 1
+        orbit_timestep_sympl => nan_state_step
+        do endpoint = 0, 1
+            injected_status = SYMPLECTIC_STEP_OK
+            if (endpoint == 1) injected_status = SYMPLECTIC_STEP_BOUNDARY
+            do component = 1, 4
+                injected_nan_component = component
+                do warning = 0, 1
+                    symplectic_newton_warning_mode = warning == 1
+                    do wall_path = 0, 1
+                        local_orbit = norb
+                        call init_sympl(local_orbit%si, local_orbit%f, initial, &
+                                        1.0e-3_dp, 1.0e-3_dp, 1.0e-12_dp, 1)
+                        z = initial
+                        call run_nan_macrostep(local_orbit, z, wall_path, &
+                                               .false., step_error, numerical_hold)
+                        call require_not_lost(step_error, 1, &
+                                              'non-finite symplectic step was lost')
+                        if (.not. all(is_finite(z))) &
+                            error stop 'non-finite symplectic state was committed'
+                    end do
+                end do
+            end do
+        end do
+
+        ! Adaptive RK (integmode=0) and active RK recovery, entered with a
+        ! non-finite state beyond the chamber flag z(1) >= 1.
+        do path = 0, 1
+            mode = path
+            integmode = mode
+            do component = 2, 5
+                do warning = 0, 1
+                    symplectic_newton_warning_mode = warning == 1
+                    do wall_path = 0, 1
+                        local_orbit = norb
+                        call init_sympl(local_orbit%si, local_orbit%f, initial, &
+                                        1.0e-3_dp, 1.0e-3_dp, 1.0e-12_dp, 1)
+                        z = [1.5_dp, 0.2_dp, 0.3_dp, 1.0_dp, 0.1_dp]
+                        z(component) = quiet_nan()
+                        call run_nan_macrostep(local_orbit, z, wall_path, &
+                                               path == 1, step_error, numerical_hold)
+                        call require_not_lost(step_error, mode, &
+                                              'non-finite RK state became a loss')
+                        if (step_error == 0 .and. .not. numerical_hold) &
+                            error stop 'non-finite RK state was accepted as a step'
+                    end do
+                end do
+            end do
+        end do
+
+        injected_status = 0
+        injected_nan_component = 4
+        integmode = saved_integmode
+        symplectic_newton_warning_mode = saved_warning_mode
+        dtaumin = saved_dtaumin
+        relerr = saved_relerr
+        wall_query_rho_lcfs = saved_wall_gate
+        ro0 = saved_ro0
+        deallocate (ref_coords)
+        call move_alloc(saved_ref_coords, ref_coords)
+
+    end subroutine test_nan_state_is_never_a_loss
+
+    subroutine run_nan_macrostep(orbit, state, wall_path, recovery_active, &
+                                 step_error, numerical_hold)
+        type(tracer_t), intent(inout) :: orbit
+        real(dp), intent(inout) :: state(5)
+        integer, intent(in) :: wall_path
+        logical, intent(in) :: recovery_active
+        integer, intent(out) :: step_error
+        logical, intent(out) :: numerical_hold
+        type(rk_recovery_state_t) :: recovery
+        real(dp) :: x_previous(3), exit_step
+        integer(int64) :: kt
+        integer :: hold_streak
+
+        recovery = rk_recovery_state_t()
+        if (recovery_active) then
+            recovery = rk_recovery_state_t(active=.true., &
+                                           has_momentum_reference=.true., &
+                                           momentum_reference=1.0_dp)
+        end if
+        kt = 0_int64
+        hold_streak = 0
+        x_previous = 0.0_dp
+        if (wall_path == 0) then
+            call macrostep(orbit, state, kt, step_error, 1, exit_step, &
+                           hold_streak=hold_streak, numerical_hold_any=numerical_hold, &
+                           rk_recovery=recovery)
+        else
+            call macrostep(orbit, state, kt, step_error, 1, exit_step, &
+                           hold_streak=hold_streak, numerical_hold_any=numerical_hold, &
+                           rk_recovery=recovery, ipart=1, x_prev_m=x_previous)
+        end if
+    end subroutine run_nan_macrostep
+
+    subroutine require_not_lost(step_error, integration_mode, message)
+        integer, intent(in) :: step_error, integration_mode
+        character(*), intent(in) :: message
+        integer :: exit_code
+
+        if (step_error == 0) return
+        exit_code = classify_orbit_exit(step_error, ORBIT_GC, integration_mode, &
+                                        ORBIT_EXIT_LCFS)
+        if (exit_code == ORBIT_EXIT_LCFS .or. exit_code == ORBIT_EXIT_WALL) &
+            error stop message
+    end subroutine require_not_lost
+
+    ! The tcut/fast_class classifier counts a boundary status as an LCFS loss;
+    ! a non-finite state at that status must stay an unresolved marker.
+    subroutine test_nan_state_classifier_is_never_a_loss
+        use finite_check, only: is_finite, quiet_nan
+        use parmot_mod, only: ro0
+        use classification, only: trace_orbit_with_classifiers, &
+                                  classification_result_t
+        use params, only: ntestpart, ntimstep, ntau, nplagr, nder, npl_half, nfp, &
+                          fper, num_surf, bmin, bmax, notrace_passing, contr_pp, &
+                          class_plot, dtaumin, relerr, v0, zstart, times_lost, &
+                          orbit_exit_code, unresolved_orbits, reallocate_arrays, &
+                          ntau_macro
+        type(tracer_t) :: local_orbit
+        type(classification_result_t) :: class_result
+        real(dp) :: saved_ro0
+        integer :: path, warning, saved_integmode
+        logical :: saved_warning_mode
+
+        saved_ro0 = ro0
+        ro0 = 1.0_dp
+        saved_integmode = integmode
+        saved_warning_mode = symplectic_newton_warning_mode
+        ntestpart = 1
+        ntimstep = 3
+        ntau = 2
+        ! The classifier advances macrostep it by ntau_macro(it) (#705).
+        if (allocated(ntau_macro)) deallocate (ntau_macro)
+        allocate (ntau_macro(ntimstep))
+        ntau_macro = ntau
+        nplagr = 4
+        nder = 0
+        npl_half = 2
+        nfp = 4
+        fper = 2.0_dp*acos(-1.0_dp)
+        num_surf = 1
+        bmin = 0.5_dp
+        bmax = 2.0_dp
+        notrace_passing = 0
+        contr_pp = -huge(1.0_dp)
+        class_plot = .false.
+        dtaumin = 1.0e-3_dp
+        relerr = 1.0e-12_dp
+        v0 = 1.0_dp
+        call reallocate_arrays
+        swcoll = .false.
+        orbit_model = ORBIT_GC
+        orbit_timestep_sympl => nan_state_step
+        injected_status = SYMPLECTIC_STEP_BOUNDARY
+
+        do path = 0, 1
+            integmode = path
+            do warning = 0, 1
+                symplectic_newton_warning_mode = warning == 1
+                if (path == 0) then
+                    ! RK chamber flag z(1) >= 1 with a non-finite momentum.
+                    zstart(:, 1) = [1.5_dp, 0.2_dp, 0.3_dp, quiet_nan(), 0.1_dp]
+                else
+                    zstart(:, 1) = [0.5_dp, 0.2_dp, 0.3_dp, 1.0_dp, 0.1_dp]
+                end if
+                local_orbit = norb
+                times_lost = 0.0_dp
+                orbit_exit_code = 0
+                unresolved_orbits = 0
+                call trace_orbit_with_classifiers(local_orbit, 1, class_result)
+                if (class_result%lost .or. &
+                    orbit_exit_code(1) == ORBIT_EXIT_LCFS .or. &
+                    class_result%exit_code == ORBIT_EXIT_LCFS) &
+                    error stop 'classifier counted a non-finite state as LCFS loss'
+                if (is_finite(times_lost(1)) .or. unresolved_orbits(ntimstep) /= 1) &
+                    error stop 'classifier did not report a non-finite state unresolved'
+            end do
+        end do
+
+        injected_status = 0
+        integmode = saved_integmode
+        symplectic_newton_warning_mode = saved_warning_mode
+        ro0 = saved_ro0
+    end subroutine test_nan_state_classifier_is_never_a_loss
 
 end program test_sympl_testfield
