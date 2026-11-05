@@ -8,7 +8,7 @@ copyright = "Copyright 2025, Plasma Physics at TU Graz"
 [dependencies]
 libneo.git = "https://github.com/itpplasma/libneo.git"
 # Same fortnum as cmake/dependency_versions.json; libneo pins an older one.
-fortnum = { git = "https://github.com/lazy-fortran/fortnum.git", rev = "6655e69ceda762ab880ad41efc5582433b8a24a0" }
+fortnum = { git = "https://github.com/lazy-fortran/fortnum.git", rev = "7d479d2b5f5bb9b6c255ccdb62638a9a9c75695c" }
 openmp = "*"
 hdf5 = "*"
 netcdf = "*"
