@@ -99,9 +99,10 @@ radial coordinate, both angles and pitch. Cartesian axis variables use the
 regularization disc's radius, :math:`\sqrt{s_\mathrm{floor}}` on flux charts and
 :math:`\rho_\mathrm{floor}` on rho charts. Their error bound therefore remains
 finite when they pass through zero, while the momentum retains its relative
-error scale. For the angles this matters at :math:`0 = 2\pi`, where the
-periodic splines meet with a small jump that a purely relative scale cannot
-step over.
+error scale. For the angles this matters at :math:`0 = 2\pi`: the VMEC
+splines are continuous at their knots only to about :math:`10^{-7}` relative,
+and a purely relative scale, which vanishes with the angle, cannot step over
+such a jump.
 
 The Cash–Karp RK5(4) integrator of libneo (``odeint_allroutines``) solves the
 non-canonical guiding-centre equations in any coordinates, with relative

@@ -24,9 +24,10 @@ module alpha_lifetime_sub
     ! its step limit or underflows the step size (native exit code 104).
     ! This happens for the pitch lambda=v_par/v, zero at every mirror point,
     ! for the polar radial coordinate on approach to the axis, for the
-    ! Cartesian axis variables X and Y, and for both angles at 0 = 2*pi, where
-    ! the angular splines meet with a small jump. Radial position,
-    ! angles and pitch have scale one, while X and Y use the
+    ! Cartesian axis variables X and Y, and for both angles at 0 = 2*pi: the
+    ! VMEC splines are continuous at their knots only to about 1e-7 relative,
+    ! and a step over such a jump must not shrink with the angle. Radial
+    ! position, angles and pitch have scale one, while X and Y use the
     ! regularization-disc radius in Cartesian units. The momentum keeps its
     ! relative scale.
     real(dp), parameter :: polar_ode_scale_floor(axis_rhs_count) = &

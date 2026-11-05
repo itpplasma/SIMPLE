@@ -2,13 +2,14 @@ program test_rk_angle_seam_crossing
     !> Regression test for adaptive RK guiding-centre steps in VMEC
     !> coordinates whose poloidal or toroidal angle passes through zero.
     !>
-    !> The angular splines meet at 0 = 2*pi with a small jump (about 1e-10
-    !> relative near the boundary of the public QA equilibrium).
-    !> With a purely relative error scale, the scale of an angle crossing
-    !> zero shrinks like the step itself, so the error estimate of a step over
-    !> the jump no longer decreases with the step and the step size underflows
-    !> (unresolved markers in vmec_rk runs). The step must succeed and agree
-    !> with the same step taken one period further on.
+    !> The VMEC splines are continuous at their knots, including 0 = 2*pi,
+    !> only to about 1e-8 relative in the right-hand side near the boundary
+    !> of the public QA equilibrium. With a purely relative error scale, the
+    !> scale of an angle crossing zero shrinks like the step itself, so the
+    !> error estimate of a step over the jump no longer decreases with the
+    !> step and the step size underflows (unresolved markers in vmec_rk runs).
+    !> The step must succeed and agree with the same step taken one period
+    !> further on.
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use simple, only: init_vmec
