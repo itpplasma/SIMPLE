@@ -91,7 +91,7 @@ regression_suite() {
     local jobs=$1 threads=$2 golden
     golden=$(cmake -DDEPENDENCY=libneo_golden -P cmake/read_dependency_version.cmake)
     export CTEST_PARALLEL_LEVEL=$jobs GOLDEN_RECORD_OMP_THREADS=$threads
-    export GOLDEN_RECORD_PERF_GATE=0 GOLDEN_LIBNEO_REF=$golden
+    export GOLDEN_LIBNEO_REF=$golden
     # The golden reference runner uses Release; match its architecture flags.
     stamp "build-deterministic-nopy (libneo $golden)" &&
         make build-deterministic-nopy CONFIG=Release \
