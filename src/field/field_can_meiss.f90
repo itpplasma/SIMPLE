@@ -259,26 +259,26 @@ subroutine choose_default_scaling(field, scaling)
 end subroutine choose_default_scaling
 
 
-subroutine cleanup_meiss()
-    ! Clean up batch splines to prevent memory leaks
-    use interpolate, only: destroy_batch_splines_3d
+    subroutine cleanup_meiss()
+        ! Clean up batch splines to prevent memory leaks
+        use interpolate, only: destroy_batch_splines_3d
 
-    if (batch_splines_initialized) then
-        call destroy_batch_splines_3d(spl_field_batch)
-        batch_splines_initialized = .false.
-    end if
+        if (batch_splines_initialized) then
+            call destroy_batch_splines_3d(spl_field_batch)
+            batch_splines_initialized = .false.
+        end if
 
-    if (transform_splines_initialized) then
-        call destroy_batch_splines_3d(spl_transform_batch)
-        transform_splines_initialized = .false.
-    end if
+        if (transform_splines_initialized) then
+            call destroy_batch_splines_3d(spl_transform_batch)
+            transform_splines_initialized = .false.
+        end if
 
-    ! Clean up allocated arrays
-    if (allocated(lam_phi)) deallocate(lam_phi)
-    if (allocated(chi_gauge)) deallocate(chi_gauge)
-    if (allocated(field_noncan)) deallocate(field_noncan)
-    if (allocated(coord_scaling)) deallocate(coord_scaling)
-end subroutine cleanup_meiss
+        ! Clean up allocated arrays
+        if (allocated(lam_phi)) deallocate (lam_phi)
+        if (allocated(chi_gauge)) deallocate (chi_gauge)
+        if (allocated(field_noncan)) deallocate (field_noncan)
+        if (allocated(coord_scaling)) deallocate (coord_scaling)
+    end subroutine cleanup_meiss
 
 
 subroutine evaluate_meiss(f, r, th_c, ph_c, mode_secders)
@@ -392,16 +392,16 @@ subroutine init_transformation(ierr)
     end if
 end subroutine init_transformation
 
-subroutine init_transformation_arrays()
+    subroutine init_transformation_arrays()
 !> Initialize transformation arrays - can be called separately for diagnostics
-    if (allocated(lam_phi)) deallocate(lam_phi)
-    if (allocated(chi_gauge)) deallocate(chi_gauge)
-    allocate(lam_phi(n_r, n_th, n_phi), chi_gauge(n_r, n_th, n_phi))
+        if (allocated(lam_phi)) deallocate (lam_phi)
+        if (allocated(chi_gauge)) deallocate (chi_gauge)
+        allocate (lam_phi(n_r, n_th, n_phi), chi_gauge(n_r, n_th, n_phi))
 
-    ! Initialize to zero (boundary conditions)
-    lam_phi = 0.0_dp
-    chi_gauge = 0.0_dp
-end subroutine init_transformation_arrays
+        ! Initialize to zero (boundary conditions)
+        lam_phi = 0.0_dp
+        chi_gauge = 0.0_dp
+    end subroutine init_transformation_arrays
 
 subroutine compute_transformation(ierr)
 !> Compute transformation data via integration (expensive operation)
@@ -571,21 +571,20 @@ end subroutine integrate
         if (abs(hp) < hp_min) floored_hph = sign(hp_min, hp)
     end function floored_hph
 
+    subroutine spline_transformation
+        real(dp), dimension(:, :, :, :), allocatable :: y_batch
+        integer :: dims(3)
 
-subroutine spline_transformation
-    real(dp), dimension(:,:,:,:), allocatable :: y_batch
-    integer :: dims(3)
+        ! Construct batch spline for transformation components (2: lam_phi, chi_gauge)
+        dims = shape(lam_phi)
+        allocate (y_batch(dims(1), dims(2), dims(3), 2))
 
-    ! Construct batch spline for transformation components (2: lam_phi, chi_gauge)
-    dims = shape(lam_phi)
-    allocate(y_batch(dims(1), dims(2), dims(3), 2))
-
-    y_batch(:,:,:,1) = lam_phi
-    y_batch(:,:,:,2) = chi_gauge
+        y_batch(:, :, :, 1) = lam_phi
+        y_batch(:, :, :, 2) = chi_gauge
 
     call construct_batch_splines_3d(xmin, xmax, y_batch, order, periodic, spl_transform_batch)
-    transform_splines_initialized = .true.
-end subroutine spline_transformation
+        transform_splines_initialized = .true.
+    end subroutine spline_transformation
 
 
 subroutine ah_cov_on_slice(r, phi, i_th, Ar, Ap, hr, hp)
@@ -666,71 +665,71 @@ logical function is_hr_zero_on_slice(i_th, i_phi) result(is_zero)
 end function is_hr_zero_on_slice
 
 
-subroutine init_canonical_field_components
-    real(dp) :: xcan(3)
-    real(dp), dimension(:,:,:,:), allocatable :: y_batch
-    real(dp) :: xref(3), Acov(3), hcov(3), Bmod, lam, dlam(3), chi, dchi(3)
-    integer :: i_r, i_th, i_phi
+    subroutine init_canonical_field_components
+        real(dp) :: xcan(3)
+        real(dp), dimension(:, :, :, :), allocatable :: y_batch
+        real(dp) :: xref(3), Acov(3), hcov(3), Bmod, lam, dlam(3), chi, dchi(3)
+        integer :: i_r, i_th, i_phi
 
-    if (allocated(lam_phi)) deallocate(lam_phi)
-    if (allocated(chi_gauge)) deallocate(chi_gauge)
-    allocate(y_batch(n_r, n_th, n_phi, 5))
+        if (allocated(lam_phi)) deallocate (lam_phi)
+        if (allocated(chi_gauge)) deallocate (chi_gauge)
+        allocate (y_batch(n_r, n_th, n_phi, 5))
 
-    do i_phi=1,n_phi
-        do i_th=1,n_th
-            do i_r=1,n_r
-                xcan = get_grid_point(i_r, i_th, i_phi)
+        do i_phi = 1, n_phi
+            do i_th = 1, n_th
+                do i_r = 1, n_r
+                    xcan = get_grid_point(i_r, i_th, i_phi)
 
-                ! Use batch evaluation for both transformation components
-                block
-                    real(dp) :: y_trans(2), dy_trans(3,2)
-                    call evaluate_batch_splines_3d_der(spl_transform_batch, xcan, y_trans, dy_trans)
-                    lam = y_trans(1)    ! lam_phi
-                    chi = y_trans(2)    ! chi_gauge
-                    dlam = dy_trans(:,1)  ! derivatives of lam_phi
-                    dchi = dy_trans(:,2)  ! derivatives of chi_gauge
-                end block
-
-                ! xcan is in integrator coords (r, th, phi)
-                ! xref here is the non-canonical angle coords (th, phi + lam)
-                xref = [xcan(1), modulo(xcan(2), twopi), modulo(xcan(3) + lam, twopi)]
-
-                select type (fld => field_noncan)
-                type is (vmec_field_t)
-                    ! VMEC field expects s-coordinates
+                    ! Use batch evaluation for both transformation components
                     block
-                        real(dp) :: x_integ_local(3), x_ref_local(3), jac_local(3)
-                        x_integ_local = xref
-                        call coord_scaling%inverse(x_integ_local, x_ref_local, jac_local)
-                        call fld%evaluate(x_ref_local, Acov, hcov, Bmod)
+                        real(dp) :: y_trans(2), dy_trans(3, 2)
+        call evaluate_batch_splines_3d_der(spl_transform_batch, xcan, y_trans, dy_trans)
+                        lam = y_trans(1)    ! lam_phi
+                        chi = y_trans(2)    ! chi_gauge
+                        dlam = dy_trans(:, 1)  ! derivatives of lam_phi
+                        dchi = dy_trans(:, 2)  ! derivatives of chi_gauge
                     end block
-                type is (splined_field_t)
-                    ! Splined field already in scaled coordinates
-                    call fld%evaluate(xref, Acov, hcov, Bmod)
-                type is (spectre_field_t)
-                    ! SPECTRE chart is its own radial coordinate (identity scaling)
-                    call bias_spectre_upper_endpoint(fld, xref)
-                    call fld%evaluate(xref, Acov, hcov, Bmod)
-                class default
+
+                    ! xcan is in integrator coords (r, th, phi)
+                    ! xref here is the non-canonical angle coords (th, phi + lam)
+                  xref = [xcan(1), modulo(xcan(2), twopi), modulo(xcan(3) + lam, twopi)]
+
+                    select type (fld => field_noncan)
+                    type is (vmec_field_t)
+                        ! VMEC field expects s-coordinates
+                        block
+                            real(dp) :: x_integ_local(3), x_ref_local(3), jac_local(3)
+                            x_integ_local = xref
+                       call coord_scaling%inverse(x_integ_local, x_ref_local, jac_local)
+                            call fld%evaluate(x_ref_local, Acov, hcov, Bmod)
+                        end block
+                    type is (splined_field_t)
+                        ! Splined field already in scaled coordinates
+                        call fld%evaluate(xref, Acov, hcov, Bmod)
+                    type is (spectre_field_t)
+                        ! SPECTRE chart is its own radial coordinate (identity scaling)
+                        call bias_spectre_upper_endpoint(fld, xref)
+                        call fld%evaluate(xref, Acov, hcov, Bmod)
+                    class default
                     error stop "init_canonical_field_components: unsupported field type"
-                end select
+                    end select
 
-                ! Note: We only use theta/phi components of Acov/hcov below
+                    ! Note: We only use theta/phi components of Acov/hcov below
 
-                y_batch(i_r, i_th, i_phi, 1) = &
-                    Acov(2) + Acov(3)*dlam(2) - dchi(2)
-                y_batch(i_r, i_th, i_phi, 2) = &
-                    Acov(3)*(1.0d0 + dlam(3)) - dchi(3)
-                y_batch(i_r, i_th, i_phi, 3) = hcov(2) + hcov(3)*dlam(2)
-                y_batch(i_r, i_th, i_phi, 4) = hcov(3)*(1.0d0 + dlam(3))
-                y_batch(i_r, i_th, i_phi, 5) = Bmod
+                    y_batch(i_r, i_th, i_phi, 1) = &
+                        Acov(2) + Acov(3)*dlam(2) - dchi(2)
+                    y_batch(i_r, i_th, i_phi, 2) = &
+                        Acov(3)*(1.0d0 + dlam(3)) - dchi(3)
+                    y_batch(i_r, i_th, i_phi, 3) = hcov(2) + hcov(3)*dlam(2)
+                    y_batch(i_r, i_th, i_phi, 4) = hcov(3)*(1.0d0 + dlam(3))
+                    y_batch(i_r, i_th, i_phi, 5) = Bmod
+                end do
             end do
         end do
-    end do
 
-    call construct_batch_splines_3d(xmin, xmax, y_batch, order, periodic, spl_field_batch)
-    batch_splines_initialized = .true.
-end subroutine init_canonical_field_components
+  call construct_batch_splines_3d(xmin, xmax, y_batch, order, periodic, spl_field_batch)
+        batch_splines_initialized = .true.
+    end subroutine init_canonical_field_components
 
 
 subroutine bias_spectre_upper_endpoint(field, x)
@@ -799,56 +798,55 @@ end subroutine magfie_meiss
 
 
 ! Batch evaluation helper for first derivatives
-subroutine evaluate_meiss_batch_der(f, x)
-    type(field_can_t), intent(inout) :: f
-    real(dp), intent(in) :: x(3)
+    subroutine evaluate_meiss_batch_der(f, x)
+        type(field_can_t), intent(inout) :: f
+        real(dp), intent(in) :: x(3)
 
-    real(dp) :: y_batch(5), dy_batch(3, 5)
+        real(dp) :: y_batch(5), dy_batch(3, 5)
 
-    call evaluate_batch_splines_3d_der(spl_field_batch, x, y_batch, dy_batch)
+        call evaluate_batch_splines_3d_der(spl_field_batch, x, y_batch, dy_batch)
 
-    ! Unpack results: order is [Ath, Aph, hth, hph, Bmod]
-    f%Ath = y_batch(1)
-    f%Aph = y_batch(2)
-    f%hth = y_batch(3)
-    f%hph = y_batch(4)
-    f%Bmod = y_batch(5)
+        ! Unpack results: order is [Ath, Aph, hth, hph, Bmod]
+        f%Ath = y_batch(1)
+        f%Aph = y_batch(2)
+        f%hth = y_batch(3)
+        f%hph = y_batch(4)
+        f%Bmod = y_batch(5)
 
-    f%dAth = dy_batch(:, 1)
-    f%dAph = dy_batch(:, 2)
-    f%dhth = dy_batch(:, 3)
-    f%dhph = dy_batch(:, 4)
-    f%dBmod = dy_batch(:, 5)
-end subroutine evaluate_meiss_batch_der
-
+        f%dAth = dy_batch(:, 1)
+        f%dAph = dy_batch(:, 2)
+        f%dhth = dy_batch(:, 3)
+        f%dhph = dy_batch(:, 4)
+        f%dBmod = dy_batch(:, 5)
+    end subroutine evaluate_meiss_batch_der
 
 ! Batch evaluation helper for second derivatives
-subroutine evaluate_meiss_batch_der2(f, x)
-    type(field_can_t), intent(inout) :: f
-    real(dp), intent(in) :: x(3)
+    subroutine evaluate_meiss_batch_der2(f, x)
+        type(field_can_t), intent(inout) :: f
+        real(dp), intent(in) :: x(3)
 
-    real(dp) :: y_batch(5), dy_batch(3, 5), d2y_batch(6, 5)
+        real(dp) :: y_batch(5), dy_batch(3, 5), d2y_batch(6, 5)
 
-    call evaluate_batch_splines_3d_der2(spl_field_batch, x, y_batch, dy_batch, d2y_batch)
+   call evaluate_batch_splines_3d_der2(spl_field_batch, x, y_batch, dy_batch, d2y_batch)
 
-    ! Unpack results: order is [Ath, Aph, hth, hph, Bmod]
-    f%Ath = y_batch(1)
-    f%Aph = y_batch(2)
-    f%hth = y_batch(3)
-    f%hph = y_batch(4)
-    f%Bmod = y_batch(5)
+        ! Unpack results: order is [Ath, Aph, hth, hph, Bmod]
+        f%Ath = y_batch(1)
+        f%Aph = y_batch(2)
+        f%hth = y_batch(3)
+        f%hph = y_batch(4)
+        f%Bmod = y_batch(5)
 
-    f%dAth = dy_batch(:, 1)
-    f%dAph = dy_batch(:, 2)
-    f%dhth = dy_batch(:, 3)
-    f%dhph = dy_batch(:, 4)
-    f%dBmod = dy_batch(:, 5)
+        f%dAth = dy_batch(:, 1)
+        f%dAph = dy_batch(:, 2)
+        f%dhth = dy_batch(:, 3)
+        f%dhph = dy_batch(:, 4)
+        f%dBmod = dy_batch(:, 5)
 
-    f%d2Ath = d2y_batch(:, 1)
-    f%d2Aph = d2y_batch(:, 2)
-    f%d2hth = d2y_batch(:, 3)
-    f%d2hph = d2y_batch(:, 4)
-    f%d2Bmod = d2y_batch(:, 5)
-end subroutine evaluate_meiss_batch_der2
+        f%d2Ath = d2y_batch(:, 1)
+        f%d2Aph = d2y_batch(:, 2)
+        f%d2hth = d2y_batch(:, 3)
+        f%d2hph = d2y_batch(:, 4)
+        f%d2Bmod = d2y_batch(:, 5)
+    end subroutine evaluate_meiss_batch_der2
 
 end module field_can_meiss
