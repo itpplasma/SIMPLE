@@ -258,6 +258,10 @@ contains
         integer :: cooldown
         real(dp) :: x_reference(3)
 
+        should_resume_symplectic = .false.
+        ! Resume only where the reference shell can hold the carried mu.
+        if (state%has_momentum_reference .and. z(4)**2*(1.0_dp - z(5)**2) > &
+            state%momentum_reference**2) return
         call integ_to_ref(z(1:3), x_reference)
         select case (state%reason)
         case (RK_RECOVERY_AXIS)
@@ -3587,8 +3591,11 @@ contains
         real(dp), intent(in) :: mu, bmod, momentum
         real(dp), intent(inout) :: z(5)
 
+        ! With mu*B above the reference energy no pitch on that shell keeps
+        ! mu; keep the carried state, whose momentum the caller validates.
+        if (mu*bmod > momentum**2) return
         z(4) = momentum
-        z(5) = sign(sqrt(max(0.0_dp, 1.0_dp - mu*bmod/momentum**2)), z(5))
+        z(5) = sign(sqrt(1.0_dp - mu*bmod/momentum**2), z(5))
     end subroutine project_momentum_keep_mu
 
     subroutine reseed_recovery_sympl(si, f, z, momentum_reference)

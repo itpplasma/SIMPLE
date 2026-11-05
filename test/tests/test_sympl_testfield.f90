@@ -722,7 +722,12 @@ contains
         real(dp) :: initial(5), z(5), x_previous(3), initial_mu
         real(dp) :: saved_ro0, saved_rmu, saved_dt, saved_tol, saved_wall_gate
         integer(int64) :: kt
-        integer :: wall_path, resume, step_error
+        integer :: wall_path, resume, step_error, ipitch
+        logical :: shell_holds_mu
+        ! At pitch 0.05 the 0.4% momentum excess gives p^2*(1-pitch^2) > 1:
+        ! no pitch on the reference shell keeps mu, so recovery must keep
+        ! the carried state instead of lowering mu.
+        real(dp), parameter :: pitches(2) = [0.25_dp, 0.05_dp]
 
         saved_ro0 = ro0
         saved_rmu = rmu
@@ -740,47 +745,57 @@ contains
         integmode = 3
         swcoll = .false.
         symplectic_newton_warning_mode = .true.
-        do resume = 0, 1
-            do wall_path = 0, 1
-                local_orbit = norb
-                initial = [0.2_dp, 1.0_dp, 0.2_dp, 1.004_dp, 0.25_dp]
-                call init_sympl(local_orbit%si, local_orbit%f, initial, &
-                                dtaumin, dtaumin, relerr, integmode)
-                initial_mu = local_orbit%f%mu
-                ! An accepted endpoint can differ from the fixed reference by 0.4%.
-                local_orbit%si%pabs = 1.0_dp
-                recovery = rk_recovery_state_t()
-                if (resume == 0) then
-                    ! Euler caches need not describe the carried canonical endpoint.
-                    local_orbit%f%vpar = 1.01_dp*local_orbit%f%vpar
-                    call to_standard_z_coordinates(local_orbit, z)
-                    orbit_timestep_sympl => fail_symplectic_step
-                else
-                    z = initial
-                    call activate_rk_recovery(recovery, z, 1.0_dp)
-                    recovery%safe_steps = 255
-                end if
-                kt = 0_int64
-                x_previous = z(1:3)
-                if (wall_path == 0) then
-                    call macrostep(local_orbit, z, kt, step_error, 1, &
-                                   rk_recovery=recovery)
-                else
-                    call macrostep_with_wall_check(local_orbit, z, kt, &
+        do ipitch = 1, 2
+            shell_holds_mu = ipitch == 1
+            do resume = 0, 1
+                do wall_path = 0, 1
+                    local_orbit = norb
+                    initial = [0.2_dp, 1.0_dp, 0.2_dp, 1.004_dp, pitches(ipitch)]
+                    call init_sympl(local_orbit%si, local_orbit%f, initial, &
+                                    dtaumin, dtaumin, relerr, integmode)
+                    initial_mu = local_orbit%f%mu
+                    ! An accepted endpoint can differ from the fixed reference by 0.4%.
+                    local_orbit%si%pabs = 1.0_dp
+                    recovery = rk_recovery_state_t()
+                    if (resume == 0) then
+                        ! Euler caches need not describe the carried canonical endpoint.
+                        local_orbit%f%vpar = 1.01_dp*local_orbit%f%vpar
+                        call to_standard_z_coordinates(local_orbit, z)
+                        orbit_timestep_sympl => fail_symplectic_step
+                    else
+                        z = initial
+                        call activate_rk_recovery(recovery, z, 1.0_dp)
+                        recovery%safe_steps = 255
+                    end if
+                    kt = 0_int64
+                    x_previous = z(1:3)
+                    if (wall_path == 0) then
+                        call macrostep(local_orbit, z, kt, step_error, 1, &
+                                       rk_recovery=recovery)
+                    else
+                        call macrostep_with_wall_check(local_orbit, z, kt, &
                                      step_error, 1, 1, x_previous, rk_recovery=recovery)
-                end if
-                if (step_error /= 0 .or. kt /= 1_int64) &
-                    error stop 'Magnetic-moment recovery fixture did not advance'
-                if (recovery%active .neqv. (resume == 0)) &
-                    error stop 'Magnetic-moment fixture missed recovery transition'
-                if (abs(local_orbit%f%mu/initial_mu - 1.0_dp) > 1.0e-9_dp) &
-                    error stop 'Collisionless recovery changed magnetic moment'
-                if (local_orbit%si%pabs /= 1.0_dp) &
+                    end if
+                    if (step_error /= 0 .or. kt /= 1_int64) &
+                        error stop 'Magnetic-moment recovery fixture did not advance'
+                    if (abs(local_orbit%f%mu/initial_mu - 1.0_dp) > 1.0e-9_dp) &
+                        error stop 'Collisionless recovery changed magnetic moment'
+                    if (.not. shell_holds_mu) then
+                        if (.not. recovery%active) &
+                            error stop 'Recovery resumed on a shell that cannot hold mu'
+                        if (abs(z(4) - 1.0_dp) > 0.005_dp) &
+                            error stop 'Kept recovery state left the momentum band'
+                        cycle
+                    end if
+                    if (recovery%active .neqv. (resume == 0)) &
+                        error stop 'Magnetic-moment fixture missed recovery transition'
+                    if (local_orbit%si%pabs /= 1.0_dp) &
                  error stop 'Invariant-preserving recovery ratcheted momentum reference'
-                ! Seeding with the decoded 1.004 random-walks energy over many
-                ! recoveries (#639); the reference momentum is the invariant.
-                if (abs(z(4) - 1.0_dp) > 1.0e-9_dp) &
+                    ! Seeding with the decoded 1.004 random-walks energy over many
+                    ! recoveries (#639); the reference momentum is the invariant.
+                    if (abs(z(4) - 1.0_dp) > 1.0e-9_dp) &
                 error stop 'Recovery kept the decoded instead of the reference momentum'
+                end do
             end do
         end do
         deallocate (ref_coords)
