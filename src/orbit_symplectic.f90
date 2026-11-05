@@ -30,6 +30,15 @@ use orbit_symplectic_euler1, only: sympl_euler1_residual, sympl_euler1_jacobian,
     use orbit_systems_generated, only: euler2_residual, euler2_jacobian, &
                                  midpoint_residual, midpoint_jacobian, lobatto3_jacobian
     use orbit_systems_generated, only: gc_geometry_gradient_transport
+    use orbit_newton, only: newton_state_t, newton_begin, newton_advance, &
+                            SYSTEM_EULER1, SYSTEM_EULER2, SYSTEM_MIDPOINT, &
+                            SYSTEM_RK_GAUSS, SYSTEM_RK_LOBATTO, NEWTON_NMAX, &
+                            WARNING_NONE, WARNING_ACCEPT, WARNING_REJECT_100, &
+                            WARNING_REJECT_1E4, WARNING_REJECT_LARGE, &
+                            WARNING_NONFINITE, WARNING_AXIS_ACCEPT, &
+                            finite_newton_iterate, warning_maxiter_class, &
+                            axis_crossing_converged, matrix3_near_singular, &
+                            limit_radial_newton_step, radial_boundary_reached
 use orbit_rk_core, only: rk_gauss_residual, rk_gauss_jacobian, rk_solve, MODEL_GC
 use vector_potentail_mod, only: torflux
 use diag_counters, only: count_event, EVT_NEWTON1_MAXIT, EVT_NEWTON2_MAXIT, &
@@ -41,109 +50,53 @@ use diag_counters, only: count_event, EVT_NEWTON1_MAXIT, EVT_NEWTON2_MAXIT, &
 
 implicit none
 
-    ! Implicit systems solved by newton_solve.
-    integer, parameter :: SYSTEM_EULER1 = 1, SYSTEM_EULER2 = 2, SYSTEM_MIDPOINT = 3, &
-                          SYSTEM_RK_GAUSS = 4, SYSTEM_RK_LOBATTO = 5
-    ! Largest system: four Gauss stages of four unknowns each.
-    integer, parameter :: NEWTON_NMAX = 16
-
 ! Tests may substitute a stepper; production code never reassigns it.
     procedure(orbit_timestep_sympl_i), pointer :: orbit_timestep_sympl => &
         orbit_timestep_sympl_dispatch
 
 contains
 
-    logical function accept_by_rate(xabs, tol, step_limited, dnorm_prev)
-        ! Rate-based acceptance of the current Newton iterate; dnorm_prev carries
-        ! the scaled norm of the previous correction between iterations.
-        real(dp), intent(in) :: xabs(:), tol(:)
-        logical, intent(in) :: step_limited
-        real(dp), intent(inout) :: dnorm_prev
-        real(dp) :: dnorm
+    logical function accept_warning_maxiter(x, xlast, tolref, rtol, warning_factor)
+        ! Continue only when the final Newton correction is finite and inside this
+        ! integrator's tolerance-scaled guard. Other iterates enter retry recovery.
+        real(dp), intent(in) :: x(:), xlast(:), tolref(:), rtol, warning_factor
+        integer :: warning
 
-        accept_by_rate = .false.
-        ! A zero tolerance demands the correction rule; no estimate meets it.
-        if (step_limited .or. .not. all(tol > 0d0)) then
-            dnorm_prev = 0d0
-            return
-        end if
-        dnorm = maxval(xabs/tol)
-        accept_by_rate = rate_converged(dnorm, dnorm_prev)
-        dnorm_prev = dnorm
-    end function accept_by_rate
+        warning = warning_maxiter_class(symplectic_newton_warning_mode, x, xlast, &
+                                        tolref, rtol, warning_factor)
+        call count_warning(warning)
+        accept_warning_maxiter = warning == WARNING_ACCEPT
+    end function accept_warning_maxiter
 
-pure logical function finite_newton_iterate(x)
-  real(dp), intent(in) :: x(:)
+    subroutine count_warning(warning)
+        integer, intent(in) :: warning
 
-  integer(int64), parameter :: exponent_mask = &
-    int(z'7FF0000000000000', int64)
-  integer(int64) :: bits
-  integer :: i
+        select case (warning)
+        case (WARNING_ACCEPT)
+            call count_event(EVT_WARNING_MAXIT_ACCEPT)
+        case (WARNING_REJECT_100)
+            call count_event(EVT_WARNING_MAXIT_REJECT_100)
+        case (WARNING_REJECT_1E4)
+            call count_event(EVT_WARNING_MAXIT_REJECT_1E4)
+        case (WARNING_REJECT_LARGE)
+            call count_event(EVT_WARNING_MAXIT_REJECT_LARGE)
+        case (WARNING_NONFINITE)
+            call count_event(EVT_WARNING_MAXIT_NONFINITE)
+        case (WARNING_AXIS_ACCEPT)
+            call count_event(EVT_WARNING_AXIS_CROSSING_ACCEPT)
+        end select
+    end subroutine count_warning
 
-  finite_newton_iterate = .false.
-  do i = 1, size(x)
-    bits = transfer(x(i), bits)
-    if (iand(bits, exponent_mask) == exponent_mask) return
-  end do
-  finite_newton_iterate = .true.
-end function finite_newton_iterate
+    logical function accept_warning_axis_crossing(si, x, xlast, tolref, rtol)
+        type(symplectic_integrator_t), intent(in) :: si
+        real(dp), intent(in) :: x(5), xlast(5), tolref(5), rtol
 
-logical function accept_warning_maxiter(x, xlast, tolref, rtol, warning_factor)
-  ! Continue only when the final Newton correction is finite and inside this
-  ! integrator's tolerance-scaled guard. Other iterates enter retry recovery.
-  real(dp), intent(in) :: x(:), xlast(:), tolref(:), rtol, warning_factor
-  real(dp) :: correction_ratio
-
-  accept_warning_maxiter = .false.
-  if (.not. symplectic_newton_warning_mode .or. rtol <= 0.0_dp) return
-  if (.not. finite_newton_iterate(x)) then
-    call count_event(EVT_WARNING_MAXIT_NONFINITE)
-    return
-  end if
-  if (.not. finite_newton_iterate(xlast)) then
-    call count_event(EVT_WARNING_MAXIT_NONFINITE)
-    return
-  end if
-  if (.not. finite_newton_iterate(tolref)) then
-    call count_event(EVT_WARNING_MAXIT_NONFINITE)
-    return
-  end if
-  correction_ratio = maxval(abs(x - xlast)/ &
-    max(rtol*abs(tolref), tiny(1.0_dp)))
-  accept_warning_maxiter = correction_ratio <= warning_factor
-  if (accept_warning_maxiter) then
-    call count_event(EVT_WARNING_MAXIT_ACCEPT)
-  else if (correction_ratio <= 100.0_dp) then
-    call count_event(EVT_WARNING_MAXIT_REJECT_100)
-  else if (correction_ratio <= 1.0e4_dp) then
-    call count_event(EVT_WARNING_MAXIT_REJECT_1E4)
-  else
-    call count_event(EVT_WARNING_MAXIT_REJECT_LARGE)
-  end if
-end function accept_warning_maxiter
-
-logical function accept_warning_axis_crossing(si, x, xlast, tolref, rtol)
-  ! Near the polar-coordinate axis, the endpoint and midpoint radii can change
-  ! sign while the physical step and its angular/momentum components have
-  ! converged. Accept only that local chart crossing; the caller immediately
-  ! maps the negative endpoint to the equivalent positive-radius chart.
-  type(symplectic_integrator_t), intent(in) :: si
-  real(dp), intent(in) :: x(5), xlast(5), tolref(5), rtol
-  real(dp), parameter :: axis_radius = 1.0e-6_dp
-
-  accept_warning_axis_crossing = .false.
-  if (.not. symplectic_newton_warning_mode .or. rtol <= 0.0_dp) return
-  if (si%z(1) < 0.0_dp .or. si%z(1) > axis_radius) return
-  if (.not. finite_newton_iterate(x)) return
-  if (.not. finite_newton_iterate(xlast)) return
-  if (.not. finite_newton_iterate(tolref)) return
-  if (x(1) >= 0.0_dp) return
-  if (max(abs(x(1)), abs(x(5))) > axis_radius) return
-  accept_warning_axis_crossing = all(abs(x(2:4) - xlast(2:4)) <= &
-    si%warning_factor*rtol*abs(tolref(2:4)))
-  if (accept_warning_axis_crossing) &
-    call count_event(EVT_WARNING_AXIS_CROSSING_ACCEPT)
-end function accept_warning_axis_crossing
+        accept_warning_axis_crossing = axis_crossing_converged( &
+                                       symplectic_newton_warning_mode, si%z(1), x, &
+                                       xlast, tolref, rtol, si%warning_factor)
+        if (accept_warning_axis_crossing) &
+            call count_event(EVT_WARNING_AXIS_CROSSING_ACCEPT)
+    end function accept_warning_axis_crossing
 
     subroutine advance_symplectic_with_retry(si, f, stepper, status, &
                                              accepted_fraction)
@@ -560,62 +513,28 @@ end subroutine jac_sympl_euler2
         type(field_can_t), intent(inout), optional :: fs(:)
         integer, intent(in), optional :: s
 
-        ! Fixed-size work arrays: automatic or temporary arrays of size n are
-        ! heap-allocated by some compilers on every call, which tripled the CPU
-        ! cost of a step. The Jacobian is passed by sequence association.
+        type(newton_state_t) :: state
+        ! Fixed size: arrays of size n are heap-allocated by some compilers on
+        ! every call. The Jacobian is passed by sequence association.
         real(dp) :: fvec(NEWTON_NMAX), fjac(NEWTON_NMAX*NEWTON_NMAX)
-        real(dp) :: correction(NEWTON_NMAX), xabs(NEWTON_NMAX), fabs(NEWTON_NMAX)
-        real(dp) :: tolref(NEWTON_NMAX), tolerance(NEWTON_NMAX)
-        real(dp) :: step_scale, dnorm_prev
-        integer :: radial_indices(NEWTON_NMAX), nradial, kit, ks, info
-        logical :: boundary_limited, step_limited, linear_failed, nonnegative
+        real(dp) :: flux_scale, aphi
+        integer :: stages
+        logical :: need_system
 
         if (n > NEWTON_NMAX) error stop 'newton_solve: system too large'
-        xlast = x
-        status = SYMPLECTIC_STEP_MAXITER
-        boundary_limited = .false.
-        step_limited = .false.
-        dnorm_prev = 0d0
-        tolref = 1d0
-
-        select case (scheme)
-        case (SYSTEM_EULER1)
-            nradial = 1
-            radial_indices(1) = 1
-            tolref(2) = dabs(1d1*torflux/f%ro0)
-        case (SYSTEM_EULER2)
-            nradial = 1
-            radial_indices(1) = 1
-            tolref(2:3) = twopi
-        case (SYSTEM_MIDPOINT)
-            nradial = 2
-            radial_indices(1:2) = [1, 5]
-            tolref(2:3) = twopi
-            tolref(4) = max(dabs(f%Aph), dabs(1d1*torflux/f%ro0))
-        case (SYSTEM_RK_GAUSS)
-            nradial = s
-            do ks = 1, s
-                radial_indices(ks) = 4*ks - 3
-            end do
-        case (SYSTEM_RK_LOBATTO)
-            nradial = s
-            radial_indices(1) = 1
-            do ks = 2, s
-                radial_indices(ks) = 4*ks - 5
-            end do
-        case default
-            error stop 'newton_solve: unknown system'
-        end select
-
-        do kit = 1, maxit
-            ! A negative radial label is the axis continuation (#370): the field
-            ! evaluation maps it to (|s|, theta+pi), and the caller commits the chart
-            ! switch on the converged solution.
-            if (radius_beyond(x, radial_indices(:nradial), .true.)) then
-                status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
-                return
-            end if
-
+        stages = 0
+        if (present(s)) stages = s
+        flux_scale = 0d0
+        aphi = 0d0
+        if (present(f)) then
+            flux_scale = 1d1*torflux/f%ro0
+            aphi = f%Aph
+        end if
+        call newton_begin(state, scheme, n, stages, maxit, atol, rtol, &
+                          symplectic_newton_warning_mode, si%warning_factor, &
+                          si%z(1), flux_scale, aphi)
+        call newton_advance(state, x, xlast, fvec, fjac, need_system)
+        do while (need_system)
             select case (scheme)
             case (SYSTEM_EULER1)
                 call eval_field(f, x(1), si%z(2), si%z(3), 2)
@@ -634,106 +553,11 @@ end subroutine jac_sympl_euler2
                 call f_rk_lobatto(si, fs, s, x, fvec, 2)
                 call jac_rk_lobatto(si, fs, s, fjac)
             end select
-            fabs(:n) = dabs(fvec(:n))
-            xlast = x
-
-            ! The Euler schemes keep their closed-form inverses: rk_solve would
-            ! round differently and change the iterates.
-            select case (scheme)
-            case (SYSTEM_EULER1)
-                call sympl_euler1_solve(fjac, fvec, correction, linear_failed)
-            case (SYSTEM_EULER2)
-                call solve_euler2_system(fjac, fvec, correction, linear_failed)
-            case default
-                correction(:n) = fvec(:n)
-                call rk_solve(n, fjac, correction, info)
-                linear_failed = info /= 0
-            end select
-            if (linear_failed) then
-                status = SYMPLECTIC_STEP_LINEAR_SOLVE
-                return
-            end if
-
-            call limit_radial_newton_step(x, correction(:n), radial_indices(:nradial), &
-                                          step_scale, step_limited)
-            boundary_limited = boundary_limited .or. step_limited
-            x = x - step_scale*correction(:n)
-
-            ! Midpoint and Euler-1 bound |r| like the guard before the step, the
-            ! Runge-Kutta schemes only r itself, and Euler-2 leaves it to the next
-            ! guard.
-            select case (scheme)
-            case (SYSTEM_EULER1, SYSTEM_MIDPOINT)
-                if (radius_beyond(x, radial_indices(:nradial), .true.)) then
-                    status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
-                    return
-                end if
-            case (SYSTEM_RK_GAUSS, SYSTEM_RK_LOBATTO)
-                if (radius_beyond(x, radial_indices(:nradial), .false.)) then
-                    status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
-                    return
-                end if
-            end select
-            xabs(:n) = dabs(x - xlast)
-
-            select case (scheme)
-            case (SYSTEM_EULER1)
-                tolref(2) = max(dabs(x(2)), tolref(2))
-            case (SYSTEM_MIDPOINT)
-                ! Don't take too small values in pphi as tolerance reference
-                tolref(4) = max(dabs(x(4)), tolref(4))
-            case (SYSTEM_RK_GAUSS)
-                do ks = 1, s
-                    tolref(4*ks - 3) = 1d0
-                    tolref(4*ks - 2) = twopi
-                    tolref(4*ks - 1) = twopi
-                    tolref(4*ks) = dabs(xlast(4*ks))
-                end do
-            case (SYSTEM_RK_LOBATTO)
-                tolref(1) = 1d0
-                tolref(2) = dabs(xlast(2))
-                do ks = 2, s
-                    tolref(4*ks - 2 - 3) = 1d0
-                    tolref(4*ks - 2 - 2) = twopi
-                    tolref(4*ks - 2 - 1) = twopi
-                    tolref(4*ks - 2) = dabs(xlast(4*ks - 2))
-                end do
-            end select
-            tolerance(:n) = rtol*tolref(:n)
-
-            ! Gauss stages accept only nonnegative radii.
-            nonnegative = .true.
-            if (scheme == SYSTEM_RK_GAUSS) then
-                do ks = 1, nradial
-                    nonnegative = nonnegative .and. x(radial_indices(ks)) >= 0d0
-                end do
-            end if
-
-            if (.not. step_limited .and. nonnegative .and. all(fabs(:n) < atol)) then
-                status = SYMPLECTIC_STEP_OK
-                return
-            end if
-            if (.not. step_limited .and. nonnegative .and. &
-                all(xabs(:n) < tolerance(:n))) then
-                status = SYMPLECTIC_STEP_OK
-                return
-            end if
-            if (accept_by_rate(xabs(:n), tolerance(:n), step_limited, dnorm_prev) &
-                .and. nonnegative) then
-                status = SYMPLECTIC_STEP_OK
-                return
-            end if
+            call newton_advance(state, x, xlast, fvec, fjac, need_system)
         end do
+        status = state%status
 
-        if (boundary_limited) then
-            if (step_limited .and. &
-                radial_boundary_reached(x, radial_indices(:nradial), rtol)) then
-                status = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
-            else
-                status = SYMPLECTIC_STEP_BOUNDARY_LIMITED
-            end if
-            return
-        end if
+        if (.not. state%maxit_reached) return
         select case (scheme)
         case (SYSTEM_EULER1)
             call count_event(EVT_NEWTON1_MAXIT)
@@ -741,69 +565,13 @@ end subroutine jac_sympl_euler2
             call count_event(EVT_NEWTON2_MAXIT)
         case (SYSTEM_MIDPOINT)
             call count_event(EVT_MIDPOINT_MAXIT)
-            if (accept_warning_axis_crossing(si, x, xlast, tolref, rtol)) then
-                status = SYMPLECTIC_STEP_OK
-                return
-            end if
         case (SYSTEM_RK_GAUSS)
             call count_event(EVT_RK_GAUSS_MAXIT)
         case (SYSTEM_RK_LOBATTO)
             call count_event(EVT_RK_LOBATTO_MAXIT)
         end select
-        if (accept_warning_maxiter(x, xlast, tolref(:n), rtol, si%warning_factor)) &
-            status = SYMPLECTIC_STEP_OK
+        call count_warning(state%warning)
     end subroutine newton_solve
-
-    pure logical function radius_beyond(x, radial_indices, absolute)
-        ! A loop rather than any() over a vector subscript, which needs a
-        ! temporary array.
-        real(dp), intent(in) :: x(:)
-        integer, intent(in) :: radial_indices(:)
-        logical, intent(in) :: absolute
-
-        integer :: k
-
-        radius_beyond = .false.
-        do k = 1, size(radial_indices)
-            if (absolute) then
-                radius_beyond = abs(x(radial_indices(k))) > sympl_rmax
-            else
-                radius_beyond = x(radial_indices(k)) > sympl_rmax
-            end if
-            if (radius_beyond) return
-        end do
-    end function radius_beyond
-
-    pure subroutine solve_euler2_system(fjac, fvec, correction, failed)
-        real(dp), intent(in) :: fjac(3, 3), fvec(3)
-        real(dp), intent(out) :: correction(3)
-        logical, intent(out) :: failed
-
-        real(dp) :: jinv(3, 3), det
-
-        det = fjac(1, 1)*fjac(2, 2)*fjac(3, 3) + fjac(1, 2)*fjac(2, 3)*fjac(3, 1) &
-              + fjac(1, 3)*fjac(2, 1)*fjac(3, 2) - fjac(1, 3)*fjac(2, 2)*fjac(3, 1) &
-              - fjac(1, 1)*fjac(2, 3)*fjac(3, 2) - fjac(1, 2)*fjac(2, 1)*fjac(3, 3)
-        failed = matrix3_near_singular(fjac, det)
-        if (failed) then
-            correction = 0d0
-            return
-        end if
-
-        jinv(1, 1) = fjac(2, 2)*fjac(3, 3) - fjac(2, 3)*fjac(3, 2)
-        jinv(1, 2) = fjac(1, 3)*fjac(3, 2) - fjac(1, 2)*fjac(3, 3)
-        jinv(1, 3) = fjac(1, 2)*fjac(2, 3) - fjac(1, 3)*fjac(2, 2)
-
-        jinv(2, 1) = fjac(2, 3)*fjac(3, 1) - fjac(2, 1)*fjac(3, 3)
-        jinv(2, 2) = fjac(1, 1)*fjac(3, 3) - fjac(1, 3)*fjac(3, 1)
-        jinv(2, 3) = fjac(1, 3)*fjac(2, 1) - fjac(1, 1)*fjac(2, 3)
-
-        jinv(3, 1) = fjac(2, 1)*fjac(3, 2) - fjac(3, 1)*fjac(2, 2)
-        jinv(3, 2) = fjac(1, 2)*fjac(3, 1) - fjac(3, 2)*fjac(1, 1)
-        jinv(3, 3) = fjac(1, 1)*fjac(2, 2) - fjac(1, 2)*fjac(2, 1)
-
-        correction = matmul(jinv, fvec)/det
-    end subroutine solve_euler2_system
 
     recursive subroutine newton2(si, f, x, atol, rtol, maxit, xlast, status)
         type(symplectic_integrator_t), intent(inout) :: si
@@ -817,15 +585,6 @@ end subroutine jac_sympl_euler2
         call newton_solve(SYSTEM_EULER2, 3, si, x, atol, rtol, maxit, xlast, &
                           status, f=f)
     end subroutine newton2
-
-pure logical function matrix3_near_singular(matrix, determinant)
-  real(dp), intent(in) :: matrix(3, 3), determinant
-  real(dp) :: matrix_scale
-
-  matrix_scale = maxval(abs(matrix))
-  matrix3_near_singular = matrix_scale == 0d0 .or. &
-    abs(determinant) <= epsilon(1d0)*matrix_scale**3
-end function matrix3_near_singular
 
 ! Small dense Newton solve (n = 2 .. 4*s) by in-house LU with partial pivoting.
 ! No library call and no allocation: LAPACK/OpenBLAS dgesv per step exhausted
@@ -853,40 +612,6 @@ pure logical function boundary_event_converged(fraction_width, radial_residual, 
   boundary_event_converged = fraction_width <= fraction_tolerance .and. &
     radial_residual <= radial_tolerance
 end function boundary_event_converged
-
-pure subroutine limit_radial_newton_step(x, correction, radial_indices, &
-    step_scale, limited)
-  real(dp), intent(in) :: x(:), correction(:)
-  integer, intent(in) :: radial_indices(:)
-  real(dp), intent(out) :: step_scale
-  logical, intent(out) :: limited
-
-  real(dp) :: outward_step
-  integer :: k, radius_index
-
-  step_scale = 1d0
-  if (sympl_rmax > 1d0) then
-    limited = .false.
-    return
-  end if
-  do k = 1, size(radial_indices)
-    radius_index = radial_indices(k)
-    outward_step = -correction(radius_index)
-    if (outward_step > 0d0) then
-      step_scale = min(step_scale, &
-        0.8d0*max(0d0, sympl_rmax - x(radius_index))/outward_step)
-    end if
-  end do
-  limited = step_scale < 1d0
-end subroutine limit_radial_newton_step
-
-pure logical function radial_boundary_reached(x, radial_indices, rtol)
-  real(dp), intent(in) :: x(:), rtol
-  integer, intent(in) :: radial_indices(:)
-
-  radial_boundary_reached = any(abs(sympl_rmax - x(radial_indices)) <= &
-    max(1d-10, 10d0*rtol))
-end function radial_boundary_reached
 
     recursive subroutine newton_midpoint(si, f, x, atol, rtol, maxit, xlast, status)
         type(symplectic_integrator_t), intent(inout) :: si
