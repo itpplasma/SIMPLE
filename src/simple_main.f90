@@ -109,6 +109,7 @@ module simple_main
     integer, parameter :: RECOVERY_STEP_TOROIDAL = 2
     integer, parameter :: RECOVERY_STEP_FULL_ORBIT = 3
     real(dp), parameter :: MOMENTUM_SANITY_FRACTION = 0.005_dp
+    real(dp), parameter :: SYMPLECTIC_JUMP_FRACTION = 0.2_dp
 
     type :: rk_recovery_state_t
         logical :: active = .false.
@@ -2677,24 +2678,26 @@ contains
         found = .true.
     end subroutine locate_reference_crossing
 
-    subroutine validate_rk_state(z_start, z_end, ierr, expected_momentum)
+    subroutine validate_rk_state(z_start, z_end, ierr, expected_momentum, &
+                                 momentum_fraction)
         use finite_check, only: is_finite
 
         real(dp), intent(in) :: z_start(5)
         real(dp), intent(inout) :: z_end(5)
         integer, intent(inout) :: ierr
-        real(dp), intent(in), optional :: expected_momentum
-        real(dp) :: momentum_reference
+        real(dp), intent(in), optional :: expected_momentum, momentum_fraction
+        real(dp) :: momentum_reference, fraction
         logical :: momentum_valid
 
         if (ierr /= 0) return
         momentum_reference = z_start(4)
         momentum_valid = .true.
+        fraction = MOMENTUM_SANITY_FRACTION
+        if (present(momentum_fraction)) fraction = momentum_fraction
         if (present(expected_momentum)) then
             momentum_reference = expected_momentum
             momentum_valid = abs(z_end(4) - momentum_reference) <= &
-                MOMENTUM_SANITY_FRACTION* &
-                max(abs(momentum_reference), tiny(1.0_dp))
+                fraction*max(abs(momentum_reference), tiny(1.0_dp))
         end if
         if (all(is_finite(z_end)) .and. z_end(4) > 0.0_dp .and. &
             abs(z_end(5)) <= 1.0_dp + 100.0_dp*epsilon(1.0_dp) .and. &
@@ -2789,7 +2792,7 @@ contains
             momentum_reference = z_physical(4)
         momentum_ierr = 0
         call validate_rk_state(z_start, z_physical, momentum_ierr, &
-                               momentum_reference)
+                               momentum_reference, SYMPLECTIC_JUMP_FRACTION)
         if (momentum_ierr /= 0) then
             z = z_start
             ierr = momentum_ierr

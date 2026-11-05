@@ -475,8 +475,10 @@ contains
             injected_stale_cache = excessive == 3
             radial_electric_potential_slope = 0.0_dp
             if (excessive == 2) radial_electric_potential_slope = -1.0_dp
-            injected_momentum_ratio = 1.004_dp
-            if (excessive == 1) injected_momentum_ratio = 1.006_dp
+            ! Symplectic Euler keeps the energy only to O(dt): a 2% endpoint
+            ! offset is a valid step; a 30% one is a jump to reject.
+            injected_momentum_ratio = 1.02_dp
+            if (excessive == 1) injected_momentum_ratio = 1.3_dp
             if (excessive == 2) injected_momentum_ratio = 1.1_dp
             do collisions = 0, 1
                 swcoll = collisions == 1
