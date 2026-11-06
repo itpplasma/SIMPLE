@@ -1,5 +1,5 @@
 module spectre_fo_hybrid
-    use, intrinsic :: iso_fortran_env, only: dp => real64
+    use, intrinsic :: iso_fortran_env, only: dp => real64, int64
     use magfie_sub, only: spectre_field
     use spectre_fo_field, only: spectre_fo_field_build, spectre_fo_field_local, &
         spectre_fo_field_locate, spectre_fo_local_t, fo_field_axisymmetric, &
@@ -25,9 +25,9 @@ module spectre_fo_hybrid
     !> as an RK45 substep, so it is not evaluated after every substep; an exit
     !> is detected at most this angle late, and always at the end of a call.
     real(dp), parameter :: EXIT_CHECK_ANGLE = 1.0_dp
-    real(dp), parameter :: ENTRY_MOMENTUM_TOL = 1.0e-3_dp
     integer, parameter :: MAX_SUBSTEPS = 100000
-    integer, parameter :: NPHASE = 64
+    !> Phases tried when the p_zeta match would need |v_par| > |v|.
+    integer, parameter :: ENTRY_PHASE_TRIES = 8
     type, public :: spectre_fo_state_t
         real(dp) :: x(3) = 0.0_dp
         real(dp) :: v(3) = 0.0_dp
@@ -52,7 +52,7 @@ module spectre_fo_hybrid
     public :: spectre_fo_enter, spectre_fo_to_gc, spectre_fo_configure
     public :: spectre_fo_radial_larmor
     public :: spectre_fo_advance_until_exit
-    public :: spectre_fo_canonical_pzeta
+    public :: spectre_fo_canonical_pzeta, entry_gyrophase
 contains
     subroutine spectre_fo_configure(tolerance, grid)
         real(dp), intent(in) :: tolerance
@@ -73,8 +73,8 @@ contains
         integer, intent(in) :: owner, iface
         integer, intent(out) :: status
         real(dp) :: x_gc(3), b(3), e1(3), e2(3), eperp(3), e_zeta(3)
-        real(dp) :: acov(3), bmod, vpar, vperp, target, alpha
-        integer :: locate_status
+        real(dp) :: acov(3), bmod, vpar, vperp, target, alpha, speed
+        integer :: locate_status, try
         state = spectre_fo_state_t()
         if (ro0_bar <= 0.0_dp .or. y(4) <= 0.0_dp) then
             status = SPECTRE_FO_INVALID_STATE
@@ -94,10 +94,23 @@ contains
         target = vpar*dot_product(b, e_zeta) + acov(3)/ro0_bar
         state%entry_pzeta = target
         state%entry_owner = owner
-        alpha = 0.0_dp
+        ! The guiding centre carries no gyrophase, so it is drawn uniformly.
+        ! A phase chosen to match p_zeta has no root on a current-carrying
+        ! sheet and biases the phase elsewhere (SIMPLE#528). In axisymmetry
+        ! the exact invariant p_zeta is matched through v_par instead, at
+        ! fixed speed: a correction O(rho*^2) off a sheet, O(rho*) on it.
+        alpha = entry_gyrophase(y)
         if (axisymmetric()) then
-            call solve_gyrophase(x_gc, state%u, owner, b, e1, e2, vpar, &
-                vperp, target, ro0_bar, alpha, status)
+            speed = sqrt(vpar**2 + vperp**2)
+            do try = 1, ENTRY_PHASE_TRIES
+                call match_pzeta(alpha, x_gc, state%u, owner, b, e1, e2, &
+                                 speed, target, dot_product(b, e_zeta), &
+                                 ro0_bar, vpar, vperp, status)
+                if (status /= SPECTRE_FO_GYROPHASE_FAIL) exit
+                ! Golden-angle steps keep the retried phases spread.
+                alpha = modulo(alpha + 2.399963229728653_dp, &
+                               8.0_dp*atan(1.0_dp))
+            end do
             if (status /= SPECTRE_FO_OK) return
         end if
         eperp = cos(alpha)*e1 + sin(alpha)*e2
@@ -120,6 +133,32 @@ contains
         end if
         state%active = .true.
     end subroutine spectre_fo_enter
+    pure real(dp) function entry_gyrophase(y) result(alpha)
+        !> Uniform gyrophase in [0, 2 pi) hashed from the guiding-centre state,
+        !> reproducible for any thread count.
+        real(dp), intent(in) :: y(5)
+        integer(int64), parameter :: MASK32 = 4294967295_int64
+        integer(int64), parameter :: MULT = 73244475_int64
+        real(dp), parameter :: QUANTUM = 1.0e-9_dp
+        integer(int64) :: q, h
+        integer :: i
+        ! Hash the state rounded to QUANTUM, so that round-off in coordinate
+        ! conversions does not change the phase.
+        h = 2166136261_int64
+        do i = 1, size(y)
+            q = nint(y(i)/QUANTUM, int64)
+            h = mix32(ieor(h, iand(q, MASK32)))
+            h = mix32(ieor(h, iand(shiftr(q, 32), MASK32)))
+        end do
+        alpha = 8.0_dp*atan(1.0_dp)*real(h, dp)/4294967296.0_dp
+    contains
+        pure integer(int64) function mix32(x) result(z)
+            integer(int64), intent(in) :: x
+            z = iand(ieor(shiftr(x, 16), x)*MULT, MASK32)
+            z = iand(ieor(shiftr(z, 16), z)*MULT, MASK32)
+            z = ieor(shiftr(z, 16), z)
+        end function mix32
+    end function entry_gyrophase
     subroutine spectre_fo_radial_larmor(y, owner, ro0_bar, rho_r, status)
         !> Gyroradius of the guiding-centre state y in rho_g units.
         real(dp), intent(in) :: y(5), ro0_bar
@@ -658,88 +697,58 @@ contains
             call locate_cart(state%x, state%u, state%owner, status)
     end subroutine synchronize_position
 
-    subroutine solve_gyrophase(x_gc, u_gc, owner, b, e1, e2, vpar, vperp, &
-            target, ro0_bar, alpha, status)
-        real(dp), intent(in) :: x_gc(3), u_gc(3), b(3), e1(3), e2(3)
-        real(dp), intent(in) :: vpar, vperp, target, ro0_bar
+    subroutine match_pzeta(alpha, x_gc, u_gc, owner, b, e1, e2, speed, target, &
+                           h_zeta, ro0_bar, vpar, vperp, status)
+        !> Secant solve for v_par at fixed speed and gyrophase such that the
+        !> particle p_zeta equals the guiding-centre value target.
+        real(dp), intent(in) :: alpha, x_gc(3), u_gc(3), b(3), e1(3), e2(3)
+        real(dp), intent(in) :: speed, target, ro0_bar
+        !> b.e_zeta at the guiding centre, the slope dp_zeta/dv_par.
+        real(dp), intent(in) :: h_zeta
         integer, intent(in) :: owner
-        real(dp), intent(out) :: alpha
+        real(dp), intent(inout) :: vpar, vperp
         integer, intent(out) :: status
-        real(dp) :: a0, a1, f0, f1, amid, fmid, scale, best_residual, best_alpha
-        integer :: i, ierr
-        logical :: have_previous
-        if (vperp <= sqrt(epsilon(1.0_dp))) then
-            alpha = 0.0_dp
-            call phase_residual(alpha, x_gc, u_gc, owner, b, e1, e2, vpar, &
-                vperp, target, ro0_bar, f0, ierr)
-            scale = max(abs(target), 1.0_dp)
-            if (ierr /= SPECTRE_FO_OK) then
-                status = ierr
-            else if (abs(f0) <= 1.0e-11_dp*scale) then
-                status = SPECTRE_FO_OK
-            else
-                status = SPECTRE_FO_GYROPHASE_FAIL
-            end if
+        real(dp) :: w0, w1, f0, f1, w2, scale
+        integer :: i
+        scale = max(abs(target), 1.0_dp)
+        w0 = vpar
+        call residual_at(w0, f0)
+        if (status /= SPECTRE_FO_OK) return
+        if (abs(f0) <= 1.0e-12_dp*scale) return
+        if (abs(h_zeta) <= epsilon(1.0_dp)*scale) then
+            status = SPECTRE_FO_GYROPHASE_FAIL
             return
         end if
-        have_previous = .false.
-        best_residual = huge(1.0_dp)
-        best_alpha = 0.0_dp
-        do i = 0, NPHASE
-            a1 = 8.0_dp*atan(1.0_dp)*real(i, dp)/real(NPHASE, dp)
-            call phase_residual(a1, x_gc, u_gc, owner, b, e1, e2, vpar, &
-                vperp, target, ro0_bar, f1, ierr)
-            if (ierr /= SPECTRE_FO_OK) then
-                have_previous = .false.
-                cycle
-            end if
-            if (abs(f1) < best_residual) then
-                best_residual = abs(f1)
-                best_alpha = a1
-            end if
-            if (f1 == 0.0_dp) then
-                alpha = a1
-                status = SPECTRE_FO_OK
-                return
-            end if
-            if (have_previous) then
-                if (f0*f1 <= 0.0_dp) exit
-            end if
-            a0 = a1
-            f0 = f1
-            have_previous = .true.
-        end do
-        if (i > NPHASE) then
-            ! The gyrophase variation of p_zeta, proportional to v_perp, does
-            ! not reach the guiding-centre value (strongly passing markers):
-            ! take the closest gyrophase only with a bounded momentum defect.
-            ! Entry records the actual signed defect; no order claim is made.
-            if (best_residual > ENTRY_MOMENTUM_TOL*max(abs(target), 1.0_dp)) then
-                status = SPECTRE_FO_GYROPHASE_FAIL
-                return
-            end if
-            alpha = best_alpha
-            status = SPECTRE_FO_OK
-            return
-        end if
+        w1 = w0 - f0/h_zeta
         do i = 1, 60
-            amid = 0.5_dp*(a0 + a1)
-            call phase_residual(amid, x_gc, u_gc, owner, b, e1, e2, vpar, &
-                vperp, target, ro0_bar, fmid, ierr)
-            if (ierr /= SPECTRE_FO_OK) then
-                status = ierr
+            if (abs(w1) > speed) then
+                status = SPECTRE_FO_GYROPHASE_FAIL
                 return
             end if
-            if (f0*fmid <= 0.0_dp) then
-                a1 = amid
-            else
-                a0 = amid
-                f0 = fmid
+            call residual_at(w1, f1)
+            if (status /= SPECTRE_FO_OK) return
+            if (abs(f1) <= 1.0e-12_dp*scale) then
+                vpar = w1
+                vperp = sqrt(max(speed**2 - w1**2, 0.0_dp))
+                return
             end if
+            if (f1 == f0) exit
+            w2 = w1 - f1*(w1 - w0)/(f1 - f0)
+            w0 = w1
+            f0 = f1
+            w1 = w2
         end do
-        alpha = 0.5_dp*(a0 + a1)
-        status = SPECTRE_FO_OK
-    end subroutine solve_gyrophase
+        status = SPECTRE_FO_GYROPHASE_FAIL
+    contains
+        subroutine residual_at(w, f)
+            real(dp), intent(in) :: w
+            real(dp), intent(out) :: f
+            real(dp) :: wperp
+            wperp = sqrt(max(speed**2 - w**2, 0.0_dp))
+            call phase_residual(alpha, x_gc, u_gc, owner, b, e1, e2, w, &
+                                wperp, target, ro0_bar, f, status)
+        end subroutine residual_at
+    end subroutine match_pzeta
     subroutine phase_residual(alpha, x_gc, u_gc, owner, b_gc, e1, e2, vpar, &
             vperp, target, ro0_bar, residual, status)
         real(dp), intent(in) :: alpha, x_gc(3), u_gc(3), b_gc(3), e1(3), e2(3)

@@ -33,7 +33,7 @@ program test_spectre_switch_roundtrip
     type(spectre_fo_state_t) :: state, ref
     character(len=1024) :: h5file
     real(dp) :: ro0, ro0_bar, theta, zeta, lam, alpha, rho_r, rho_l
-    real(dp) :: u(3), x_gc(3), b(3), bmod, e1(3), e2(3), eperp(3)
+    real(dp) :: u(3), x_gc(3), b(3), bmod, e1(3), e2(3), eperp(3), vref(3)
     real(dp) :: vpar, vperp, y(5), y_out(5), mu_in, mu_out, x_out(3), b_out(3)
     real(dp) :: bmod_out, xp(3), bp(3), bmod_p
     real(dp) :: dmu, dlam, drho, dang, dx, eps_loc
@@ -101,9 +101,14 @@ program test_spectre_switch_roundtrip
                         state%iface = 1
                         state%active = .true.
                         if (k == 1) then
-                            if (norm2(state%x - ref%x) > 1.0e-9_dp*rho_l .or. &
-                                norm2(state%v - ref%v) > 1.0e-12_dp) &
-                                error stop 'phase sweep differs from enter'
+                            ! Entry keeps the speed and places the particle one
+                            ! Larmor vector of its own v_perp from the centre.
+                            vref = ref%v - dot_product(ref%v, b)*b
+                            if (abs(norm2(ref%v) - norm2(state%v)) > &
+                                1.0e-12_dp*norm2(state%v) .or. &
+                                norm2(ref%x - x_gc - (ro0_bar/bmod)* &
+                                      cross(b, vref)) > 1.0e-9_dp*rho_l) &
+                                error stop 'entry is not a Larmor lift'
                             state = ref
                         end if
                         call spectre_fo_to_gc(state, ro0_bar, y_out, &
