@@ -4,7 +4,7 @@ module field_coils
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use neo_biotsavart, only: coils_t, load_coils_from_file, &
-        compute_vector_potential, compute_magnetic_field
+                              compute_vector_potential, compute_magnetic_field, clight
     use field_base, only: magnetic_field_t
     use cartesian_coordinates, only: cartesian_coordinate_system_t
 
@@ -46,7 +46,7 @@ contains
         type(coils_field_t), intent(out) :: field
 
         real(dp), parameter :: M_TO_CM = 100.0d0
-        real(dp), parameter :: A_TO_STATA = 2997924536.8431d0
+        real(dp), parameter :: A_TO_STATA = clight/10.0d0
 
         call load_coils_from_file(coils_file, field%coils)
 

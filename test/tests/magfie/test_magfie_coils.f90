@@ -26,6 +26,7 @@ program test_magfie_coils
     logical :: wout_exists, coils_exists
 
     n_failed = 0
+    call test_square_loop_units(n_failed)
     isw_field_type = VMEC
 
     inquire (file='wout.nc', exist=wout_exists)
@@ -106,6 +107,40 @@ program test_magfie_coils
     end if
 
 contains
+
+    subroutine test_square_loop_units(n_failed)
+        integer, intent(inout) :: n_failed
+        type(coils_field_t) :: square
+        real(dp), parameter :: current = 1d5
+        real(dp), parameter :: heights(4) = [0d0, 0.1d0, 0.4d0, 1d0]
+        real(dp) :: a(3), h(3), bmod, actual(3), expected, z
+        integer :: unit, i
+        character(*), parameter :: filename = 'square_loop_units.dat'
+
+        open (newunit=unit, file=filename, status='replace')
+        write (unit, *) 5
+        write (unit, *) - 1d0, -1d0, 0d0, current
+        write (unit, *) 1d0, -1d0, 0d0, current
+        write (unit, *) 1d0, 1d0, 0d0, current
+        write (unit, *) - 1d0, 1d0, 0d0, current
+        write (unit, *) - 1d0, -1d0, 0d0, 0d0
+        close (unit)
+        call create_coils_field(filename, square)
+        open (newunit=unit, file=filename, status='old')
+        close (unit, status='delete')
+
+        do i = 1, size(heights)
+            z = heights(i)
+            call square%evaluate([0d0, 0d0, 100d0*z], a, h, bmod)
+            actual = h*bmod*1d-4
+            ! Exact SI field on the symmetry axis of a square of half-side 1 m.
+            expected = 8d-7*current/((1d0 + z*z)*sqrt(2d0 + z*z))
+            if (maxval(abs(actual - [0d0, 0d0, expected])) > 1d-12*expected) then
+                print *, 'FAILED: square-loop SI field at height ', z, actual, expected
+                n_failed = n_failed + 1
+            end if
+        end do
+    end subroutine test_square_loop_units
 
     subroutine evaluate_raw_at_ref(field, x_spline, Acov, hcov, Bmod)
         !> Helper to evaluate raw coils at a spline coordinate point.

@@ -203,7 +203,9 @@ not add the plasma contribution to that field.
 
 `coils_field_t` evaluates Biot–Savart from libneo `neo_biotsavart`;
 `create_coils_field` converts coil positions from m to cm and currents from A
-to statA ($\times 2.99792458\times 10^{9}$).
+to statA ($\times 2.99792458\times 10^{9}$), using one tenth of the
+Gaussian segment kernel's speed of light in cm/s. The absolute field scale
+is checked against the exact SI field on the axis of a square loop.
 
 `boozer_chartmap_field_t` needs no VMEC initialisation;
 `is_boozer_chartmap` selects this path. On load it scales `Bmod` by
