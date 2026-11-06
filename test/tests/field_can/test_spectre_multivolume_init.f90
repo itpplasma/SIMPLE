@@ -89,16 +89,21 @@ program test_spectre_multivolume_init
     ! The particle, rather than its GC, must hit the absorbing edge. Compare
     ! the hybrid against a directly launched FO (whose edge event is checked
     ! independently by test_spectre_fo_events). The centre remains inside.
-    x = [2.0_dp - 1d-7, 3.0_dp*twopi/4.0_dp, 0.0_dp]
+    ! The entry gyrophase is sampled, so take the first start angle near
+    ! theta = 3 pi/2 whose particle starts inside the wall.
+    do k = 0, 15
+        x = [2.0_dp - 1d-7, 3.0_dp*twopi/4.0_dp + twopi*real(k, dp)/64, 0.0_dp]
+        y = [x, 1.0_dp, 0.8_dp]
+        call spectre_fo_enter(reference, y, spectre_mvol, spectre_mvol, &
+                              ro0/sqrt2, reference_status)
+        if (reference_status == SPECTRE_FO_OK) exit
+    end do
+    if (reference_status /= SPECTRE_FO_OK) error stop 'reference edge launch'
     call ref_to_integ(x, z(1:3))
-    z(4:5) = [1.0_dp, 0.8_dp]
+    z(4:5) = y(4:5)
     call init_sympl(si, f, z, dtaumin, dtaumin, relerr, integmode)
     call sympl_spectre_reset(state, si, spectre_mvol, integmode, crossing_level)
     call sympl_landing_stats_reset
-    y = [x, z(4:5)]
-    call spectre_fo_enter(reference, y, spectre_mvol, spectre_mvol, &
-        ro0/sqrt2, reference_status)
-    if (reference_status /= SPECTRE_FO_OK) error stop 'reference edge launch'
     reference%exit_rho = 1.0e6_dp
     do k = 1, 100
         call spectre_fo_advance_until_exit(reference, state%dt_std, ro0/sqrt2, &

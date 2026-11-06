@@ -48,14 +48,17 @@ $$
 \qquad \bar{\mathbf v} = \bar v_\parallel\mathbf b + \bar{\mathbf v}_\perp(\alpha).
 $$
 
-In an axisymmetric field the gyrophase $\alpha$ is chosen so that the
-particle's toroidal canonical momentum
-$\bar p_\zeta = \bar{\mathbf v}\cdot\mathbf e_\zeta + A_\zeta/\bar\rho_0$
-equals the GC value: 64 phases are sampled and a sign change is refined by
-bisection. If no root exists (strongly passing markers), the best phase is
-accepted only if $|\Delta\bar p_\zeta| \le 10^{-3}\max(|\bar p_\zeta|, 1)$;
-otherwise the step fails with `SPECTRE_FO_GYROPHASE_FAIL`. The accepted
-defect is kept in `spectre_fo_state_t%entry_pzeta_defect`.
+The gyrophase $\alpha$ is drawn uniformly, as a hash of the guiding-centre
+state rounded to $10^{-9}$, so it is reproducible for any thread count. In an
+axisymmetric field the particle's toroidal canonical momentum
+$\bar p_\zeta = \bar{\mathbf v}\cdot\mathbf e_\zeta + A_\zeta/\bar\rho_0$ is then
+made equal to the GC value by a secant solve for $\bar v_\parallel$ at fixed
+speed. Off a sheet the correction is $O(\rho_*^2)$; on a current-carrying
+sheet, where no gyrophase matches $\bar p_\zeta$ (SIMPLE#528), it is
+$O(\rho_*)$. If the match would need $|\bar v_\parallel| > |\bar{\mathbf v}|$,
+up to eight further phases are tried in golden-angle steps before the step
+fails with `SPECTRE_FO_GYROPHASE_FAIL`. The remaining defect is kept in
+`spectre_fo_state_t%entry_pzeta_defect`.
 
 ## FO integration
 

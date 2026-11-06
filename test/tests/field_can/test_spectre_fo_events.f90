@@ -10,8 +10,7 @@ program test_spectre_fo_events
     use field_spectre, only: spectre_field_t, create_spectre_field
     use spectre_fo_hybrid, only: spectre_fo_state_t, spectre_fo_configure, &
         spectre_fo_advance_until_exit, spectre_fo_canonical_pzeta, &
-        spectre_fo_enter, SPECTRE_FO_OK, SPECTRE_FO_LOSS, &
-        SPECTRE_FO_GYROPHASE_FAIL
+                       spectre_fo_enter, SPECTRE_FO_OK, SPECTRE_FO_LOSS, entry_gyrophase
     implicit none
 
     type(spectre_field_t) :: sf
@@ -20,7 +19,7 @@ program test_spectre_fo_events
     real(dp), parameter :: RO = 1.0e4_dp
     real(dp) :: u(3), x(3), b(3), bmod, n(3), tangent(3), dt, used, y(5)
     real(dp) :: p0, p1, defect, acov(3), hcov(3), scale, xref(3), vref(3)
-    integer :: status, owner, j, visits, cross_entries(2)
+    integer :: status, owner, j, visits, cross_entries(2), counts(8)
     logical :: exited
 
     call get_command_argument(1, h5file)
@@ -85,20 +84,17 @@ program test_spectre_fo_events
     if (visits == 0 .or. state%owner /= 1) error stop 'missing excursion witness'
 
     ! Entry at the sheet from either gauge, including Larmor samples on the
-    ! other side: the recorded residual must equal actual P in the entry gauge.
+    ! other side. Owner 1, j = 1 has no gyrophase that matches the guiding-
+    ! centre p_zeta (SIMPLE#528); every entry must still succeed, with the
+    ! particle's p_zeta in the entry gauge equal to the guiding-centre value.
     cross_entries = 0
     do owner = 1, 2
         do j = 1, 16
             y = [1.0_dp, 8.0_dp*atan(1.0_dp)*real(mod(j - 1, 8), dp)/8, &
                 0.0_dp, 1.0_dp, merge(0.5_dp, -0.5_dp, j <= 8)]
             call spectre_fo_enter(state, y, owner, 1, RO, status)
-            if (owner == 1 .and. j == 1) then
-                ! This no-root fixture exceeds the finite defect bound.
-                if (status /= SPECTRE_FO_GYROPHASE_FAIL .or. state%active) &
-                    error stop 'unbounded no-root entry was accepted'
-                cycle
-            end if
-            if (status /= SPECTRE_FO_OK) error stop 'sheet entry failed'
+            if (status /= SPECTRE_FO_OK .or. .not. state%active) &
+                error stop 'sheet entry failed'
             call spectre_fo_canonical_pzeta(state, RO, p1, status)
             if (status /= SPECTRE_FO_OK) error stop 'entry invariant sample failed'
             if (state%owner /= owner) then
@@ -112,16 +108,28 @@ program test_spectre_fo_events
                 p0 = (acov(3) - p0)*TESLA_TO_GAUSS*M_TO_CM**2/RO
                 p1 = p1 - real(state%owner - owner, dp)*p0
             end if
-            defect = p1 - state%entry_pzeta
-            if (abs(defect - state%entry_pzeta_defect) > 1.0e-10_dp) &
-                error stop 'entry residual uses inconsistent gauges'
-            if (abs(defect) > 1.0e-3_dp*max(abs(state%entry_pzeta), 1.0_dp)) &
-                error stop 'unbounded entry momentum defect'
+            if (abs(p1 - state%entry_pzeta) > &
+                1.0e-10_dp*max(abs(state%entry_pzeta), 1.0_dp)) &
+                error stop 'entry p_zeta differs from the guiding centre'
         end do
         print '(A,I0,A,I0)', 'entry owner ', owner, ' cross-gauge entries: ', &
             cross_entries(owner)
     end do
     if (any(cross_entries == 0)) error stop 'missing cross-gauge entry coverage'
+
+    ! The entry gyrophase is uniform over neighbouring guiding-centre states:
+    ! 4096 draws in 8 bins, chi-square with 7 degrees of freedom below its
+    ! 0.1 % quantile 24.3.
+    counts = 0
+    do j = 1, 4096
+        y = [1.0_dp - 1.0e-3_dp*real(j, dp)/4096, 0.25_dp, 0.0_dp, 1.0_dp, 0.3_dp]
+        p0 = entry_gyrophase(y)/(8.0_dp*atan(1.0_dp))
+        if (p0 < 0.0_dp .or. p0 >= 1.0_dp) error stop 'gyrophase outside [0, 2 pi)'
+        counts(1 + int(8*p0)) = counts(1 + int(8*p0)) + 1
+    end do
+    p0 = sum((real(counts, dp) - 512.0_dp)**2/512.0_dp)
+    print '(A,F8.3)', 'entry gyrophase chi-square (7 dof): ', p0
+    if (p0 > 24.3_dp) error stop 'entry gyrophase is not uniform'
 
     ! An outer-domain trial stage must retry deterministically. Only an
     ! actually located terminal point can report physical loss.
@@ -140,6 +148,7 @@ program test_spectre_fo_events
     call spectre_fo_advance_until_exit(state, dt, RO, used, y, owner, &
         exited, status)
     if (status /= SPECTRE_FO_LOSS) error stop 'outer-domain retry did not find loss'
+
     if (used < 0.0_dp .or. used > dt) error stop 'invalid loss time budget'
     if (state%u(1) < 2.0_dp - 2.0e-12_dp) error stop 'unlocalized outer loss'
     ! A particle already landed at the terminal sheet is lost at zero time,
@@ -148,6 +157,7 @@ program test_spectre_fo_events
         exited, status)
     if (status /= SPECTRE_FO_LOSS .or. abs(used) > tiny(1.0_dp)) &
         error stop 'terminal sheet did not retain zero-time loss'
+
     call zero_time_field_jump
     call inward_thin_volume
     call hidden_opposite_crossing
