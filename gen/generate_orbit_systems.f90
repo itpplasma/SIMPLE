@@ -6,31 +6,33 @@ program generate_orbit_systems
     ! derivative of its residual. The same file states v_par, H and p_theta
     ! once and generates their derivatives up to second order, and the
     ! guiding-centre rates of a Boozer field for OpenACC.
-    use fortsym_arena, only: arena_t
-    use fortsym_expr, only: expr_t, sym, num, func, func_in, operator(+), &
-                            operator(-), operator(*), operator(/), operator(**), &
-                            sqrt
+    use fortsym_expr, only: expr_t, sym, num, func, operator(+), operator(-), &
+                            operator(*), operator(/), operator(**), sqrt
     use fortsym_diff, only: diff, partial_derivative
-    use fortsym_subs, only: subs_many
     use fortsym_chain, only: chain_t, fold_numbers
-    use fortsym_kernel, only: kernel_spec_t, kernel_binding_t, emit_kernel, &
-                              KERNEL_SUBROUTINE
-    use fortsym_kernel_ir, only: kernel_ir_t, lower_kernel_ir
-    use fortsym_kernel_emit, only: kernel_emit_spec_t, emit_fortran_kernel_ir, &
-                                   emit_cuda_device_ir, TARGET_FORTRAN_OPENACC, &
+    use fortsym_context, only: context_t
+    use fortsym_kernel, only: kernel_spec_t
+    use fortsym_kernel_emit, only: kernel_emit_spec_t, TARGET_FORTRAN_OPENACC, &
                                    TARGET_CUDA
+    use fortsym_jet, only: derivative_set_t, partials, radial_mixed, jet_names_t, &
+                           members, listed, suffixed, bind, jet
+    use fortsym_emit, only: kernel_t, emit
     use fortgen_horner_emit, only: horner_kernel_spec_t, emit_horner_kernel
     use fortgen_kernel_target, only: HORNER_CUDA => TARGET_CUDA
     use fortgen_string, only: fg_str => str, fg_chars => chars
-    use fortsym_string, only: str_t, str, chars
+    use fortsym_string, only: str_t, str, chars, itoa, indexed, words
     implicit none
 
     type :: stage_t
         type(expr_t) :: H, pth, vpar, hth, hph
     end type stage_t
 
-    type(arena_t), target :: arena
-    type(kernel_binding_t), allocatable :: bindings(:)
+    !> Hessian packing of field_can_t: the upper 3x3 triangle by rows, then
+    !> the p_phi column.
+    integer, parameter :: PACKED(4, 4) = reshape([1, 2, 3, 7, 2, 4, 5, 8, &
+                                                  3, 5, 6, 9, 7, 8, 9, 10], [4, 4])
+    type(context_t) :: kernel_scope
+    type(derivative_set_t) :: second_without_pphi
     logical :: first_in_file
     character(4096) :: output_dir
     character(256) :: fortsym_revision
@@ -40,7 +42,6 @@ program generate_orbit_systems
     if (command_argument_count() > 0) call get_command_argument(1, output_dir)
     fortsym_revision = ''
     if (command_argument_count() > 1) call get_command_argument(2, fortsym_revision)
-    call arena%init()
 
     ! The kernels go to include files so that the OpenACC steps can compile
     ! the Euler and midpoint kernels in their own scope.
@@ -71,8 +72,12 @@ program generate_orbit_systems
     open (newunit=unit, file=trim(output_dir)//'/gpu_derivatives2_radial_mixed.inc', &
           status='replace', action='write')
     first_in_file = .true.
-    call emit_field_derivatives(unit, 'gpu_radial_mixed_second_derivatives', 2, &
-                                .true., .true.)
+    ! Second derivatives with a radial or p_phi index, for the two-variable
+    ! Euler Newton system; d2/dp_phi2 is never stored.
+    second_without_pphi = partials(4, 2)
+    second_without_pphi = second_without_pphi%without([0, 0, 0, 2])
+    call emit_field_derivatives(unit, 'gpu_radial_mixed_second_derivatives', &
+                                radial_or_pphi(second_without_pphi), .true., .true.)
     close (unit)
 
     call emit_rates_boozer(output_dir)
@@ -81,9 +86,11 @@ program generate_orbit_systems
     open (newunit=unit, file=trim(output_dir)//'/field_can_derivatives.inc', &
           status='replace', action='write')
     first_in_file = .true.
-    call emit_field_derivatives(unit, 'get_val', 0, .false., .false.)
-    call emit_field_derivatives(unit, 'get_derivatives', 1, .false., .false.)
-    call emit_field_derivatives(unit, 'get_derivatives2', 2, .false., .false.)
+    call emit_field_derivatives(unit, 'get_val', partials(4, 0), .false., .false.)
+    call emit_field_derivatives(unit, 'get_derivatives', partials(4, 1), .false., &
+                                .false.)
+    call emit_field_derivatives(unit, 'get_derivatives2', second_without_pphi, &
+                                .false., .false.)
     close (unit)
 
     open (newunit=unit, file=trim(output_dir)//'/boozer_h_derivatives.inc', &
@@ -113,29 +120,37 @@ contains
     function x(i) result(e)
         integer, intent(in) :: i
         type(expr_t) :: e
-        e = sym(arena, 'x('//itoa(i)//')')
+        e = sym('x', i)
     end function x
 
     function z(i) result(e)
         integer, intent(in) :: i
         type(expr_t) :: e
-        e = sym(arena, 'z('//itoa(i)//')')
+        e = sym('z', i)
     end function z
 
-    function coeff(name, k, l) result(e)
-        character(*), intent(in) :: name
-        integer, intent(in) :: k, l
-        type(expr_t) :: e
-        e = sym(arena, name//'('//itoa(k)//', '//itoa(l)//')')
-    end function coeff
+    !> The second derivatives of `set` with a radial or p_phi index.
+    function radial_or_pphi(set) result(subset)
+        type(derivative_set_t), intent(in) :: set
+        type(derivative_set_t) :: subset
+        subset = set%of_order(2)
+        subset = subset%touching([1, 4])
+    end function radial_or_pphi
 
-    function itoa(i) result(text)
-        integer, intent(in) :: i
-        character(:), allocatable :: text
-        character(16) :: buffer
-        write (buffer, '(i0)') i
-        text = trim(buffer)
-    end function itoa
+    !> Value, gradient and packed Hessian of the field_can_t quantity `name`
+    !> of variable `field`: field%name, field%dname, field%d2name.
+    function field_can(field, name) result(names)
+        character(*), intent(in) :: field, name
+        type(jet_names_t) :: names
+        names = members(field//'%'//name, field//'%d'//name, field//'%d2'//name, &
+                        PACKED)
+    end function field_can
+
+    !> Start a kernel with its own symbols and bindings.
+    subroutine new_kernel()
+        call kernel_scope%close()
+        call kernel_scope%open()
+    end subroutine new_kernel
 
     !> Field quantities of field_can_t variable `field` at the state
     !> (r, th, ph, pph); registers their bindings.
@@ -152,11 +167,11 @@ contains
         q%vpar = func('vpar_'//tag(field), args4)
         q%hth = func('hth_'//tag(field), args3)
         q%hph = func('hph_'//tag(field), args3)
-        call bind_quantity('H_'//tag(field), field//'%', 'H', 4)
-        call bind_quantity('pth_'//tag(field), field//'%', 'pth', 4)
-        call bind_quantity('vpar_'//tag(field), field//'%', 'vpar', 4)
-        call bind_quantity('hth_'//tag(field), field//'%', 'hth', 3)
-        call bind_quantity('hph_'//tag(field), field//'%', 'hph', 3)
+        call bind(q%H, field_can(field, 'H'))
+        call bind(q%pth, field_can(field, 'pth'))
+        call bind(q%vpar, field_can(field, 'vpar'))
+        call bind(q%hth, field_can(field, 'hth'))
+        call bind(q%hph, field_can(field, 'hph'))
     end function stage
 
     function tag(field) result(text)
@@ -171,42 +186,6 @@ contains
             end select
         end do
     end function tag
-
-    !> Value, gradient and packed Hessian of one field_can_t quantity. The
-    !> Hessian packing is that of get_derivatives2.
-    subroutine bind_quantity(head, prefix, name, nargs)
-        character(*), intent(in) :: head, prefix, name
-        integer, intent(in) :: nargs
-        integer :: i, j
-
-        call add_binding(head, [integer ::], prefix//name)
-        do i = 1, nargs
-            call add_binding(head, [i], prefix//'d'//name//'('//itoa(i)//')')
-            do j = i, nargs
-                call add_binding(head, [i, j], &
-                                 prefix//'d2'//name//'('//itoa(packed(i, j))//')')
-            end do
-        end do
-    end subroutine bind_quantity
-
-    pure integer function packed(i, j)
-        integer, intent(in) :: i, j
-        integer, parameter :: table(4, 4) = reshape([1, 2, 3, 7, 2, 4, 5, 8, &
-                                                     3, 5, 6, 9, 7, 8, 9, 10], [4, 4])
-        packed = table(i, j)
-    end function packed
-
-    subroutine add_binding(head, indices, replacement)
-        character(*), intent(in) :: head, replacement
-        integer, intent(in) :: indices(:)
-        type(kernel_binding_t) :: b
-
-        b%head = str(head)
-        if (size(indices) > 0) b%derivative_indices = indices
-        b%replacement = str(replacement)
-        if (.not. allocated(bindings)) allocate (bindings(0))
-        bindings = [bindings, b]
-    end subroutine add_binding
 
     function d(q, i) result(e)
         type(expr_t), intent(in) :: q
@@ -259,31 +238,26 @@ contains
     subroutine emit_rates_canonical(unit)
         integer, intent(in) :: unit
         type(stage_t) :: f
-        type(expr_t) :: rates(4), jac(16), state(4)
-        type(str_t), allocatable :: refs(:)
+        type(expr_t) :: rates(4), state(4)
+        type(kernel_t) :: k, jac
         integer :: i, j
 
-        call reset()
-        state = [sym(arena, 'r_'), sym(arena, 'th_'), sym(arena, 'ph_'), &
-                 sym(arena, 'pph_')]
+        call new_kernel()
+        state = [sym('r_'), sym('th_'), sym('ph_'), sym('pph_')]
         f = stage('f', state(1), state(2), state(3), state(4))
         rates = gc_rates(f, [d(f%H, 1), d(f%H, 2), d(f%H, 3)], &
                          [d(f%pth, 1), d(f%pth, 2), d(f%pth, 3)])
-        allocate (refs(4))
         do i = 1, 4
-            refs(i) = str('zdot('//itoa(i)//')')
+            call k%assign(indexed('zdot', i), rates(i))
         end do
-        call emit_one(unit, 'gc_rates_canonical', rates, refs, 'zdot', '(4)', &
+        call emit_one(unit, 'gc_rates_canonical', k, 'zdot', '(4)', &
                       ['f'], [character(6) ::], [character(6) ::])
-        deallocate (refs)
-        allocate (refs(16))
         do j = 1, 4
             do i = 1, 4
-                jac(i + 4*(j - 1)) = diff(rates(i), state(j))
-                refs(i + 4*(j - 1)) = str('jac('//itoa(i)//', '//itoa(j)//')')
+                call jac%assign(indexed('jac', i, j), diff(rates(i), state(j)))
             end do
         end do
-        call emit_one(unit, 'gc_rates_canonical_jacobian', jac, refs, 'jac', &
+        call emit_one(unit, 'gc_rates_canonical_jacobian', jac, 'jac', &
                       '(4, 4)', ['f'], [character(6) ::], [character(6) ::])
     end subroutine emit_rates_canonical
 
@@ -293,27 +267,25 @@ contains
         integer, intent(in) :: unit
         character(4), parameter :: names(5) = &
                                    [character(4) :: 'Ath', 'Aph', 'hth', 'hph', 'Bmod']
-        type(expr_t) :: state(3), quantity, gradient, roots(15)
-        type(str_t) :: refs(15)
-        integer :: i, j, q, k
+        type(expr_t) :: state(3), quantity, gradient, transported
+        type(kernel_t) :: k
+        integer :: i, j, q
 
-        call reset()
-        state = [sym(arena, 'r_'), sym(arena, 'th_'), sym(arena, 'ph_')]
+        call new_kernel()
+        state = [sym('r_'), sym('th_'), sym('ph_')]
         do q = 1, 5
             quantity = func('geometry_'//trim(names(q)), state)
-            call bind_quantity('geometry_'//trim(names(q)), 'f%', trim(names(q)), 3)
+            call bind(quantity, field_can('f', trim(names(q))))
             do i = 1, 3
-                k = i + 3*(q - 1)
                 gradient = diff(quantity, state(i))
-                roots(k) = gradient
+                transported = gradient
                 do j = 1, 3
-                    roots(k) = roots(k) + diff(gradient, state(j)) &
-                               *sym(arena, 'dz('//itoa(j)//')')
+                    transported = transported + diff(gradient, state(j))*sym('dz', j)
                 end do
-                refs(k) = str('gradients('//itoa(i)//', '//itoa(q)//')')
+                call k%assign(indexed('gradients', i, q), transported)
             end do
         end do
-        call emit_one(unit, 'gc_geometry_gradient_transport', roots, refs, &
+        call emit_one(unit, 'gc_geometry_gradient_transport', k, &
                       'gradients', '(3, 5)', ['f'], ['dz'], ['(3)'])
     end subroutine emit_geometry_gradient_transport
 
@@ -322,9 +294,9 @@ contains
         type(stage_t) :: f
         type(expr_t) :: res(2), dt, pthold
 
-        call reset()
-        dt = sym(arena, 'dt')
-        pthold = sym(arena, 'pthold')
+        call new_kernel()
+        dt = sym('dt')
+        pthold = sym('pthold')
         f = stage('f', x(1), z(2), z(3), x(2))
         res = euler1_residual(f%pth, [d(f%H, 1), d(f%H, 2), d(f%H, 3)], &
                               [d(f%pth, 1), d(f%pth, 2), d(f%pth, 3)], x(2), z(4), &
@@ -349,9 +321,9 @@ contains
         type(stage_t) :: f
         type(expr_t) :: res(3), dt, pthold
 
-        call reset()
-        dt = sym(arena, 'dt')
-        pthold = sym(arena, 'pthold')
+        call new_kernel()
+        dt = sym('dt')
+        pthold = sym('pthold')
         f = stage('f', x(1), x(2), x(3), z(4))
         res(1) = f%pth - pthold
         res(2) = d(f%pth, 1)*(x(2) - z(2)) - dt*d(f%H, 1)
@@ -368,15 +340,15 @@ contains
         type(expr_t) :: res(5), dt, pthold, half, pthdotbar, mid(4)
         integer :: i
 
-        call reset()
-        dt = sym(arena, 'dt')
-        pthold = sym(arena, 'pthold')
-        half = num(arena, 1)/num(arena, 2)
+        call new_kernel()
+        dt = sym('dt')
+        pthold = sym('pthold')
+        half = num(1)/num(2)
         ! The midpoint angles and momentum, (x + z)/2, enter as symbols of
         ! their own so that the chain-rule factor 1/2 multiplies each
         ! midpoint derivative once.
         do i = 2, 4
-            mid(i) = sym(arena, 'mid'//itoa(i))
+            mid(i) = sym('mid'//itoa(i))
         end do
         fm = stage('fmid', x(5), mid(2), mid(3), mid(4))
         fe = stage('fend', x(1), x(2), x(3), x(4))
@@ -388,7 +360,7 @@ contains
         res(4) = d(fm%pth, 1)*(x(4) - z(4)) &
                  + dt*(d(fm%H, 3)*d(fm%pth, 1) - d(fm%H, 1)*d(fm%pth, 3))
         res(5) = d(fm%pth, 1)*(fm%pth - pthold) + half*dt*pthdotbar
-        mid(1) = num(arena, 0)
+        mid(1) = num(0)
         call emit_pair(unit, 'midpoint', res, 5, [character(4) :: 'fmid', 'fend'], &
                        [character(6) :: 'dt', 'pthold', 'z', 'x'], ['(4)', '(5)'], &
                        mid=mid, mid_factor=half)
@@ -401,9 +373,9 @@ contains
         type(expr_t) :: res(4*s), dt, pthold, h
         integer :: k, l
 
-        call reset()
-        dt = sym(arena, 'dt')
-        pthold = sym(arena, 'pthold')
+        call new_kernel()
+        dt = sym('dt')
+        pthold = sym('pthold')
         do k = 1, s
             f(k) = stage('fs('//itoa(k)//')', x(4*k - 3), x(4*k - 2), &
                          x(4*k - 1), x(4*k))
@@ -414,7 +386,7 @@ contains
             res(4*k - 1) = x(4*k - 1) - z(3)
             res(4*k) = x(4*k) - z(4)
             do l = 1, s
-                h = dt*coeff('a', k, l)
+                h = dt*sym('a', k, l)
                 res(4*k - 3) = res(4*k - 3) - h*pthdot(f(l))
                 res(4*k - 2) = res(4*k - 2) - h*hprime(f(l))
                 res(4*k - 1) = res(4*k - 1) - h*phdot(f(l))
@@ -437,9 +409,9 @@ contains
         type(expr_t) :: res(4*s - 2), dt, pthold, h, hhat
         integer :: k, l, m
 
-        call reset()
-        dt = sym(arena, 'dt')
-        pthold = sym(arena, 'pthold')
+        call new_kernel()
+        dt = sym('dt')
+        pthold = sym('pthold')
         f(1) = stage('fs(1)', x(1), z(2), z(3), x(2))
         do k = 2, s
             m = 4*k - 2
@@ -448,7 +420,7 @@ contains
         res(1) = f(1)%pth - pthold
         res(2) = x(2) - z(4)
         do l = 1, s
-            hhat = dt*coeff('ahat', 1, l)
+            hhat = dt*sym('ahat', 1, l)
             res(1) = res(1) - hhat*pthdot(f(l))
             res(2) = res(2) - hhat*pphdot(f(l))
         end do
@@ -459,8 +431,8 @@ contains
             res(m - 1) = x(m - 1) - z(3)
             res(m) = x(m) - z(4)
             do l = 1, s
-                h = dt*coeff('a', k, l)
-                hhat = dt*coeff('ahat', k, l)
+                h = dt*sym('a', k, l)
+                hhat = dt*sym('ahat', k, l)
                 res(m - 3) = res(m - 3) - hhat*pthdot(f(l))
                 res(m - 2) = res(m - 2) - h*hprime(f(l))
                 res(m - 1) = res(m - 1) - h*phdot(f(l))
@@ -475,80 +447,42 @@ contains
     end subroutine emit_lobatto
 
     !> v_par, H and p_theta of field_can_t at (r, theta, phi, p_phi) and their
-    !> derivatives through `order`. v_par = (p_phi - A_phi/ro0)/h_phi is a
-    !> named intermediate, so every derivative reuses v_par and the lower
-    !> derivatives of v_par instead of re-expanding it. `radial_mixed` emits
-    !> only the second derivatives with a radial or p_phi index, which the
-    !> two-variable Euler Newton system reads, from the values and gradients
-    !> that get_derivatives already stored in f, and drops d2Phie: SIMPLE's
-    !> electric potential is linear in s. Reading them back from f, as the
-    !> hand-written device code did, keeps the OpenACC Euler kernel at its
-    !> register count. `reciprocal` multiplies by named reciprocals instead
-    !> of dividing.
-    subroutine emit_field_derivatives(unit, name, order, radial_mixed, reciprocal)
-        integer, intent(in) :: unit, order
+    !> partials in `set`. v_par = (p_phi - A_phi/ro0)/h_phi is a named
+    !> intermediate, so every derivative reuses v_par and the lower
+    !> derivatives of v_par instead of re-expanding it. `radial_mixed` reads
+    !> the values and gradients that get_derivatives already stored in f and
+    !> drops d2Phie: SIMPLE's electric potential is linear in s. Reading them
+    !> back from f, as the hand-written device code did, keeps the OpenACC
+    !> Euler kernel at its register count. `reciprocal` multiplies by named
+    !> reciprocals instead of dividing.
+    subroutine emit_field_derivatives(unit, name, set, radial_mixed, reciprocal)
+        integer, intent(in) :: unit
         character(*), intent(in) :: name
+        type(derivative_set_t), intent(in) :: set
         logical, intent(in) :: radial_mixed, reciprocal
-        character(4), parameter :: quantity(3) = ['vpar', 'H   ', 'pth ']
         type(chain_t) :: c
-        type(expr_t) :: x(4), aph, ath, hth, hph, bmod, phie, mu, ro0, q(3), e
-        type(expr_t), allocatable :: roots(:), old(:), new(:), defs(:)
-        type(str_t), allocatable :: refs(:)
-        integer, allocatable :: needed(:)
-        logical, allocatable :: keep(:)
-        integer :: i, j, m, k
+        type(kernel_t) :: k
+        type(expr_t) :: x(4), phie, q(3), e
+        type(expr_t), allocatable :: old(:), new(:)
+        integer :: i, j
 
-        call reset()
-        x = [sym(arena, 'r_'), sym(arena, 'th_'), sym(arena, 'ph_'), sym(arena, 'pphi')]
-        aph = field_function('Aph', x(1:3))
-        ath = field_function('Ath', x(1:3))
-        hth = field_function('hth', x(1:3))
-        hph = field_function('hph', x(1:3))
-        bmod = field_function('Bmod', x(1:3))
+        call new_kernel()
+        x = [sym('r_'), sym('th_'), sym('ph_'), sym('pphi')]
         phie = field_function('Phie', x(1:3))
-        mu = func_in(arena, 'mu')
-        ro0 = func_in(arena, 'ro0')
-        call add_binding('mu', [integer ::], 'f%mu')
-        call add_binding('ro0', [integer ::], 'f%ro0')
-
         call c%init(x)
-        call gc_quantities(c, x(4), aph, ath, hth, hph, bmod, phie, mu, ro0, &
+        call gc_quantities(c, x(4), field_function('Aph', x(1:3)), &
+                         field_function('Ath', x(1:3)), field_function('hth', x(1:3)), &
+                        field_function('hph', x(1:3)), field_function('Bmod', x(1:3)), &
+                           phie, stored('mu', 'f%mu'), stored('ro0', 'f%ro0'), &
                            q(1), q(2), q(3))
-        allocate (roots(0), refs(0))
-        do m = 1, 3
-            call add_root(roots, refs, q(m), 'f%'//trim(quantity(m)))
-        end do
-        if (order >= 1 .and. .not. radial_mixed) then
-            do m = 1, 3
-                do i = 1, 4
-                    call add_root(roots, refs, c%d(q(m), i), &
-                                  'f%d'//trim(quantity(m))//'('//itoa(i)//')')
-                end do
-            end do
-        end if
-        if (order >= 2) then
-            do m = 1, 3
-                do i = 1, 4
-                    do j = i, 4
-                        if (i == 4 .and. j == 4) cycle
-                        if (radial_mixed .and. i /= 1 .and. j /= 4) cycle
-                        e = c%d(c%d(q(m), i), j)
-                        call add_root(roots, refs, e, 'f%d2'//trim(quantity(m))//'('// &
-                                      itoa(packed(i, j))//')')
-                    end do
-                end do
-            end do
-        end if
+        call k%jet(q, [field_can('f', 'vpar'), field_can('f', 'H'), &
+                       field_can('f', 'pth')], set, chain=c)
         if (radial_mixed) then
-            ! Values and gradients come from f; the first three roots are
-            ! the values themselves and are not assigned again.
-            roots = roots(4:)
-            refs = refs(4:)
             allocate (old(0), new(0))
             do i = 1, 3
                 do j = i, 3
                     old = [old, partial_derivative(partial_derivative(phie, i), j)]
-                    new = [new, num(arena, 0)]
+                    new = [new, num(0)]
                 end do
             end do
             old = [old, q(1)]
@@ -557,24 +491,11 @@ contains
                 e = c%d(q(1), i)
                 if (c%index_of(e) == 0) cycle
                 old = [old, e]
-                new = [new, stored('dvpar_f'//itoa(i), 'f%dvpar('//itoa(i)//')')]
+                new = [new, stored('dvpar_f'//itoa(i), indexed('f%dvpar', i))]
             end do
-            do k = 1, size(roots)
-                roots(k) = fold_numbers(subs_many(roots(k), old, new))
-            end do
-            needed = c%needed(roots)
-            keep = [(.not. any(old%id == c%names(needed(k))%id), k=1, size(needed))]
-            needed = pack(needed, keep)
-            allocate (defs(size(needed)))
-            do k = 1, size(needed)
-                defs(k) = fold_numbers(subs_many(c%defs(needed(k)), old, new))
-            end do
-            call emit_with_locals(unit, name, c, needed, roots, refs, defs, reciprocal)
-            return
+            call k%substitute(old, new)
         end if
-        needed = c%needed(roots)
-        call emit_with_locals(unit, name, c, needed, roots, refs, c%defs(needed), &
-                              reciprocal)
+        call emit_with_locals(unit, name, k, c, reciprocal)
     end subroutine emit_field_derivatives
 
     !> v_par = (p_phi - A_phi/ro0)/h_phi as a named intermediate of chain c,
@@ -596,83 +517,44 @@ contains
         character(*), intent(in) :: head, member
         type(expr_t) :: e
 
-        e = func_in(arena, head)
-        call add_binding(head, [integer ::], member)
+        e = func(head)
+        call bind(e, members(member))
     end function stored
 
-    subroutine add_root(roots, refs, e, ref)
-        type(expr_t), allocatable, intent(inout) :: roots(:)
-        type(str_t), allocatable, intent(inout) :: refs(:)
-        type(expr_t), intent(in) :: e
-        character(*), intent(in) :: ref
-        roots = [roots, e]
-        refs = [refs, str(ref)]
-    end subroutine add_root
-
-    !> A field_can_t quantity of (r, theta, phi) with its value, gradient
-    !> and packed Hessian bound to the members f%<head>, f%d<head>, f%d2<head>.
+    !> A field_can_t quantity of (r, theta, phi) bound to its value, gradient
+    !> and packed Hessian members f%<head>, f%d<head>, f%d2<head>.
     function field_function(head, x3) result(e)
         character(*), intent(in) :: head
         type(expr_t), intent(in) :: x3(3)
         type(expr_t) :: e
-        integer :: a, b
 
         e = func(head, x3)
-        call add_binding(head, [integer ::], 'f%'//head)
-        do a = 1, 3
-            call add_binding(head, [a], 'f%d'//head//'('//itoa(a)//')')
-            do b = a, 3
-                call add_binding(head, [a, b], &
-                                 'f%d2'//head//'('//itoa(packed(a, b))//')')
-            end do
-        end do
+        call bind(e, field_can('f', head))
     end function field_function
 
     !> A kernel (f, pphi) that assigns the chain intermediates as locals and
-    !> the roots to the members of the inout field_can_t f.
-    subroutine emit_with_locals(unit, name, c, needed, roots, refs, defs, reciprocal)
+    !> the outputs to the members of the inout field_can_t f.
+    subroutine emit_with_locals(unit, name, k, c, reciprocal)
         integer, intent(in) :: unit
-        logical, intent(in) :: reciprocal
         character(*), intent(in) :: name
+        type(kernel_t), intent(in) :: k
         type(chain_t), intent(in) :: c
-        integer, intent(in) :: needed(:)
-        type(expr_t), intent(in) :: roots(:), defs(:)
-        type(str_t), intent(in) :: refs(:)
+        logical, intent(in) :: reciprocal
         type(kernel_spec_t) :: spec
-        type(str_t) :: source
-        character(:), allocatable :: message
-        logical :: good
-        integer :: k
 
-        spec%name = str(name)
-        spec%mode = KERNEL_SUBROUTINE
-        if (reads(roots, 'pphi') .or. reads(defs, 'pphi')) then
-            spec%args = [str('f'), str('pphi')]
+        spec = spec_of(name)
+        if (k%reads('pphi', c)) then
+            spec%args = words('f pphi')
             spec%arg_types = [str('type(field_can_t)'), str('real(dp)')]
-            spec%arg_intents = [str('inout'), str('in')]
+            spec%arg_intents = words('inout in')
         else
-            spec%args = [str('f')]
+            spec%args = words('f')
             spec%arg_types = [str('type(field_can_t)')]
-            spec%arg_intents = [str('inout')]
+            spec%arg_intents = words('inout')
         end if
         allocate (spec%outputs(0))
-        spec%locals = [(c%names(needed(k))%name(), k=1, size(needed))]
-        spec%output_references = [spec%locals, refs]
-        spec%bindings = bindings
-        spec%temp_prefix = str('t')
-        spec%generator = str('gen/generate_orbit_systems.f90')
-        if (len_trim(fortsym_revision) > 0) &
-            spec%generator_revision = str('fortsym '//trim(fortsym_revision))
-        spec%regenerate_command = str('generate_orbit_systems src/generated '// &
-                                      trim(fortsym_revision))
-        spec%openacc_routine_seq = .true.
         spec%reciprocal_temporaries = reciprocal
-        source = emit_kernel([defs, roots], spec, good, message=message)
-        if (.not. good) then
-            print *, 'emission of ', name, ' failed: ', message
-            error stop 1
-        end if
-        call write_source(unit, chars(source))
+        call write_source(unit, chars(emit(k, spec, chain=c)))
     end subroutine emit_with_locals
 
     !> h_theta = B_theta/B and h_phi = B_phi/B of a Boozer field, with
@@ -685,66 +567,49 @@ contains
         integer, intent(in) :: unit
         character(*), intent(in) :: name
         integer, intent(in) :: hessian(:)
-        integer, parameter :: row(6) = [1, 1, 1, 2, 2, 3], col(6) = [1, 2, 3, 2, 3, 3]
         character(3), parameter :: hname(2) = ['hth', 'hph'], bname(2) = ['Bth', 'Bph']
-        type(expr_t) :: x(3), h(2), b, e
-        type(expr_t), allocatable :: roots(:)
-        type(str_t), allocatable :: refs(:)
+        type(expr_t) :: x(3), h(2), b
+        type(expr_t), allocatable :: d(:)
+        type(derivative_set_t) :: first, second
+        type(jet_names_t) :: out
+        type(kernel_t) :: k
         type(kernel_spec_t) :: spec
-        type(str_t) :: source
-        character(:), allocatable :: message
-        logical :: good
-        integer :: m, i, k
+        integer :: m, i
 
-        call reset()
-        x = [sym(arena, 'r_'), sym(arena, 'th_'), sym(arena, 'ph_')]
+        call new_kernel()
+        x = [sym('r_'), sym('th_'), sym('ph_')]
         b = field_function('Bmod', x)
-        allocate (roots(0), refs(0), spec%args(0))
+        first = partials(3, 1)
+        second = partials(3, 2)
+        second = second%of_order(2)
+        second%orders = second%orders(:, hessian)
+        spec = spec_of(name)
+        allocate (spec%args(0))
         do m = 1, 2
-            h(m) = func(bname(m), x(1:1))/b
-            call add_binding(bname(m), [integer ::], bname(m))
-            call add_binding(bname(m), [1], 'd'//bname(m))
+            h(m) = func(bname(m), x(1:1))
+            call bind(h(m), listed(words(bname(m)//' d'//bname(m)//' d2'//bname(m))))
+            h(m) = h(m)/b
             spec%args = [spec%args, str(bname(m)), str('d'//bname(m))]
-            if (size(hessian) > 0) then
-                call add_binding(bname(m), [1, 1], 'd2'//bname(m))
-                spec%args = [spec%args, str('d2'//bname(m))]
-            end if
+            if (size(hessian) > 0) spec%args = [spec%args, str('d2'//bname(m))]
         end do
         do m = 1, 2
-            call add_root(roots, refs, h(m), 'f%'//hname(m))
-            do i = 1, 3
-                call add_root(roots, refs, diff(h(m), x(i)), &
-                              'f%d'//hname(m)//'('//itoa(i)//')')
+            out = members('f%'//hname(m), 'f%d'//hname(m), 'f%d2'//hname(m))
+            d = jet(h(m), first, x)
+            do i = 1, first%count()
+                call k%assign(out%of(first%orders(:, i)), d(i))
             end do
-            do k = 1, size(hessian)
-                e = diff(diff(h(m), x(row(hessian(k)))), x(col(hessian(k))))
-                call add_root(roots, refs, fold_numbers(e), &
-                              'f%d2'//hname(m)//'('//itoa(hessian(k))//')')
+            d = jet(h(m), second, x)
+            do i = 1, second%count()
+                call k%assign(out%of(second%orders(:, i)), fold_numbers(d(i)))
             end do
         end do
 
-        spec%name = str(name)
-        spec%mode = KERNEL_SUBROUTINE
         spec%args = [str('f'), spec%args]
         spec%arg_types = [str('type(field_can_t)'), &
-                          [(str('real(dp)'), k=2, size(spec%args))]]
-        spec%arg_intents = [str('inout'), [(str('in'), k=2, size(spec%args))]]
+                          [(str('real(dp)'), i=2, size(spec%args))]]
+        spec%arg_intents = [str('inout'), [(str('in'), i=2, size(spec%args))]]
         allocate (spec%outputs(0))
-        spec%output_references = refs
-        spec%bindings = bindings
-        spec%temp_prefix = str('t')
-        spec%generator = str('gen/generate_orbit_systems.f90')
-        if (len_trim(fortsym_revision) > 0) &
-            spec%generator_revision = str('fortsym '//trim(fortsym_revision))
-        spec%regenerate_command = str('generate_orbit_systems src/generated '// &
-                                      trim(fortsym_revision))
-        spec%openacc_routine_seq = .true.
-        source = emit_kernel(roots, spec, good, message=message)
-        if (.not. good) then
-            print *, 'emission of ', name, ' failed: ', message
-            error stop 1
-        end if
-        call write_source(unit, chars(source))
+        call write_source(unit, chars(emit(k, spec)))
     end subroutine emit_boozer_h
 
     !> Guiding-centre rates of a Boozer field: B(r, theta, phi) and the
@@ -757,34 +622,36 @@ contains
     subroutine emit_rates_boozer(output_dir)
         character(*), intent(in) :: output_dir
         type(chain_t) :: c
+        type(kernel_t) :: k
+        type(kernel_emit_spec_t) :: spec
         type(expr_t) :: x(4), mu, ro0, aphi, btheta, bphi, ath, bmod, vpar, h, pth
         type(expr_t) :: dh(3), dpth(3), hth, hph, rates(4), hp
-        type(expr_t), allocatable :: old(:), new(:), locals(:), values(:)
-        type(kernel_ir_t) :: ir
-        type(kernel_emit_spec_t) :: spec
-        integer, allocatable :: needed(:)
-        character(:), allocatable :: message
-        type(str_t) :: source
-        logical :: good
-        integer :: k, unit
+        type(str_t), allocatable :: sources(:)
+        integer :: i, unit
 
-        x = [sym(arena, 'r_'), sym(arena, 'th_'), sym(arena, 'ph_'), sym(arena, 'pph')]
-        mu = sym(arena, 'mu')
-        ro0 = sym(arena, 'ro0')
+        call new_kernel()
+        x = [sym('r_'), sym('th_'), sym('ph_'), sym('pph')]
+        mu = sym('mu')
+        ro0 = sym('ro0')
         aphi = func('aphi', x(1:1))
         btheta = func('btheta', x(1:1))
         bphi = func('bphi', x(1:1))
         ath = func('ath', x(1:1))
         bmod = func('bmod', x(1:3))
+        call bind(aphi, listed(words('aphi daphi')))
+        call bind(btheta, listed(words('btheta dbtheta')))
+        call bind(bphi, listed(words('bphi dbphi')))
+        call bind(ath, listed([str(''), str('torflux')]))
+        call bind(bmod, listed(words('bmod dbmod_r dbmod_theta dbmod_phi')))
         call c%init(x)
         hth = btheta/bmod
         hph = bphi/bmod
         vpar = bmod*c%let('vpar_over_b', c%let('q', x(4) - aphi/ro0)/bphi)
         h = vpar**2/2 + mu*bmod
         pth = hth*vpar + ath/ro0
-        do k = 1, 3
-            dh(k) = c%d(h, k)
-            dpth(k) = c%d(pth, k)
+        do i = 1, 3
+            dh(i) = c%d(h, i)
+            dpth(i) = c%d(pth, i)
         end do
         hp = dh(1)/dpth(1)
         rates(1) = -(dh(2) - hth/hph*dh(3))/dpth(1)
@@ -792,52 +659,18 @@ contains
         rates(3) = (vpar - hp*hth)/hph
         rates(4) = -(dh(3) - hp*dpth(3))
 
-        old = [aphi, partial_derivative(aphi, 1), btheta, &
-               partial_derivative(btheta, 1), bphi, partial_derivative(bphi, 1), &
-               bmod, partial_derivative(bmod, 1), partial_derivative(bmod, 2), &
-               partial_derivative(bmod, 3), partial_derivative(ath, 1)]
-        new = [sym(arena, 'aphi'), sym(arena, 'daphi'), sym(arena, 'btheta'), &
-               sym(arena, 'dbtheta'), sym(arena, 'bphi'), sym(arena, 'dbphi'), &
-               sym(arena, 'bmod'), sym(arena, 'dbmod_r'), sym(arena, 'dbmod_theta'), &
-               sym(arena, 'dbmod_phi'), sym(arena, 'torflux')]
-        do k = 1, 4
-            rates(k) = subs_many(fold_numbers(rates(k)), old, new)
+        spec = ir_spec_of('gc_rates_boozer')
+        spec%args = words('pph mu ro0 torflux aphi daphi btheta dbtheta bphi dbphi '// &
+                          'bmod dbmod_r dbmod_theta dbmod_phi')
+        spec%outputs = words('rdot thdot phdot pphdot')
+        do i = 1, 4
+            call k%assign(chars(spec%outputs(i)), fold_numbers(rates(i)))
         end do
-        needed = c%needed(rates)
-        locals = c%names(needed)
-        values = c%defs(needed)
-        do k = 1, size(values)
-            values(k) = subs_many(values(k), old, new)
-        end do
-        call lower_kernel_ir(rates, ir, good, message, locals, values, &
-                             share_products=.true.)
-        if (.not. good) then
-            print *, 'lowering of gc_rates_boozer failed: ', message
-            error stop 1
-        end if
-
-        spec%name = str('gc_rates_boozer')
-        spec%args = [str('pph'), str('mu'), str('ro0'), str('torflux'), str('aphi'), &
-                     str('daphi'), str('btheta'), str('dbtheta'), str('bphi'), &
-                     str('dbphi'), str('bmod'), str('dbmod_r'), str('dbmod_theta'), &
-                     str('dbmod_phi')]
-        spec%outputs = [str('rdot'), str('thdot'), str('phdot'), str('pphdot')]
-        spec%temp_prefix = str('t')
-        spec%generator = str('gen/generate_orbit_systems.f90')
-        if (len_trim(fortsym_revision) > 0) &
-            spec%generator_revision = str('fortsym '//trim(fortsym_revision))
-        spec%regenerate_command = str('generate_orbit_systems src/generated '// &
-                                      trim(fortsym_revision))
-        spec%target = TARGET_FORTRAN_OPENACC
-        source = emit_fortran_kernel_ir(ir, spec, good, message)
-        if (.not. good) then
-            print *, 'Fortran emission of gc_rates_boozer failed: ', message
-            error stop 1
-        end if
+       sources = emit(k, spec, [TARGET_FORTRAN_OPENACC], chain=c, share_products=.true.)
         open (newunit=unit, file=trim(output_dir)//'/gc_rates_boozer.inc', &
               status='replace', action='write')
         first_in_file = .true.
-        call write_source(unit, chars(source))
+        call write_source(unit, chars(sources(1)))
         close (unit)
     end subroutine emit_rates_boozer
 
@@ -850,23 +683,22 @@ contains
     subroutine emit_cuda_euler1_boozer(output_dir)
         character(*), intent(in) :: output_dir
         type(chain_t) :: c
+        type(kernel_t) :: k
         type(expr_t) :: x(4), sigma, mu, ro0, torflux, dt, pthold, pph_old
         type(expr_t) :: s, rho, aphi, bth, bph, bmod, hth, hph, vpar, h, pth
         type(expr_t) :: dh(3), dpth(3), res(2), roots(21)
-        type(expr_t), allocatable :: old(:), new(:), values(:)
         type(str_t), allocatable :: inputs(:), args(:), outputs(:)
-        integer, allocatable :: needed(:)
-        integer :: k, unit
+        integer :: i, unit
 
-        call reset()
-        x = [sym(arena, 'r'), sym(arena, 'th'), sym(arena, 'ph'), sym(arena, 'pph')]
-        sigma = sym(arena, 'sigma')
-        mu = sym(arena, 'mu')
-        ro0 = sym(arena, 'ro0')
-        torflux = sym(arena, 'torflux')
-        dt = sym(arena, 'dt')
-        pthold = sym(arena, 'pthold')
-        pph_old = sym(arena, 'pph_old')
+        call new_kernel()
+        x = [sym('r'), sym('th'), sym('ph'), sym('pph')]
+        sigma = sym('sigma')
+        mu = sym('mu')
+        ro0 = sym('ro0')
+        torflux = sym('torflux')
+        dt = sym('dt')
+        pthold = sym('pthold')
+        pph_old = sym('pph_old')
         call c%init(x)
         s = c%let('s', sigma*x(1))
         rho = c%let('rho', sqrt(s))
@@ -876,11 +708,11 @@ contains
         bmod = func('bmod', [rho, x(2), x(3)])
         hth = c%let('hth', bth/bmod)
         hph = c%let('hph', bph/bmod)
-        call gc_quantities(c, x(4), aphi, torflux*s, hth, hph, bmod, num(arena, 0), &
+        call gc_quantities(c, x(4), aphi, torflux*s, hth, hph, bmod, num(0), &
                            mu, ro0, vpar, h, pth)
-        do k = 1, 3
-            dh(k) = c%d(h, k)
-            dpth(k) = c%d(pth, k)
+        do i = 1, 3
+            dh(i) = c%d(h, i)
+            dpth(i) = c%d(pth, i)
         end do
         res = euler1_residual(pth, dh, dpth, x(4), pph_old, pthold, dt)
         roots = [res(1), res(2), c%d(res(1), 1), c%d(res(2), 1), c%d(res(1), 4), &
@@ -888,18 +720,13 @@ contains
                  c%d(dh(1), 4), c%d(dpth(1), 1), c%d(dpth(1), 4), vpar, c%d(vpar, 1), &
                  c%d(vpar, 4), hth, c%d(hth, 1), hph, c%d(hph, 1)]
 
-        allocate (old(0), new(0), inputs(0))
-        call spline_inputs(aphi, 'aphi', 1, old, new, inputs)
-        call spline_inputs(bth, 'bth', 1, old, new, inputs)
-        call spline_inputs(bph, 'bph', 1, old, new, inputs)
-        call spline_inputs(bmod, 'bmod', 3, old, new, inputs)
-        do k = 1, size(roots)
-            roots(k) = subs_many(fold_numbers(roots(k)), old, new)
-        end do
-        needed = c%needed(roots)
-        values = c%defs(needed)
-        do k = 1, size(values)
-            values(k) = subs_many(values(k), old, new)
+        ! The values and radial-mixed partials of each spline are inputs
+        ! <name>, <name>_r, <name>_t, <name>_p, <name>_rr, <name>_rt, <name>_rp.
+        inputs = [spline_input(aphi, 'aphi'), spline_input(bth, 'bth'), &
+                  spline_input(bph, 'bph'), spline_input(bmod, 'bmod')]
+        outputs = [words('fvec1 fvec2 jac11 jac21 jac12 jac22'), aux_names()]
+        do i = 1, size(roots)
+            call k%assign(chars(outputs(i)), fold_numbers(roots(i)))
         end do
 
         open (newunit=unit, file=trim(output_dir)//'/cuda_euler1_boozer.cuh', &
@@ -910,51 +737,23 @@ contains
         write (unit, '(a)') '#pragma once'
         call emit_cuda_spline_leaves(unit)
         args = [words('r th ph pph sigma mu ro0 torflux dt pthold pph_old'), inputs]
-        outputs = [words('fvec1 fvec2 jac11 jac21 jac12 jac22'), aux_names()]
-        call emit_cuda(unit, 'euler1_boozer_system', roots, c%names(needed), values, &
-                       args, outputs)
+        call emit_cuda(unit, 'euler1_boozer_system', k, args, outputs, c)
         call emit_cuda_euler1_advance(unit)
         close (unit)
     end subroutine emit_cuda_euler1_boozer
 
-    !> The values and radial-mixed derivatives of spline `q` become the
-    !> inputs <name>, <name>_r, <name>_t, <name>_p, <name>_rr, <name>_rt and
-    !> <name>_rp (first argument r, then t and p).
-    subroutine spline_inputs(q, name, nargs, old, new, inputs)
+    !> Bind spline `q` to the input names of its radial-mixed partials, first
+    !> argument r, then t and p, and return those names.
+    function spline_input(q, name) result(inputs)
         type(expr_t), intent(in) :: q
         character(*), intent(in) :: name
-        integer, intent(in) :: nargs
-        type(expr_t), allocatable, intent(inout) :: old(:), new(:)
-        type(str_t), allocatable, intent(inout) :: inputs(:)
-        character(1), parameter :: axis(3) = ['r', 't', 'p']
-        type(expr_t) :: d1, d1i
-        integer :: i
+        type(str_t), allocatable :: inputs(:)
+        type(jet_names_t) :: names
 
-        call add_input(q, name, old, new, inputs)
-        do i = 1, nargs
-            call add_input(partial_derivative(q, i), name//'_'//axis(i), old, new, &
-                           inputs)
-        end do
-        d1 = partial_derivative(q, 1)
-        call add_input(partial_derivative(d1, 1), name//'_rr', old, new, inputs)
-        do i = 2, nargs
-            d1i = partial_derivative(d1, i)
-            call add_input(d1i, name//'_r'//axis(i), old, new, inputs)
-            old = [old, partial_derivative(partial_derivative(q, i), 1)]
-            new = [new, sym(arena, name//'_r'//axis(i))]
-        end do
-    end subroutine spline_inputs
-
-    subroutine add_input(e, input, old, new, inputs)
-        type(expr_t), intent(in) :: e
-        character(*), intent(in) :: input
-        type(expr_t), allocatable, intent(inout) :: old(:), new(:)
-        type(str_t), allocatable, intent(inout) :: inputs(:)
-
-        old = [old, e]
-        new = [new, sym(arena, input)]
-        inputs = [inputs, str(input)]
-    end subroutine add_input
+        names = suffixed(name, ['r', 't', 'p'])
+        call bind(q, names, radial_mixed(q%nargs()))
+        inputs = names%all(radial_mixed(q%nargs()))
+    end function spline_input
 
     !> After convergence the CUDA step moves p_theta and the field quantities
     !> of the last Newton evaluation to the converged (r, p_phi) to first order,
@@ -969,32 +768,16 @@ contains
                  words('vpar dvpar_r dvpar_p hth dhth_r hph dhph_r')]
     end function aux_names
 
-    !> Space-separated names as strings.
-    function words(text) result(list)
-        character(*), intent(in) :: text
-        type(str_t), allocatable :: list(:)
-        integer :: first, last
-
-        allocate (list(0))
-        last = 0
-        do
-            first = verify(text(last + 1:), ' ')
-            if (first == 0) exit
-            first = last + first
-            last = index(text(first:)//' ', ' ') + first - 2
-            list = [list, str(text(first:last))]
-        end do
-    end function words
-
     function named(name) result(e)
         character(*), intent(in) :: name
         type(expr_t) :: e
-        e = sym(arena, name)
+        e = sym(name)
     end function named
 
     subroutine emit_cuda_euler1_advance(unit)
         integer, intent(in) :: unit
-        type(expr_t) :: dr, dp, pth, dh1, dpth1, vpar, hth, hph, hp, roots(3)
+        type(expr_t) :: dr, dp, pth, dh1, dpth1, vpar, hth, hph, hp
+        type(kernel_t) :: advance
 
         dr = named('dr')
         dp = named('dp')
@@ -1005,10 +788,10 @@ contains
         hth = named('hth') + named('dhth_r')*dr
         hph = named('hph') + named('dhph_r')*dr
         hp = dh1/dpth1
-        roots(1) = pth
-        roots(2) = named('z2') + named('dt')*hp
-        roots(3) = named('z3') + named('dt')*(vpar - hp*hth)/hph
-        call emit_cuda(unit, 'euler1_boozer_advance', roots, [expr_t ::], [expr_t ::], &
+        call advance%assign('pth_new', pth)
+        call advance%assign('z2_new', named('z2') + named('dt')*hp)
+        call advance%assign('z3_new', named('z3') + named('dt')*(vpar - hp*hth)/hph)
+        call emit_cuda(unit, 'euler1_boozer_advance', advance, &
                        [words('dr dp dt z2 z3'), aux_names()], &
                        words('pth_new z2_new z3_new'))
     end subroutine emit_cuda_euler1_advance
@@ -1023,16 +806,12 @@ contains
 
         spec%target = HORNER_CUDA
         spec%name = fg_str('spline3d_o555_rmix_nq1')
-        spec%dimension = 3
+        spec%derivatives = radial_mixed(3)
         spec%degree = [5, 5, 5]
         spec%nq = 1
-        spec%orders = reshape([0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, &
-                               2, 0, 0, 1, 1, 0, 1, 0, 1], [3, 7])
         call emit_horner(unit, spec)
-        deallocate (spec%orders)
-        spec%dimension = 1
+        spec%derivatives = partials(1, 2)
         spec%degree = [5, 0, 0]
-        spec%max_order = 2
         spec%name = fg_str('spline1d_o5_d2_nq1')
         call emit_horner(unit, spec)
         spec%nq = 2
@@ -1054,44 +833,50 @@ contains
         call write_source(unit, source)
     end subroutine emit_horner
 
-    subroutine emit_cuda(unit, name, roots, locals, values, args, outputs)
+    subroutine emit_cuda(unit, name, k, args, outputs, c)
         integer, intent(in) :: unit
         character(*), intent(in) :: name
-        type(expr_t), intent(in) :: roots(:), locals(:), values(:)
+        type(kernel_t), intent(in) :: k
         type(str_t), intent(in) :: args(:), outputs(:)
-        type(kernel_ir_t) :: ir
+        type(chain_t), intent(in), optional :: c
         type(kernel_emit_spec_t) :: spec
-        type(str_t) :: source
-        character(:), allocatable :: message
-        logical :: good
+        type(str_t), allocatable :: sources(:)
 
-        if (size(locals) > 0) then
-            call lower_kernel_ir(roots, ir, good, message, locals, values, &
-                                 share_products=.true.)
-        else
-            call lower_kernel_ir(roots, ir, good, message, share_products=.true.)
-        end if
-        if (.not. good) then
-            print *, 'lowering of ', name, ' failed: ', message
-            error stop 1
-        end if
-        spec%name = str(name)
+        spec = ir_spec_of(name)
         spec%args = args
         spec%outputs = outputs
+        sources = emit(k, spec, [TARGET_CUDA], chain=c, share_products=.true.)
+        call write_source(unit, chars(sources(1)))
+    end subroutine emit_cuda
+
+    !> Name, temporaries and provenance shared by every Fortran leaf.
+    function spec_of(name) result(spec)
+        character(*), intent(in) :: name
+        type(kernel_spec_t) :: spec
+
+        spec%name = str(name)
         spec%temp_prefix = str('t')
         spec%generator = str('gen/generate_orbit_systems.f90')
         if (len_trim(fortsym_revision) > 0) &
             spec%generator_revision = str('fortsym '//trim(fortsym_revision))
         spec%regenerate_command = str('generate_orbit_systems src/generated '// &
                                       trim(fortsym_revision))
-        spec%target = TARGET_CUDA
-        source = emit_cuda_device_ir(ir, spec, good, message)
-        if (.not. good) then
-            print *, 'CUDA emission of ', name, ' failed: ', message
-            error stop 1
-        end if
-        call write_source(unit, chars(source))
-    end subroutine emit_cuda
+        spec%openacc_routine_seq = .true.
+    end function spec_of
+
+    !> Name, temporaries and provenance shared by every IR leaf.
+    function ir_spec_of(name) result(spec)
+        character(*), intent(in) :: name
+        type(kernel_emit_spec_t) :: spec
+
+        spec%name = str(name)
+        spec%temp_prefix = str('t')
+        spec%generator = str('gen/generate_orbit_systems.f90')
+        if (len_trim(fortsym_revision) > 0) &
+            spec%generator_revision = str('fortsym '//trim(fortsym_revision))
+        spec%regenerate_command = str('generate_orbit_systems src/generated '// &
+                                      trim(fortsym_revision))
+    end function ir_spec_of
 
     subroutine write_source(unit, source)
         integer, intent(in) :: unit
@@ -1108,11 +893,6 @@ contains
         write (unit, '(a)') text
     end subroutine write_source
 
-    subroutine reset()
-        if (allocated(bindings)) deallocate (bindings)
-        allocate (bindings(0))
-    end subroutine reset
-
     !> Emit `<name>_residual` and `<name>_jacobian`, each with only the
     !> arguments its expressions read. Real arguments are listed in `reals`
     !> with the shapes of the array ones (all but dt and pthold) in `shapes`.
@@ -1125,146 +905,65 @@ contains
         integer, intent(in), optional :: stages
         !> Symbols that stand for mid_factor*(x(j) + z(j)), j = 2, 3, 4.
         type(expr_t), intent(in), optional :: mid(4), mid_factor
-        type(expr_t) :: jac(n*n)
-        type(str_t), allocatable :: refs(:)
+        type(kernel_t) :: residual, jacobian
+        type(expr_t) :: entry
         integer :: i, j
 
-        allocate (refs(n))
         do i = 1, n
-            refs(i) = str('fvec('//itoa(i)//')')
+            call residual%assign(indexed('fvec', i), res(i))
         end do
-        call emit_one(unit, name//'_residual', res, refs, 'fvec', &
+        call emit_one(unit, name//'_residual', residual, 'fvec', &
                       '('//itoa(n)//')', fields, reals, shapes, stages)
 
-        deallocate (refs)
-        allocate (refs(n*n))
         do j = 1, n
             do i = 1, n
-                jac(i + n*(j - 1)) = diff(res(i), x(j))
+                entry = diff(res(i), x(j))
                 if (present(mid) .and. j >= 2 .and. j <= 4) &
-                    jac(i + n*(j - 1)) = jac(i + n*(j - 1)) &
-                                         + mid_factor*diff(res(i), mid(j))
-                refs(i + n*(j - 1)) = str('jac('//itoa(i)//', '//itoa(j)//')')
+                    entry = entry + mid_factor*diff(res(i), mid(j))
+                call jacobian%assign(indexed('jac', i, j), entry)
             end do
         end do
-        call emit_one(unit, name//'_jacobian', jac, refs, 'jac', &
+        call emit_one(unit, name//'_jacobian', jacobian, 'jac', &
                       '('//itoa(n)//', '//itoa(n)//')', fields, reals, shapes, stages)
     end subroutine emit_pair
 
-    subroutine emit_one(unit, name, roots, refs, output, output_shape, fields, &
-                        reals, shapes, stages)
+    subroutine emit_one(unit, name, k, output, output_shape, fields, reals, shapes, &
+                        stages)
         integer, intent(in) :: unit
         character(*), intent(in) :: name, output, output_shape
-        type(expr_t), intent(in) :: roots(:)
-        type(str_t), intent(in) :: refs(:)
+        type(kernel_t), intent(in) :: k
         character(*), intent(in) :: fields(:), reals(:), shapes(:)
         integer, intent(in), optional :: stages
         type(kernel_spec_t) :: spec
-        type(str_t), allocatable :: args(:), arg_shapes(:), arg_types(:)
-        type(str_t) :: source
-        character(:), allocatable :: message, text
-        logical :: good
-        integer :: k, kshape
+        integer :: i, kshape
 
-        allocate (args(0), arg_shapes(0), arg_types(0))
+        spec = spec_of(name)
+        allocate (spec%args(0), spec%arg_shapes(0), spec%arg_types(0))
         kshape = 0
-        do k = 1, size(reals)
-            if (trim(reals(k)) /= 'dt' .and. trim(reals(k)) /= 'pthold') &
+        do i = 1, size(reals)
+            if (trim(reals(i)) /= 'dt' .and. trim(reals(i)) /= 'pthold') &
                 kshape = kshape + 1
-            if (.not. reads(roots, trim(reals(k)))) cycle
-            args = [args, str(trim(reals(k)))]
-            arg_types = [arg_types, str('real(dp)')]
-            if (trim(reals(k)) == 'dt' .or. trim(reals(k)) == 'pthold') then
-                arg_shapes = [arg_shapes, str('')]
+            if (.not. k%reads(trim(reals(i)))) cycle
+            spec%args = [spec%args, str(trim(reals(i)))]
+            spec%arg_types = [spec%arg_types, str('real(dp)')]
+            if (trim(reals(i)) == 'dt' .or. trim(reals(i)) == 'pthold') then
+                spec%arg_shapes = [spec%arg_shapes, str('')]
             else
-                arg_shapes = [arg_shapes, str(trim(shapes(kshape)))]
+                spec%arg_shapes = [spec%arg_shapes, str(trim(shapes(kshape)))]
             end if
         end do
-        do k = 1, size(fields)
-            args = [args, str(trim(fields(k)))]
-            arg_types = [arg_types, str('type(field_can_t)')]
+        do i = 1, size(fields)
+            spec%args = [spec%args, str(trim(fields(i)))]
+            spec%arg_types = [spec%arg_types, str('type(field_can_t)')]
             if (present(stages)) then
-                arg_shapes = [arg_shapes, str('('//itoa(stages)//')')]
+                spec%arg_shapes = [spec%arg_shapes, str(indexed('', stages))]
             else
-                arg_shapes = [arg_shapes, str('')]
+                spec%arg_shapes = [spec%arg_shapes, str('')]
             end if
         end do
-
-        spec%name = str(name)
-        spec%mode = KERNEL_SUBROUTINE
-        spec%args = args
-        spec%arg_shapes = arg_shapes
-        spec%arg_types = arg_types
         spec%outputs = [str(output)]
         spec%output_shapes = [str(output_shape)]
-        spec%output_references = refs
-        spec%bindings = bindings
-        spec%temp_prefix = str('t')
-        spec%generator = str('gen/generate_orbit_systems.f90')
-        if (len_trim(fortsym_revision) > 0) &
-            spec%generator_revision = str('fortsym '//trim(fortsym_revision))
-        spec%regenerate_command = str('generate_orbit_systems src/generated '// &
-                                      trim(fortsym_revision))
-        spec%openacc_routine_seq = .true.
-        source = emit_kernel(roots, spec, good, message=message)
-        if (.not. good) then
-            print *, 'emission of ', name, ' failed: ', message
-            error stop 1
-        end if
-        text = chars(source)
-        do while (len(text) > 0)
-            if (text(len(text):len(text)) /= new_line('a')) exit
-            text = text(:len(text) - 1)
-        end do
-        if (.not. first_in_file) write (unit, '(a)') ''
-        first_in_file = .false.
-        write (unit, '(a)') text
+        call write_source(unit, chars(emit(k, spec)))
     end subroutine emit_one
-
-    !> Whether the symbol name, or an element name(...) of it, occurs in the
-    !> printed form of the roots outside applied-function arguments. A
-    !> conservative textual check suffices: an unused declared argument only
-    !> costs a compiler warning, a missing one fails the build.
-    logical function reads(roots, name)
-        type(expr_t), intent(in) :: roots(:)
-        character(*), intent(in) :: name
-        integer :: k
-
-        reads = .false.
-        do k = 1, size(roots)
-            if (contains_symbol(roots(k), name)) then
-                reads = .true.
-                return
-            end if
-        end do
-    end function reads
-
-    recursive logical function contains_symbol(e, name) result(found)
-        use fortsym_arena, only: NK_SYM, NK_FUNC
-        type(expr_t), intent(in) :: e
-        character(*), intent(in) :: name
-        character(:), allocatable :: symbol
-        integer :: k, first
-
-        found = .false.
-        select case (e%kind())
-        case (NK_SYM)
-            symbol = chars(e%name())
-            found = symbol == name .or. index(symbol, name//'(') == 1
-        case default
-            first = 1
-            ! Arguments of bound applied functions are never printed.
-            if (e%kind() == NK_FUNC) then
-                symbol = chars(e%name())
-                if (index(symbol, 'Derivative') == 1 .or. index(symbol, '_') > 0) return
-            end if
-            do k = first, e%nargs()
-                if (contains_symbol(e%arg(k), name)) then
-                    found = .true.
-                    return
-                end if
-            end do
-        end select
-    end function contains_symbol
 
 end program generate_orbit_systems

@@ -1,17 +1,15 @@
 program generate_axis_maps
     ! Native q is either normalized flux (R=sqrt(q)) or radius (R=q).
     ! No chart selection or boundary policy belongs in this algebraic kernel.
-    use fortsym_arena, only: arena_t
     use fortsym_expr, only: expr_t, sym, sin, cos, sqrt
     use fortsym_expr, only: operator(+), operator(-), operator(*), &
                             operator(/), operator(**)
     use fortsym_diff, only: diff
     use fortsym_kernel, only: kernel_spec_t, emit_kernel, KERNEL_SUBROUTINE
-    use fortsym_string, only: str, chars, str_t
+    use fortsym_string, only: str, chars, str_t, words
     use fortsym_engine, only: engine_result_t
     use fortsym_engine_symengine, only: symengine_engine_t, make_symengine_engine
     implicit none
-    type(arena_t), target :: arena
     type(symengine_engine_t) :: engine
     type(expr_t) :: q, theta, r2, x, y, qdot, thetadot
     type(expr_t) :: radius, inverse_q, radial_factor
@@ -22,15 +20,14 @@ program generate_axis_maps
 
     output_dir = 'src/generated'
     if (command_argument_count() > 0) call get_command_argument(1, output_dir)
-    call arena%init()
-    engine = make_symengine_engine(arena)
-    q = sym(arena, 'q')
-    theta = sym(arena, 'theta')
-    r2 = sym(arena, 'r2')
-    x = sym(arena, 'x')
-    y = sym(arena, 'y')
-    qdot = sym(arena, 'dq')
-    thetadot = sym(arena, 'dtheta')
+    engine = make_symengine_engine()
+    q = sym('q')
+    theta = sym('theta')
+    r2 = sym('r2')
+    x = sym('x')
+    y = sym('y')
+    qdot = sym('dq')
+    thetadot = sym('dtheta')
     r2 = x*x + y*y
     open (newunit=output_unit, file=trim(output_dir)//'/axis_map_generated.f90', &
           status='replace', action='write', iostat=ios)
@@ -50,19 +47,16 @@ program generate_axis_maps
         end if
         forward(1) = radius*cos(theta)
         forward(2) = radius*sin(theta)
-        call emit('axis_'//mode//'_forward', forward, &
-                  [str('q'), str('theta')], [str('x'), str('y')])
+        call emit('axis_'//mode//'_forward', forward, words('q theta'), words('x y'))
         inverse = [inverse_q]
-        call emit('axis_'//mode//'_inverse', inverse, &
-                  [str('x'), str('y')], [str('q')])
+        call emit('axis_'//mode//'_inverse', inverse, words('x y'), words('q'))
         ! qdot=(dq/dr2)*2*(x*xdot+y*ydot). Angular velocity supplies
         ! the orthogonal component. Derive radial factor from the inverse map.
         radial_factor = 1/(x*diff(inverse_q, x) + y*diff(inverse_q, y))
         pullback(1) = radial_factor*qdot*x - thetadot*y
         pullback(2) = radial_factor*qdot*y + thetadot*x
-        call emit('axis_'//mode//'_velocity', pullback, &
-                  [str('x'), str('y'), str('dq'), str('dtheta')], &
-                  [str('dx'), str('dy')])
+        call emit('axis_'//mode//'_velocity', pullback, words('x y dq dtheta'), &
+                  words('dx dy'))
     end do
     write (output_unit, '(a)') 'end module axis_map_generated'
     close (output_unit)
