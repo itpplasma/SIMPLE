@@ -4,6 +4,7 @@ module spectre_fo_hybrid
     use spectre_fo_field, only: spectre_fo_field_build, spectre_fo_field_local, &
         spectre_fo_field_locate, spectre_fo_local_t, fo_field_axisymmetric, &
         FO_AXIS_RADIUS
+    use spectre_kernels_generated, only: spectre_larmor_lift, spectre_gc_projection
     implicit none
     private
     integer, parameter, public :: SPECTRE_FO_OK = 0
@@ -72,7 +73,7 @@ contains
         real(dp), intent(in) :: y(5), ro0_bar
         integer, intent(in) :: owner, iface
         integer, intent(out) :: status
-        real(dp) :: x_gc(3), b(3), e1(3), e2(3), eperp(3), e_zeta(3)
+        real(dp) :: x_gc(3), b(3), e1(3), e2(3), e_zeta(3)
         real(dp) :: acov(3), bmod, vpar, vperp, target, alpha, speed
         integer :: locate_status, try
         state = spectre_fo_state_t()
@@ -113,9 +114,8 @@ contains
             end do
             if (status /= SPECTRE_FO_OK) return
         end if
-        eperp = cos(alpha)*e1 + sin(alpha)*e2
-        state%v = vpar*b + vperp*eperp
-        state%x = x_gc + (ro0_bar/bmod)*cross(b, vperp*eperp)
+        call lift(x_gc, b, e1, e2, bmod, vpar, vperp, alpha, ro0_bar, state%x, &
+                  state%v)
         call spectre_fo_field_locate(state%x, state%u, state%owner, locate_status)
         if (locate_status /= 0) then
             status = SPECTRE_FO_LOCATE_FAIL
@@ -284,7 +284,7 @@ contains
         logical, intent(out), optional :: exited
         type(spectre_fo_local_t) :: gc
         real(dp) :: b(3), b_gc(3), acov(3), e_zeta(3), bmod
-        real(dp) :: vpar, vperp(3), rho_l(3), x_gc(3), speed, acov_gc(3)
+        real(dp) :: vpar, vperp2, rho_l(3), x_gc(3), speed, acov_gc(3)
         real(dp) :: e_zeta_gc(3), pzeta, h_zeta, perpendicular_energy, u_gc(3)
         real(dp) :: radial_larmor
         integer :: owner_gc
@@ -309,9 +309,11 @@ contains
         ! GC variables so a short recovery excursion cannot create a hidden
         ! p_zeta kick.
         if (axisymmetric()) pzeta = state%entry_pzeta
-        vperp = state%v - vpar*b
-        rho_l = (ro0_bar/bmod)*cross(b, vperp)
-        x_gc = particle%x - rho_l
+        call spectre_gc_projection(particle%x(1), particle%x(2), particle%x(3), &
+                                   state%v(1), state%v(2), state%v(3), &
+                                   b(1), b(2), b(3), bmod, ro0_bar, &
+                                   x_gc(1), x_gc(2), x_gc(3), vpar, vperp2)
+        rho_l = particle%x - x_gc
         u_gc = state%u - matmul(rho_l, particle%dual)
         owner_gc = state%owner
         call locate_cart(x_gc, u_gc, owner_gc, status)
@@ -749,6 +751,15 @@ contains
                                 wperp, target, ro0_bar, f, status)
         end subroutine residual_at
     end subroutine match_pzeta
+    subroutine lift(x_gc, b, e1, e2, bmod, vpar, vperp, alpha, ro0_bar, x, v)
+        real(dp), intent(in) :: x_gc(3), b(3), e1(3), e2(3), bmod, vpar, vperp
+        real(dp), intent(in) :: alpha, ro0_bar
+        real(dp), intent(out) :: x(3), v(3)
+        call spectre_larmor_lift(x_gc(1), x_gc(2), x_gc(3), b(1), b(2), b(3), &
+                                 e1(1), e1(2), e1(3), e2(1), e2(2), e2(3), bmod, &
+                                 vpar, vperp, alpha, ro0_bar, &
+                                 x(1), x(2), x(3), v(1), v(2), v(3))
+    end subroutine lift
     subroutine phase_residual(alpha, x_gc, u_gc, owner, b_gc, e1, e2, vpar, &
             vperp, target, ro0_bar, residual, status)
         real(dp), intent(in) :: alpha, x_gc(3), u_gc(3), b_gc(3), e1(3), e2(3)
@@ -756,17 +767,15 @@ contains
         integer, intent(in) :: owner
         real(dp), intent(out) :: residual
         integer, intent(out) :: status
-        real(dp) :: eperp(3), x(3), u(3), b(3), bmod, acov(3), e_zeta(3), v(3)
+        real(dp) :: x(3), u(3), b(3), bmod, acov(3), e_zeta(3), v(3)
         integer :: trial_owner
-        eperp = cos(alpha)*e1 + sin(alpha)*e2
         call logical_sample(u_gc, owner, x, b, bmod, acov, e_zeta, status)
         if (status /= SPECTRE_FO_OK) return
-        x = x_gc + (ro0_bar/bmod)*cross(b_gc, vperp*eperp)
+        call lift(x_gc, b_gc, e1, e2, bmod, vpar, vperp, alpha, ro0_bar, x, v)
         u = u_gc
         trial_owner = owner
         call cart_sample(x, u, trial_owner, b, bmod, acov, e_zeta, status)
         if (status /= SPECTRE_FO_OK) return
-        v = vpar*b_gc + vperp*eperp
         residual = dot_product(v, e_zeta) &
             + (acov(3) - gauge_shift(owner, trial_owner))/ro0_bar - target
     end subroutine phase_residual
