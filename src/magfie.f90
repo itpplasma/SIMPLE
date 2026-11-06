@@ -251,6 +251,10 @@ end subroutine magfie_refcoords
         real(dp), intent(in) :: x(3)
         real(dp), intent(out) :: bmod, sqrtg
         real(dp), intent(out) :: bder(3), hcovar(3), hctrvr(3), hcurl(3)
+        ! Central differences with step h have truncation error h**2 max|f'''|/6
+        ! and rounding error about eps max|f|/h; for fields varying on unit
+        ! scales of the reference coordinates both are near 1e-11 relative.
+        ! Below h from the axis the one-sided difference errs by h max|f''|/2.
         real(dp), parameter :: derivative_step = 1.0e-5_dp
         real(dp) :: Acov(3), dBmod(3), dhcov(3, 3)
         real(dp) :: ap(3), hp(3), bp, am(3), hm(3), bm
