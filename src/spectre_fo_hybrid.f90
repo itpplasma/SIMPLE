@@ -19,10 +19,10 @@ module spectre_fo_hybrid
     integer, parameter, public :: SPECTRE_FO_OUTSIDE = 7
     real(dp), parameter :: OWNER_EPS = 1.0e-12_dp
     integer, parameter :: STAGE_IN = 0, STAGE_OUT = 1
-    !> RK45 relative tolerance, configured before parallel tracing.
     !> Outer-boundary loss when the particle touches it (finite Larmor radius)
     !> instead of when its guiding centre crosses it.
     logical :: particle_outer_loss = .false.
+    !> RK45 relative tolerance, configured before parallel tracing.
     real(dp) :: fo_tolerance = 1.0e-9_dp
     ! At most 0.1 rad (1/63 of a gyro-period). A cross-and-return hidden
     ! between stage samples has circular-orbit depth <= rho_L*(1-cos(0.05)),
