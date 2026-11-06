@@ -173,6 +173,9 @@ volume and full orbits near the interfaces, where the field jumps:
 or :math:`s` with ``spectre_sbeg_is_toroidal_flux = .true.`` (``startmode = 1``). The interface
 controls ``spectre_fo_entry_larmor``, ``spectre_fo_tolerance`` and
 ``spectre_fo_grid`` are explained in :doc:`/model/extensions`.
+``spectre_outer_loss`` sets the loss at the outer boundary: ``'guiding_centre'``
+(default) when the guiding centre crosses it, as for VMEC and GVEC fields,
+or ``'particle'`` when the full orbit touches it.
 
 Each volume builds its own Meiss canonical coordinates on a grid of
 ``spectre_ncon_r`` (default 48) by ``spectre_ncon_th`` (48) by

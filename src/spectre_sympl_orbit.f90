@@ -16,8 +16,8 @@ module spectre_sympl_orbit
     use orbit_symplectic, only: orbit_timestep_sympl, orbit_sympl_init
     use spectre_fo_hybrid, only: spectre_fo_state_t, spectre_fo_enter, &
         spectre_fo_advance_until_exit, spectre_fo_radial_larmor, SPECTRE_FO_OK, &
-        SPECTRE_FO_LOSS
-    use params, only: spectre_fo_entry_larmor
+                                 SPECTRE_FO_LOSS, SPECTRE_FO_OUTSIDE
+    use params, only: spectre_fo_entry_larmor, spectre_outer_loss
     use diag_counters, only: count_event, EVT_WARNING_STEP_SKIP
 
     implicit none
@@ -316,8 +316,9 @@ contains
             call landed_state(si, f, real(iface, dp), direction, y_iface)
             used = used + h_land
             call update_landing_stats(resid)
-            if (state%mvol == 1) then
-                ! The separate single-volume GC model retains its GC edge.
+            if (state%mvol == 1 .or. (iface == state%mvol .and. &
+                                      trim(spectre_outer_loss) /= 'particle')) then
+                ! The guiding centre crossed the outer boundary.
                 ierr = SYMPL_SPECTRE_LOSS
                 t_frac = used/state%dt_std
                 exit
@@ -560,6 +561,8 @@ contains
         call integrator_state(si, f, y)
         if (state%mvol == 1) return
         k = nint(y(1))
+        ! With the guiding-centre loss only interior sheets need the full orbit.
+        if (trim(spectre_outer_loss) /= 'particle') k = min(k, state%mvol - 1)
         if (k < 1 .or. k > state%mvol) return
         call spectre_fo_radial_larmor(y, nint(state%home_hi), ro0/sqrt2, rho_r, &
             status)
@@ -604,6 +607,13 @@ contains
         owner_out = owner
         exited = .false.
         call spectre_fo_enter(state%fo, y, owner, iface, ro0/sqrt2, ierr)
+        if (ierr == SPECTRE_FO_OUTSIDE) then
+            ! No gyrophase keeps the particle inside while its guiding centre
+            ! is inside: the guiding centre continues.
+            ierr = SPECTRE_FO_OK
+            exited = .true.
+            return
+        end if
         if (ierr == SPECTRE_FO_LOSS) then
             ! A GC initially inside the wall can map to a particle outside it.
             ! This is an immediate physical loss, with no accepted FO time.

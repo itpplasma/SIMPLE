@@ -25,7 +25,7 @@ and ``DOC/config.md`` for additional usage, units and option interactions.
 &config
 -------
 
-Source: ``src/params.f90:266``.
+Source: ``src/params.f90:270``.
 
 .. list-table::
    :header-rows: 1
@@ -637,6 +637,12 @@ Source: ``src/params.f90:266``.
      - ``3``
      - ``(/32, 64, 32/)``
      - Per-volume FO spline points: rho, theta, zeta per field period.
+   * - ``spectre_outer_loss``
+     - ``character(len=16)``
+     - ``default``
+     - ``scalar``
+     - ``'guiding_centre'``
+     - Loss at the outer SPECTRE boundary: 'guiding_centre' when the guiding centre crosses it, as for VMEC and GVEC fields; 'particle' when the full orbit touches it, a finite-Larmor-radius loss.
    * - ``spectre_sbeg_is_toroidal_flux``
      - ``logical``
      - ``default``
