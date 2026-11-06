@@ -2,8 +2,9 @@ program test_sympl
 
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use orbit_symplectic
-use orbit_symplectic_quasi, only: f_quasi => f, si_quasi => si, &
-    orbit_timestep_quasi, orbit_timestep_multi_quasi
+use orbit_symplectic_quasi, only: f_quasi => f, si_quasi => si
+use orbit_quasi_implicit, only: orbit_timestep_quasi, orbit_timestep_multi_quasi, &
+                                    select_quasi_stepper, reset_quasi_warm_start
 use simple
 use simple_main, only : init_field
 use params, only: coord_input, field_input
@@ -203,6 +204,7 @@ subroutine test_quasi(si, outname)
 
     f_quasi = f
     si_quasi = si
+    call select_quasi_stepper(si%mode)
 
     starttime = get_wtime()
     do kt = 2, nt
@@ -270,6 +272,7 @@ subroutine test_multi_quasi(mi, outname)
     double precision, allocatable :: out(:, :)
 
     f_quasi = f
+    call reset_quasi_warm_start
 
     allocate(out(5,nt))
 

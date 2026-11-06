@@ -7,8 +7,8 @@ program test_quasi_gauss_threads
 !$  use omp_lib, only: omp_get_num_threads
     use orbit_symplectic, only: orbit_sympl_init
     use orbit_symplectic_base, only: symplectic_integrator_t, GAUSS2, GAUSS4
-    use orbit_symplectic_quasi, only: f_quasi => f, si_quasi => si, &
-                                      timestep_rk_gauss_quasi
+    use orbit_symplectic_quasi, only: f_quasi => f, si_quasi => si
+    use orbit_quasi_implicit, only: timestep_rk_gauss_quasi
     use field_can_mod, only: field_can_t, eval_field => evaluate
     use simple, only: tracer_t, init_params
     use parmot_mod, only: ro0
@@ -80,7 +80,7 @@ contains
     end subroutine check_stages
 
     ! Passing orbits of different pitch and radius; set up serially because
-    ! orbit_sympl_init also selects the module-wide stepper.
+    ! orbit_sympl_init writes module state.
     subroutine start_orbit(i, mode, si, f)
         integer, intent(in) :: i, mode
         type(symplectic_integrator_t), intent(out) :: si

@@ -16,14 +16,11 @@ use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_
                       boundary_event_radial_tolerance, symplectic_newton_warning_mode, &
                          history_valid, predict_state, record_history, rate_converged, &
                                      max_retry_depth, retry_split, retry_next
-use orbit_symplectic_quasi, only: orbit_timestep_quasi, timestep_expl_impl_euler_quasi, &
-  timestep_impl_expl_euler_quasi, timestep_midpoint_quasi, orbit_timestep_rk45, &
+    use orbit_symplectic_quasi, only: &
                   orbit_timestep_radau15, orbit_timestep_gbs16, orbit_timestep_tdrk24, &
                                     orbit_timestep_tdrk24a, orbit_timestep_cashkarp45, &
                                       reset_explicit_step_carry, &
-                                      reset_quasi_warm_start, &
-                                      si_quasi => si, f_quasi => f, &
-  timestep_rk_gauss_quasi, timestep_rk_lobatto_quasi
+                                      si_quasi => si, f_quasi => f
 use orbit_symplectic_euler1, only: sympl_euler1_residual, sympl_euler1_jacobian, &
                                    sympl_euler1_solve, sympl_euler1_extrapolate_field, &
   sympl_euler1_advance_angles
@@ -201,7 +198,6 @@ recursive subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
   si%atol = 1d-15
   si%rtol = rtol_init
         call reset_explicit_step_carry
-        call reset_quasi_warm_start
 
         si%mode = mode_init
   si%ntau = ntau
@@ -223,42 +219,6 @@ recursive subroutine orbit_sympl_init(si, f, z, dt, ntau, rtol_init, mode_init)
             print *, 'invalid mode for orbit_timestep_sympl: ', mode_init
             error stop
         end if
-        ! The quasi stepper pointer is shared module state used only by serial
-        ! tests; the symplectic step dispatches on si%mode instead.
-!$      if (omp_in_parallel()) return
-        select case (mode_init)
-    case (RK45)
-      orbit_timestep_quasi => orbit_timestep_rk45
-    case (EXPL_IMPL_EULER)
-      orbit_timestep_quasi => timestep_expl_impl_euler_quasi
-    case (IMPL_EXPL_EULER)
-      orbit_timestep_quasi => timestep_impl_expl_euler_quasi
-    case (MIDPOINT)
-      orbit_timestep_quasi => timestep_midpoint_quasi
-    case (GAUSS1)
-      orbit_timestep_quasi => orbit_timestep_quasi_gauss1
-    case (GAUSS2)
-      orbit_timestep_quasi => orbit_timestep_quasi_gauss2
-    case (GAUSS3)
-      orbit_timestep_quasi => orbit_timestep_quasi_gauss3
-    case (GAUSS4)
-      orbit_timestep_quasi => orbit_timestep_quasi_gauss4
-    case (LOBATTO3)
-      orbit_timestep_quasi => orbit_timestep_quasi_lobatto3
-        case (RADAU15)
-            orbit_timestep_quasi => orbit_timestep_radau15
-        case (GBS16)
-            orbit_timestep_quasi => orbit_timestep_gbs16
-        case (TDRK24)
-            orbit_timestep_quasi => orbit_timestep_tdrk24
-        case (TDRK24A)
-            orbit_timestep_quasi => orbit_timestep_tdrk24a
-        case (CASHKARP45)
-            orbit_timestep_quasi => orbit_timestep_cashkarp45
-    case default
-      print *, 'invalid mode for orbit_timestep_sympl: ', mode_init
-      error stop
-  end select
 end subroutine orbit_sympl_init
 
     !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -373,30 +333,6 @@ recursive subroutine orbit_timestep_sympl_lobatto3(si, f, ierr)
   call orbit_timestep_sympl_rk_lobatto(si, f, 3, ierr)
 end subroutine orbit_timestep_sympl_lobatto3
 
-recursive subroutine orbit_timestep_quasi_gauss1(ierr)
-  integer, intent(out) :: ierr
-  call timestep_rk_gauss_quasi(1, ierr)
-end subroutine orbit_timestep_quasi_gauss1
-
-recursive subroutine orbit_timestep_quasi_gauss2(ierr)
-  integer, intent(out) :: ierr
-  call timestep_rk_gauss_quasi(2, ierr)
-end subroutine orbit_timestep_quasi_gauss2
-
-recursive subroutine orbit_timestep_quasi_gauss3(ierr)
-  integer, intent(out) :: ierr
-  call timestep_rk_gauss_quasi(3, ierr)
-end subroutine orbit_timestep_quasi_gauss3
-
-recursive subroutine orbit_timestep_quasi_gauss4(ierr)
-  integer, intent(out) :: ierr
-  call timestep_rk_gauss_quasi(4, ierr)
-end subroutine orbit_timestep_quasi_gauss4
-
-recursive subroutine orbit_timestep_quasi_lobatto3(ierr)
-  integer, intent(out) :: ierr
-  call timestep_rk_lobatto_quasi(3, ierr)
-end subroutine orbit_timestep_quasi_lobatto3
 
 
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc

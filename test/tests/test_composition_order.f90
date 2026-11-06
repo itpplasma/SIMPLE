@@ -10,7 +10,8 @@ program test_composition_order
                                 orbit_sympl_init_verlet, orbit_sympl_init_order4, &
                                 orbit_sympl_init_mclachlan4, orbit_sympl_init_blanes4, &
                                 orbit_sympl_init_kahan6, orbit_sympl_init_kahan8, GAUSS4
-    use orbit_symplectic_quasi, only: f_quasi => f, orbit_timestep_multi_quasi
+    use orbit_symplectic_quasi, only: f_quasi => f
+    use orbit_quasi_implicit, only: orbit_timestep_multi_quasi, reset_quasi_warm_start
     use field_can_mod, only: field_can_t, field_can_init, eval_field => evaluate, &
                              field_can_from_name
 
@@ -94,7 +95,10 @@ contains
         case (6)
             call orbit_sympl_init_kahan8(mi, f, z0, dt, 1, rtol)
         end select
-        if (quasi) f_quasi = f
+        if (quasi) then
+            f_quasi = f
+            call reset_quasi_warm_start
+        end if
         do kt = 1, nt
             if (quasi) then
                 call orbit_timestep_multi_quasi(mi, ierr)
