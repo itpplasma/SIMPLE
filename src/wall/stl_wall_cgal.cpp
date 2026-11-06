@@ -127,6 +127,21 @@ static bool face_normal_unit(const SurfaceMesh& mesh, SurfaceMesh::Face_index f,
     normal_out[2] = CGAL::to_double(n.z()) * inv;
     return true;
 }
+static Point local_plane_hit(const SurfaceMesh& mesh, SurfaceMesh::Face_index face,
+                             const Point& p0, const Point& p1, const Point& fallback) {
+    // EPIK point construction loses grazing accuracy when plane offsets cancel.
+    double n[3];
+    if (!face_normal_unit(mesh, face, n)) return fallback;
+    const auto h = halfedge(face, mesh);
+    const Point a = mesh.point(source(h, mesh));
+    const auto v = p1 - p0;
+    const double den = n[0] * v.x() + n[1] * v.y() + n[2] * v.z();
+    if (den == 0.0) return fallback;
+    const double num = n[0] * (a.x() - p0.x()) +
+        n[1] * (a.y() - p0.y()) + n[2] * (a.z() - p0.z());
+    const double t = num / den;
+    return std::isfinite(t) ? p0 + v * std::clamp(t, 0.0, 1.0) : fallback;
+}
 }  // namespace
 
 extern "C" void* stl_wall_create(const char* filename, double scale_to_m) {
@@ -209,7 +224,7 @@ extern "C" int stl_wall_first_hit_segment(void* h, const double p0_m[3],
         const auto& variant_geom = entry.first;
         Point cand;
         if (const Point* ipoint = variant_get_if<Point>(&variant_geom)) {
-            cand = *ipoint;
+            cand = local_plane_hit(wall->mesh, entry.second, p0, p1, *ipoint);
         } else if (const Segment* iseg = variant_get_if<Segment>(&variant_geom)) {
             cand = first_point_along_segment(*iseg, p0);
         } else {
@@ -271,7 +286,7 @@ extern "C" int stl_wall_first_hit_segment_with_normal(void* h, const double p0_m
         const auto face = entry.second;
         Point cand;
         if (const Point* ipoint = variant_get_if<Point>(&variant_geom)) {
-            cand = *ipoint;
+            cand = local_plane_hit(wall->mesh, entry.second, p0, p1, *ipoint);
         } else if (const Segment* iseg = variant_get_if<Segment>(&variant_geom)) {
             cand = first_point_along_segment(*iseg, p0);
         } else {
