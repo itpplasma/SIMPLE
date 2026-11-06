@@ -1,7 +1,8 @@
 program test_stl_wall_intersection
     use, intrinsic :: iso_fortran_env, only: dp => real64, int8
     use stl_wall_intersection, only: stl_wall_init, stl_wall_finalize, &
-                                     stl_wall_first_hit_segment_with_normal
+                                     stl_wall_first_hit_segment_with_normal, &
+                                     stl_wall_first_hit_segment
     use test_utils, only: check, check_close, check_close_vec
     use simple_main, only: main_wall => wall, chartmap_cart_scale_to_m, &
                            locate_wall_segment
@@ -16,7 +17,7 @@ program test_stl_wall_intersection
     use cartesian_coordinates, only: cartesian_coordinate_system_t
     implicit none
 
-    integer :: errors, triangle, j
+    integer :: errors, triangle, j, unit_plane, shift
     logical :: hit
     real(dp) :: p0(3), p1(3), hit_p(3)
     real(dp) :: normal(3), dotx
@@ -196,6 +197,36 @@ program test_stl_wall_intersection
         call check(wall_hit_triangle(1) == 4, "stored facet-order index", errors)
         zend(:, 1) = z
         call write_results_netcdf(trim(order_results(j)), main_wall%facet_count)
+        call stl_wall_finalize(main_wall)
+    end do
+    do shift = 0, 1
+        open (newunit=unit_plane, file='grazing_plane.stl', &
+              status='replace', action='write')
+        write (unit_plane, '(A)') 'solid plane'
+        call write_tri(unit_plane, [1.0_dp - shift, -1.0_dp, -1.0_dp], &
+                   [1.0_dp - shift, 2.0_dp, -1.0_dp], [1.0_dp - shift, -1.0_dp, 2.0_dp])
+        write (unit_plane, '(A)') 'endsolid plane'
+        close (unit_plane)
+        call stl_wall_init(main_wall, 'grazing_plane.stl', 1.0_dp)
+        p0 = [0.9999999999000001_dp - shift, -0.5_dp, 0.0_dp]
+        p1 = [1.0000000001_dp - shift, 0.5_dp, 0.0_dp]
+        dotx = (1.0_dp - shift - p0(1))/(p1(1) - p0(1))
+        do j = 1, 2
+            if (j == 1) then
+                call stl_wall_first_hit_segment_with_normal( &
+                    main_wall, p0, p1, hit, hit_p, normal, triangle)
+            else
+                call stl_wall_first_hit_segment_with_normal( &
+                    main_wall, p1, p0, hit, hit_p, normal, triangle)
+            end if
+            call check(hit .and. triangle == 0, 'grazing plane hit', errors)
+            call check_close_vec(hit_p, [1.0_dp - shift, -0.5_dp + dotx, 0.0_dp], &
+                                 1.0e-12_dp, 'grazing plane location', errors)
+        end do
+        call stl_wall_first_hit_segment(main_wall, p0, p1, hit, hit_p)
+        call check(hit, 'grazing point-only hit', errors)
+        call check_close_vec(hit_p, [1.0_dp - shift, -0.5_dp + dotx, 0.0_dp], &
+                             1.0e-12_dp, 'grazing point-only location', errors)
         call stl_wall_finalize(main_wall)
     end do
     if (errors /= 0) error stop 1
