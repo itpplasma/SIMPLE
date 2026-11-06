@@ -17,6 +17,7 @@ sampling-only runs are unrestricted.
 | Key | Default | Meaning |
 |---|---|---|
 | `spectre_fo_entry_larmor` | `1.5` | enter FO closer than this many radial gyroradii to a sheet (and to the outer boundary with `spectre_outer_loss = 'particle'`) |
+| `spectre_fo_jump_tol` | `1d-3` | interfaces whose largest jump of $\lvert B\rvert/B$ or of $\mathbf b$ is smaller are crossed by the GC directly |
 | `spectre_outer_loss` | `'guiding_centre'` | outer-boundary loss: when the guiding centre crosses it, as for VMEC and GVEC fields, or `'particle'` when the full orbit touches it |
 | `spectre_fo_tolerance` | `1d-9` | relative tolerance of the FO RK45 |
 | `spectre_fo_grid` | `32, 64, 32` | FO spline points per volume in $\rho_g$, $\vartheta$, $\zeta$ (per field period) |
@@ -33,12 +34,30 @@ $$
 \rho_r = \frac{\bar\rho_0\,\bar v_\perp}{B}\,|\nabla\rho_g|,
 $$
 
-and enters FO if $|\rho_g - k'| < \ell_e\rho_r$ with
+and enters FO if $|\rho_g - k'| < \ell_e\rho_r$, unless $k'$ is a smooth
+interface (below), with
 $\ell_e = $ `spectre_fo_entry_larmor`. It leaves FO when the reconstructed
 GC satisfies $|\rho_g - k'| > (\ell_e + 1)\rho_r$ and the field at the
 particle and at the GC agree, $|B_p - B_{gc}| \le 0.05\,B_{gc}$ and
 $|\mathbf b_p - \mathbf b_{gc}| \le 0.05$. The exit test runs once per radian
 of gyration and at the end of each call.
+
+## Smooth interfaces
+
+At configuration SIMPLE samples every interior interface on a 64 by 32 grid
+of one field period and records the largest $|B_+ - B_-|/B_-$ and
+$|\mathbf b_+ - \mathbf b_-|$ (printed as `SPECTRE interface field jumps`).
+An interface whose jump is below `spectre_fo_jump_tol` starts no FO. When
+the GC lands on it, it continues in the neighbouring volume at the same
+position, speed and pitch, re-canonicalized in that volume's chart. The
+reset is exact for a continuous field (T1b in
+`DOC/spectre-rejected-interface-models.md`); its error per crossing is of
+the order of the jump. Interfaces of SPECTRE representations of smooth
+equilibria (eight volumes on the VMEC surfaces of the Landreman-Paul QA
+case: $10^{-4}$ to $3\times10^{-4}$ at Fourier order 10, up to
+$9\times10^{-4}$ at order 6) fall below the default, current sheets
+(tok2vol $4.5\times10^{-2}$, NCSX free boundary $7.7\times10^{-2}$ and
+$0.38$) above it.
 
 ## GC to FO
 

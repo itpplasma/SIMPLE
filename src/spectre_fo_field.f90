@@ -35,6 +35,7 @@ module spectre_fo_field
     integer :: fo_field_mvol = 0
     logical, public, protected :: fo_field_axisymmetric = .false.
 
+    public :: spectre_fo_interface_jump
     public :: spectre_fo_field_build, spectre_fo_field_clear, &
         spectre_fo_field_local, spectre_fo_field_locate, &
         spectre_fo_local_t
@@ -155,6 +156,30 @@ contains
         end do
         deallocate (vol_spl)
     end subroutine spectre_fo_field_clear
+
+    real(dp) function spectre_fo_interface_jump(k) result(jump)
+        !> Largest field jump across interface k: max over a 64 x 32 grid of
+        !> one field period of |B+ - B-|/B- and |b+ - b-|, the bounds on the
+        !> error of a guiding-centre transfer that keeps position and pitch.
+        integer, intent(in) :: k
+        integer, parameter :: NTH = 64, NZE_PERIOD = 32
+        type(spectre_fo_local_t) :: lo, hi
+        real(dp) :: u(3), period
+        integer :: i, j, nze
+
+        jump = 0.0_dp
+        period = TWOPI/real(max(spectre_field%data%Nfp, 1), dp)
+        nze = NZE_PERIOD
+        if (all(spectre_field%data%in == 0)) nze = 1
+        do j = 0, nze - 1
+            do i = 0, NTH - 1
+                u = [real(k, dp), TWOPI*real(i, dp)/NTH, period*real(j, dp)/nze]
+                call spectre_fo_field_local(u, k, lo)
+                call spectre_fo_field_local(u, k + 1, hi)
+                jump = max(jump, abs(hi%bmod - lo%bmod)/lo%bmod, norm2(hi%b - lo%b))
+            end do
+        end do
+    end function spectre_fo_interface_jump
 
     subroutine spectre_fo_field_local(u, owner, loc)
         real(dp), intent(in) :: u(3)

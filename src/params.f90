@@ -244,6 +244,10 @@ module params
     !> centre crosses it, as for VMEC and GVEC fields; 'particle' when the full
     !> orbit touches it, a finite-Larmor-radius loss.
     character(16) :: spectre_outer_loss = 'guiding_centre'
+    !> Interfaces whose largest jump of |B|/B or of the field direction is
+    !> below this are crossed by the guiding centre directly, with an error
+    !> of that size per crossing, instead of in full orbit.
+    real(dp) :: spectre_fo_jump_tol = 1.0e-3_dp
     logical :: spectre_sbeg_is_toroidal_flux = .false.
 
     !> SPECTRE per-volume Meiss construction grid (n_r, n_th, n_phi). Each volume
@@ -294,7 +298,7 @@ module params
         field_input, coord_input, profile_label_file, marker_weight_file, &
         wall_input, wall_units, chart_boundary_kind, integ_coords, crossing_level, &
         spectre_fo_entry_larmor, spectre_fo_tolerance, spectre_fo_grid, &
-        spectre_outer_loss, &
+        spectre_outer_loss, spectre_fo_jump_tol, &
         spectre_sbeg_is_toroidal_flux, spectre_ncon_r, spectre_ncon_th, &
         spectre_ncon_phi, spectre_ncon_order, spectre_ncon_ode_max_steps, &
         spectre_ncon_ode_relerr, &
@@ -398,6 +402,8 @@ contains
             error stop 'spectre_fo_entry_larmor must be positive'
         if (spectre_fo_tolerance <= 0.0_dp) &
             error stop 'spectre_fo_tolerance must be positive'
+        if (spectre_fo_jump_tol < 0.0_dp) &
+            error stop 'spectre_fo_jump_tol must not be negative'
         if (trim(spectre_outer_loss) /= 'guiding_centre' .and. &
             trim(spectre_outer_loss) /= 'particle') &
             error stop "spectre_outer_loss must be 'guiding_centre' or 'particle'"

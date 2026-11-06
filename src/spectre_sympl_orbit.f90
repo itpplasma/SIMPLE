@@ -16,7 +16,8 @@ module spectre_sympl_orbit
     use orbit_symplectic, only: orbit_timestep_sympl, orbit_sympl_init
     use spectre_fo_hybrid, only: spectre_fo_state_t, spectre_fo_enter, &
         spectre_fo_advance_until_exit, spectre_fo_radial_larmor, SPECTRE_FO_OK, &
-                                 SPECTRE_FO_LOSS, SPECTRE_FO_OUTSIDE
+                                 SPECTRE_FO_LOSS, SPECTRE_FO_OUTSIDE, &
+                                 spectre_fo_smooth_interface
     use params, only: spectre_fo_entry_larmor, spectre_outer_loss
     use diag_counters, only: count_event, EVT_WARNING_STEP_SKIP
 
@@ -323,9 +324,21 @@ contains
                 t_frac = used/state%dt_std
                 exit
             end if
+            budget = state%dt_std - used
+            if (spectre_fo_smooth_interface(iface)) then
+                ! A negligible jump: the guiding centre crosses at fixed
+                ! position, speed and pitch into the neighbouring volume.
+                ! Start a hair inside the new volume, as landed_state reads its
+                ! transform, so the next step does not land on iface again.
+                y_iface(1) = real(iface, dp) + real(direction, dp)*transform_bias
+                call set_home_volume(state, merge(iface + 1, iface, direction > 0))
+                call recanonicalize(state, si, f, y_iface)
+                if (budget <= budget_eps*state%dt_std) exit
+                h_try = budget
+                cycle
+            end if
             ! A multi-volume hybrid resolves both sheets and its absorbing
             ! particle boundary in FO if a GC step missed the proximity band.
-            budget = state%dt_std - used
             call fo_exit_distance(state, y_iface, exit_rho)
             call start_fo(state, si, f, y_iface, nint(state%home_hi), iface, &
                 budget, used, y_out, fo_owner, fo_exited, ierr_fo, exit_rho)
@@ -564,6 +577,7 @@ contains
         ! With the guiding-centre loss only interior sheets need the full orbit.
         if (trim(spectre_outer_loss) /= 'particle') k = min(k, state%mvol - 1)
         if (k < 1 .or. k > state%mvol) return
+        if (spectre_fo_smooth_interface(k)) return
         call spectre_fo_radial_larmor(y, nint(state%home_hi), ro0/sqrt2, rho_r, &
             status)
         if (status /= SPECTRE_FO_OK) return
