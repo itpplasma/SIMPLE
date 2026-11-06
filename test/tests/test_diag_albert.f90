@@ -100,8 +100,8 @@ contains
         call require(fig%ylabel == 'phi', 'phi label changed')
         call require(fig%title == plot_title, 'figure title changed')
         call require(fig%state%grid_enabled, 'diagnostic grid is disabled')
-        call require(fig%state%colorbar_enabled, 'diagnostic colorbar is disabled')
-        call require(fig%state%colorbar_plot_index == 1, &
+        call require(fig%state%colorbar%enabled, 'diagnostic colorbar is disabled')
+        call require(fig%state%colorbar%plot_index == 1, &
                      'colorbar is not attached to the contour field')
         call require(plots(1)%show_colorbar, 'contour excludes its colorbar')
         call fig%savefig(filename)

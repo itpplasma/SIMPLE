@@ -379,6 +379,17 @@ if(NOT TARGET fortnum)
     FetchContent_MakeAvailable(fortnum)
 endif()
 
+# libneo's fortfem declares fortplot too; declare SIMPLE's pin first so that
+# FetchContent, which keeps the first declaration, uses it.
+if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
+    include(FetchContent)
+    FetchContent_Declare(
+        fortplot
+        GIT_REPOSITORY https://github.com/lazy-fortran/fortplot.git
+        GIT_TAG ${FORTPLOT_REF}
+    )
+endif()
+
 find_or_fetch(libneo)
 
 # Consume the scientific-I/O target selected by libneo. The variable fallback
@@ -428,11 +439,6 @@ if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     # SIMPLE uses the native plotting API and does not need the fortarray adapter.
     set(FORTPLOT_BUILD_FORTARRAY_ADAPTER OFF CACHE BOOL
         "Build the optional fortarray plotting adapter")
-    FetchContent_Declare(
-        fortplot
-        GIT_REPOSITORY https://github.com/lazy-fortran/fortplot.git
-        GIT_TAG ${FORTPLOT_REF}
-    )
     FetchContent_MakeAvailable(fortplot)
     add_compile_definitions(USE_FORTPLOT)
 else()
