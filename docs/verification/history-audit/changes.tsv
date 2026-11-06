@@ -1,0 +1,871 @@
+case	date	prev	cur	kind	st_prev	st_cur	flips	nanflip	maxdt	maxcol	dconf	conf	subject
+albert	2020-02-10	ef5e4ceaac	23e7b86dfa	status	NOBUILD	UNSUPPORTED							Thread safety for rkf45
+albert	2021-12-02	abfd48ca37	6a6699ab7a	status	UNSUPPORTED	OK							Boozer Symplectic
+albert	2024-08-18	5fff69e0ad	95ba9cba54	status	OK	FAIL 1							Dispatch (#53)
+albert	2024-09-01	74e871f441	4a7a0bf190	status	FAIL 1	OK							new coordinates (#52)
+albert	2024-09-07	07ef544318	748be8ad40	status	OK	NOBUILD							Non-flux coordinates (#56)
+albert	2025-02-02	174599d8c8	e25adbd873	status	NOBUILD	OK							Fetch dependencies (#75)
+albert	2025-03-18	e25adbd873	c6de27923c	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.8828125	Sampler interface (#77)
+albert	2025-04-28	c6de27923c	786d4a2dc2	incomparable	OK	OK					nan	nan	Merge branch 'main' into golden_record_update
+albert	2025-07-06	786d4a2dc2	70b78749a1	status	OK	FAIL 139							Merge branch 'main' into golden_record_update
+albert	2025-08-12	bce44b338c	8f87525522	status	FAIL 139	OK							build: add -Wtrampolines compiler flag and adjust executable stack options
+albert	2025-08-12	b0b8a647a4	92d51a5ee1	status	OK	NOBUILD							Modernize type declarations in orbit_symplectic_base.f90 (issue #110) (#136)
+albert	2025-08-12	a93fef0aa0	0fcf94b182	status	NOBUILD	OK							fix: Use explicit imports to avoid dp conflicts after type modernization (#139)
+albert	2025-08-22	58220277cd	0016bff6a4	CHANGED	OK	OK	1	0	0.4501425990787692	0.9653753743704397	-0.0009765625	0.8818359375	test: Add Python batch API test infrastructure for Issue #90 (#172)
+albert	2025-09-05	0016bff6a4	493afe3afc	losstimes	OK	OK	0	0	0.43619635108996807	0.9800118149821904	0.0	0.8818359375	feat: implement comprehensive batch spline optimization system (#174)
+albert	2025-12-17	df975292c9	bc67a39ba7	CHANGED	OK	OK	2	0	0.44104646232305794	0.9918263739025861	0.001953125	0.8837890625	feat: unify vmec_field_t coordinate convention (#253) (#257)
+albert	2025-12-22	a3c0fced6e	ccebc3d857	status	OK	NOBUILD							Refactor canflux to use libneo batch splines (#269)
+albert	2025-12-27	3d4b18ac37	a0ae6874c4	status	NOBUILD	OK							Perf: reduce spline overhead and stabilize Python imports (#280)
+albert	2026-01-11	ce33f5800e	17d8c8ea6e	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.8828125	feat: logarithmic macrostep time grid (#314)
+albert	2026-06-06	171c9984a8	c455409ad2	losstimes	OK	OK	0	0	8.519157455324188e-05	0.9808443375468586	0.0	0.8828125	Periodic checkpoint output and lock-free hot-loop diagnostics (#352)
+albert	2026-06-06	f04397ada2	1eaa91cc3e	losstimes	OK	OK	0	0	3.872344297864774e-06	0.9803983743888677	0.0	0.8828125	OpenACC GPU offload of default Boozer + symplectic Euler tracing (#354)
+albert	2026-06-20	50783532f7	c277e63038	status	OK	NOBUILD							Document GVEC chartmap conventions (#403)
+albert	2026-06-21	c277e63038	29c642778f	status	NOBUILD	OK							Use libneo field abstraction and boozer_sub; drop SIMPLE copies (#389)
+albert	2026-07-13	63ab6cb2f1	714c16866b	roundoff	OK	OK	0	0	0.0	0.014027412996262674	0.0	0.8828125	Fix slow CI test gates (#454)
+albert	2026-07-13	47e6fde583	cc5872a855	CHANGED	OK	OK	9	9	1.9057656149637774e-06	0.910991402550049	0.0	0.8828125	Locate symplectic boundary events (#459)
+albert	2026-07-17	48551773c1	f60c57c4a1	CHANGED	OK	OK	0	9	0.0	0.0	0.0087890625	0.8916015625	Continue numerical recoveries and report resolved confinement (#494)
+albert	2026-07-17	7e8d2d3ca6	d8b0e019ab	CHANGED	OK	OK	49	0	0.0	0.9976329377789294	0.0322265625	0.923828125	Restore warning-mode orbit recovery without Newton stalls (#499)
+albert	2026-07-25	53f0012d35	69fe8c364d	CHANGED	OK	OK	42	0	0.0003744396205915634	0.997751523580975	-0.041015625	0.8828125	Stabilize orbit recovery and boundary reporting (#503)
+albert	2026-10-16	cbf2b45526	2a0c51782d	roundoff	OK	OK	0	0	0.0	0.9853254171741805	0.0	0.8828125	perf: drop the IEEE intrinsic modules from SIMPLE sources (#538)
+albert	2026-10-16	2a0c51782d	ffd7f4a197	roundoff	OK	OK	0	0	0.0	0.9903221885200164	0.0	0.8828125	fix: drop the RK momentum gate on accepted symplectic steps (#540)
+albert	2026-10-19	6da8670473	63e72ee20c	status	OK	NOBUILD							Build the regular near-axis Boozer field on request (libneo 924ba773) (#580)
+albert	2026-10-19	4b5dcd842e	19198d90eb	status	NOBUILD	OK							Fix main build: count regular-axis Boozer evaluations via count_field_evaluation (#583)
+albert	2026-10-19	19198d90eb	61d7aaddd6	roundoff	OK	OK	0	0	0.0	1.2115844648840987e-07	0.0	0.8828125	Add explicit-energy monoenergetic Lorentz collisions (#522)
+albert	2026-10-21	20c897d098	9eca50edfa	roundoff	OK	OK	0	0	0.0	0.9919805264498858	0.0	0.8828125	Check physical momentum before accepting symplectic endpoints (#560)
+albert	2026-10-23	caabbb50d5	29adb18993	roundoff	OK	OK	0	0	2.168404344971009e-17	0.9603758931171549	0.0	0.8828125	Keep adaptive RK error scales finite at zero pitch and the axis (#610)
+albert	2026-10-23	fb8152483c	2e0cf97d16	roundoff	OK	OK	0	0	0.0	0.8148286842298937	0.0	0.8828125	Preserve RK recovery backoff through brief symplectic probes (#619)
+albert	2026-10-27	2e0cf97d16	0a176137d5	roundoff	OK	OK	0	0	0.0	0.9789159480961186	0.0	0.8828125	Preserve magnetic moment across symplectic RK recovery (#629)
+albert	2026-10-29	244f237b0d	4feb1bed35	CHANGED	OK	OK	19	0	0.0	0.9836396497594045	-0.0185546875	0.8642578125	Seed symplectic RK recovery with the reference momentum and carried mu (#640)
+albert	2026-10-30	f8eddbc488	3493038a34	roundoff	OK	OK	0	0	0.0	0.11107287121464544	0.0	0.8642578125	Fix NaN classifier boundaries using surface mirror extrema (#599)
+albert	2026-11-03	273aaf7d42	0155903b1f	losstimes	OK	OK	0	0	0.04681000102452906	0.9817110730148237	0.0	0.8642578125	Start Newton from extrapolated states and stop on the contraction rate (#646)
+albert	2026-11-03	2290f5162b	af9c334654	CHANGED	OK	OK	2	0	0.36581993754332454	0.9844303804976103	0.0	0.8642578125	Store the canonical-flux metric and field components as one spline (#647)
+albert	2026-11-03	a8eb199321	8e9a4ce93a	roundoff	OK	OK	0	0	3.1366402530874637e-12	1.2080379909181727e-07	0.0	0.8642578125	Generate the implicit-scheme residuals and Jacobians from one source (#656)
+albert	2026-11-05	359ec8c432	619c217ac4	CHANGED	OK	OK	6	0	0.19651885791276316	0.9949326636922636	0.0	0.8642578125	Use CODATA 2018 physical constants (#675)
+albert	2026-11-05	d0b1b4a861	74eba10ab6	CHANGED	OK	OK	20	0	0.0	0.9677570088385138	0.01953125	0.8837890625	Reject only momentum jumps on accepted symplectic endpoints (#707)
+albert	2026-11-05	c055055a6a	43287d943f	losstimes	OK	OK	0	0	0.07456716461126589	0.9095981734241266	0.0	0.8837890625	Generate get_derivatives2 and the Boozer h derivatives with FortSym (#730)
+albert	2026-11-05	c04724ec6b	bcfac3c319	CHANGED	OK	OK	47	0	0.07522316081438728	0.9976975968431266	0.0458984375	0.9296875	Extend the Albert psi grid to the whole plasma (#732)
+boozer	2020-02-10	ef5e4ceaac	23e7b86dfa	status	NOBUILD	UNSUPPORTED							Thread safety for rkf45
+boozer	2021-12-02	abfd48ca37	6a6699ab7a	status	UNSUPPORTED	OK							Boozer Symplectic
+boozer	2022-01-11	6a6699ab7a	795fd3fd61	status	OK	FAIL 139							OpenMP for classification
+boozer	2022-06-28	795fd3fd61	86b715fbc4	status	FAIL 139	OK							Untangle circular dependency
+boozer	2023-08-06	5973643d2f	be3d2f34ea	incomparable	OK	OK					nan	nan	remove pFUnit, add o0wn assertion templates and sanity test for new utility
+boozer	2023-12-16	ce3275d7df	be7a83b532	incomparable	OK	OK					nan	0.9306640625	Need bminmax for every particle
+boozer	2024-03-11	be7a83b532	6c5eb2ca0e	roundoff	OK	OK	0	0	0.0	24352.123699224518	0.0	0.9306640625	Fix find_bminmax
+boozer	2024-05-25	6c5eb2ca0e	579874be4a	roundoff	OK	OK	0	0	0.0	2.4251207603142078	0.0	0.9306640625	Shorten module name
+boozer	2024-07-18	579874be4a	d582580f98	roundoff	OK	OK	0	0	0.0	0.9999850234417189	0.0	0.9306640625	Configurable collisions
+boozer	2024-08-02	d582580f98	87a2afc76b	roundoff	OK	OK	0	0	0.0	0.9997738278168541	0.0	0.9306640625	48 allow non integer mass number (#49)
+boozer	2024-08-19	4cda89147b	c2bb7512f1	roundoff	OK	OK	0	0	0.0	2.305180986870412e-05	0.0	0.9306640625	Restore 1.3 behavior
+boozer	2024-08-28	59ab3ed119	74e871f441	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.9306640625	Extract procedures (#55)
+boozer	2024-09-01	74e871f441	4a7a0bf190	roundoff	OK	OK	0	0	0.0	0.9999036577569409	0.0	0.9306640625	new coordinates (#52)
+boozer	2024-09-07	07ef544318	748be8ad40	status	OK	NOBUILD							Non-flux coordinates (#56)
+boozer	2025-02-02	174599d8c8	e25adbd873	status	NOBUILD	OK							Fetch dependencies (#75)
+boozer	2025-03-18	e25adbd873	c6de27923c	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.9306640625	Sampler interface (#77)
+boozer	2025-04-28	c6de27923c	786d4a2dc2	incomparable	OK	OK					nan	nan	Merge branch 'main' into golden_record_update
+boozer	2025-07-06	786d4a2dc2	70b78749a1	incomparable	OK	OK					nan	0.9306640625	Merge branch 'main' into golden_record_update
+boozer	2025-08-12	b4c996733c	c7ca093a01	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.9306640625	Always init starting surface for bmin/bmax
+boozer	2025-08-12	b0b8a647a4	92d51a5ee1	status	OK	NOBUILD							Modernize type declarations in orbit_symplectic_base.f90 (issue #110) (#136)
+boozer	2025-08-12	a93fef0aa0	0fcf94b182	status	NOBUILD	OK							fix: Use explicit imports to avoid dp conflicts after type modernization (#139)
+boozer	2025-08-22	58220277cd	0016bff6a4	roundoff	OK	OK	0	0	0.0	0.9843499088756488	0.0	0.9306640625	test: Add Python batch API test infrastructure for Issue #90 (#172)
+boozer	2025-12-21	007a946933	a3c0fced6e	roundoff	OK	OK	0	0	0.0	0.8756862378476932	0.0	0.9306640625	Refactor Boozer eval to libneo batch splines + golden perf guard (#267)
+boozer	2025-12-22	a3c0fced6e	ccebc3d857	status	OK	NOBUILD							Refactor canflux to use libneo batch splines (#269)
+boozer	2025-12-27	3d4b18ac37	a0ae6874c4	status	NOBUILD	OK							Perf: reduce spline overhead and stabilize Python imports (#280)
+boozer	2026-01-11	ce33f5800e	17d8c8ea6e	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.9306640625	feat: logarithmic macrostep time grid (#314)
+boozer	2026-06-06	171c9984a8	c455409ad2	roundoff	OK	OK	0	0	0.0	0.9006955873444049	0.0	0.9306640625	Periodic checkpoint output and lock-free hot-loop diagnostics (#352)
+boozer	2026-06-06	f04397ada2	1eaa91cc3e	roundoff	OK	OK	0	0	0.0	0.9637700285413	0.0	0.9306640625	OpenACC GPU offload of default Boozer + symplectic Euler tracing (#354)
+boozer	2026-06-11	ba2390a945	78bd48144c	roundoff	OK	OK	0	0	0.0	0.3635293914430395	0.0	0.9306640625	Continue symplectic orbits through the magnetic axis instead of clamping r to 0.01 (#384)
+boozer	2026-06-20	50783532f7	c277e63038	status	OK	NOBUILD							Document GVEC chartmap conventions (#403)
+boozer	2026-06-21	c277e63038	29c642778f	status	NOBUILD	OK							Use libneo field abstraction and boozer_sub; drop SIMPLE copies (#389)
+boozer	2026-07-13	63ab6cb2f1	714c16866b	roundoff	OK	OK	0	0	0.0	0.0001669206327627954	0.0	0.9306640625	Fix slow CI test gates (#454)
+boozer	2026-07-13	47e6fde583	cc5872a855	CHANGED	OK	OK	0	2	1.8998878212469431e-06	0.8205557684488308	-0.001953125	0.9287109375	Locate symplectic boundary events (#459)
+boozer	2026-07-17	48551773c1	f60c57c4a1	CHANGED	OK	OK	0	2	0.0	0.09968997870030498	0.001953125	0.9306640625	Continue numerical recoveries and report resolved confinement (#494)
+boozer	2026-07-17	7e8d2d3ca6	d8b0e019ab	roundoff	OK	OK	0	0	0.0	0.566681657859665	0.0	0.9306640625	Restore warning-mode orbit recovery without Newton stalls (#499)
+boozer	2026-07-25	53f0012d35	69fe8c364d	roundoff	OK	OK	0	0	0.0	0.13434732197135674	0.0	0.9306640625	Stabilize orbit recovery and boundary reporting (#503)
+boozer	2026-10-19	6da8670473	63e72ee20c	status	OK	NOBUILD							Build the regular near-axis Boozer field on request (libneo 924ba773) (#580)
+boozer	2026-10-19	4b5dcd842e	19198d90eb	status	NOBUILD	OK							Fix main build: count regular-axis Boozer evaluations via count_field_evaluation (#583)
+boozer	2026-10-23	caabbb50d5	29adb18993	roundoff	OK	OK	0	0	0.0	0.32221098368044504	0.0	0.9306640625	Keep adaptive RK error scales finite at zero pitch and the axis (#610)
+boozer	2026-10-27	2e0cf97d16	0a176137d5	roundoff	OK	OK	0	0	8.99487201302257e-10	1.31108894804151	0.0	0.9306640625	Preserve magnetic moment across symplectic RK recovery (#629)
+boozer	2026-10-29	244f237b0d	4feb1bed35	roundoff	OK	OK	0	0	0.0	0.5479637445994562	0.0	0.9306640625	Seed symplectic RK recovery with the reference momentum and carried mu (#640)
+boozer	2026-10-30	f8eddbc488	3493038a34	roundoff	OK	OK	0	0	0.0	1.690109361770649e-05	0.0	0.9306640625	Fix NaN classifier boundaries using surface mirror extrema (#599)
+boozer	2026-10-31	452542c412	00a2b30f48	roundoff	OK	OK	0	0	0.0	0.5679354820699722	0.0	0.9306640625	Boozer axis continuation: evaluate negative labels at (|s|, theta+pi) (#642)
+boozer	2026-11-02	00a2b30f48	b6dc7f9be9	losstimes	OK	OK	0	0	0.05227358958337705	1.5746232811387257	0.0	0.9306640625	Bump fortnum to d40be6d for the hybrd1 multiroot_hybrids (#643)
+boozer	2026-11-03	273aaf7d42	0155903b1f	roundoff	OK	OK	0	0	5.095750210681871e-16	1.5117933763282327	0.0	0.9306640625	Start Newton from extrapolated states and stop on the contraction rate (#646)
+boozer	2026-11-03	2290f5162b	af9c334654	roundoff	OK	OK	0	0	4.98732999343332e-16	1.3929703200603183	0.0	0.9306640625	Store the canonical-flux metric and field components as one spline (#647)
+boozer	2026-11-05	359ec8c432	619c217ac4	roundoff	OK	OK	0	0	7.648837204018641e-07	1.5096083225860946	0.0	0.9306640625	Use CODATA 2018 physical constants (#675)
+boozer	2026-11-05	2be96cea41	c055055a6a	roundoff	OK	OK	0	0	5.556558675229003e-10	0.9799458391371924	0.0	0.9306640625	Keep the field period of a Boozer start in ref_to_integ_boozer (#733)
+boozer	2026-11-05	c055055a6a	43287d943f	roundoff	OK	OK	0	0	4.0115480381963664e-16	1.396993664771855	0.0	0.9306640625	Generate get_derivatives2 and the Boozer h derivatives with FortSym (#730)
+boozer_gauss2	2020-02-10	ef5e4ceaac	23e7b86dfa	status	NOBUILD	UNSUPPORTED							Thread safety for rkf45
+boozer_gauss2	2021-12-02	abfd48ca37	6a6699ab7a	status	UNSUPPORTED	OK							Boozer Symplectic
+boozer_gauss2	2022-01-11	6a6699ab7a	795fd3fd61	status	OK	FAIL 139							OpenMP for classification
+boozer_gauss2	2022-06-28	795fd3fd61	86b715fbc4	status	FAIL 139	OK							Untangle circular dependency
+boozer_gauss2	2023-08-06	5973643d2f	be3d2f34ea	incomparable	OK	OK					nan	nan	remove pFUnit, add o0wn assertion templates and sanity test for new utility
+boozer_gauss2	2023-12-16	ce3275d7df	be7a83b532	incomparable	OK	OK					nan	0.94921875	Need bminmax for every particle
+boozer_gauss2	2024-03-11	be7a83b532	6c5eb2ca0e	roundoff	OK	OK	0	0	0.0	5.391051195311291	0.0	0.94921875	Fix find_bminmax
+boozer_gauss2	2024-05-25	6c5eb2ca0e	579874be4a	roundoff	OK	OK	0	0	0.0	0.881359488110101	0.0	0.94921875	Shorten module name
+boozer_gauss2	2024-07-18	579874be4a	d582580f98	roundoff	OK	OK	0	0	0.0	0.8664517240996106	0.0	0.94921875	Configurable collisions
+boozer_gauss2	2024-08-02	d582580f98	87a2afc76b	roundoff	OK	OK	0	0	0.0	0.9991709662978586	0.0	0.94921875	48 allow non integer mass number (#49)
+boozer_gauss2	2024-08-19	4cda89147b	c2bb7512f1	roundoff	OK	OK	0	0	0.0	2.3053243328289302e-05	0.0	0.94921875	Restore 1.3 behavior
+boozer_gauss2	2024-08-28	59ab3ed119	74e871f441	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.94921875	Extract procedures (#55)
+boozer_gauss2	2024-09-01	74e871f441	4a7a0bf190	roundoff	OK	OK	0	0	0.0	0.9997364681410462	0.0	0.94921875	new coordinates (#52)
+boozer_gauss2	2024-09-07	07ef544318	748be8ad40	status	OK	NOBUILD							Non-flux coordinates (#56)
+boozer_gauss2	2025-02-02	174599d8c8	e25adbd873	status	NOBUILD	OK							Fetch dependencies (#75)
+boozer_gauss2	2025-03-18	e25adbd873	c6de27923c	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.94921875	Sampler interface (#77)
+boozer_gauss2	2025-04-28	c6de27923c	786d4a2dc2	incomparable	OK	OK					nan	nan	Merge branch 'main' into golden_record_update
+boozer_gauss2	2025-07-06	786d4a2dc2	70b78749a1	incomparable	OK	OK					nan	0.94921875	Merge branch 'main' into golden_record_update
+boozer_gauss2	2025-08-12	b4c996733c	c7ca093a01	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.94921875	Always init starting surface for bmin/bmax
+boozer_gauss2	2025-08-12	b0b8a647a4	92d51a5ee1	status	OK	NOBUILD							Modernize type declarations in orbit_symplectic_base.f90 (issue #110) (#136)
+boozer_gauss2	2025-08-12	a93fef0aa0	0fcf94b182	status	NOBUILD	OK							fix: Use explicit imports to avoid dp conflicts after type modernization (#139)
+boozer_gauss2	2025-08-22	58220277cd	0016bff6a4	roundoff	OK	OK	0	0	0.0	0.9621602071532571	0.0	0.94921875	test: Add Python batch API test infrastructure for Issue #90 (#172)
+boozer_gauss2	2025-12-21	007a946933	a3c0fced6e	roundoff	OK	OK	0	0	0.0	0.9663348673779032	0.0	0.94921875	Refactor Boozer eval to libneo batch splines + golden perf guard (#267)
+boozer_gauss2	2025-12-22	a3c0fced6e	ccebc3d857	status	OK	NOBUILD							Refactor canflux to use libneo batch splines (#269)
+boozer_gauss2	2025-12-27	3d4b18ac37	a0ae6874c4	status	NOBUILD	OK							Perf: reduce spline overhead and stabilize Python imports (#280)
+boozer_gauss2	2026-01-11	ce33f5800e	17d8c8ea6e	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.94921875	feat: logarithmic macrostep time grid (#314)
+boozer_gauss2	2026-06-20	50783532f7	c277e63038	status	OK	NOBUILD							Document GVEC chartmap conventions (#403)
+boozer_gauss2	2026-06-21	c277e63038	29c642778f	status	NOBUILD	OK							Use libneo field abstraction and boozer_sub; drop SIMPLE copies (#389)
+boozer_gauss2	2026-07-13	63ab6cb2f1	714c16866b	CHANGED	OK	OK	34	0	1.9361721489384858e-06	0.9275629153059648	-0.1328125	0.81640625	Fix slow CI test gates (#454)
+boozer_gauss2	2026-07-13	47e6fde583	cc5872a855	CHANGED	OK	OK	40	40	1.7096260056712032e-06	0.0013152261688362237	0.0	0.81640625	Locate symplectic boundary events (#459)
+boozer_gauss2	2026-07-14	1a29fadb22	6eb1542f48	CHANGED	OK	OK	0	34	0.0	0.9275629153059648	0.1328125	0.94921875	Continue after bounded Newton maxiter without false losses (#487)
+boozer_gauss2	2026-07-17	48551773c1	f60c57c4a1	CHANGED	OK	OK	0	6	0.0	0.0	0.0234375	0.97265625	Continue numerical recoveries and report resolved confinement (#494)
+boozer_gauss2	2026-07-17	7e8d2d3ca6	d8b0e019ab	CHANGED	OK	OK	6	0	0.0	0.9975329262202164	-0.0234375	0.94921875	Restore warning-mode orbit recovery without Newton stalls (#499)
+boozer_gauss2	2026-07-25	53f0012d35	69fe8c364d	roundoff	OK	OK	0	0	3.503328269843786e-16	9.048183652644251e-11	0.0	0.94921875	Stabilize orbit recovery and boundary reporting (#503)
+boozer_gauss2	2026-10-15	45c0598be9	2297745141	roundoff	OK	OK	0	0	0.0	1.0026392792479639e-11	0.0	0.94921875	Fix canonical GC field extrapolation after Newton solves (#535)
+boozer_gauss2	2026-10-16	2a0c51782d	ffd7f4a197	roundoff	OK	OK	0	0	0.0	3.543403046468234e-10	0.0	0.94921875	fix: drop the RK momentum gate on accepted symplectic steps (#540)
+boozer_gauss2	2026-10-19	d42194797a	7dc178536d	roundoff	OK	OK	0	0	0.0	3.939223162364089e-09	0.0	0.94921875	Replace per-step dgesv in Newton solves with small in-house LU (#579)
+boozer_gauss2	2026-10-19	6da8670473	63e72ee20c	status	OK	NOBUILD							Build the regular near-axis Boozer field on request (libneo 924ba773) (#580)
+boozer_gauss2	2026-10-19	4b5dcd842e	19198d90eb	status	NOBUILD	OK							Fix main build: count regular-axis Boozer evaluations via count_field_evaluation (#583)
+boozer_gauss2	2026-10-19	3e91819022	7b4207fb6d	roundoff	OK	OK	0	0	4.1003265322401487e-07	0.9318631836026704	0.0	0.94921875	Report the Gauss endpoint radius and field cache by Hermite extrapolation (supersedes #539
+boozer_gauss2	2026-10-27	2e0cf97d16	0a176137d5	roundoff	OK	OK	0	0	3.83331739831419e-11	0.7029281354909072	0.0	0.94921875	Preserve magnetic moment across symplectic RK recovery (#629)
+boozer_gauss2	2026-10-30	f8eddbc488	3493038a34	roundoff	OK	OK	0	0	0.0	1.6902074372584184e-05	0.0	0.94921875	Fix NaN classifier boundaries using surface mirror extrema (#599)
+boozer_gauss2	2026-10-31	452542c412	00a2b30f48	roundoff	OK	OK	0	0	0.0	6.583722366324148e-07	0.0	0.94921875	Boozer axis continuation: evaluate negative labels at (|s|, theta+pi) (#642)
+boozer_gauss2	2026-11-02	00a2b30f48	b6dc7f9be9	roundoff	OK	OK	0	0	4.4873849423399256e-07	1.220518211498975	0.0	0.94921875	Bump fortnum to d40be6d for the hybrd1 multiroot_hybrids (#643)
+boozer_gauss2	2026-11-03	273aaf7d42	0155903b1f	roundoff	OK	OK	0	0	1.3552527156068805e-18	0.9505686835249937	0.0	0.94921875	Start Newton from extrapolated states and stop on the contraction rate (#646)
+boozer_gauss2	2026-11-03	2290f5162b	af9c334654	roundoff	OK	OK	0	0	2.032879073410321e-18	1.0476680257029058	0.0	0.94921875	Store the canonical-flux metric and field components as one spline (#647)
+boozer_gauss2	2026-11-03	a8eb199321	8e9a4ce93a	roundoff	OK	OK	0	0	0.0	1.0741368187538747e-08	0.0	0.94921875	Generate the implicit-scheme residuals and Jacobians from one source (#656)
+boozer_gauss2	2026-11-05	359ec8c432	619c217ac4	roundoff	OK	OK	0	0	5.8995812765192876e-08	1.0608718028301325	0.0	0.94921875	Use CODATA 2018 physical constants (#675)
+boozer_gauss2	2026-11-05	2be96cea41	c055055a6a	roundoff	OK	OK	0	0	4.743384504624082e-18	0.6012259961158207	0.0	0.94921875	Keep the field period of a Boozer start in ref_to_integ_boozer (#733)
+boozer_gauss2	2026-11-05	c055055a6a	43287d943f	roundoff	OK	OK	0	0	2.710505431213761e-18	0.9768498200173841	0.0	0.94921875	Generate get_derivatives2 and the Boozer h derivatives with FortSym (#730)
+boozer_lobatto	2020-02-10	ef5e4ceaac	23e7b86dfa	status	NOBUILD	UNSUPPORTED							Thread safety for rkf45
+boozer_lobatto	2021-12-02	abfd48ca37	6a6699ab7a	status	UNSUPPORTED	OK							Boozer Symplectic
+boozer_lobatto	2022-01-11	6a6699ab7a	795fd3fd61	status	OK	FAIL 139							OpenMP for classification
+boozer_lobatto	2022-06-28	795fd3fd61	86b715fbc4	status	FAIL 139	OK							Untangle circular dependency
+boozer_lobatto	2023-08-06	5973643d2f	be3d2f34ea	incomparable	OK	OK					nan	nan	remove pFUnit, add o0wn assertion templates and sanity test for new utility
+boozer_lobatto	2023-12-16	ce3275d7df	be7a83b532	incomparable	OK	OK					nan	1.0	Need bminmax for every particle
+boozer_lobatto	2024-03-11	be7a83b532	6c5eb2ca0e	roundoff	OK	OK	0	0	0.0	inf	0.0	1.0	Fix find_bminmax
+boozer_lobatto	2024-05-25	6c5eb2ca0e	579874be4a	roundoff	OK	OK	0	0	0.0	1.01	0.0	1.0	Shorten module name
+boozer_lobatto	2024-07-18	579874be4a	d582580f98	roundoff	OK	OK	0	0	0.0	2.8491785611910685	0.0	1.0	Configurable collisions
+boozer_lobatto	2024-08-02	d582580f98	87a2afc76b	roundoff	OK	OK	0	0	0.0	0.9998892839519848	0.0	1.0	48 allow non integer mass number (#49)
+boozer_lobatto	2024-08-19	4cda89147b	c2bb7512f1	roundoff	OK	OK	0	0	0.0	2.3053243328289302e-05	0.0	1.0	Restore 1.3 behavior
+boozer_lobatto	2024-08-28	59ab3ed119	74e871f441	roundoff	OK	OK	0	0	0.0	0.0	0.0	1.0	Extract procedures (#55)
+boozer_lobatto	2024-09-01	74e871f441	4a7a0bf190	roundoff	OK	OK	0	0	0.0	0.999736470715237	0.0	1.0	new coordinates (#52)
+boozer_lobatto	2024-09-07	07ef544318	748be8ad40	status	OK	NOBUILD							Non-flux coordinates (#56)
+boozer_lobatto	2025-02-02	174599d8c8	e25adbd873	status	NOBUILD	OK							Fetch dependencies (#75)
+boozer_lobatto	2025-03-18	e25adbd873	c6de27923c	roundoff	OK	OK	0	0	0.0	0.0	0.0	1.0	Sampler interface (#77)
+boozer_lobatto	2025-04-28	c6de27923c	786d4a2dc2	incomparable	OK	OK					nan	nan	Merge branch 'main' into golden_record_update
+boozer_lobatto	2025-07-06	786d4a2dc2	70b78749a1	incomparable	OK	OK					nan	1.0	Merge branch 'main' into golden_record_update
+boozer_lobatto	2025-08-12	b4c996733c	c7ca093a01	roundoff	OK	OK	0	0	0.0	0.0	0.0	1.0	Always init starting surface for bmin/bmax
+boozer_lobatto	2025-08-12	b0b8a647a4	92d51a5ee1	status	OK	NOBUILD							Modernize type declarations in orbit_symplectic_base.f90 (issue #110) (#136)
+boozer_lobatto	2025-08-12	a93fef0aa0	0fcf94b182	status	NOBUILD	OK							fix: Use explicit imports to avoid dp conflicts after type modernization (#139)
+boozer_lobatto	2025-08-22	58220277cd	0016bff6a4	roundoff	OK	OK	0	0	0.0	1.0239811762931252	0.0	1.0	test: Add Python batch API test infrastructure for Issue #90 (#172)
+boozer_lobatto	2025-12-21	007a946933	a3c0fced6e	roundoff	OK	OK	0	0	0.0	0.9330923014876773	0.0	1.0	Refactor Boozer eval to libneo batch splines + golden perf guard (#267)
+boozer_lobatto	2025-12-22	a3c0fced6e	ccebc3d857	status	OK	NOBUILD							Refactor canflux to use libneo batch splines (#269)
+boozer_lobatto	2025-12-27	3d4b18ac37	a0ae6874c4	status	NOBUILD	OK							Perf: reduce spline overhead and stabilize Python imports (#280)
+boozer_lobatto	2026-01-11	ce33f5800e	17d8c8ea6e	roundoff	OK	OK	0	0	0.0	0.0	0.0	1.0	feat: logarithmic macrostep time grid (#314)
+boozer_lobatto	2026-06-20	50783532f7	c277e63038	status	OK	NOBUILD							Document GVEC chartmap conventions (#403)
+boozer_lobatto	2026-06-21	c277e63038	29c642778f	status	NOBUILD	OK							Use libneo field abstraction and boozer_sub; drop SIMPLE copies (#389)
+boozer_lobatto	2026-07-13	63ab6cb2f1	714c16866b	CHANGED	OK	OK	83	0	0.0	1.8286280600118248	-0.32421875	0.67578125	Fix slow CI test gates (#454)
+boozer_lobatto	2026-07-13	47e6fde583	cc5872a855	CHANGED	OK	OK	70	70	1.9194220499316986e-06	0.0010853282772460215	0.0	0.67578125	Locate symplectic boundary events (#459)
+boozer_lobatto	2026-07-14	1a29fadb22	6eb1542f48	CHANGED	OK	OK	0	69	0.0	0.9633028059060098	0.26953125	0.9453125	Continue after bounded Newton maxiter without false losses (#487)
+boozer_lobatto	2026-07-14	aa69209524	ba581b6fac	CHANGED	OK	OK	0	1	0.0	0.11006996439712502	0.00390625	0.94921875	Retry failed symplectic steps in warning mode (#488)
+boozer_lobatto	2026-07-25	53f0012d35	69fe8c364d	roundoff	OK	OK	0	0	0.0	3.0340860792694663e-10	0.0	0.94921875	Stabilize orbit recovery and boundary reporting (#503)
+boozer_lobatto	2026-08-13	04b31af79a	c29a8c5447	roundoff	OK	OK	0	0	4.065758146820642e-18	0.5629904954459829	0.0	0.94921875	Add native CUDA RK54 tracing with tuned DOPRI (#518)
+boozer_lobatto	2026-10-16	cbf2b45526	2a0c51782d	roundoff	OK	OK	0	0	4.065758146820642e-18	0.5629904973302963	0.0	0.94921875	perf: drop the IEEE intrinsic modules from SIMPLE sources (#538)
+boozer_lobatto	2026-10-19	6da8670473	63e72ee20c	status	OK	NOBUILD							Build the regular near-axis Boozer field on request (libneo 924ba773) (#580)
+boozer_lobatto	2026-10-19	4b5dcd842e	19198d90eb	status	NOBUILD	OK							Fix main build: count regular-axis Boozer evaluations via count_field_evaluation (#583)
+boozer_lobatto	2026-10-27	2e0cf97d16	0a176137d5	roundoff	OK	OK	0	0	3.831423161593586e-11	1.56029282637	0.0	0.94921875	Preserve magnetic moment across symplectic RK recovery (#629)
+boozer_lobatto	2026-10-30	f8eddbc488	3493038a34	roundoff	OK	OK	0	0	0.0	1.6902074372584184e-05	0.0	0.94921875	Fix NaN classifier boundaries using surface mirror extrema (#599)
+boozer_lobatto	2026-10-31	452542c412	00a2b30f48	roundoff	OK	OK	0	0	0.0	1.8943066986817401e-06	0.0	0.94921875	Boozer axis continuation: evaluate negative labels at (|s|, theta+pi) (#642)
+boozer_lobatto	2026-11-02	00a2b30f48	b6dc7f9be9	roundoff	OK	OK	0	0	4.485998736550149e-07	1.002710995207235	0.0	0.94921875	Bump fortnum to d40be6d for the hybrd1 multiroot_hybrids (#643)
+boozer_lobatto	2026-11-03	273aaf7d42	0155903b1f	roundoff	OK	OK	0	0	3.3881317890172014e-18	0.5587965458732319	0.0	0.94921875	Start Newton from extrapolated states and stop on the contraction rate (#646)
+boozer_lobatto	2026-11-03	0155903b1f	9088aaeef1	roundoff	OK	OK	0	0	0.0	5.532231168013266e-10	0.0	0.94921875	Optimise the Fast build and the Newton LU solve (#649)
+boozer_lobatto	2026-11-03	2290f5162b	af9c334654	roundoff	OK	OK	0	0	3.3881317890172014e-18	0.9755035397673784	0.0	0.94921875	Store the canonical-flux metric and field components as one spline (#647)
+boozer_lobatto	2026-11-03	a8eb199321	8e9a4ce93a	roundoff	OK	OK	0	0	0.0	1.4569780199193154	0.0	0.94921875	Generate the implicit-scheme residuals and Jacobians from one source (#656)
+boozer_lobatto	2026-11-05	359ec8c432	619c217ac4	roundoff	OK	OK	0	0	5.8965830120407976e-08	1.1638168311483086	0.0	0.94921875	Use CODATA 2018 physical constants (#675)
+boozer_lobatto	2026-11-05	2be96cea41	c055055a6a	roundoff	OK	OK	0	0	3.3881317890172014e-18	0.6450235221282373	0.0	0.94921875	Keep the field period of a Boozer start in ref_to_integ_boozer (#733)
+boozer_lobatto	2026-11-05	c055055a6a	43287d943f	roundoff	OK	OK	0	0	1.6353126399684323e-10	0.9502357739653527	0.0	0.94921875	Generate get_derivatives2 and the Boozer h derivatives with FortSym (#730)
+boozer_midpoint	2020-02-10	ef5e4ceaac	23e7b86dfa	status	NOBUILD	UNSUPPORTED							Thread safety for rkf45
+boozer_midpoint	2021-12-02	abfd48ca37	6a6699ab7a	status	UNSUPPORTED	OK							Boozer Symplectic
+boozer_midpoint	2022-01-11	6a6699ab7a	795fd3fd61	status	OK	FAIL 139							OpenMP for classification
+boozer_midpoint	2022-06-28	795fd3fd61	86b715fbc4	status	FAIL 139	OK							Untangle circular dependency
+boozer_midpoint	2023-08-06	5973643d2f	be3d2f34ea	incomparable	OK	OK					nan	nan	remove pFUnit, add o0wn assertion templates and sanity test for new utility
+boozer_midpoint	2023-12-16	ce3275d7df	be7a83b532	incomparable	OK	OK					nan	0.9306640625	Need bminmax for every particle
+boozer_midpoint	2024-03-11	be7a83b532	6c5eb2ca0e	roundoff	OK	OK	0	0	0.0	1002.4829995195381	0.0	0.9306640625	Fix find_bminmax
+boozer_midpoint	2024-05-25	6c5eb2ca0e	579874be4a	roundoff	OK	OK	0	0	0.0	inf	0.0	0.9306640625	Shorten module name
+boozer_midpoint	2024-07-18	579874be4a	d582580f98	roundoff	OK	OK	0	0	0.0	1.1922591541497987	0.0	0.9306640625	Configurable collisions
+boozer_midpoint	2024-08-02	d582580f98	87a2afc76b	roundoff	OK	OK	0	0	0.0	1.1922591541497987	0.0	0.9306640625	48 allow non integer mass number (#49)
+boozer_midpoint	2024-08-19	4cda89147b	c2bb7512f1	roundoff	OK	OK	0	0	0.0	2.305180986870412e-05	0.0	0.9306640625	Restore 1.3 behavior
+boozer_midpoint	2024-08-28	59ab3ed119	74e871f441	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.9306640625	Extract procedures (#55)
+boozer_midpoint	2024-09-01	74e871f441	4a7a0bf190	roundoff	OK	OK	0	0	0.0	0.9996795243464308	0.0	0.9306640625	new coordinates (#52)
+boozer_midpoint	2024-09-07	07ef544318	748be8ad40	status	OK	NOBUILD							Non-flux coordinates (#56)
+boozer_midpoint	2025-02-02	174599d8c8	e25adbd873	status	NOBUILD	OK							Fetch dependencies (#75)
+boozer_midpoint	2025-03-18	e25adbd873	c6de27923c	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.9306640625	Sampler interface (#77)
+boozer_midpoint	2025-04-28	c6de27923c	786d4a2dc2	incomparable	OK	OK					nan	nan	Merge branch 'main' into golden_record_update
+boozer_midpoint	2025-07-06	786d4a2dc2	70b78749a1	incomparable	OK	OK					nan	0.9306640625	Merge branch 'main' into golden_record_update
+boozer_midpoint	2025-08-12	b4c996733c	c7ca093a01	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.9306640625	Always init starting surface for bmin/bmax
+boozer_midpoint	2025-08-12	b0b8a647a4	92d51a5ee1	status	OK	NOBUILD							Modernize type declarations in orbit_symplectic_base.f90 (issue #110) (#136)
+boozer_midpoint	2025-08-12	a93fef0aa0	0fcf94b182	status	NOBUILD	OK							fix: Use explicit imports to avoid dp conflicts after type modernization (#139)
+boozer_midpoint	2025-08-22	58220277cd	0016bff6a4	roundoff	OK	OK	0	0	0.0	1.7401956009554442	0.0	0.9306640625	test: Add Python batch API test infrastructure for Issue #90 (#172)
+boozer_midpoint	2025-09-05	0016bff6a4	493afe3afc	roundoff	OK	OK	0	0	0.0	0.4792502293110186	0.0	0.9306640625	feat: implement comprehensive batch spline optimization system (#174)
+boozer_midpoint	2025-12-21	007a946933	a3c0fced6e	roundoff	OK	OK	0	0	0.0	0.9515965555452495	0.0	0.9306640625	Refactor Boozer eval to libneo batch splines + golden perf guard (#267)
+boozer_midpoint	2025-12-22	a3c0fced6e	ccebc3d857	status	OK	NOBUILD							Refactor canflux to use libneo batch splines (#269)
+boozer_midpoint	2025-12-27	3d4b18ac37	a0ae6874c4	status	NOBUILD	OK							Perf: reduce spline overhead and stabilize Python imports (#280)
+boozer_midpoint	2026-01-11	ce33f5800e	17d8c8ea6e	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.9306640625	feat: logarithmic macrostep time grid (#314)
+boozer_midpoint	2026-06-20	50783532f7	c277e63038	status	OK	NOBUILD							Document GVEC chartmap conventions (#403)
+boozer_midpoint	2026-06-21	c277e63038	29c642778f	status	NOBUILD	OK							Use libneo field abstraction and boozer_sub; drop SIMPLE copies (#389)
+boozer_midpoint	2026-07-13	63ab6cb2f1	714c16866b	CHANGED	OK	OK	367	0	0.0	0.954114503867371	-0.3583984375	0.572265625	Fix slow CI test gates (#454)
+boozer_midpoint	2026-07-13	47e6fde583	cc5872a855	CHANGED	OK	OK	367	365	1.9355637153651867e-06	1.5781889688256072	0.001953125	0.57421875	Locate symplectic boundary events (#459)
+boozer_midpoint	2026-07-14	1a29fadb22	6eb1542f48	CHANGED	OK	OK	0	365	0.0	0.9673656615170098	0.3564453125	0.9306640625	Continue after bounded Newton maxiter without false losses (#487)
+boozer_midpoint	2026-08-13	04b31af79a	c29a8c5447	roundoff	OK	OK	0	0	0.0	3.1070634842755736e-05	0.0	0.9306640625	Add native CUDA RK54 tracing with tuned DOPRI (#518)
+boozer_midpoint	2026-10-15	45c0598be9	2297745141	roundoff	OK	OK	0	0	1.5612511283791264e-15	1.6150983983792813	0.0	0.9306640625	Fix canonical GC field extrapolation after Newton solves (#535)
+boozer_midpoint	2026-10-19	d42194797a	7dc178536d	roundoff	OK	OK	0	0	1.6940658945086007e-18	0.9583631257732907	0.0	0.9306640625	Replace per-step dgesv in Newton solves with small in-house LU (#579)
+boozer_midpoint	2026-10-19	6da8670473	63e72ee20c	status	OK	NOBUILD							Build the regular near-axis Boozer field on request (libneo 924ba773) (#580)
+boozer_midpoint	2026-10-19	4b5dcd842e	19198d90eb	status	NOBUILD	OK							Fix main build: count regular-axis Boozer evaluations via count_field_evaluation (#583)
+boozer_midpoint	2026-10-27	2e0cf97d16	0a176137d5	roundoff	OK	OK	0	0	8.698467510517838e-10	1.844514871231343	0.0	0.9306640625	Preserve magnetic moment across symplectic RK recovery (#629)
+boozer_midpoint	2026-10-30	f8eddbc488	3493038a34	roundoff	OK	OK	0	0	0.0	1.690109361770649e-05	0.0	0.9306640625	Fix NaN classifier boundaries using surface mirror extrema (#599)
+boozer_midpoint	2026-10-31	452542c412	00a2b30f48	roundoff	OK	OK	0	0	0.0	0.7233697979690358	0.0	0.9306640625	Boozer axis continuation: evaluate negative labels at (|s|, theta+pi) (#642)
+boozer_midpoint	2026-11-02	00a2b30f48	b6dc7f9be9	losstimes	OK	OK	0	0	1.1717397607627442e-05	1.5577451720446962	0.0	0.9306640625	Bump fortnum to d40be6d for the hybrd1 multiroot_hybrids (#643)
+boozer_midpoint	2026-11-03	273aaf7d42	0155903b1f	roundoff	OK	OK	0	0	4.2283884726934673e-16	1.4123459131255844	0.0	0.9306640625	Start Newton from extrapolated states and stop on the contraction rate (#646)
+boozer_midpoint	2026-11-03	2290f5162b	af9c334654	roundoff	OK	OK	0	0	3.7947076036992655e-16	1.0361881102332897	0.0	0.9306640625	Store the canonical-flux metric and field components as one spline (#647)
+boozer_midpoint	2026-11-05	359ec8c432	619c217ac4	roundoff	OK	OK	0	0	7.370693889973724e-07	1.2501547229058136	0.0	0.9306640625	Use CODATA 2018 physical constants (#675)
+boozer_midpoint	2026-11-05	2be96cea41	c055055a6a	roundoff	OK	OK	0	0	6.667843360785852e-16	1.4274185739141532	0.0	0.9306640625	Keep the field period of a Boozer start in ref_to_integ_boozer (#733)
+boozer_midpoint	2026-11-05	c055055a6a	43287d943f	roundoff	OK	OK	0	0	6.670074301573319e-09	0.8847265848672722	0.0	0.9306640625	Generate get_derivatives2 and the Boozer h derivatives with FortSym (#730)
+boozer_rk	2020-02-10	ef5e4ceaac	23e7b86dfa	status	NOBUILD	UNSUPPORTED							Thread safety for rkf45
+boozer_rk	2021-12-02	abfd48ca37	6a6699ab7a	status	UNSUPPORTED	OK							Boozer Symplectic
+boozer_rk	2022-01-11	6a6699ab7a	795fd3fd61	roundoff	OK	OK	0	0	0.0	1.0952360663763259	0.0	1.0	OpenMP for classification
+boozer_rk	2022-06-28	795fd3fd61	86b715fbc4	roundoff	OK	OK	0	0	0.0	0.0	0.0	1.0	Untangle circular dependency
+boozer_rk	2023-08-06	5973643d2f	be3d2f34ea	incomparable	OK	OK					nan	nan	remove pFUnit, add o0wn assertion templates and sanity test for new utility
+boozer_rk	2023-12-16	ce3275d7df	be7a83b532	incomparable	OK	OK					nan	1.0	Need bminmax for every particle
+boozer_rk	2024-03-11	be7a83b532	6c5eb2ca0e	roundoff	OK	OK	0	0	0.0	inf	0.0	1.0	Fix find_bminmax
+boozer_rk	2024-05-25	6c5eb2ca0e	579874be4a	roundoff	OK	OK	0	0	0.0	1.2322740253861555	0.0	1.0	Shorten module name
+boozer_rk	2024-07-18	579874be4a	d582580f98	roundoff	OK	OK	0	0	0.0	1.01	0.0	1.0	Configurable collisions
+boozer_rk	2024-08-02	d582580f98	87a2afc76b	roundoff	OK	OK	0	0	0.0	1.01	0.0	1.0	48 allow non integer mass number (#49)
+boozer_rk	2024-08-19	4cda89147b	c2bb7512f1	roundoff	OK	OK	0	0	0.0	2.305180986870412e-05	0.0	1.0	Restore 1.3 behavior
+boozer_rk	2024-08-28	59ab3ed119	74e871f441	roundoff	OK	OK	0	0	0.0	0.0	0.0	1.0	Extract procedures (#55)
+boozer_rk	2024-09-01	74e871f441	4a7a0bf190	roundoff	OK	OK	0	0	0.0	0.9905825414348601	0.0	1.0	new coordinates (#52)
+boozer_rk	2024-09-07	07ef544318	748be8ad40	status	OK	NOBUILD							Non-flux coordinates (#56)
+boozer_rk	2025-02-02	174599d8c8	e25adbd873	status	NOBUILD	OK							Fetch dependencies (#75)
+boozer_rk	2025-03-18	e25adbd873	c6de27923c	roundoff	OK	OK	0	0	0.0	0.0	0.0	1.0	Sampler interface (#77)
+boozer_rk	2025-04-28	c6de27923c	786d4a2dc2	incomparable	OK	OK					nan	nan	Merge branch 'main' into golden_record_update
+boozer_rk	2025-07-06	786d4a2dc2	70b78749a1	incomparable	OK	OK					nan	1.0	Merge branch 'main' into golden_record_update
+boozer_rk	2025-08-12	b4c996733c	c7ca093a01	roundoff	OK	OK	0	0	0.0	0.0	0.0	1.0	Always init starting surface for bmin/bmax
+boozer_rk	2025-08-12	b0b8a647a4	92d51a5ee1	status	OK	NOBUILD							Modernize type declarations in orbit_symplectic_base.f90 (issue #110) (#136)
+boozer_rk	2025-08-12	a93fef0aa0	0fcf94b182	status	NOBUILD	OK							fix: Use explicit imports to avoid dp conflicts after type modernization (#139)
+boozer_rk	2025-08-22	58220277cd	0016bff6a4	CHANGED	OK	OK	71	0	0.0	2.862077543259808	-0.0693359375	0.9306640625	test: Add Python batch API test infrastructure for Issue #90 (#172)
+boozer_rk	2025-12-21	007a946933	a3c0fced6e	roundoff	OK	OK	0	0	0.0	0.9524056967461333	0.0	0.9306640625	Refactor Boozer eval to libneo batch splines + golden perf guard (#267)
+boozer_rk	2025-12-22	a3c0fced6e	ccebc3d857	status	OK	NOBUILD							Refactor canflux to use libneo batch splines (#269)
+boozer_rk	2025-12-27	3d4b18ac37	a0ae6874c4	status	NOBUILD	OK							Perf: reduce spline overhead and stabilize Python imports (#280)
+boozer_rk	2026-01-11	ce33f5800e	17d8c8ea6e	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.9306640625	feat: logarithmic macrostep time grid (#314)
+boozer_rk	2026-06-19	19cf820146	50783532f7	roundoff	OK	OK	0	0	0.0	0.9536779465663484	0.0	0.9306640625	Fix RK near-axis pseudo-Cartesian coordinates (#402)
+boozer_rk	2026-06-20	50783532f7	c277e63038	status	OK	NOBUILD							Document GVEC chartmap conventions (#403)
+boozer_rk	2026-06-21	c277e63038	29c642778f	status	NOBUILD	OK							Use libneo field abstraction and boozer_sub; drop SIMPLE copies (#389)
+boozer_rk	2026-07-13	47e6fde583	cc5872a855	losstimes	OK	OK	0	0	1.921199453599467e-06	0.0014663606134538633	0.0	0.9306640625	Locate symplectic boundary events (#459)
+boozer_rk	2026-07-25	53f0012d35	69fe8c364d	roundoff	OK	OK	0	0	0.0	0.6890978581854768	0.0	0.9306640625	Stabilize orbit recovery and boundary reporting (#503)
+boozer_rk	2026-08-13	04b31af79a	c29a8c5447	roundoff	OK	OK	0	0	6.776263578034403e-16	0.7605346693718328	0.0	0.9306640625	Add native CUDA RK54 tracing with tuned DOPRI (#518)
+boozer_rk	2026-10-16	cbf2b45526	2a0c51782d	roundoff	OK	OK	0	0	6.776263578034403e-16	0.7605346687991347	0.0	0.9306640625	perf: drop the IEEE intrinsic modules from SIMPLE sources (#538)
+boozer_rk	2026-10-19	6da8670473	63e72ee20c	status	OK	NOBUILD							Build the regular near-axis Boozer field on request (libneo 924ba773) (#580)
+boozer_rk	2026-10-19	4b5dcd842e	19198d90eb	status	NOBUILD	OK							Fix main build: count regular-axis Boozer evaluations via count_field_evaluation (#583)
+boozer_rk	2026-10-23	caabbb50d5	29adb18993	roundoff	OK	OK	0	0	1.6136994084731127e-14	0.9117818502814328	0.0	0.9306640625	Keep adaptive RK error scales finite at zero pitch and the axis (#610)
+boozer_rk	2026-10-27	2e0cf97d16	0a176137d5	roundoff	OK	OK	0	0	8.701472918939968e-10	0.9871297158509246	0.0	0.9306640625	Preserve magnetic moment across symplectic RK recovery (#629)
+boozer_rk	2026-10-30	f8eddbc488	3493038a34	roundoff	OK	OK	0	0	0.0	1.690109361770649e-05	0.0	0.9306640625	Fix NaN classifier boundaries using surface mirror extrema (#599)
+boozer_rk	2026-11-02	00a2b30f48	b6dc7f9be9	losstimes	OK	OK	0	0	1.1727295600192983e-05	1.3718143066130528	0.0	0.9306640625	Bump fortnum to d40be6d for the hybrd1 multiroot_hybrids (#643)
+boozer_rk	2026-11-03	2290f5162b	af9c334654	roundoff	OK	OK	0	0	2.1684043449710089e-16	1.336316753673661	0.0	0.9306640625	Store the canonical-flux metric and field components as one spline (#647)
+boozer_rk	2026-11-03	af9c334654	a8eb199321	roundoff	OK	OK	0	0	0.0	0.10025989901522202	0.0	0.9306640625	Evaluate the Boozer field of the GPU Euler Newton step as one record (#655)
+boozer_rk	2026-11-05	359ec8c432	619c217ac4	roundoff	OK	OK	0	0	7.390168166440322e-07	1.3844896040025825	0.0	0.9306640625	Use CODATA 2018 physical constants (#675)
+boozer_rk	2026-11-05	2be96cea41	c055055a6a	roundoff	OK	OK	0	0	3.444374776714887e-15	1.311738792985569	0.0	0.9306640625	Keep the field period of a Boozer start in ref_to_integ_boozer (#733)
+boozer_rk	2026-11-05	dbab349871	677c23fcdb	roundoff	OK	OK	0	0	8.700722434196173e-15	1.274616048422998	0.0	0.9306640625	Floor the RK error scale of both angles at one (#747)
+canonical	2020-02-10	ef5e4ceaac	23e7b86dfa	status	NOBUILD	FAIL 2							Thread safety for rkf45
+canonical	2021-02-03	c2877a7dea	b9706e275c	status	FAIL 2	OK							Merge branch 'master' of github.com:itpplasma/SIMPLE
+canonical	2021-08-31	b9706e275c	77722c2479	CHANGED	OK	OK	123	0	0.0014966610711291564	1.1653731307091164	0.0009765625	0.9384765625	ANTS support
+canonical	2021-11-29	77722c2479	abfd48ca37	CHANGED	OK	OK	115	0	0.11341902831264532	1.139765937832955	-0.0009765625	0.9375	Testing Boozer
+canonical	2021-12-02	abfd48ca37	6a6699ab7a	CHANGED	OK	OK	130	0	0.0026583643604920193	1.1581277376226475	-0.0078125	0.9296875	Boozer Symplectic
+canonical	2022-01-11	6a6699ab7a	795fd3fd61	status	OK	FAIL 139							OpenMP for classification
+canonical	2022-06-28	795fd3fd61	86b715fbc4	status	FAIL 139	OK							Untangle circular dependency
+canonical	2023-08-06	5973643d2f	be3d2f34ea	incomparable	OK	OK					nan	nan	remove pFUnit, add o0wn assertion templates and sanity test for new utility
+canonical	2023-12-16	ce3275d7df	be7a83b532	incomparable	OK	OK					nan	0.9306640625	Need bminmax for every particle
+canonical	2024-03-11	be7a83b532	6c5eb2ca0e	roundoff	OK	OK	0	0	0.0	2241.6871857974725	0.0	0.9306640625	Fix find_bminmax
+canonical	2024-05-25	6c5eb2ca0e	579874be4a	roundoff	OK	OK	0	0	0.0	0.9995585850462372	0.0	0.9306640625	Shorten module name
+canonical	2024-07-18	579874be4a	d582580f98	roundoff	OK	OK	0	0	0.0	0.9993161873697936	0.0	0.9306640625	Configurable collisions
+canonical	2024-08-02	d582580f98	87a2afc76b	roundoff	OK	OK	0	0	0.0	0.9993414090292936	0.0	0.9306640625	48 allow non integer mass number (#49)
+canonical	2024-08-19	4cda89147b	c2bb7512f1	roundoff	OK	OK	0	0	0.0	1.0000011913424078	0.0	0.9306640625	Restore 1.3 behavior
+canonical	2024-08-28	59ab3ed119	74e871f441	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.9306640625	Extract procedures (#55)
+canonical	2024-09-01	74e871f441	4a7a0bf190	roundoff	OK	OK	0	0	0.0	0.9999690558140567	0.0	0.9306640625	new coordinates (#52)
+canonical	2024-09-07	07ef544318	748be8ad40	status	OK	NOBUILD							Non-flux coordinates (#56)
+canonical	2025-02-02	174599d8c8	e25adbd873	status	NOBUILD	OK							Fetch dependencies (#75)
+canonical	2025-03-18	e25adbd873	c6de27923c	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.9306640625	Sampler interface (#77)
+canonical	2025-04-28	c6de27923c	786d4a2dc2	incomparable	OK	OK					nan	nan	Merge branch 'main' into golden_record_update
+canonical	2025-07-06	786d4a2dc2	70b78749a1	incomparable	OK	OK					nan	0.9306640625	Merge branch 'main' into golden_record_update
+canonical	2025-07-09	895022d4c6	241e9053da	roundoff	OK	OK	0	0	0.0	0.8638518725053959	0.0	0.9306640625	Refactor (#88)
+canonical	2025-08-12	b4c996733c	c7ca093a01	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.9306640625	Always init starting surface for bmin/bmax
+canonical	2025-08-12	b0b8a647a4	92d51a5ee1	status	OK	NOBUILD							Modernize type declarations in orbit_symplectic_base.f90 (issue #110) (#136)
+canonical	2025-08-12	a93fef0aa0	0fcf94b182	status	NOBUILD	OK							fix: Use explicit imports to avoid dp conflicts after type modernization (#139)
+canonical	2025-08-22	58220277cd	0016bff6a4	roundoff	OK	OK	0	0	0.0	0.9683701682699666	0.0	0.9306640625	test: Add Python batch API test infrastructure for Issue #90 (#172)
+canonical	2025-12-22	a3c0fced6e	ccebc3d857	status	OK	NOBUILD							Refactor canflux to use libneo batch splines (#269)
+canonical	2025-12-27	3d4b18ac37	a0ae6874c4	status	NOBUILD	OK							Perf: reduce spline overhead and stabilize Python imports (#280)
+canonical	2026-01-11	ce33f5800e	17d8c8ea6e	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.9306640625	feat: logarithmic macrostep time grid (#314)
+canonical	2026-06-06	171c9984a8	c455409ad2	roundoff	OK	OK	0	0	0.0	1.0939286599792446	0.0	0.9306640625	Periodic checkpoint output and lock-free hot-loop diagnostics (#352)
+canonical	2026-06-06	f04397ada2	1eaa91cc3e	roundoff	OK	OK	0	0	0.0	1.2141044462421755	0.0	0.9306640625	OpenACC GPU offload of default Boozer + symplectic Euler tracing (#354)
+canonical	2026-06-12	78bd48144c	a75cb985c7	roundoff	OK	OK	0	0	0.0	1.1308512143331544	0.0	0.9306640625	Normalize chartmap grids and flat profiles (#386)
+canonical	2026-06-20	50783532f7	c277e63038	status	OK	NOBUILD							Document GVEC chartmap conventions (#403)
+canonical	2026-06-21	c277e63038	29c642778f	status	NOBUILD	OK							Use libneo field abstraction and boozer_sub; drop SIMPLE copies (#389)
+canonical	2026-07-13	63ab6cb2f1	714c16866b	roundoff	OK	OK	0	0	0.0	0.0009557066671308904	0.0	0.9306640625	Fix slow CI test gates (#454)
+canonical	2026-07-13	47e6fde583	cc5872a855	CHANGED	OK	OK	0	1	1.8641790812991006e-06	0.856042325289395	-0.0009765625	0.9296875	Locate symplectic boundary events (#459)
+canonical	2026-07-17	48551773c1	f60c57c4a1	CHANGED	OK	OK	0	1	0.0	0.03494553958990981	0.0009765625	0.9306640625	Continue numerical recoveries and report resolved confinement (#494)
+canonical	2026-07-17	f60c57c4a1	a105cf471a	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	Require valid states for SPECTRE physical losses (#496)
+canonical	2026-07-17	a105cf471a	7e8d2d3ca6	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	Use one NetCDF/HDF5 link stack (#501)
+canonical	2026-07-17	7e8d2d3ca6	d8b0e019ab	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	Restore warning-mode orbit recovery without Newton stalls (#499)
+canonical	2026-07-18	d8b0e019ab	b7badf8ec7	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	Add invariant initial conditions (#502)
+canonical	2026-07-24	b7badf8ec7	53f0012d35	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	Expose equilibrium edge flux in invariant API
+canonical	2026-07-25	53f0012d35	69fe8c364d	roundoff	OK	OK	0	0	0.0	0.922932493719703	0.0	0.9306640625	Stabilize orbit recovery and boundary reporting (#503)
+canonical	2026-07-30	69fe8c364d	04b31af79a	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	build: consume Fortio target from libneo (#506)
+canonical	2026-08-13	04b31af79a	c29a8c5447	roundoff	OK	OK	0	0	4.553649124439119e-16	1.1168821380677145	0.0	0.9306640625	Add native CUDA RK54 tracing with tuned DOPRI (#518)
+canonical	2026-08-13	c29a8c5447	99bc0e4cd0	roundoff	OK	OK	0	0	0.0	1.4482901838742475e-13	0.0	0.9306640625	Configure GPU execution from simple.in (#519)
+canonical	2026-08-13	99bc0e4cd0	2c59ebf79e	roundoff	OK	OK	0	0	0.0	1.4482901838742475e-13	0.0	0.9306640625	fix: make native CUDA the default GPU path
+canonical	2026-08-13	2c59ebf79e	b64acb4239	roundoff	OK	OK	0	0	0.0	1.4482901838742475e-13	0.0	0.9306640625	fix: select a supported native CUDA architecture
+canonical	2026-08-13	b64acb4239	c5b106135d	roundoff	OK	OK	0	0	0.0	1.4482901838742475e-13	0.0	0.9306640625	fix: require native CUDA for production GPU runs
+canonical	2026-08-13	c5b106135d	79839c5145	roundoff	OK	OK	0	0	0.0	7.241450919371237e-14	0.0	0.9306640625	fix: initialize chartmap surface for CPU starts
+canonical	2026-08-13	79839c5145	3788f59cbd	roundoff	OK	OK	0	0	0.0	1.4482901838742475e-13	0.0	0.9306640625	fix: isolate libneo tests and pin compatible ref
+canonical	2026-08-14	3788f59cbd	2a7506031d	roundoff	OK	OK	0	0	0.0	1.4482901838742475e-13	0.0	0.9306640625	docs: cite Landreman optimization protocol
+canonical	2026-08-14	2a7506031d	228511a053	roundoff	OK	OK	0	0	0.0	1.4482901838742475e-13	0.0	0.9306640625	docs: cite native Landreman bridge
+canonical	2026-08-17	228511a053	8061d4e936	roundoff	OK	OK	0	0	0.0	1.4482901838742475e-13	0.0	0.9306640625	fix: make NVHPC GPU builds reproducible
+canonical	2026-10-01	8061d4e936	372e765f2e	roundoff	OK	OK	0	0	0.0	1.4482901838742475e-13	0.0	0.9306640625	fix: replace Albert pyplot dependency with native fortplot (#525)
+canonical	2026-10-03	372e765f2e	212b6e6b38	roundoff	OK	OK	0	0	0.0	1.4482901838742475e-13	0.0	0.9306640625	Share dependency versions and update merged upstream fixes (#523)
+canonical	2026-10-13	212b6e6b38	eef592dd43	roundoff	OK	OK	0	0	0.0	1.4482901838742475e-13	0.0	0.9306640625	Fix SPECTRE drift sign, relocated-transmission ownership and the invalid tok2vol fixture (
+canonical	2026-10-13	eef592dd43	dcdeeb6440	roundoff	OK	OK	0	0	0.0	7.241450919371237e-14	0.0	0.9306640625	Fortran library API, config-file init for pysimple, and API/doc/test cleanup (#526)
+canonical	2026-10-14	dcdeeb6440	08355bc193	roundoff	OK	OK	0	0	0.0	1.4482901838742475e-13	0.0	0.9306640625	Remove rejected SPECTRE guiding-centre interface maps (#531)
+canonical	2026-10-14	08355bc193	cbb4a7a0fd	roundoff	OK	OK	0	0	0.0	1.4482901838742475e-13	0.0	0.9306640625	Document trapping parameter definition
+canonical	2026-10-14	cbb4a7a0fd	45c0598be9	roundoff	OK	OK	0	0	0.0	1.4482901838742475e-13	0.0	0.9306640625	SPECTRE: resolve strong interface jumps with full orbits and default RK45 (#530)
+canonical	2026-10-15	45c0598be9	2297745141	roundoff	OK	OK	0	0	0.0	1.4482901838742475e-13	0.0	0.9306640625	Fix canonical GC field extrapolation after Newton solves (#535)
+canonical	2026-10-15	2297745141	81b2eca646	roundoff	OK	OK	0	0	0.0	1.4482901838742475e-13	0.0	0.9306640625	Speed SPECTRE full orbit with per-volume splines and logical position (#534)
+canonical	2026-10-15	81b2eca646	e132b55bd1	roundoff	OK	OK	0	0	0.0	1.4482901838742475e-13	0.0	0.9306640625	fix: resolve particle-wall losses in the multi-volume SPECTRE hybrid (#536)
+canonical	2026-10-15	e132b55bd1	c574c3a68f	roundoff	OK	OK	0	0	0.0	1.4482901838742475e-13	0.0	0.9306640625	Integrate retained SPECTRE research, loss diagnosis and model comparison plan (#537)
+canonical	2026-10-16	c574c3a68f	db681d8a38	roundoff	OK	OK	0	0	0.0	1.4482901838742475e-13	0.0	0.9306640625	fix: enter SPECTRE full orbit at 1.5 radial gyroradii by default
+canonical	2026-10-16	db681d8a38	7f09a3f613	roundoff	OK	OK	0	0	0.0	1.4482901838742475e-13	0.0	0.9306640625	research: trace SPECTRE switch chatter to the GC energy-shell guard
+canonical	2026-10-16	7f09a3f613	cbf2b45526	roundoff	OK	OK	0	0	0.0	1.4482901838742475e-13	0.0	0.9306640625	perf: test the SPECTRE full-orbit exit distance once per radian
+canonical	2026-10-16	cbf2b45526	2a0c51782d	roundoff	OK	OK	0	0	4.553649124439119e-16	1.11688212850381	0.0	0.9306640625	perf: drop the IEEE intrinsic modules from SIMPLE sources (#538)
+canonical	2026-10-16	2a0c51782d	ffd7f4a197	roundoff	OK	OK	0	0	0.0	0.922932493719703	0.0	0.9306640625	fix: drop the RK momentum gate on accepted symplectic steps (#540)
+canonical	2026-10-18	ffd7f4a197	796eb0c2a7	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	Add fusion-reactivity-weighted alpha birth sampling (#544)
+canonical	2026-10-18	796eb0c2a7	9eae6072a0	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	Add per-triangle STL wall heat loads (#545)
+canonical	2026-10-18	9eae6072a0	5428b23147	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	Add input validation, analysis tools and reproducible verification with CI (#556)
+canonical	2026-10-18	5428b23147	5d29f57dc8	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	Test collisional alpha tracing with an STL wall (#546)
+canonical	2026-10-18	5d29f57dc8	27e5d3b405	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	Correct marker collision streams and low-momentum collision steps (#558)
+canonical	2026-10-18	27e5d3b405	76f989ce39	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	docs: rewrite user, developer and model documentation (#565)
+canonical	2026-10-19	76f989ce39	b9dd4c977b	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	fix(api): initialise starting line before simple_sample (#574)
+canonical	2026-10-19	b9dd4c977b	4bfb7f1a9c	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	Add IMAS IDS input/output and a guiding-centre workflow actor (#562)
+canonical	2026-10-19	4bfb7f1a9c	89177bb001	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	GPU production: reject non-RK-chartmap fields at input validation (#569) (#577)
+canonical	2026-10-19	89177bb001	d42194797a	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	Collisions: evaluate profiles at toroidal flux s for every integ_coords (#571) (#576)
+canonical	2026-10-19	d42194797a	7dc178536d	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	Replace per-step dgesv in Newton solves with small in-house LU (#579)
+canonical	2026-10-19	7dc178536d	aa1d30bdf2	roundoff	OK	OK	0	0	0.0	7.241451121206409e-14	0.0	0.9306640625	Let fast_class enable classification on its own (#512)
+canonical	2026-10-19	aa1d30bdf2	df0516bb20	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	Define success status for the full-orbit wrapper (#524)
+canonical	2026-10-19	df0516bb20	6da8670473	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	Count field evaluations by derivative depth, and on the magfie path (#510)
+canonical	2026-10-19	6da8670473	63e72ee20c	status	OK	NOBUILD							Build the regular near-axis Boozer field on request (libneo 924ba773) (#580)
+canonical	2026-10-19	4b5dcd842e	19198d90eb	status	NOBUILD	OK							Fix main build: count regular-axis Boozer evaluations via count_field_evaluation (#583)
+canonical	2026-10-19	19198d90eb	61d7aaddd6	roundoff	OK	OK	0	0	2.168404344971009e-17	0.9369441928160103	0.0	0.9306640625	Add explicit-energy monoenergetic Lorentz collisions (#522)
+canonical	2026-10-19	61d7aaddd6	39eb5dbea8	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	Add integmode 20 (Gauss-Radau) and 21 (Bulirsch-Stoer) (#511)
+canonical	2026-10-19	39eb5dbea8	3e91819022	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	field: use VMEC++ geometry jets through ISO C (#521)
+canonical	2026-10-19	3e91819022	7b4207fb6d	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	Report the Gauss endpoint radius and field cache by Hermite extrapolation (supersedes #539
+canonical	2026-10-19	7b4207fb6d	212edee8dc	roundoff	OK	OK	0	0	0.0	7.241451121206409e-14	0.0	0.9306640625	Expose the continuous margins behind the orbit classes (#513)
+canonical	2026-10-19	212edee8dc	bfcb24c473	roundoff	OK	OK	0	0	0.0	7.241451121206409e-14	0.0	0.9306640625	Use native radial coordinates in reference-field RK axis recovery (#564)
+canonical	2026-10-19	bfcb24c473	fd33f76a8f	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	fix: keep classifier surface extrema per particle (#589)
+canonical	2026-10-20	fd33f76a8f	4144d58c40	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	Reduce NCSX test memory and allocate CTest memory resources (#591)
+canonical	2026-10-20	4144d58c40	20c897d098	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	Fix midpoint momentum after axis chart switches (#566)
+canonical	2026-10-21	20c897d098	9eca50edfa	roundoff	OK	OK	0	0	0.0	0.9351302529218425	0.0	0.9306640625	Check physical momentum before accepting symplectic endpoints (#560)
+canonical	2026-10-23	9eca50edfa	30316e5422	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	Use configured test-ion mass and charge in Coulomb collisions (#608)
+canonical	2026-10-23	30316e5422	3f2a72b11c	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	Accept geometric chart radii in REFCOORDS RK axis handling (#611)
+canonical	2026-10-23	3f2a72b11c	8263951ff6	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	Take the collision profile radius from a tabulated label at the physical position (#613)
+canonical	2026-10-23	8263951ff6	b09d279f9d	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	Regular low-speed collision substep in stost (#615)
+canonical	2026-10-23	b09d279f9d	a28d02ed6a	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	Keep the default near-axis regularization radius on rho-native charts (#616)
+canonical	2026-10-23	a28d02ed6a	016a67d19e	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	Read plasma profile files through the exterior collision domain (#609)
+canonical	2026-10-23	016a67d19e	caabbb50d5	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	Bump libneo pin to the Boozer net-current fix (libneo#452) (#614)
+canonical	2026-10-23	caabbb50d5	29adb18993	roundoff	OK	OK	0	0	0.0	0.9327907650966442	0.0	0.9306640625	Keep adaptive RK error scales finite at zero pitch and the axis (#610)
+canonical	2026-10-23	29adb18993	fb8152483c	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	Format adaptive RK changes for changed-line lint (#621)
+canonical	2026-10-23	fb8152483c	2e0cf97d16	roundoff	OK	OK	0	0	0.0	1.4482902242412819e-13	0.0	0.9306640625	Preserve RK recovery backoff through brief symplectic probes (#619)
+canonical	2026-10-27	2e0cf97d16	0a176137d5	roundoff	OK	OK	0	0	1.0950441942103595e-15	1.1308310875839587	0.0	0.9306640625	Preserve magnetic moment across symplectic RK recovery (#629)
+canonical	2026-10-28	0a176137d5	1e680f2f84	roundoff	OK	OK	0	0	0.0	7.241451074080351e-14	0.0	0.9306640625	Add energy and weight metadata to compressed wall events (#631)
+canonical	2026-10-29	1e680f2f84	389775536a	roundoff	OK	OK	0	0	0.0	7.241451074080351e-14	0.0	0.9306640625	Differentiate physical field direction before the coordinate pullback (#622)
+canonical	2026-10-29	389775536a	094b7d25e6	roundoff	OK	OK	0	0	0.0	7.241451074080351e-14	0.0	0.9306640625	Encode collision kicks with the field at the carried position (#638)
+canonical	2026-10-29	094b7d25e6	244f237b0d	roundoff	OK	OK	0	0	0.0	7.241451074080351e-14	0.0	0.9306640625	Read relative marker weights from a file in simple.x (#632)
+canonical	2026-10-29	244f237b0d	4feb1bed35	roundoff	OK	OK	0	0	0.0	1.2779167709749013	0.0	0.9306640625	Seed symplectic RK recovery with the reference momentum and carried mu (#640)
+canonical	2026-10-30	4feb1bed35	f8eddbc488	roundoff	OK	OK	0	0	0.0	7.241451074080351e-14	0.0	0.9306640625	Sample chart coil fields over the chart's own field period (#641)
+canonical	2026-10-30	f8eddbc488	3493038a34	roundoff	OK	OK	0	0	0.0	7.179160797994068e-06	0.0	0.9306640625	Fix NaN classifier boundaries using surface mirror extrema (#599)
+canonical	2026-10-30	3493038a34	452542c412	roundoff	OK	OK	0	0	0.0	1.4482902148160702e-13	0.0	0.9306640625	Expose held symplectic SPECTRE intervals as unresolved orbit history (#625)
+canonical	2026-10-31	452542c412	00a2b30f48	roundoff	OK	OK	0	0	0.0	1.2521087893563814	0.0	0.9306640625	Boozer axis continuation: evaluate negative labels at (|s|, theta+pi) (#642)
+canonical	2026-11-02	00a2b30f48	b6dc7f9be9	roundoff	OK	OK	0	0	0.0	7.241451074080351e-14	0.0	0.9306640625	Bump fortnum to d40be6d for the hybrd1 multiroot_hybrids (#643)
+canonical	2026-11-03	b6dc7f9be9	6d49cbc22b	roundoff	OK	OK	0	0	0.0	7.241451074080351e-14	0.0	0.9306640625	Warm-start the quasi-Newton euler2 and midpoint solves (#644)
+canonical	2026-11-03	6d49cbc22b	8da6de6d59	roundoff	OK	OK	0	0	0.0	7.241451074080351e-14	0.0	0.9306640625	Keep the quasi Gauss stage fields local to each solve (#645)
+canonical	2026-11-03	8da6de6d59	273aaf7d42	roundoff	OK	OK	0	0	0.0	3.6207255370401756e-14	0.0	0.9306640625	Stop the quasi solves on the Newton steppers' step test (#648)
+canonical	2026-11-03	273aaf7d42	0155903b1f	roundoff	OK	OK	0	0	8.565197162635485e-16	1.1356048109131975	0.0	0.9306640625	Start Newton from extrapolated states and stop on the contraction rate (#646)
+canonical	2026-11-03	0155903b1f	9088aaeef1	roundoff	OK	OK	0	0	0.0	0.4234856242402024	0.0	0.9306640625	Optimise the Fast build and the Newton LU solve (#649)
+canonical	2026-11-03	9088aaeef1	5c5b7bf3e5	roundoff	OK	OK	0	0	0.0	7.241450859461697e-14	0.0	0.9306640625	Stop a composed symplectic step at the first failed stage (#650)
+canonical	2026-11-03	5c5b7bf3e5	1c2bcc4564	roundoff	OK	OK	0	0	0.0	1.4143458709886127e-16	0.0	0.9306640625	Bump fortnum to 6655e69 so SIMPLE builds with nvfortran (#652)
+canonical	2026-11-03	1c2bcc4564	e240abebc8	roundoff	OK	OK	0	0	0.0	3.6207254297308485e-14	0.0	0.9306640625	Use the extrapolated guess and the rate stop in the OpenACC Newton steps (#651)
+canonical	2026-11-03	e240abebc8	2290f5162b	roundoff	OK	OK	0	0	0.0	0.19278613446617843	0.0	0.9306640625	fix: run each composition stage with its own Euler variant (#653)
+canonical	2026-11-03	2290f5162b	af9c334654	roundoff	OK	OK	0	0	6.288372600415926e-16	1.1078132228240354	0.0	0.9306640625	Store the canonical-flux metric and field components as one spline (#647)
+canonical	2026-11-03	af9c334654	a8eb199321	roundoff	OK	OK	0	0	0.0	7.241450871809418e-14	0.0	0.9306640625	Evaluate the Boozer field of the GPU Euler Newton step as one record (#655)
+canonical	2026-11-03	a8eb199321	8e9a4ce93a	roundoff	OK	OK	0	0	0.0	1.4143458734002769e-16	0.0	0.9306640625	Generate the implicit-scheme residuals and Jacobians from one source (#656)
+canonical	2026-11-03	8e9a4ce93a	b3a5aafb98	CHANGED	OK	OK	0	1	0.0	0.43648129153625526	-6.777706500482594e-05	0.9305962854349952	Let the OpenACC Newton steps cross the magnetic axis like the CPU ones (#657)
+canonical	2026-11-03	b3a5aafb98	d5111a870e	roundoff	OK	OK	0	0	0.0	0.23763293182906522	0.0	0.9305962854349952	Keep the OpenACC per-particle state in private copies (#658)
+canonical	2026-11-03	d5111a870e	05b7a5ff1d	CHANGED	OK	OK	0	1	0.0	0.2598881744460793	6.777706500482594e-05	0.9306640625	Generate the OpenACC Euler second derivatives and Boozer rates (#660)
+canonical	2026-11-03	05b7a5ff1d	bdc5c4b6e5	roundoff	OK	OK	0	0	0.0	1.4143458734002769e-16	0.0	0.9306640625	Halve the near-axis midpoint step on CPU and GPU alike (#662)
+canonical	2026-11-03	bdc5c4b6e5	88957e1842	roundoff	OK	OK	0	0	0.0	1.4482901743618835e-13	0.0	0.9306640625	Trace on several GPUs of one process (#659)
+canonical	2026-11-03	88957e1842	5a0c385c7a	roundoff	OK	OK	0	0	0.0	1.4482901743618835e-13	0.0	0.9306640625	Keep native RK54 source compatible with CuMetal (#666)
+canonical	2026-11-04	5a0c385c7a	4549b09fcd	roundoff	OK	OK	0	0	0.0	1.767932341750346e-17	0.0	0.9306640625	Keep the initial macrostep orbit sample in integrator coordinates (#668)
+canonical	2026-11-04	4549b09fcd	7a5f22e55e	roundoff	OK	OK	0	0	0.0	8.83966170875173e-18	0.0	0.9306640625	Pass OpenMP driver flags to mixed CGAL C++ links (#667)
+canonical	2026-11-04	7a5f22e55e	d2294eb41a	roundoff	OK	OK	0	0	0.0	1.4482901743618835e-13	0.0	0.9306640625	Evaluate collision coefficients at the local flux instead of a 101-point table (#669)
+canonical	2026-11-04	d2294eb41a	9df5740a43	roundoff	OK	OK	0	0	0.0	1.4482901743618835e-13	0.0	0.9306640625	Pin the golden-record libneo to the production revision (#670)
+canonical	2026-11-04	9df5740a43	c07abd6fa5	roundoff	OK	OK	0	0	0.0	0.17538515216249792	0.0	0.9306640625	Make the fpm build path build again (#671)
+canonical	2026-11-04	c07abd6fa5	db1014ac7c	roundoff	OK	OK	0	0	0.0	0.17538515216249792	0.0	0.9306640625	fix: transport Gauss stage gradients before endpoint extrapolation (#672)
+canonical	2026-11-04	db1014ac7c	7e4950c10e	roundoff	OK	OK	0	0	0.0	1.4143458734002769e-16	0.0	0.9306640625	Restore the toroidal momentum-gradient term in canonical radial rates (#673)
+canonical	2026-11-05	7e4950c10e	359ec8c432	roundoff	OK	OK	0	0	0.0	0.5941019508603894	0.0	0.9306640625	Use species-resolved, speed-dependent Coulomb logarithms in collisions (#674)
+canonical	2026-11-05	359ec8c432	619c217ac4	roundoff	OK	OK	0	0	7.815785443105946e-07	1.7480936837944898	0.0	0.9306640625	Use CODATA 2018 physical constants (#675)
+canonical	2026-11-05	619c217ac4	17ef6bca8c	roundoff	OK	OK	0	0	0.0	1.414039684739154e-16	0.0	0.9306640625	Stop collisional markers below thermal_stop_factor times T_i (#676)
+canonical	2026-11-05	17ef6bca8c	3d1bddfc18	roundoff	OK	OK	0	0	4.846383711010205e-15	1.128621622669593	0.0	0.9306640625	Share the selected canonical-flux field across OpenMP threads (#677)
+canonical	2026-11-05	b420006baf	7460ae9d89	roundoff	OK	OK	0	0	0.0	0.9053979790158809	0.0	0.9306640625	Compile every OpenACC target with the same GPU memory model (#710)
+canonical	2026-11-05	c055055a6a	43287d943f	roundoff	OK	OK	0	0	3.3610267347050637e-16	0.929166739871839	0.0	0.9306640625	Generate get_derivatives2 and the Boozer h derivatives with FortSym (#730)
+classifier	2020-02-10	ef5e4ceaac	23e7b86dfa	status	NOBUILD	UNSUPPORTED							Thread safety for rkf45
+classifier	2021-12-02	abfd48ca37	6a6699ab7a	status	UNSUPPORTED	OK							Boozer Symplectic
+classifier	2022-01-11	6a6699ab7a	795fd3fd61	status	OK	FAIL 139							OpenMP for classification
+classifier	2022-06-28	795fd3fd61	86b715fbc4	status	FAIL 139	OK							Untangle circular dependency
+classifier	2023-08-06	5973643d2f	be3d2f34ea	incomparable	OK	OK					nan	nan	remove pFUnit, add o0wn assertion templates and sanity test for new utility
+classifier	2023-12-16	ce3275d7df	be7a83b532	incomparable	OK	OK					nan	0.94140625	Need bminmax for every particle
+classifier	2024-03-11	be7a83b532	6c5eb2ca0e	roundoff	OK	OK	0	0	0.0	inf	0.0	0.94140625	Fix find_bminmax
+classifier	2024-05-25	6c5eb2ca0e	579874be4a	roundoff	OK	OK	0	0	0.0	206.96182731766464	0.0	0.94140625	Shorten module name
+classifier	2024-07-18	579874be4a	d582580f98	roundoff	OK	OK	0	0	0.0	1.3536514776507864	0.0	0.94140625	Configurable collisions
+classifier	2024-08-02	d582580f98	87a2afc76b	roundoff	OK	OK	0	0	0.0	1.01	0.0	0.94140625	48 allow non integer mass number (#49)
+classifier	2024-08-19	4cda89147b	c2bb7512f1	roundoff	OK	OK	0	0	0.0	2.305267764028536e-05	0.0	0.94140625	Restore 1.3 behavior
+classifier	2024-09-07	07ef544318	748be8ad40	status	OK	NOBUILD							Non-flux coordinates (#56)
+classifier	2025-02-02	174599d8c8	e25adbd873	status	NOBUILD	OK							Fetch dependencies (#75)
+classifier	2025-03-18	e25adbd873	c6de27923c	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.94140625	Sampler interface (#77)
+classifier	2025-04-28	c6de27923c	786d4a2dc2	incomparable	OK	OK					nan	nan	Merge branch 'main' into golden_record_update
+classifier	2025-07-06	786d4a2dc2	70b78749a1	incomparable	OK	OK					nan	0.94140625	Merge branch 'main' into golden_record_update
+classifier	2025-08-12	b4c996733c	c7ca093a01	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.94140625	Always init starting surface for bmin/bmax
+classifier	2025-08-12	b0b8a647a4	92d51a5ee1	status	OK	NOBUILD							Modernize type declarations in orbit_symplectic_base.f90 (issue #110) (#136)
+classifier	2025-08-12	a93fef0aa0	0fcf94b182	status	NOBUILD	OK							fix: Use explicit imports to avoid dp conflicts after type modernization (#139)
+classifier	2025-08-22	58220277cd	0016bff6a4	roundoff	OK	OK	0	0	0.0	0.5186286664580053	0.0	0.94140625	test: Add Python batch API test infrastructure for Issue #90 (#172)
+classifier	2025-12-21	007a946933	a3c0fced6e	roundoff	OK	OK	0	0	0.0	0.1857417335268238	0.0	0.94140625	Refactor Boozer eval to libneo batch splines + golden perf guard (#267)
+classifier	2025-12-22	a3c0fced6e	ccebc3d857	status	OK	NOBUILD							Refactor canflux to use libneo batch splines (#269)
+classifier	2025-12-27	3d4b18ac37	a0ae6874c4	status	NOBUILD	OK							Perf: reduce spline overhead and stabilize Python imports (#280)
+classifier	2026-01-11	ce33f5800e	17d8c8ea6e	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.94140625	feat: logarithmic macrostep time grid (#314)
+classifier	2026-06-06	171c9984a8	c455409ad2	roundoff	OK	OK	0	0	0.0	0.2869647725124896	0.0	0.94140625	Periodic checkpoint output and lock-free hot-loop diagnostics (#352)
+classifier	2026-06-06	f04397ada2	1eaa91cc3e	roundoff	OK	OK	0	0	0.0	0.28265064534319373	0.0	0.94140625	OpenACC GPU offload of default Boozer + symplectic Euler tracing (#354)
+classifier	2026-06-20	50783532f7	c277e63038	status	OK	NOBUILD							Document GVEC chartmap conventions (#403)
+classifier	2026-06-21	c277e63038	29c642778f	status	NOBUILD	OK							Use libneo field abstraction and boozer_sub; drop SIMPLE copies (#389)
+classifier	2026-07-13	47e6fde583	cc5872a855	roundoff	OK	OK	0	0	0.0	0.5357394501338487	0.0	0.94140625	Locate symplectic boundary events (#459)
+classifier	2026-07-17	48551773c1	f60c57c4a1	roundoff	OK	OK	0	0	0.0	0.00040729701040997934	0.0	0.94140625	Continue numerical recoveries and report resolved confinement (#494)
+classifier	2026-10-19	6da8670473	63e72ee20c	status	OK	NOBUILD							Build the regular near-axis Boozer field on request (libneo 924ba773) (#580)
+classifier	2026-10-19	4b5dcd842e	19198d90eb	status	NOBUILD	OK							Fix main build: count regular-axis Boozer evaluations via count_field_evaluation (#583)
+classifier	2026-10-27	2e0cf97d16	0a176137d5	roundoff	OK	OK	0	0	0.0	0.5176029146936931	0.0	0.94140625	Preserve magnetic moment across symplectic RK recovery (#629)
+classifier	2026-10-30	f8eddbc488	3493038a34	roundoff	OK	OK	0	0	0.0	1.6901687336055486e-05	0.0	0.94140625	Fix NaN classifier boundaries using surface mirror extrema (#599)
+classifier	2026-10-31	452542c412	00a2b30f48	roundoff	OK	OK	0	0	0.0	0.10904150471237985	0.0	0.94140625	Boozer axis continuation: evaluate negative labels at (|s|, theta+pi) (#642)
+classifier	2026-11-02	00a2b30f48	b6dc7f9be9	losstimes	OK	OK	0	0	0.05227471184917993	0.6242481938839951	0.0	0.94140625	Bump fortnum to d40be6d for the hybrd1 multiroot_hybrids (#643)
+classifier	2026-11-03	273aaf7d42	0155903b1f	roundoff	OK	OK	0	0	0.0	0.6439746859241045	0.0	0.94140625	Start Newton from extrapolated states and stop on the contraction rate (#646)
+classifier	2026-11-03	2290f5162b	af9c334654	roundoff	OK	OK	0	0	0.0	0.31074568142542874	0.0	0.94140625	Store the canonical-flux metric and field components as one spline (#647)
+classifier	2026-11-05	359ec8c432	619c217ac4	roundoff	OK	OK	0	0	5.421010862427522e-18	0.35285634725493037	0.0	0.94140625	Use CODATA 2018 physical constants (#675)
+classifier	2026-11-05	c055055a6a	43287d943f	roundoff	OK	OK	0	0	0.0	0.4082901110081728	0.0	0.94140625	Generate get_derivatives2 and the Boozer h derivatives with FortSym (#730)
+collision	2020-02-10	ef5e4ceaac	23e7b86dfa	status	NOBUILD	UNSUPPORTED							Thread safety for rkf45
+collision	2022-06-28	795fd3fd61	86b715fbc4	status	UNSUPPORTED	OK							Untangle circular dependency
+collision	2023-08-06	5973643d2f	be3d2f34ea	incomparable	OK	OK					nan	nan	remove pFUnit, add o0wn assertion templates and sanity test for new utility
+collision	2023-12-16	ce3275d7df	be7a83b532	incomparable	OK	OK					nan	1.0	Need bminmax for every particle
+collision	2024-03-11	be7a83b532	6c5eb2ca0e	CHANGED	OK	OK	86	0	0.0	1.01	-0.083984375	0.916015625	Fix find_bminmax
+collision	2024-05-25	6c5eb2ca0e	579874be4a	roundoff	OK	OK	0	0	0.0	0.9997614921813046	0.0	0.916015625	Shorten module name
+collision	2024-07-18	579874be4a	d582580f98	roundoff	OK	OK	0	0	0.0	inf	0.0	0.916015625	Configurable collisions
+collision	2024-08-02	d582580f98	87a2afc76b	roundoff	OK	OK	0	0	0.0	1.01	0.0	0.916015625	48 allow non integer mass number (#49)
+collision	2024-08-19	4cda89147b	c2bb7512f1	roundoff	OK	OK	0	0	0.0	2.305180986870412e-05	0.0	0.916015625	Restore 1.3 behavior
+collision	2024-08-28	59ab3ed119	74e871f441	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.916015625	Extract procedures (#55)
+collision	2024-09-01	74e871f441	4a7a0bf190	roundoff	OK	OK	0	0	0.0	0.999942042981371	0.0	0.916015625	new coordinates (#52)
+collision	2024-09-07	07ef544318	748be8ad40	status	OK	NOBUILD							Non-flux coordinates (#56)
+collision	2025-02-02	174599d8c8	e25adbd873	status	NOBUILD	OK							Fetch dependencies (#75)
+collision	2025-03-18	e25adbd873	c6de27923c	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.9169921875	Sampler interface (#77)
+collision	2025-04-28	c6de27923c	786d4a2dc2	incomparable	OK	OK					nan	nan	Merge branch 'main' into golden_record_update
+collision	2025-07-06	786d4a2dc2	70b78749a1	incomparable	OK	OK					nan	0.9169921875	Merge branch 'main' into golden_record_update
+collision	2025-08-12	b4c996733c	c7ca093a01	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.9169921875	Always init starting surface for bmin/bmax
+collision	2025-08-12	b0b8a647a4	92d51a5ee1	status	OK	NOBUILD							Modernize type declarations in orbit_symplectic_base.f90 (issue #110) (#136)
+collision	2025-08-12	a93fef0aa0	0fcf94b182	status	NOBUILD	OK							fix: Use explicit imports to avoid dp conflicts after type modernization (#139)
+collision	2025-08-22	58220277cd	0016bff6a4	roundoff	OK	OK	0	0	0.0	1.41655928291497	0.0	0.9169921875	test: Add Python batch API test infrastructure for Issue #90 (#172)
+collision	2025-12-21	007a946933	a3c0fced6e	roundoff	OK	OK	0	0	0.0	1.4790900517081846	0.0	0.9169921875	Refactor Boozer eval to libneo batch splines + golden perf guard (#267)
+collision	2025-12-22	a3c0fced6e	ccebc3d857	status	OK	NOBUILD							Refactor canflux to use libneo batch splines (#269)
+collision	2025-12-27	3d4b18ac37	a0ae6874c4	status	NOBUILD	OK							Perf: reduce spline overhead and stabilize Python imports (#280)
+collision	2026-01-11	ce33f5800e	17d8c8ea6e	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.9052734375	feat: logarithmic macrostep time grid (#314)
+collision	2026-06-06	171c9984a8	c455409ad2	roundoff	OK	OK	0	0	0.0	1.8538134892460174	0.0	0.9052734375	Periodic checkpoint output and lock-free hot-loop diagnostics (#352)
+collision	2026-06-06	f04397ada2	1eaa91cc3e	losstimes	OK	OK	0	0	1.9361721489974393e-06	1.6792400391103142	0.0	0.9052734375	OpenACC GPU offload of default Boozer + symplectic Euler tracing (#354)
+collision	2026-06-11	ba2390a945	78bd48144c	roundoff	OK	OK	0	0	0.0	0.4301682497973272	0.0	0.9052734375	Continue symplectic orbits through the magnetic axis instead of clamping r to 0.01 (#384)
+collision	2026-06-20	50783532f7	c277e63038	status	OK	NOBUILD							Document GVEC chartmap conventions (#403)
+collision	2026-06-21	c277e63038	29c642778f	status	NOBUILD	OK							Use libneo field abstraction and boozer_sub; drop SIMPLE copies (#389)
+collision	2026-07-13	63ab6cb2f1	714c16866b	roundoff	OK	OK	0	0	0.0	0.00019494298732773742	0.0	0.9052734375	Fix slow CI test gates (#454)
+collision	2026-07-13	47e6fde583	cc5872a855	CHANGED	OK	OK	0	2	1.8916176962344795e-06	1.702759156790428	-0.001953125	0.9033203125	Locate symplectic boundary events (#459)
+collision	2026-07-14	aa69209524	ba581b6fac	CHANGED	OK	OK	0	1	0.0	0.3262847244590877	0.0009765625	0.904296875	Retry failed symplectic steps in warning mode (#488)
+collision	2026-07-17	48551773c1	f60c57c4a1	CHANGED	OK	OK	0	1	0.0	0.0052296620063483675	0.0009765625	0.9052734375	Continue numerical recoveries and report resolved confinement (#494)
+collision	2026-07-17	7e8d2d3ca6	d8b0e019ab	roundoff	OK	OK	0	0	0.0	0.35893187321806236	0.0	0.9052734375	Restore warning-mode orbit recovery without Newton stalls (#499)
+collision	2026-07-25	53f0012d35	69fe8c364d	roundoff	OK	OK	0	0	0.0	0.09184479023224629	0.0	0.9052734375	Stabilize orbit recovery and boundary reporting (#503)
+collision	2026-08-13	04b31af79a	c29a8c5447	roundoff	OK	OK	0	0	0.0	0.776684257836397	0.0	0.9052734375	Add native CUDA RK54 tracing with tuned DOPRI (#518)
+collision	2026-10-16	cbf2b45526	2a0c51782d	roundoff	OK	OK	0	0	0.0	0.776684257836397	0.0	0.9052734375	perf: drop the IEEE intrinsic modules from SIMPLE sources (#538)
+collision	2026-10-18	5428b23147	5d29f57dc8	roundoff	OK	OK	0	0	7.095052496908227e-09	1.6281936842142464	0.0	0.9052734375	Test collisional alpha tracing with an STL wall (#546)
+collision	2026-10-18	5d29f57dc8	27e5d3b405	CHANGED	OK	OK	30	0	0.6576899431033999	1.617568059111097	0.005859375	0.9111328125	Correct marker collision streams and low-momentum collision steps (#558)
+collision	2026-10-19	6da8670473	63e72ee20c	status	OK	NOBUILD							Build the regular near-axis Boozer field on request (libneo 924ba773) (#580)
+collision	2026-10-19	4b5dcd842e	19198d90eb	status	NOBUILD	OK							Fix main build: count regular-axis Boozer evaluations via count_field_evaluation (#583)
+collision	2026-10-23	caabbb50d5	29adb18993	roundoff	OK	OK	0	0	0.0	0.6923502468157858	0.0	0.9111328125	Keep adaptive RK error scales finite at zero pitch and the axis (#610)
+collision	2026-10-27	2e0cf97d16	0a176137d5	losstimes	OK	OK	0	0	0.07116764030332011	1.7658219885492992	0.0	0.9111328125	Preserve magnetic moment across symplectic RK recovery (#629)
+collision	2026-10-29	389775536a	094b7d25e6	CHANGED	OK	OK	18	0	0.6540592343244979	1.7445817391961254	0.0	0.9111328125	Encode collision kicks with the field at the carried position (#638)
+collision	2026-10-30	f8eddbc488	3493038a34	roundoff	OK	OK	0	0	0.0	1.690109361770649e-05	0.0	0.9111328125	Fix NaN classifier boundaries using surface mirror extrema (#599)
+collision	2026-10-31	452542c412	00a2b30f48	losstimes	OK	OK	0	0	0.0840866041040402	0.9904300100688758	0.0	0.9111328125	Boozer axis continuation: evaluate negative labels at (|s|, theta+pi) (#642)
+collision	2026-11-02	00a2b30f48	b6dc7f9be9	CHANGED	OK	OK	9	0	0.48939578365581515	1.6122245851001067	0.0048828125	0.916015625	Bump fortnum to d40be6d for the hybrd1 multiroot_hybrids (#643)
+collision	2026-11-03	273aaf7d42	0155903b1f	losstimes	OK	OK	0	0	5.493496762522254e-06	1.7661861248615331	0.0	0.916015625	Start Newton from extrapolated states and stop on the contraction rate (#646)
+collision	2026-11-03	2290f5162b	af9c334654	roundoff	OK	OK	0	0	7.27331838853984e-08	1.2939394012883678	0.0	0.916015625	Store the canonical-flux metric and field components as one spline (#647)
+collision	2026-11-05	7e4950c10e	359ec8c432	CHANGED	OK	OK	9	0	0.02256307260970233	1.4090464840348904	0.0029296875	0.9189453125	Use species-resolved, speed-dependent Coulomb logarithms in collisions (#674)
+collision	2026-11-05	359ec8c432	619c217ac4	CHANGED	OK	OK	4	0	0.0001687862003855664	1.7713090532854194	0.0	0.9189453125	Use CODATA 2018 physical constants (#675)
+collision	2026-11-05	2be96cea41	c055055a6a	roundoff	OK	OK	0	0	1.1257010948395596e-11	1.8040794635891255	0.0	0.9189453125	Keep the field period of a Boozer start in ref_to_integ_boozer (#733)
+collision	2026-11-05	c055055a6a	43287d943f	roundoff	OK	OK	0	0	1.046133084672829e-07	1.3711000197353598	0.0	0.9189453125	Generate get_derivatives2 and the Boozer h derivatives with FortSym (#730)
+fast_class	2020-02-10	ef5e4ceaac	23e7b86dfa	status	NOBUILD	UNSUPPORTED							Thread safety for rkf45
+fast_class	2022-06-28	795fd3fd61	86b715fbc4	status	UNSUPPORTED	OK							Untangle circular dependency
+fast_class	2023-08-06	5973643d2f	be3d2f34ea	incomparable	OK	OK					nan	nan	remove pFUnit, add o0wn assertion templates and sanity test for new utility
+fast_class	2023-12-16	ce3275d7df	be7a83b532	incomparable	OK	OK					nan	0.78125	Need bminmax for every particle
+fast_class	2024-03-11	be7a83b532	6c5eb2ca0e	CHANGED	OK	OK	81	0	0.0	inf	0.0791015625	0.8603515625	Fix find_bminmax
+fast_class	2024-05-25	6c5eb2ca0e	579874be4a	CHANGED	OK	OK	99	0	0.0	1.015	0.0185546875	0.87890625	Shorten module name
+fast_class	2024-07-18	579874be4a	d582580f98	CHANGED	OK	OK	97	0	0.0	1.015	-0.0166015625	0.8623046875	Configurable collisions
+fast_class	2024-08-02	d582580f98	87a2afc76b	CHANGED	OK	OK	83	0	0.0	1.015	-0.0810546875	0.78125	48 allow non integer mass number (#49)
+fast_class	2024-08-19	4cda89147b	c2bb7512f1	roundoff	OK	OK	0	0	0.0	2.305180961795646e-05	0.0	0.78125	Restore 1.3 behavior
+fast_class	2024-09-01	74e871f441	4a7a0bf190	roundoff	OK	OK	0	0	0.0	1.304729319560422	0.0	0.78125	new coordinates (#52)
+fast_class	2024-09-07	07ef544318	748be8ad40	status	OK	NOBUILD							Non-flux coordinates (#56)
+fast_class	2025-02-02	174599d8c8	e25adbd873	status	NOBUILD	OK							Fetch dependencies (#75)
+fast_class	2025-03-18	e25adbd873	c6de27923c	CHANGED	OK	OK	212	0	0.0	1.015	0.20703125	1.0	Sampler interface (#77)
+fast_class	2025-04-28	c6de27923c	786d4a2dc2	incomparable	OK	OK					nan	nan	Merge branch 'main' into golden_record_update
+fast_class	2025-07-06	786d4a2dc2	70b78749a1	incomparable	OK	OK					nan	1.0	Merge branch 'main' into golden_record_update
+fast_class	2025-08-12	b4c996733c	c7ca093a01	CHANGED	OK	OK	212	0	0.0	4421.356498303943	-0.20703125	0.79296875	Always init starting surface for bmin/bmax
+fast_class	2025-08-12	b0b8a647a4	92d51a5ee1	status	OK	NOBUILD							Modernize type declarations in orbit_symplectic_base.f90 (issue #110) (#136)
+fast_class	2025-08-12	a93fef0aa0	0fcf94b182	status	NOBUILD	OK							fix: Use explicit imports to avoid dp conflicts after type modernization (#139)
+fast_class	2025-08-22	58220277cd	0016bff6a4	CHANGED	OK	OK	2	0	2.5798994871562937e-06	1.2395953390713312	0.0	0.79296875	test: Add Python batch API test infrastructure for Issue #90 (#172)
+fast_class	2025-12-21	007a946933	a3c0fced6e	roundoff	OK	OK	0	0	0.0	1.536612741609304	0.0	0.79296875	Refactor Boozer eval to libneo batch splines + golden perf guard (#267)
+fast_class	2025-12-22	a3c0fced6e	ccebc3d857	status	OK	NOBUILD							Refactor canflux to use libneo batch splines (#269)
+fast_class	2025-12-27	3d4b18ac37	a0ae6874c4	status	NOBUILD	OK							Perf: reduce spline overhead and stabilize Python imports (#280)
+fast_class	2026-01-11	ce33f5800e	17d8c8ea6e	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.7919921875	feat: logarithmic macrostep time grid (#314)
+fast_class	2026-05-22	26933e7807	e404496e17	CHANGED	OK	OK	148	0	0.2340226824762907	0.9490631229425073	0.14453125	0.9365234375	fix(classification): fast_class regression + JPP 2023 paper reproduction (#323)
+fast_class	2026-06-06	171c9984a8	c455409ad2	roundoff	OK	OK	0	0	0.0	1.2437887656957989	0.0	0.9365234375	Periodic checkpoint output and lock-free hot-loop diagnostics (#352)
+fast_class	2026-06-06	f04397ada2	1eaa91cc3e	roundoff	OK	OK	0	0	0.0	1.5762463122208383	0.0	0.9365234375	OpenACC GPU offload of default Boozer + symplectic Euler tracing (#354)
+fast_class	2026-06-11	ba2390a945	78bd48144c	roundoff	OK	OK	0	0	0.0	0.6448116571810663	0.0	0.9365234375	Continue symplectic orbits through the magnetic axis instead of clamping r to 0.01 (#384)
+fast_class	2026-06-20	50783532f7	c277e63038	status	OK	NOBUILD							Document GVEC chartmap conventions (#403)
+fast_class	2026-06-21	c277e63038	29c642778f	status	NOBUILD	OK							Use libneo field abstraction and boozer_sub; drop SIMPLE copies (#389)
+fast_class	2026-07-04	ef51e77ca5	10f9e17d0d	roundoff	OK	OK	0	0	0.0	2.5298641417576566	0.0	0.9365234375	Fix pysimple orbit loss-time handling
+fast_class	2026-07-13	47e6fde583	cc5872a855	roundoff	OK	OK	0	0	0.0	0.5587405373711728	0.0	0.9365234375	Locate symplectic boundary events (#459)
+fast_class	2026-07-17	48551773c1	f60c57c4a1	roundoff	OK	OK	0	0	0.0	0.0009973999519126595	0.0	0.9365234375	Continue numerical recoveries and report resolved confinement (#494)
+fast_class	2026-08-13	04b31af79a	c29a8c5447	roundoff	OK	OK	0	0	0.0	8.597632567162563e-12	0.0	0.9365234375	Add native CUDA RK54 tracing with tuned DOPRI (#518)
+fast_class	2026-10-16	cbf2b45526	2a0c51782d	roundoff	OK	OK	0	0	0.0	8.597632567162563e-12	0.0	0.9365234375	perf: drop the IEEE intrinsic modules from SIMPLE sources (#538)
+fast_class	2026-10-19	6da8670473	63e72ee20c	status	OK	NOBUILD							Build the regular near-axis Boozer field on request (libneo 924ba773) (#580)
+fast_class	2026-10-19	4b5dcd842e	19198d90eb	status	NOBUILD	OK							Fix main build: count regular-axis Boozer evaluations via count_field_evaluation (#583)
+fast_class	2026-10-27	2e0cf97d16	0a176137d5	CHANGED	OK	OK	0	3	0.0	0.6181145398430101	-0.00018651291625859656	0.9363369245837414	Preserve magnetic moment across symplectic RK recovery (#629)
+fast_class	2026-10-30	f8eddbc488	3493038a34	roundoff	OK	OK	0	0	0.0	1.6901093446160396e-05	0.0	0.9363369245837414	Fix NaN classifier boundaries using surface mirror extrema (#599)
+fast_class	2026-10-31	452542c412	00a2b30f48	CHANGED	OK	OK	0	3	0.0	0.20042112708141177	0.00018651291625859656	0.9365234375	Boozer axis continuation: evaluate negative labels at (|s|, theta+pi) (#642)
+fast_class	2026-11-02	00a2b30f48	b6dc7f9be9	CHANGED	OK	OK	1	0	0.2739079285471038	0.7075443540694871	-0.0009765625	0.935546875	Bump fortnum to d40be6d for the hybrd1 multiroot_hybrids (#643)
+fast_class	2026-11-03	273aaf7d42	0155903b1f	roundoff	OK	OK	0	0	0.0	0.5467989644316664	0.0	0.935546875	Start Newton from extrapolated states and stop on the contraction rate (#646)
+fast_class	2026-11-03	2290f5162b	af9c334654	roundoff	OK	OK	0	0	0.0	0.6173484426379764	0.0	0.935546875	Store the canonical-flux metric and field components as one spline (#647)
+fast_class	2026-11-05	359ec8c432	619c217ac4	losstimes	OK	OK	0	0	7.73969846117976e-06	0.6569059399768269	0.0	0.935546875	Use CODATA 2018 physical constants (#675)
+fast_class	2026-11-05	c055055a6a	43287d943f	roundoff	OK	OK	0	0	0.0	0.5129783782446817	0.0	0.935546875	Generate get_derivatives2 and the Boozer h derivatives with FortSym (#730)
+fast_class_np0	2020-02-10	ef5e4ceaac	23e7b86dfa	status	NOBUILD	UNSUPPORTED							Thread safety for rkf45
+fast_class_np0	2022-06-28	795fd3fd61	86b715fbc4	status	UNSUPPORTED	OK							Untangle circular dependency
+fast_class_np0	2023-08-06	5973643d2f	be3d2f34ea	incomparable	OK	OK					nan	nan	remove pFUnit, add o0wn assertion templates and sanity test for new utility
+fast_class_np0	2023-12-16	ce3275d7df	be7a83b532	incomparable	OK	OK					nan	0.7939453125	Need bminmax for every particle
+fast_class_np0	2024-03-11	be7a83b532	6c5eb2ca0e	roundoff	OK	OK	0	0	0.0	1592.8692453807012	0.0	0.7939453125	Fix find_bminmax
+fast_class_np0	2024-05-25	6c5eb2ca0e	579874be4a	roundoff	OK	OK	0	0	0.0	1.1962359000114087	0.0	0.7939453125	Shorten module name
+fast_class_np0	2024-07-18	579874be4a	d582580f98	CHANGED	OK	OK	1	0	0.0	inf	0.0009765625	0.794921875	Configurable collisions
+fast_class_np0	2024-08-02	d582580f98	87a2afc76b	CHANGED	OK	OK	1	0	0.0	1.01	-0.0009765625	0.7939453125	48 allow non integer mass number (#49)
+fast_class_np0	2024-08-19	4cda89147b	c2bb7512f1	roundoff	OK	OK	0	0	0.0	2.305180986870412e-05	0.0	0.7939453125	Restore 1.3 behavior
+fast_class_np0	2024-08-28	59ab3ed119	74e871f441	CHANGED	OK	OK	140	0	0.05564365138833224	0.9784581486709145	0.13671875	0.9306640625	Extract procedures (#55)
+fast_class_np0	2024-09-01	74e871f441	4a7a0bf190	roundoff	OK	OK	0	0	0.0	0.9999036577569409	0.0	0.9306640625	new coordinates (#52)
+fast_class_np0	2024-09-07	07ef544318	748be8ad40	status	OK	NOBUILD							Non-flux coordinates (#56)
+fast_class_np0	2025-02-02	174599d8c8	e25adbd873	status	NOBUILD	OK							Fetch dependencies (#75)
+fast_class_np0	2025-03-18	e25adbd873	c6de27923c	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.9306640625	Sampler interface (#77)
+fast_class_np0	2025-04-28	c6de27923c	786d4a2dc2	incomparable	OK	OK					nan	nan	Merge branch 'main' into golden_record_update
+fast_class_np0	2025-07-06	786d4a2dc2	70b78749a1	incomparable	OK	OK					nan	0.9306640625	Merge branch 'main' into golden_record_update
+fast_class_np0	2025-08-12	b4c996733c	c7ca093a01	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.9306640625	Always init starting surface for bmin/bmax
+fast_class_np0	2025-08-12	b0b8a647a4	92d51a5ee1	status	OK	NOBUILD							Modernize type declarations in orbit_symplectic_base.f90 (issue #110) (#136)
+fast_class_np0	2025-08-12	a93fef0aa0	0fcf94b182	status	NOBUILD	OK							fix: Use explicit imports to avoid dp conflicts after type modernization (#139)
+fast_class_np0	2025-08-22	58220277cd	0016bff6a4	roundoff	OK	OK	0	0	0.0	0.9843499088756488	0.0	0.9306640625	test: Add Python batch API test infrastructure for Issue #90 (#172)
+fast_class_np0	2025-12-21	007a946933	a3c0fced6e	roundoff	OK	OK	0	0	0.0	0.8756862378476932	0.0	0.9306640625	Refactor Boozer eval to libneo batch splines + golden perf guard (#267)
+fast_class_np0	2025-12-22	a3c0fced6e	ccebc3d857	status	OK	NOBUILD							Refactor canflux to use libneo batch splines (#269)
+fast_class_np0	2025-12-27	3d4b18ac37	a0ae6874c4	status	NOBUILD	OK							Perf: reduce spline overhead and stabilize Python imports (#280)
+fast_class_np0	2026-01-11	ce33f5800e	17d8c8ea6e	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.9306640625	feat: logarithmic macrostep time grid (#314)
+fast_class_np0	2026-06-06	171c9984a8	c455409ad2	roundoff	OK	OK	0	0	0.0	0.9006955873444049	0.0	0.9306640625	Periodic checkpoint output and lock-free hot-loop diagnostics (#352)
+fast_class_np0	2026-06-06	5a1203ebb2	1eaa91cc3e	roundoff	OK	OK	0	0	0.0	0.9637700285413	0.0	0.9306640625	OpenACC GPU offload of default Boozer + symplectic Euler tracing (#354)
+fast_class_np0	2026-06-11	ba2390a945	78bd48144c	roundoff	OK	OK	0	0	0.0	0.3635293914430395	0.0	0.9306640625	Continue symplectic orbits through the magnetic axis instead of clamping r to 0.01 (#384)
+fast_class_np0	2026-06-20	50783532f7	c277e63038	status	OK	NOBUILD							Document GVEC chartmap conventions (#403)
+fast_class_np0	2026-06-21	c277e63038	29c642778f	status	NOBUILD	OK							Use libneo field abstraction and boozer_sub; drop SIMPLE copies (#389)
+fast_class_np0	2026-07-13	63ab6cb2f1	714c16866b	roundoff	OK	OK	0	0	0.0	0.0001669206327627954	0.0	0.9306640625	Fix slow CI test gates (#454)
+fast_class_np0	2026-07-13	47e6fde583	cc5872a855	CHANGED	OK	OK	0	2	1.8998878212469431e-06	0.8205557684488308	-0.001953125	0.9287109375	Locate symplectic boundary events (#459)
+fast_class_np0	2026-07-17	48551773c1	f60c57c4a1	CHANGED	OK	OK	0	2	0.0	0.09968997870030498	0.001953125	0.9306640625	Continue numerical recoveries and report resolved confinement (#494)
+fast_class_np0	2026-07-17	7e8d2d3ca6	d8b0e019ab	roundoff	OK	OK	0	0	0.0	0.566681657859665	0.0	0.9306640625	Restore warning-mode orbit recovery without Newton stalls (#499)
+fast_class_np0	2026-07-25	53f0012d35	69fe8c364d	roundoff	OK	OK	0	0	0.0	0.13434732197135674	0.0	0.9306640625	Stabilize orbit recovery and boundary reporting (#503)
+fast_class_np0	2026-10-19	7dc178536d	aa1d30bdf2	CHANGED	OK	OK	0	2	1.8998878212469431e-06	1914.5352548212466	-0.000135686766144838	0.9305283757338552	Let fast_class enable classification on its own (#512)
+fast_class_np0	2026-10-19	6da8670473	63e72ee20c	status	OK	NOBUILD							Build the regular near-axis Boozer field on request (libneo 924ba773) (#580)
+fast_class_np0	2026-10-19	4b5dcd842e	19198d90eb	status	NOBUILD	OK							Fix main build: count regular-axis Boozer evaluations via count_field_evaluation (#583)
+fast_class_np0	2026-10-27	2e0cf97d16	0a176137d5	CHANGED	OK	OK	0	1	0.0	0.5174171175082781	6.790970114001205e-05	0.9305962854349952	Preserve magnetic moment across symplectic RK recovery (#629)
+fast_class_np0	2026-10-30	f8eddbc488	3493038a34	roundoff	OK	OK	0	0	0.0	1.690109361770649e-05	0.0	0.9305962854349952	Fix NaN classifier boundaries using surface mirror extrema (#599)
+fast_class_np0	2026-10-31	452542c412	00a2b30f48	CHANGED	OK	OK	0	1	0.0	0.15049883446988147	6.777706500482594e-05	0.9306640625	Boozer axis continuation: evaluate negative labels at (|s|, theta+pi) (#642)
+fast_class_np0	2026-11-02	00a2b30f48	b6dc7f9be9	losstimes	OK	OK	0	0	0.05227471184917993	0.6240241157407063	0.0	0.9306640625	Bump fortnum to d40be6d for the hybrd1 multiroot_hybrids (#643)
+fast_class_np0	2026-11-03	273aaf7d42	0155903b1f	roundoff	OK	OK	0	0	0.0	0.6437439421061764	0.0	0.9306640625	Start Newton from extrapolated states and stop on the contraction rate (#646)
+fast_class_np0	2026-11-03	2290f5162b	af9c334654	roundoff	OK	OK	0	0	0.0	0.31074550023832465	0.0	0.9306640625	Store the canonical-flux metric and field components as one spline (#647)
+fast_class_np0	2026-11-05	359ec8c432	619c217ac4	CHANGED	OK	OK	1	1	1.936172148943229e-06	0.3536379312445204	0.0009097400415445378	0.9315738025415445	Use CODATA 2018 physical constants (#675)
+fast_class_np1	2020-02-10	ef5e4ceaac	23e7b86dfa	status	NOBUILD	UNSUPPORTED							Thread safety for rkf45
+fast_class_np1	2022-06-28	795fd3fd61	86b715fbc4	status	UNSUPPORTED	OK							Untangle circular dependency
+fast_class_np1	2023-08-06	5973643d2f	be3d2f34ea	incomparable	OK	OK					nan	nan	remove pFUnit, add o0wn assertion templates and sanity test for new utility
+fast_class_np1	2023-12-16	ce3275d7df	be7a83b532	incomparable	OK	OK					nan	0.97265625	Need bminmax for every particle
+fast_class_np1	2024-03-11	be7a83b532	6c5eb2ca0e	CHANGED	OK	OK	132	0	0.0	571.6026799571272	-0.123046875	0.849609375	Fix find_bminmax
+fast_class_np1	2024-05-25	6c5eb2ca0e	579874be4a	CHANGED	OK	OK	60	0	0.0	1.01	-0.001953125	0.84765625	Shorten module name
+fast_class_np1	2024-07-18	579874be4a	d582580f98	CHANGED	OK	OK	70	0	0.0	1.01	-0.005859375	0.841796875	Configurable collisions
+fast_class_np1	2024-08-02	d582580f98	87a2afc76b	CHANGED	OK	OK	44	0	0.0	1.01	-0.04296875	0.798828125	48 allow non integer mass number (#49)
+fast_class_np1	2024-08-19	4cda89147b	c2bb7512f1	roundoff	OK	OK	0	0	0.0	2.305180986870412e-05	0.0	0.798828125	Restore 1.3 behavior
+fast_class_np1	2024-08-28	59ab3ed119	74e871f441	CHANGED	OK	OK	139	0	0.05564365138833224	0.9938512166163826	0.1357421875	0.9345703125	Extract procedures (#55)
+fast_class_np1	2024-09-01	74e871f441	4a7a0bf190	roundoff	OK	OK	0	0	0.0	0.9984461466889989	0.0	0.9345703125	new coordinates (#52)
+fast_class_np1	2024-09-07	07ef544318	748be8ad40	status	OK	NOBUILD							Non-flux coordinates (#56)
+fast_class_np1	2025-02-02	174599d8c8	e25adbd873	status	NOBUILD	OK							Fetch dependencies (#75)
+fast_class_np1	2025-03-18	e25adbd873	c6de27923c	CHANGED	OK	OK	67	0	0.0	1.01	0.0654296875	1.0	Sampler interface (#77)
+fast_class_np1	2025-04-28	c6de27923c	786d4a2dc2	incomparable	OK	OK					nan	nan	Merge branch 'main' into golden_record_update
+fast_class_np1	2025-07-06	786d4a2dc2	70b78749a1	incomparable	OK	OK					nan	1.0	Merge branch 'main' into golden_record_update
+fast_class_np1	2025-08-12	b4c996733c	c7ca093a01	CHANGED	OK	OK	67	0	0.0	6.273308134911926	-0.0654296875	0.9345703125	Always init starting surface for bmin/bmax
+fast_class_np1	2025-08-12	b0b8a647a4	92d51a5ee1	status	OK	NOBUILD							Modernize type declarations in orbit_symplectic_base.f90 (issue #110) (#136)
+fast_class_np1	2025-08-12	a93fef0aa0	0fcf94b182	status	NOBUILD	OK							fix: Use explicit imports to avoid dp conflicts after type modernization (#139)
+fast_class_np1	2025-08-22	58220277cd	0016bff6a4	roundoff	OK	OK	0	0	0.0	1.2897852358389252	0.0	0.9345703125	test: Add Python batch API test infrastructure for Issue #90 (#172)
+fast_class_np1	2025-12-21	007a946933	a3c0fced6e	roundoff	OK	OK	0	0	0.0	1.2179395605949135	0.0	0.9345703125	Refactor Boozer eval to libneo batch splines + golden perf guard (#267)
+fast_class_np1	2025-12-22	a3c0fced6e	ccebc3d857	status	OK	NOBUILD							Refactor canflux to use libneo batch splines (#269)
+fast_class_np1	2025-12-27	3d4b18ac37	a0ae6874c4	status	NOBUILD	OK							Perf: reduce spline overhead and stabilize Python imports (#280)
+fast_class_np1	2026-01-11	ce33f5800e	17d8c8ea6e	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.9345703125	feat: logarithmic macrostep time grid (#314)
+fast_class_np1	2026-06-06	171c9984a8	c455409ad2	roundoff	OK	OK	0	0	0.0	0.9949009208990505	0.0	0.9345703125	Periodic checkpoint output and lock-free hot-loop diagnostics (#352)
+fast_class_np1	2026-06-06	5a1203ebb2	1eaa91cc3e	roundoff	OK	OK	0	0	0.0	1.1003610822448187	0.0	0.9345703125	OpenACC GPU offload of default Boozer + symplectic Euler tracing (#354)
+fast_class_np1	2026-06-11	ba2390a945	78bd48144c	roundoff	OK	OK	0	0	0.0	0.3638199640589221	0.0	0.9345703125	Continue symplectic orbits through the magnetic axis instead of clamping r to 0.01 (#384)
+fast_class_np1	2026-06-20	50783532f7	c277e63038	status	OK	NOBUILD							Document GVEC chartmap conventions (#403)
+fast_class_np1	2026-06-21	c277e63038	29c642778f	status	NOBUILD	OK							Use libneo field abstraction and boozer_sub; drop SIMPLE copies (#389)
+fast_class_np1	2026-07-04	ef51e77ca5	10f9e17d0d	roundoff	OK	OK	0	0	0.0	2.519840375223606	0.0	0.9345703125	Fix pysimple orbit loss-time handling
+fast_class_np1	2026-07-13	63ab6cb2f1	714c16866b	roundoff	OK	OK	0	0	0.0	0.0001670163353240577	0.0	0.9345703125	Fix slow CI test gates (#454)
+fast_class_np1	2026-07-13	47e6fde583	cc5872a855	CHANGED	OK	OK	0	2	1.8998878212469431e-06	0.8214187154098375	-0.001953125	0.9326171875	Locate symplectic boundary events (#459)
+fast_class_np1	2026-07-17	48551773c1	f60c57c4a1	CHANGED	OK	OK	0	2	0.0	0.09964909620745087	0.001953125	0.9345703125	Continue numerical recoveries and report resolved confinement (#494)
+fast_class_np1	2026-07-17	7e8d2d3ca6	d8b0e019ab	roundoff	OK	OK	0	0	0.0	0.5664492638003016	0.0	0.9345703125	Restore warning-mode orbit recovery without Newton stalls (#499)
+fast_class_np1	2026-07-25	53f0012d35	69fe8c364d	roundoff	OK	OK	0	0	0.0	0.13434732197135674	0.0	0.9345703125	Stabilize orbit recovery and boundary reporting (#503)
+fast_class_np1	2026-10-19	7dc178536d	aa1d30bdf2	CHANGED	OK	OK	0	2	1.8998878212469431e-06	468.86816102199214	-0.00012804244129149822	0.9344422700587085	Let fast_class enable classification on its own (#512)
+fast_class_np1	2026-10-19	6da8670473	63e72ee20c	status	OK	NOBUILD							Build the regular near-axis Boozer field on request (libneo 924ba773) (#580)
+fast_class_np1	2026-10-19	4b5dcd842e	19198d90eb	status	NOBUILD	OK							Fix main build: count regular-axis Boozer evaluations via count_field_evaluation (#583)
+fast_class_np1	2026-10-27	2e0cf97d16	0a176137d5	CHANGED	OK	OK	0	1	0.0	0.5174237144287801	6.408380248412726e-05	0.9345063538611926	Preserve magnetic moment across symplectic RK recovery (#629)
+fast_class_np1	2026-10-30	f8eddbc488	3493038a34	roundoff	OK	OK	0	0	0.0	1.690109361770649e-05	0.0	0.9345063538611926	Fix NaN classifier boundaries using surface mirror extrema (#599)
+fast_class_np1	2026-10-31	452542c412	00a2b30f48	CHANGED	OK	OK	0	1	0.0	0.15049883446988147	6.395863880737096e-05	0.9345703125	Boozer axis continuation: evaluate negative labels at (|s|, theta+pi) (#642)
+fast_class_np1	2026-11-02	00a2b30f48	b6dc7f9be9	losstimes	OK	OK	0	0	0.05227471184917993	0.6240320717378243	0.0	0.9345703125	Bump fortnum to d40be6d for the hybrd1 multiroot_hybrids (#643)
+fast_class_np1	2026-11-03	273aaf7d42	0155903b1f	roundoff	OK	OK	0	0	0.0	0.6437524027962668	0.0	0.9345703125	Start Newton from extrapolated states and stop on the contraction rate (#646)
+fast_class_np1	2026-11-03	2290f5162b	af9c334654	roundoff	OK	OK	0	0	0.0	0.3518216027230087	0.0	0.9345703125	Store the canonical-flux metric and field components as one spline (#647)
+fast_class_np1	2026-11-05	359ec8c432	619c217ac4	CHANGED	OK	OK	1	1	1.936172148943229e-06	0.3778652688687942	0.0009135584677419928	0.935483870967742	Use CODATA 2018 physical constants (#675)
+meiss	2020-02-10	ef5e4ceaac	23e7b86dfa	status	NOBUILD	UNSUPPORTED							Thread safety for rkf45
+meiss	2021-12-02	abfd48ca37	6a6699ab7a	status	UNSUPPORTED	OK							Boozer Symplectic
+meiss	2024-08-18	5fff69e0ad	95ba9cba54	status	OK	FAIL 1							Dispatch (#53)
+meiss	2024-09-01	74e871f441	4a7a0bf190	status	FAIL 1	OK							new coordinates (#52)
+meiss	2024-09-07	07ef544318	748be8ad40	status	OK	NOBUILD							Non-flux coordinates (#56)
+meiss	2025-02-02	174599d8c8	e25adbd873	status	NOBUILD	OK							Fetch dependencies (#75)
+meiss	2025-03-18	e25adbd873	c6de27923c	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.9296875	Sampler interface (#77)
+meiss	2025-04-28	c6de27923c	786d4a2dc2	incomparable	OK	OK					nan	nan	Merge branch 'main' into golden_record_update
+meiss	2025-07-06	786d4a2dc2	70b78749a1	status	OK	FAIL 139							Merge branch 'main' into golden_record_update
+meiss	2025-08-12	bce44b338c	8f87525522	status	FAIL 139	OK							build: add -Wtrampolines compiler flag and adjust executable stack options
+meiss	2025-08-12	b0b8a647a4	92d51a5ee1	status	OK	NOBUILD							Modernize type declarations in orbit_symplectic_base.f90 (issue #110) (#136)
+meiss	2025-08-12	a93fef0aa0	0fcf94b182	status	NOBUILD	OK							fix: Use explicit imports to avoid dp conflicts after type modernization (#139)
+meiss	2025-08-22	58220277cd	0016bff6a4	roundoff	OK	OK	0	0	0.0	0.9885792886263934	0.0	0.9296875	test: Add Python batch API test infrastructure for Issue #90 (#172)
+meiss	2025-09-05	0016bff6a4	493afe3afc	roundoff	OK	OK	0	0	0.0	0.7172335662402249	0.0	0.9296875	feat: implement comprehensive batch spline optimization system (#174)
+meiss	2025-12-17	df975292c9	bc67a39ba7	roundoff	OK	OK	0	0	0.0	0.9753725289003532	0.0	0.9296875	feat: unify vmec_field_t coordinate convention (#253) (#257)
+meiss	2025-12-22	a3c0fced6e	ccebc3d857	status	OK	NOBUILD							Refactor canflux to use libneo batch splines (#269)
+meiss	2025-12-27	3d4b18ac37	a0ae6874c4	status	NOBUILD	OK							Perf: reduce spline overhead and stabilize Python imports (#280)
+meiss	2026-01-11	ce33f5800e	17d8c8ea6e	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.9296875	feat: logarithmic macrostep time grid (#314)
+meiss	2026-06-06	171c9984a8	c455409ad2	roundoff	OK	OK	0	0	0.0	0.8027184275091446	0.0	0.9296875	Periodic checkpoint output and lock-free hot-loop diagnostics (#352)
+meiss	2026-06-06	f04397ada2	1eaa91cc3e	roundoff	OK	OK	0	0	0.0	0.7339838210240951	0.0	0.9296875	OpenACC GPU offload of default Boozer + symplectic Euler tracing (#354)
+meiss	2026-06-20	50783532f7	c277e63038	status	OK	NOBUILD							Document GVEC chartmap conventions (#403)
+meiss	2026-06-21	c277e63038	29c642778f	status	NOBUILD	OK							Use libneo field abstraction and boozer_sub; drop SIMPLE copies (#389)
+meiss	2026-07-13	63ab6cb2f1	714c16866b	roundoff	OK	OK	0	0	0.0	0.010494875066885212	0.0	0.9296875	Fix slow CI test gates (#454)
+meiss	2026-07-13	47e6fde583	cc5872a855	CHANGED	OK	OK	32	32	1.9278756111781653e-06	0.5009208452981984	0.0	0.9296875	Locate symplectic boundary events (#459)
+meiss	2026-07-17	48551773c1	f60c57c4a1	CHANGED	OK	OK	0	32	0.0	0.0	0.03125	0.9609375	Continue numerical recoveries and report resolved confinement (#494)
+meiss	2026-07-17	7e8d2d3ca6	d8b0e019ab	CHANGED	OK	OK	32	0	0.0	0.9975692690555467	-0.03125	0.9296875	Restore warning-mode orbit recovery without Newton stalls (#499)
+meiss	2026-07-25	53f0012d35	69fe8c364d	roundoff	OK	OK	0	0	3.2248324345098e-09	0.9691523021861925	0.0	0.9296875	Stabilize orbit recovery and boundary reporting (#503)
+meiss	2026-10-16	cbf2b45526	2a0c51782d	roundoff	OK	OK	0	0	0.0	0.9635587801655582	0.0	0.9296875	perf: drop the IEEE intrinsic modules from SIMPLE sources (#538)
+meiss	2026-10-16	2a0c51782d	ffd7f4a197	roundoff	OK	OK	0	0	0.0	0.98103954088959	0.0	0.9296875	fix: drop the RK momentum gate on accepted symplectic steps (#540)
+meiss	2026-10-19	6da8670473	63e72ee20c	status	OK	NOBUILD							Build the regular near-axis Boozer field on request (libneo 924ba773) (#580)
+meiss	2026-10-19	4b5dcd842e	19198d90eb	status	NOBUILD	OK							Fix main build: count regular-axis Boozer evaluations via count_field_evaluation (#583)
+meiss	2026-10-19	19198d90eb	61d7aaddd6	roundoff	OK	OK	0	0	0.0	3.4025785032674975e-08	0.0	0.9296875	Add explicit-energy monoenergetic Lorentz collisions (#522)
+meiss	2026-10-21	20c897d098	9eca50edfa	roundoff	OK	OK	0	0	0.0	0.9884113379749488	0.0	0.9296875	Check physical momentum before accepting symplectic endpoints (#560)
+meiss	2026-10-23	caabbb50d5	29adb18993	roundoff	OK	OK	0	0	0.0	0.9773733247197908	0.0	0.9296875	Keep adaptive RK error scales finite at zero pitch and the axis (#610)
+meiss	2026-10-23	fb8152483c	2e0cf97d16	roundoff	OK	OK	0	0	0.0	0.968807162356087	0.0	0.9296875	Preserve RK recovery backoff through brief symplectic probes (#619)
+meiss	2026-10-27	2e0cf97d16	0a176137d5	CHANGED	OK	OK	20	0	4.883688023887877e-09	0.9803427894148801	-0.01953125	0.91015625	Preserve magnetic moment across symplectic RK recovery (#629)
+meiss	2026-10-29	244f237b0d	4feb1bed35	CHANGED	OK	OK	27	0	4.71828582945138e-09	0.9662421999405904	0.0126953125	0.9228515625	Seed symplectic RK recovery with the reference momentum and carried mu (#640)
+meiss	2026-10-30	f8eddbc488	3493038a34	roundoff	OK	OK	0	0	0.0	0.4473214689876604	0.0	0.9228515625	Fix NaN classifier boundaries using surface mirror extrema (#599)
+meiss	2026-10-31	452542c412	00a2b30f48	roundoff	OK	OK	0	0	0.0	0.2067007130019464	0.0	0.9228515625	Boozer axis continuation: evaluate negative labels at (|s|, theta+pi) (#642)
+meiss	2026-11-03	273aaf7d42	0155903b1f	losstimes	OK	OK	0	0	0.019526346835775817	0.98487889998014	0.0	0.9228515625	Start Newton from extrapolated states and stop on the contraction rate (#646)
+meiss	2026-11-03	2290f5162b	af9c334654	CHANGED	OK	OK	1	0	4.404011877401359e-11	0.9870043725780538	0.0009765625	0.923828125	Store the canonical-flux metric and field components as one spline (#647)
+meiss	2026-11-03	a8eb199321	8e9a4ce93a	roundoff	OK	OK	0	0	0.0	9.308648228496157e-10	0.0	0.923828125	Generate the implicit-scheme residuals and Jacobians from one source (#656)
+meiss	2026-11-05	359ec8c432	619c217ac4	CHANGED	OK	OK	3	0	0.0632346292502724	0.997754045330056	-0.0009765625	0.9228515625	Use CODATA 2018 physical constants (#675)
+meiss	2026-11-05	d0b1b4a861	74eba10ab6	CHANGED	OK	OK	6	0	0.0	0.978958576024026	0.005859375	0.9287109375	Reject only momentum jumps on accepted symplectic endpoints (#707)
+meiss	2026-11-05	c055055a6a	43287d943f	roundoff	OK	OK	0	0	1.3416698307899821e-11	0.9987458872187477	0.0	0.9287109375	Generate get_derivatives2 and the Boozer h derivatives with FortSym (#730)
+meiss	2026-11-05	dbab349871	677c23fcdb	roundoff	OK	OK	0	0	3.3881317890172014e-18	1.6976647254803597e-15	0.0	0.9287109375	Floor the RK error scale of both angles at one (#747)
+meiss_coils	2020-02-10	ef5e4ceaac	23e7b86dfa	status	NOBUILD	UNSUPPORTED							Thread safety for rkf45
+meiss_coils	2024-09-07	07ef544318	748be8ad40	status	UNSUPPORTED	NOBUILD							Non-flux coordinates (#56)
+meiss_coils	2025-02-02	174599d8c8	e25adbd873	status	NOBUILD	OK							Fetch dependencies (#75)
+meiss_coils	2025-04-28	c6de27923c	786d4a2dc2	incomparable	OK	OK					nan	nan	Merge branch 'main' into golden_record_update
+meiss_coils	2025-07-06	786d4a2dc2	70b78749a1	status	OK	FAIL 139							Merge branch 'main' into golden_record_update
+meiss_coils	2025-08-12	bce44b338c	8f87525522	status	FAIL 139	OK							build: add -Wtrampolines compiler flag and adjust executable stack options
+meiss_coils	2025-08-12	b0b8a647a4	92d51a5ee1	status	OK	NOBUILD							Modernize type declarations in orbit_symplectic_base.f90 (issue #110) (#136)
+meiss_coils	2025-08-12	a93fef0aa0	0fcf94b182	status	NOBUILD	OK							fix: Use explicit imports to avoid dp conflicts after type modernization (#139)
+meiss_coils	2025-08-22	58220277cd	0016bff6a4	CHANGED	OK	OK	1	0	0.0260530801071342	0.6781280858521942	-0.015625	0.3125	test: Add Python batch API test infrastructure for Issue #90 (#172)
+meiss_coils	2025-09-05	0016bff6a4	493afe3afc	losstimes	OK	OK	0	0	2.705408110818125e-05	0.01347814102459225	0.0	0.3125	feat: implement comprehensive batch spline optimization system (#174)
+meiss_coils	2025-12-06	b69c8b1987	7f24b57348	losstimes	OK	OK	0	0	0.0001352704055406894	0.06235447102987591	0.0	0.3125	refactor: normalize B before matmul in hcov computation (#211)
+meiss_coils	2025-12-07	2fdf99fb7a	6090846020	losstimes	OK	OK	0	0	0.0001352704055406894	0.07426132069049733	0.0	0.3125	Refactor: add coordinate_system_t architecture with splined_field_t decorator (#215)
+meiss_coils	2025-12-22	a3c0fced6e	ccebc3d857	status	OK	NOBUILD							Refactor canflux to use libneo batch splines (#269)
+meiss_coils	2025-12-27	3d4b18ac37	a0ae6874c4	status	NOBUILD	OK							Perf: reduce spline overhead and stabilize Python imports (#280)
+meiss_coils	2026-01-11	ce33f5800e	17d8c8ea6e	roundoff	OK	OK	0	0	0.0	0.0	0.0	0.390625	feat: logarithmic macrostep time grid (#314)
+meiss_coils	2026-06-06	171c9984a8	c455409ad2	roundoff	OK	OK	0	0	0.0	0.01174363115751794	0.0	0.390625	Periodic checkpoint output and lock-free hot-loop diagnostics (#352)
+meiss_coils	2026-06-06	f04397ada2	1eaa91cc3e	losstimes	OK	OK	0	0	0.02927251575900224	0.8388402276598457	0.0	0.390625	OpenACC GPU offload of default Boozer + symplectic Euler tracing (#354)
+meiss_coils	2026-06-20	50783532f7	c277e63038	status	OK	NOBUILD							Document GVEC chartmap conventions (#403)
+meiss_coils	2026-06-21	c277e63038	29c642778f	status	NOBUILD	OK							Use libneo field abstraction and boozer_sub; drop SIMPLE copies (#389)
+meiss_coils	2026-07-13	63ab6cb2f1	714c16866b	roundoff	OK	OK	0	0	0.0	0.08649558310906408	0.0	0.390625	Fix slow CI test gates (#454)
+meiss_coils	2026-07-13	47e6fde583	cc5872a855	CHANGED	OK	OK	13	14	2.623451818441593e-05	0.8381464623043464	-0.015625	0.375	Locate symplectic boundary events (#459)
+meiss_coils	2026-07-17	48551773c1	f60c57c4a1	CHANGED	OK	OK	0	14	0.0	0.5350138448008194	0.21875	0.59375	Continue numerical recoveries and report resolved confinement (#494)
+meiss_coils	2026-07-17	7e8d2d3ca6	d8b0e019ab	CHANGED	OK	OK	13	0	0.0	0.9956777998806287	-0.203125	0.390625	Restore warning-mode orbit recovery without Newton stalls (#499)
+meiss_coils	2026-07-25	53f0012d35	69fe8c364d	CHANGED	OK	OK	1	0	0.0020437795137387468	0.8377028961387251	-0.015625	0.375	Stabilize orbit recovery and boundary reporting (#503)
+meiss_coils	2026-10-16	cbf2b45526	2a0c51782d	roundoff	OK	OK	0	0	1.9867157777849614e-14	1.3878538947027455e-05	0.0	0.375	perf: drop the IEEE intrinsic modules from SIMPLE sources (#538)
+meiss_coils	2026-10-16	2a0c51782d	ffd7f4a197	CHANGED	OK	OK	1	0	0.002043779513739177	0.8394258910092658	0.015625	0.390625	fix: drop the RK momentum gate on accepted symplectic steps (#540)
+meiss_coils	2026-10-19	6da8670473	63e72ee20c	status	OK	NOBUILD							Build the regular near-axis Boozer field on request (libneo 924ba773) (#580)
+meiss_coils	2026-10-19	4b5dcd842e	19198d90eb	status	NOBUILD	OK							Fix main build: count regular-axis Boozer evaluations via count_field_evaluation (#583)
+meiss_coils	2026-10-21	20c897d098	9eca50edfa	CHANGED	OK	OK	1	0	0.00205096567577447	0.8154450381261983	0.015625	0.40625	Check physical momentum before accepting symplectic endpoints (#560)
+meiss_coils	2026-10-23	caabbb50d5	29adb18993	roundoff	OK	OK	0	0	1.7251418392774664e-12	0.7308157892822048	0.0	0.40625	Keep adaptive RK error scales finite at zero pitch and the axis (#610)
+meiss_coils	2026-10-23	fb8152483c	2e0cf97d16	roundoff	OK	OK	0	0	0.0	0.9861434933254499	0.0	0.40625	Preserve RK recovery backoff through brief symplectic probes (#619)
+meiss_coils	2026-10-27	2e0cf97d16	0a176137d5	CHANGED	OK	OK	2	0	0.07206932771054836	0.8961041197795188	-0.03125	0.375	Preserve magnetic moment across symplectic RK recovery (#629)
+meiss_coils	2026-10-29	1e680f2f84	389775536a	losstimes	OK	OK	0	0	0.2307983005157033	1.00021989557879	0.0	0.375	Differentiate physical field direction before the coordinate pullback (#622)
+meiss_coils	2026-10-29	244f237b0d	4feb1bed35	losstimes	OK	OK	0	0	0.2650507127276824	0.7691594927203953	0.0	0.375	Seed symplectic RK recovery with the reference momentum and carried mu (#640)
+meiss_coils	2026-10-30	f8eddbc488	3493038a34	roundoff	OK	OK	0	0	0.0	0.8645110908839411	0.0	0.375	Fix NaN classifier boundaries using surface mirror extrema (#599)
+meiss_coils	2026-11-03	273aaf7d42	0155903b1f	losstimes	OK	OK	0	0	0.00019665763297698792	0.013773503936640414	0.0	0.375	Start Newton from extrapolated states and stop on the contraction rate (#646)
+meiss_coils	2026-11-03	2290f5162b	af9c334654	losstimes	OK	OK	0	0	6.045495762850572e-06	0.0003974577770401315	0.0	0.375	Store the canonical-flux metric and field components as one spline (#647)
+meiss_coils	2026-11-05	359ec8c432	619c217ac4	CHANGED	OK	OK	1	0	0.05023195358044147	0.8528952979996749	0.015625	0.390625	Use CODATA 2018 physical constants (#675)
+meiss_coils	2026-11-05	9065bde3e2	29f60964c1	roundoff	OK	OK	0	0	1.0193831456034586e-11	7.456090411750438e-09	0.0	0.390625	Trace the starting field line with one VMEC evaluation per point (#684)
+meiss_coils	2026-11-05	d0b1b4a861	74eba10ab6	CHANGED	OK	OK	1	0	0.0020426731880343594	0.8713866528836591	0.015625	0.40625	Reject only momentum jumps on accepted symplectic endpoints (#707)
+meiss_coils	2026-11-05	c055055a6a	43287d943f	losstimes	OK	OK	0	0	3.175582811405862e-06	0.018245272189817138	0.0	0.40625	Generate get_derivatives2 and the Boozer h derivatives with FortSym (#730)
+meiss_coils	2026-11-05	dbab349871	677c23fcdb	roundoff	OK	OK	0	0	7.453889935837843e-17	5.833070574871877e-12	0.0	0.40625	Floor the RK error scale of both angles at one (#747)
+sampler	2020-02-10	ef5e4ceaac	23e7b86dfa	status	NOBUILD	UNSUPPORTED							Thread safety for rkf45
+sampler	2021-12-02	abfd48ca37	6a6699ab7a	status	UNSUPPORTED	OK							Boozer Symplectic
+sampler	2022-01-11	6a6699ab7a	795fd3fd61	roundoff	OK	OK	0	0	0.0	1.0972802161860828	0.0	1.0	OpenMP for classification
+sampler	2022-06-28	795fd3fd61	86b715fbc4	roundoff	OK	OK	0	0	0.0	1.0411358880586605	0.0	1.0	Untangle circular dependency
+sampler	2022-06-29	86b715fbc4	472ea7bec7	roundoff	OK	OK	0	0	0.0	1.9261035766290473	0.0	1.0	Changelog
+sampler	2022-06-29	472ea7bec7	8e19626104	roundoff	OK	OK	0	0	0.0	1.9788869925929709	0.0	1.0	Removed bmod_ref
+sampler	2022-07-07	8e19626104	c54e04ae4d	roundoff	OK	OK	0	0	0.0	1.9211871317855138	0.0	1.0	Testing new canonicalization
+sampler	2023-05-21	c54e04ae4d	5973643d2f	roundoff	OK	OK	0	0	0.0	1.7003232694049122	0.0	1.0	Intent in magfie
+sampler	2023-08-06	5973643d2f	be3d2f34ea	incomparable	OK	OK					nan	nan	remove pFUnit, add o0wn assertion templates and sanity test for new utility
+sampler	2023-10-11	be3d2f34ea	f246f4387d	roundoff	OK	OK	0	0	0.0	1.748202694040421	nan	nan	Remove MPI dependency
+sampler	2023-10-19	f246f4387d	8853d2bcd4	roundoff	OK	OK	0	0	0.0	1.8639940517497577	nan	nan	Fallback for rmajor
+sampler	2023-10-22	8853d2bcd4	ce3275d7df	roundoff	OK	OK	0	0	0.0	1.8022227050489885	nan	nan	Intel compatiblity
+sampler	2023-12-16	ce3275d7df	be7a83b532	incomparable	OK	OK					nan	1.0	Need bminmax for every particle
+sampler	2024-03-11	be7a83b532	6c5eb2ca0e	roundoff	OK	OK	0	0	0.0	3.443612553066651	0.0	1.0	Fix find_bminmax
+sampler	2024-05-25	6c5eb2ca0e	579874be4a	roundoff	OK	OK	0	0	0.0	2291126.315051375	0.0	1.0	Shorten module name
+sampler	2024-07-18	579874be4a	d582580f98	roundoff	OK	OK	0	0	0.0	1.7993549950084438	0.0	1.0	Configurable collisions
+sampler	2024-08-02	d582580f98	87a2afc76b	roundoff	OK	OK	0	0	0.0	1.9244847126807847	0.0	1.0	48 allow non integer mass number (#49)
+sampler	2024-08-09	87a2afc76b	1d5046424d	roundoff	OK	OK	0	0	0.0	2.0037364290074056	0.0	1.0	replace npoi with npoiper*nper
+sampler	2024-08-19	4cda89147b	c2bb7512f1	roundoff	OK	OK	0	0	0.0	2.3070551346276747e-05	0.0	1.0	Restore 1.3 behavior
+sampler	2024-08-24	4248384fbc	e25ca7efec	roundoff	OK	OK	0	0	0.0	2.342612487086764e-07	0.0	1.0	Refactor zzg and rng
+sampler	2024-08-28	59ab3ed119	74e871f441	roundoff	OK	OK	0	0	0.0	0.0	0.0	1.0	Extract procedures (#55)
+sampler	2024-09-01	74e871f441	4a7a0bf190	roundoff	OK	OK	0	0	0.0	0.9903237564618955	0.0	1.0	new coordinates (#52)
+sampler	2024-09-07	07ef544318	748be8ad40	status	OK	NOBUILD							Non-flux coordinates (#56)
+sampler	2025-02-02	174599d8c8	e25adbd873	status	NOBUILD	OK							Fetch dependencies (#75)
+sampler	2025-04-28	c6de27923c	786d4a2dc2	incomparable	OK	OK					nan	nan	Merge branch 'main' into golden_record_update
+sampler	2025-07-06	786d4a2dc2	70b78749a1	incomparable	OK	OK					nan	1.0	Merge branch 'main' into golden_record_update
+sampler	2025-08-12	b0b8a647a4	92d51a5ee1	status	OK	NOBUILD							Modernize type declarations in orbit_symplectic_base.f90 (issue #110) (#136)
+sampler	2025-08-12	a93fef0aa0	0fcf94b182	status	NOBUILD	OK							fix: Use explicit imports to avoid dp conflicts after type modernization (#139)
+sampler	2025-08-22	58220277cd	0016bff6a4	roundoff	OK	OK	0	0	0.0	7.654822669004281e-11	0.0	1.0	test: Add Python batch API test infrastructure for Issue #90 (#172)
+sampler	2025-12-21	007a946933	a3c0fced6e	roundoff	OK	OK	0	0	0.0	9.720142637959533e-16	0.0	1.0	Refactor Boozer eval to libneo batch splines + golden perf guard (#267)
+sampler	2025-12-22	a3c0fced6e	ccebc3d857	status	OK	NOBUILD							Refactor canflux to use libneo batch splines (#269)
+sampler	2025-12-27	3d4b18ac37	a0ae6874c4	status	NOBUILD	OK							Perf: reduce spline overhead and stabilize Python imports (#280)
+sampler	2026-06-06	171c9984a8	c455409ad2	roundoff	OK	OK	0	0	0.0	8.578776818208901e-16	0.0	1.0	Periodic checkpoint output and lock-free hot-loop diagnostics (#352)
+sampler	2026-06-06	f04397ada2	1eaa91cc3e	roundoff	OK	OK	0	0	0.0	3.4023202115955055e-15	0.0	1.0	OpenACC GPU offload of default Boozer + symplectic Euler tracing (#354)
+sampler	2026-06-20	50783532f7	c277e63038	status	OK	NOBUILD							Document GVEC chartmap conventions (#403)
+sampler	2026-06-21	c277e63038	29c642778f	status	NOBUILD	OK							Use libneo field abstraction and boozer_sub; drop SIMPLE copies (#389)
+sampler	2026-10-19	6da8670473	63e72ee20c	status	OK	NOBUILD							Build the regular near-axis Boozer field on request (libneo 924ba773) (#580)
+sampler	2026-10-19	4b5dcd842e	19198d90eb	status	NOBUILD	OK							Fix main build: count regular-axis Boozer evaluations via count_field_evaluation (#583)
+sampler	2026-10-27	2e0cf97d16	0a176137d5	roundoff	OK	OK	0	0	0.0	1.7474158971098726e-08	0.0	1.0	Preserve magnetic moment across symplectic RK recovery (#629)
+sampler	2026-10-30	f8eddbc488	3493038a34	roundoff	OK	OK	0	0	0.0	1.6990871993085372e-05	0.0	1.0	Fix NaN classifier boundaries using surface mirror extrema (#599)
+sampler	2026-11-02	00a2b30f48	b6dc7f9be9	roundoff	OK	OK	0	0	0.0	0.00010406028972134348	0.0	1.0	Bump fortnum to d40be6d for the hybrd1 multiroot_hybrids (#643)
+sampler	2026-11-03	273aaf7d42	0155903b1f	roundoff	OK	OK	0	0	0.0	2.8858697619507096e-15	0.0	1.0	Start Newton from extrapolated states and stop on the contraction rate (#646)
+sampler	2026-11-03	2290f5162b	af9c334654	roundoff	OK	OK	0	0	0.0	1.1341707614140915e-15	0.0	1.0	Store the canonical-flux metric and field components as one spline (#647)
+sampler	2026-11-05	359ec8c432	619c217ac4	roundoff	OK	OK	0	0	0.0	3.141505983764964e-05	0.0	1.0	Use CODATA 2018 physical constants (#675)
+sampler	2026-11-05	b420006baf	73e1f5f11c	roundoff	OK	OK	0	0	0.0	4.941752520474562e-14	0.0	1.0	List every result-changing change since 2024 in the changelog (#703)
+sampler	2026-11-05	2be96cea41	c055055a6a	roundoff	OK	OK	0	0	0.0	0.5057237550293496	0.0	1.0	Keep the field period of a Boozer start in ref_to_integ_boozer (#733)
+sampler	2026-11-05	c055055a6a	43287d943f	roundoff	OK	OK	0	0	0.0	3.574404570190855e-15	0.0	1.0	Generate get_derivatives2 and the Boozer h derivatives with FortSym (#730)
+tokamak	2020-02-10	ef5e4ceaac	23e7b86dfa	status	NOBUILD	UNSUPPORTED							Thread safety for rkf45
+tokamak	2021-12-02	abfd48ca37	6a6699ab7a	status	UNSUPPORTED	FAIL 124							Boozer Symplectic
+tokamak	2024-08-18	5fff69e0ad	95ba9cba54	status	FAIL 124	FAIL 1							Dispatch (#53)
+tokamak	2024-09-07	07ef544318	748be8ad40	status	FAIL 1	NOBUILD							Non-flux coordinates (#56)
+tokamak	2025-02-02	174599d8c8	e25adbd873	status	NOBUILD	FAIL 1							Fetch dependencies (#75)
+tokamak	2025-04-28	c6de27923c	786d4a2dc2	status	FAIL 1	OK							Merge branch 'main' into golden_record_update
+tokamak	2025-07-06	786d4a2dc2	70b78749a1	status	OK	FAIL 1							Merge branch 'main' into golden_record_update
+tokamak	2025-08-12	b0b8a647a4	92d51a5ee1	status	FAIL 1	NOBUILD							Modernize type declarations in orbit_symplectic_base.f90 (issue #110) (#136)
+tokamak	2025-08-12	a93fef0aa0	0fcf94b182	status	NOBUILD	FAIL 1							fix: Use explicit imports to avoid dp conflicts after type modernization (#139)
+tokamak	2025-12-07	71b8737ec5	2fdf99fb7a	status	FAIL 1	OK							feat: enable TEST field to run standalone without VMEC files (#216)
+tokamak	2025-12-22	a3c0fced6e	ccebc3d857	status	OK	NOBUILD							Refactor canflux to use libneo batch splines (#269)
+tokamak	2025-12-27	3d4b18ac37	a0ae6874c4	status	NOBUILD	OK							Perf: reduce spline overhead and stabilize Python imports (#280)
+tokamak	2026-06-06	f04397ada2	1eaa91cc3e	CHANGED	OK	OK	26	0	0.0	1.249576799875891	0.000732421875	0.9915771484375	OpenACC GPU offload of default Boozer + symplectic Euler tracing (#354)
+tokamak	2026-06-11	ba2390a945	78bd48144c	CHANGED	OK	OK	4	0	0.0	3.0346315208187282	0.00048828125	0.9920654296875	Continue symplectic orbits through the magnetic axis instead of clamping r to 0.01 (#384)
+tokamak	2026-06-20	50783532f7	c277e63038	status	OK	NOBUILD							Document GVEC chartmap conventions (#403)
+tokamak	2026-06-21	c277e63038	29c642778f	status	NOBUILD	OK							Use libneo field abstraction and boozer_sub; drop SIMPLE copies (#389)
+tokamak	2026-07-13	63ab6cb2f1	714c16866b	roundoff	OK	OK	0	0	0.0	0.24613979899595645	0.0	0.9920654296875	Fix slow CI test gates (#454)
+tokamak	2026-07-13	47e6fde583	cc5872a855	CHANGED	OK	OK	98	721	0.0	inf	-0.084228515625	0.9078369140625	Locate symplectic boundary events (#459)
+tokamak	2026-07-14	aa69209524	ba581b6fac	CHANGED	OK	OK	25	529	0.0	0.5910678723306338	0.0615234375	0.9693603515625	Retry failed symplectic steps in warning mode (#488)
+tokamak	2026-07-17	48551773c1	f60c57c4a1	CHANGED	OK	OK	0	192	0.0	0.40329865446459756	0.0234375	0.9927978515625	Continue numerical recoveries and report resolved confinement (#494)
+tokamak	2026-07-17	7e8d2d3ca6	d8b0e019ab	CHANGED	OK	OK	4	0	0.0	0.4199234423269654	-0.00048828125	0.9923095703125	Restore warning-mode orbit recovery without Newton stalls (#499)
+tokamak	2026-07-25	53f0012d35	69fe8c364d	CHANGED	OK	OK	63	0	0.0	0.6026026026026026	0.0076904296875	1.0	Stabilize orbit recovery and boundary reporting (#503)
+tokamak	2026-10-16	2a0c51782d	ffd7f4a197	CHANGED	OK	OK	63	0	0.0	1.3873162382831503e+47	-0.0076904296875	0.9923095703125	fix: drop the RK momentum gate on accepted symplectic steps (#540)
+tokamak	2026-10-19	6da8670473	63e72ee20c	status	OK	NOBUILD							Build the regular near-axis Boozer field on request (libneo 924ba773) (#580)
+tokamak	2026-10-19	4b5dcd842e	19198d90eb	status	NOBUILD	OK							Fix main build: count regular-axis Boozer evaluations via count_field_evaluation (#583)
+tokamak	2026-10-21	20c897d098	9eca50edfa	CHANGED	OK	OK	63	0	0.0	1.0000783447522898	0.0076904296875	1.0	Check physical momentum before accepting symplectic endpoints (#560)
+tokamak	2026-10-23	fb8152483c	2e0cf97d16	roundoff	OK	OK	0	0	0.0	0.045781172566110244	0.0	1.0	Preserve RK recovery backoff through brief symplectic probes (#619)
+tokamak	2026-10-27	2e0cf97d16	0a176137d5	roundoff	OK	OK	0	0	0.0	0.19812415927616375	0.0	1.0	Preserve magnetic moment across symplectic RK recovery (#629)
+tokamak	2026-10-29	244f237b0d	4feb1bed35	roundoff	OK	OK	0	0	0.0	0.10302697000996144	0.0	1.0	Seed symplectic RK recovery with the reference momentum and carried mu (#640)
+tokamak	2026-10-31	452542c412	00a2b30f48	roundoff	OK	OK	0	0	0.0	0.46370709541801575	0.0	1.0	Boozer axis continuation: evaluate negative labels at (|s|, theta+pi) (#642)
+tokamak	2026-11-03	273aaf7d42	0155903b1f	roundoff	OK	OK	0	0	0.0	0.9986260415007625	0.0	1.0	Start Newton from extrapolated states and stop on the contraction rate (#646)
+tokamak	2026-11-05	359ec8c432	619c217ac4	roundoff	OK	OK	0	0	0.0	22.13939228688444	0.0	1.0	Use CODATA 2018 physical constants (#675)
+tokamak	2026-11-05	b420006baf	7460ae9d89	roundoff	OK	OK	0	0	0.0	3.233133382232605e+51	0.0	1.0	Compile every OpenACC target with the same GPU memory model (#710)
+tokamak	2026-11-05	c055055a6a	43287d943f	roundoff	OK	OK	0	0	0.0	1.7932697051782014	0.0	1.0	Generate get_derivatives2 and the Boozer h derivatives with FortSym (#730)
+tokamak	2026-11-05	216e2b9322	c04724ec6b	CHANGED	OK	OK	0	358	0.0	23710949056.267323	0.0	1.0	Derive the RK45 TEST field from the canonical TEST field (#708)
+tokamak	2026-11-05	dbab349871	677c23fcdb	roundoff	OK	OK	0	0	0.0	1.9616500797866742e-11	0.0	1.0	Floor the RK error scale of both angles at one (#747)
+tokamak_gauss2	2026-11-05	4144d58c40	7460ae9d89	roundoff	OK	OK	0	0	0.0	1008.1524063945676	0.0	1.0	Compile every OpenACC target with the same GPU memory model (#710)
+tokamak_n1024	2026-11-05	4144d58c40	850ff9a2ba	CHANGED	OK	OK	63	0	0.0	1.0000783449081763	0.0076904296875	1.0	Measure performance with a paired benchmark; keep only a gross guard in golden records (#6
+tokamak_n1024	2026-11-05	d0b1b4a861	74eba10ab6	roundoff	OK	OK	0	0	0.0	3.233133382232605e+51	0.0	1.0	Reject only momentum jumps on accepted symplectic endpoints (#707)
+vmec_rk	2020-02-10	ef5e4ceaac	23e7b86dfa	status	NOBUILD	UNSUPPORTED							Thread safety for rkf45
+vmec_rk	2021-12-02	abfd48ca37	6a6699ab7a	status	UNSUPPORTED	OK							Boozer Symplectic
+vmec_rk	2022-01-11	6a6699ab7a	795fd3fd61	roundoff	OK	OK	0	0	0.0	1.145639951050064	0.0	1.0	OpenMP for classification
+vmec_rk	2022-06-28	795fd3fd61	86b715fbc4	roundoff	OK	OK	0	0	0.0	0.0	0.0	1.0	Untangle circular dependency
+vmec_rk	2023-08-06	5973643d2f	be3d2f34ea	incomparable	OK	OK					nan	nan	remove pFUnit, add o0wn assertion templates and sanity test for new utility
+vmec_rk	2023-12-16	ce3275d7df	be7a83b532	incomparable	OK	OK					nan	1.0	Need bminmax for every particle
+vmec_rk	2024-03-11	be7a83b532	6c5eb2ca0e	roundoff	OK	OK	0	0	0.0	inf	0.0	1.0	Fix find_bminmax
+vmec_rk	2024-05-25	6c5eb2ca0e	579874be4a	roundoff	OK	OK	0	0	0.0	1.0696832071478901	0.0	1.0	Shorten module name
+vmec_rk	2024-07-18	579874be4a	d582580f98	roundoff	OK	OK	0	0	0.0	1.0696832071478901	0.0	1.0	Configurable collisions
+vmec_rk	2024-08-02	d582580f98	87a2afc76b	roundoff	OK	OK	0	0	0.0	1.01	0.0	1.0	48 allow non integer mass number (#49)
+vmec_rk	2024-08-19	4cda89147b	c2bb7512f1	roundoff	OK	OK	0	0	0.0	2.372268911398297e-06	0.0	1.0	Restore 1.3 behavior
+vmec_rk	2024-08-28	59ab3ed119	74e871f441	roundoff	OK	OK	0	0	0.0	0.0	0.0	1.0	Extract procedures (#55)
+vmec_rk	2024-09-01	74e871f441	4a7a0bf190	status	OK	FAIL 1							new coordinates (#52)
+vmec_rk	2024-09-07	07ef544318	748be8ad40	status	FAIL 1	NOBUILD							Non-flux coordinates (#56)
+vmec_rk	2025-02-02	174599d8c8	e25adbd873	status	NOBUILD	FAIL 1							Fetch dependencies (#75)
+vmec_rk	2025-04-28	c6de27923c	786d4a2dc2	status	FAIL 1	OK							Merge branch 'main' into golden_record_update
+vmec_rk	2025-07-06	786d4a2dc2	70b78749a1	status	OK	FAIL 1							Merge branch 'main' into golden_record_update
+vmec_rk	2025-08-12	b0b8a647a4	92d51a5ee1	status	FAIL 1	NOBUILD							Modernize type declarations in orbit_symplectic_base.f90 (issue #110) (#136)
+vmec_rk	2025-08-12	a93fef0aa0	0fcf94b182	status	NOBUILD	FAIL 1							fix: Use explicit imports to avoid dp conflicts after type modernization (#139)
+vmec_rk	2025-12-22	a3c0fced6e	ccebc3d857	status	FAIL 1	NOBUILD							Refactor canflux to use libneo batch splines (#269)
+vmec_rk	2025-12-27	3d4b18ac37	a0ae6874c4	status	NOBUILD	FAIL 1							Perf: reduce spline overhead and stabilize Python imports (#280)
+vmec_rk	2026-01-11	895a1f3538	2119095c68	status	FAIL 1	FAIL 124							CI: use GitHub-hosted runners (#305)
+vmec_rk	2026-06-20	50783532f7	c277e63038	status	FAIL 124	NOBUILD							Document GVEC chartmap conventions (#403)
+vmec_rk	2026-06-21	c277e63038	29c642778f	status	NOBUILD	FAIL 124							Use libneo field abstraction and boozer_sub; drop SIMPLE copies (#389)
+vmec_rk	2026-10-03	372e765f2e	212b6e6b38	status	FAIL 124	OK							Share dependency versions and update merged upstream fixes (#523)
+vmec_rk	2026-10-13	eef592dd43	dcdeeb6440	status	OK	FAIL 124							Fortran library API, config-file init for pysimple, and API/doc/test cleanup (#526)
+vmec_rk	2026-10-14	dcdeeb6440	08355bc193	status	FAIL 124	OK							Remove rejected SPECTRE guiding-centre interface maps (#531)
+vmec_rk	2026-10-14	08355bc193	cbb4a7a0fd	status	OK	FAIL 124							Document trapping parameter definition
+vmec_rk	2026-10-19	6da8670473	63e72ee20c	status	FAIL 124	NOBUILD							Build the regular near-axis Boozer field on request (libneo 924ba773) (#580)
+vmec_rk	2026-10-19	4b5dcd842e	19198d90eb	status	NOBUILD	FAIL 124							Fix main build: count regular-axis Boozer evaluations via count_field_evaluation (#583)
+vmec_rk	2026-10-23	caabbb50d5	29adb18993	status	FAIL 124	OK							Keep adaptive RK error scales finite at zero pitch and the axis (#610)
+vmec_rk	2026-10-30	f8eddbc488	3493038a34	roundoff	OK	OK	0	0	0.0	2.213313599297743e-06	0.0	0.9327309236947792	Fix NaN classifier boundaries using surface mirror extrema (#599)
+vmec_rk	2026-11-05	359ec8c432	619c217ac4	CHANGED	OK	OK	0	7	8.233980442833271e-08	0.5443806076324079	-6.760711186459822e-05	0.9326633165829146	Use CODATA 2018 physical constants (#675)
+vmec_rk	2026-11-05	2f0b84df00	b292b4dd47	status	OK	FAIL 124							Report GPU production markers as observed, unresolved or lost (#727)
+vmec_rk	2026-11-05	b292b4dd47	9fcd360117	status	FAIL 124	OK							Run the implicit symplectic schemes through one Newton loop (#731)
+vmec_rk	2026-11-05	dbab349871	677c23fcdb	status	OK	FAIL 124							Floor the RK error scale of both angles at one (#747)
+vmec_rk	2026-11-05	5216720cad	cf25738f02	status	FAIL 124	OK							One-sided radial stencil in magfie_vmec near the axis (#752)
+vmec_rk	2026-11-05	cf25738f02	51c0eee070	status	OK	FAIL 124							Add reproducible public-data IDS benchmarks against ASCOT5 and GORILLA (#563)
+vmec_rk	2026-11-05	51c0eee070	6179b1d68e	status	FAIL 124	OK							Flag markers whose RK recoveries exceed max_rk_recoveries (#753)
+vmec_rk	2026-11-06	44c2c15d59	3043122410	roundoff	OK	OK	0	0	2.0007383889821678e-08	0.48051451445154497	0.0	0.9306640625	Radial derivatives of magfie_vmec by differences in rho = sqrt(s) (#755)
