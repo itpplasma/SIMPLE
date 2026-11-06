@@ -150,8 +150,7 @@ contains
         real(dp) :: h0(3), hpv(3), hmv(3)
         real(dp) :: x_plus(3), x_minus(3), x_s(3)
         real(dp) :: Acov_tmp(3)
-        real(dp) :: s0, r0, r_plus, r_minus, ds_dr
-        real(dp) :: db_ds, dh_ds(3)
+        real(dp) :: s0, r0, r_plus, r_minus, ds_dr, hr
         integer :: i
 
         r0 = x(1)
@@ -166,8 +165,10 @@ contains
         hcov(1) = h0(1)*ds_dr
         hcov(2:3) = h0(2:3)
 
-        r_plus = sqrt(s0 + hs)
-        r_minus = sqrt(max(s0 - hs, 1.0e-16_dp))
+        ! magfie_vmec differences in rho = sqrt(s) with step min(hs, rho/2).
+        hr = min(hs, 0.5_dp*max(r0, 1.0e-8_dp))
+        r_plus = r0 + hr
+        r_minus = r0 - hr
 
         do i = 1, 3
             x_plus = x
@@ -195,10 +196,8 @@ contains
 
             select case (i)
             case (1)
-                db_ds = (Bp - Bm)/(2.0_dp*hs)
-                dh_ds = (hpv - hmv)/(2.0_dp*hs)
-                dBdx(i) = db_ds*(2.0_dp*r0)
-                dh(i, :) = dh_ds*(2.0_dp*r0)
+                dBdx(i) = (Bp - Bm)/(2.0_dp*hr)
+                dh(i, :) = (hpv - hmv)/(2.0_dp*hr)
             case (2)
                 dBdx(i) = (Bp - Bm)/(2.0_dp*dth)
                 dh(i, :) = (hpv - hmv)/(2.0_dp*dth)

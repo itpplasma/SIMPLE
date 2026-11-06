@@ -1,7 +1,7 @@
 program test_magfie_vmec_axis_stencil
     !> Within hs = 1e-3 of the axis the radial finite differences of magfie_vmec
-    !> must not sample s < 0. All outputs stay finite there, and the one-sided
-    !> radial derivative of |B| joins the central one at s = hs.
+    !> must not sample s < 0. All outputs stay finite there, and the radial
+    !> derivative of |B| is continuous at s = hs.
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
