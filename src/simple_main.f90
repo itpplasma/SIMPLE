@@ -129,6 +129,10 @@ module simple_main
         integer :: total_activations = 0
     end type rk_recovery_state_t
 
+    ! Collision operator, fixed by init_collisions from collision_model.
+    integer, parameter :: COLLISIONS_FULL = 0, COLLISIONS_LORENTZ_NUSTAR = 1
+    integer :: collision_kind = COLLISIONS_FULL
+
 contains
 
     logical function recovery_state_has_valid_phase_space(z)
@@ -1893,7 +1897,9 @@ contains
         real(dp) :: densi1, densi2, tempi1, tempi2, tempe
 
         ealpha = particle_energy_eV_effective
+        collision_kind = COLLISIONS_FULL
         if (trim(collision_model) == 'lorentz_nustar') then
+            collision_kind = COLLISIONS_LORENTZ_NUSTAR
             call configure_lorentz_nustar(nu_star_standard, &
                                           lorentz_major_radius_cm, lorentz_iota, v0)
             lorentz_nu = nu_star_standard*abs(lorentz_iota)*v0 &
@@ -3083,6 +3089,7 @@ contains
     subroutine macrostep(anorb, z, kt, ierr_orbit, ntau_local, exit_step, &
                          hold_streak, numerical_hold_any, rk_recovery, ipart, x_prev_m)
         use alpha_lifetime_sub, only: orbit_timestep_axis
+        use profile_radius, only: profile_s
         use orbit_fo_boris, only: fo_state_t
         use orbit_symplectic, only: advance_symplectic_with_retry, &
                                     orbit_timestep_sympl
@@ -3104,6 +3111,7 @@ contains
         integer :: hold_streak_local, ktau, recovery_method, symplectic_status
         integer :: ierr_coll, collision_hold_start
         real(dp) :: z_step_start(5), z_step_end(5), z_recovery_start(5), loss_fraction
+        real(dp) :: s_collision
         real(dp) :: u_ref_prev(3), u_ref_cur(3), x_cur_m(3)
         real(dp) :: segment_duration, wall_exit_step
         logical :: hit, wall_query, numerical_hold, numerical_hold_any_local
@@ -3351,7 +3359,11 @@ contains
                                          hold_streak_local, recovery_method)
             end if
             if (swcoll) then
-                call collide(z, dtaumin, ierr_coll)
+                ! Collisions change only the momentum, so the profile radius
+                ! of this position serves both the collision and the stop test.
+                s_collision = 0.0_dp
+                if (collision_kind == COLLISIONS_FULL) s_collision = profile_s(z(1:3))
+                call collide(z, dtaumin, s_collision, ierr_coll)
                 if (ierr_coll /= 0) then
                     ! Reject the complete drift-plus-collision microstep.
                     ! A collision fault is numerical, never a boundary or hold.
@@ -3368,7 +3380,7 @@ contains
                 if (rk_recovery_local%active) then
                     rk_recovery_local%momentum_reference = z(4)
                 end if
-                if (thermalized(z)) then
+                if (thermalized(z, s_collision)) then
                     ierr_orbit = THERMALIZED_EXIT
                     kt = kt + 1
                     exit
@@ -3656,16 +3668,16 @@ contains
         anorb%si%pthold = anorb%f%pth
     end subroutine update_momentum
 
-    subroutine collide(z, dt, ierr_coll)
-        use profile_radius, only: profile_s
+    !> s_profile is profile_s(z(1:3)); the Lorentz model does not use it.
+    subroutine collide(z, dt, s_profile, ierr_coll)
         real(dp), intent(inout) :: z(5)
-        real(dp), intent(in) :: dt
+        real(dp), intent(in) :: dt, s_profile
         integer, intent(out) :: ierr_coll
 
-        if (trim(collision_model) == 'lorentz_nustar') then
+        if (collision_kind == COLLISIONS_LORENTZ_NUSTAR) then
             call stost_lorentz(z, dt, ierr_coll)
         else
-            call stost(z, dt, 1, ierr_coll, s_profile=profile_s(z(1:3)))
+            call stost(z, dt, 1, ierr_coll, s_profile=s_profile)
         end if
         if (ierr_coll /= 0) then
             print *, 'Error in stost: ', ierr_coll, 'z = ', z, 'dtaumin = ', dtaumin
@@ -3674,17 +3686,16 @@ contains
 
     !> True once a collisional marker's kinetic energy is below
     !> thermal_stop_factor times the local main-ion temperature.
-    logical function thermalized(z)
-        use profile_radius, only: profile_s
+    logical function thermalized(z, s_profile)
         use simple_profiles, only: get_plasma_params
         use params, only: particle_energy_eV_effective
-        real(dp), intent(in) :: z(5)
+        real(dp), intent(in) :: z(5), s_profile
         real(dp) :: te, ti1, ti2, ni1, ni2
 
         thermalized = .false.
         if (thermal_stop_factor <= 0.0_dp) return
-        if (trim(collision_model) == 'lorentz_nustar') return
-        call get_plasma_params(max(0.0_dp, profile_s(z(1:3))), te, ti1, ti2, ni1, ni2)
+        if (collision_kind == COLLISIONS_LORENTZ_NUSTAR) return
+        call get_plasma_params(max(0.0_dp, s_profile), te, ti1, ti2, ni1, ni2)
         thermalized = z(4)**2*particle_energy_eV_effective < thermal_stop_factor*ti1
     end function thermalized
 
