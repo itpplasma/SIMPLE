@@ -56,7 +56,7 @@ made equal to the GC value by a secant solve for $\bar v_\parallel$ at fixed
 speed. Off a sheet the correction is $O(\rho_*^2)$; on a current-carrying
 sheet, where no gyrophase matches $\bar p_\zeta$ (SIMPLE#528), it is
 $O(\rho_*)$. If the match would need $|\bar v_\parallel| > |\bar{\mathbf v}|$,
-up to eight further phases are tried in golden-angle steps before the step
+up to eight phases in all are tried in golden-angle steps before the step
 fails with `SPECTRE_FO_GYROPHASE_FAIL`. The remaining defect is kept in
 `spectre_fo_state_t%entry_pzeta_defect`.
 
