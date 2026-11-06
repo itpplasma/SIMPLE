@@ -169,3 +169,19 @@ every kernel. The emitted files are committed unformatted, so regenerating into
 an empty directory with that FortSym revision reproduces it byte for byte.
 `test_orbit_systems_generated` compares the kernels with the hand-derived
 formulas they replaced on random field values.
+
+SPECTRE full-orbit kernels
+--------------------------
+
+`generate_spectre_kernels` emits `src/generated/spectre_kernels_generated.f90`,
+module `spectre_kernels_generated`, with four pure scalar subroutines used by
+`src/spectre_fo_field.f90` and `src/spectre_fo_hybrid.f90`:
+
+- `spectre_chart_geometry`: position, covariant basis, Jacobian and dual basis
+  of the chart x = (R cos zeta, R sin zeta, Z)(rho, theta, zeta);
+- `spectre_curl_field`: unit vector and modulus of B = curl A with A_rho = 0;
+- `spectre_larmor_lift`: guiding centre to particle at a given gyrophase;
+- `spectre_gc_projection`: particle to guiding centre, v_par and |v_perp|^2.
+
+Build and run it as the generators above and format the output with
+`fprettify -c .fprettify`.

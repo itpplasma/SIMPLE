@@ -32,6 +32,7 @@
     generated/axis_map_generated.f90
     generated/generated_event_energy.f90
     generated/orbit_systems_generated.f90
+    generated/spectre_kernels_generated.f90
     sub_alpha_lifetime_can.f90
     spectre_orbit.f90
     spectre_fo_field.f90

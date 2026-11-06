@@ -17,6 +17,7 @@ module spectre_fo_field
     use interpolate, only: BatchSplineData3D, construct_batch_splines_3d, &
         destroy_batch_splines_3d, evaluate_batch_splines_3d_der
     use magfie_sub, only: spectre_field, TESLA_TO_GAUSS, M_TO_CM
+    use spectre_kernels_generated, only: spectre_chart_geometry, spectre_curl_field
     implicit none
     private
 
@@ -173,34 +174,28 @@ contains
     pure subroutine local_from_values(zeta, r, dr, z, dz, at, dat, az, daz, loc)
         real(dp), intent(in) :: zeta, r, dr(3), z, dz(3), at, dat(3), az, daz(3)
         type(spectre_fo_local_t), intent(out) :: loc
-        real(dp) :: sqgb(3)
 
         call geometry_from_values(zeta, r, dr, z, dz, loc)
         loc%acov = [0.0_dp, at, az]
-        ! Match libneo: |J| B^i = eps^ijk d_j A_k with A_rho = 0.
-        sqgb = [daz(2) - dat(3), -daz(1), dat(1)]
-        call set_magnetic_field(loc, sqgb)
+        call spectre_curl_field(loc%e(1, 1), loc%e(2, 1), loc%e(3, 1), &
+                                loc%e(1, 2), loc%e(2, 2), loc%e(3, 2), &
+                                loc%e(1, 3), loc%e(2, 3), loc%e(3, 3), loc%jac, &
+                                dat(1), dat(3), daz(1), daz(2), &
+                                loc%b(1), loc%b(2), loc%b(3), loc%bmod)
     end subroutine local_from_values
 
     pure subroutine geometry_from_values(zeta, r, dr, z, dz, loc)
         real(dp), intent(in) :: zeta, r, dr(3), z, dz(3)
         type(spectre_fo_local_t), intent(out) :: loc
-        real(dp) :: c, s, cof(3, 3)
-        integer :: i
 
-        c = cos(zeta)
-        s = sin(zeta)
-        loc%x = [r*c, r*s, z]
-        do i = 1, 3
-            loc%e(:, i) = [dr(i)*c, dr(i)*s, dz(i)]
-        end do
-        loc%e(1, 3) = loc%e(1, 3) - r*s
-        loc%e(2, 3) = loc%e(2, 3) + r*c
-        cof(:, 1) = cross(loc%e(:, 2), loc%e(:, 3))
-        cof(:, 2) = cross(loc%e(:, 3), loc%e(:, 1))
-        cof(:, 3) = cross(loc%e(:, 1), loc%e(:, 2))
-        loc%jac = dot_product(loc%e(:, 1), cof(:, 1))
-        loc%dual = cof/loc%jac
+        call spectre_chart_geometry(zeta, r, dr(1), dr(2), dr(3), z, dz(1), dz(2), &
+                                    dz(3), loc%x(1), loc%x(2), loc%x(3), &
+                                    loc%e(1, 1), loc%e(2, 1), loc%e(3, 1), &
+                                    loc%e(1, 2), loc%e(2, 2), loc%e(3, 2), &
+                                    loc%e(1, 3), loc%e(2, 3), loc%e(3, 3), loc%jac, &
+                                    loc%dual(1, 1), loc%dual(2, 1), loc%dual(3, 1), &
+                                    loc%dual(1, 2), loc%dual(2, 2), loc%dual(3, 2), &
+                                    loc%dual(1, 3), loc%dual(2, 3), loc%dual(3, 3))
     end subroutine geometry_from_values
 
     pure subroutine set_magnetic_field(loc, sqgb)
@@ -406,10 +401,4 @@ contains
         status = 0
     end subroutine spectre_fo_field_locate
 
-    pure function cross(a, b) result(c)
-        real(dp), intent(in) :: a(3), b(3)
-        real(dp) :: c(3)
-        c = [a(2)*b(3) - a(3)*b(2), a(3)*b(1) - a(1)*b(3), &
-            a(1)*b(2) - a(2)*b(1)]
-    end function cross
 end module spectre_fo_field
