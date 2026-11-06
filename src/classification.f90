@@ -28,7 +28,8 @@ module classification
     use diag_mod, only : icounter
     use get_can_sub, only : vmec_to_can, can_to_vmec
     use boozer_sub, only : vmec_to_boozer, boozer_to_vmec
-    use magfie_sub, only : CANFLUX, BOOZER
+    use magfie_sub, only: CANFLUX, BOOZER, ALBERT
+    use field_can_albert, only: integ_to_ref_radius_albert
     use field_can_mod, only: ref_to_integ, integ_to_ref
     use field_can_boozer, only: ref_to_integ_boozer
     use check_orbit_type_sub, only : check_orbit_type
@@ -300,6 +301,7 @@ contains
                         end if
                     else if (ierr == 0) then
                         hold_streak = 0
+                        if (left_reference_plasma(z)) ierr = 1
                     end if
                 else
                     si_step_start = anorb%si
@@ -326,6 +328,7 @@ contains
                         z(4) = dsqrt(anorb%f%mu*anorb%f%Bmod + &
                             0.5d0*anorb%f%vpar**2)
                         z(5) = anorb%f%vpar/(z(4)*sqrt2)
+                        if (left_reference_plasma(z)) ierr = SYMPLECTIC_STEP_BOUNDARY
                     end if
                 endif
 
@@ -529,6 +532,17 @@ contains
         !  close(unit=10000+ipart)
         !  close(unit=10000+ipart)
     end subroutine trace_orbit_with_classifiers
+
+    !> In Albert coordinates s = 1 is not a coordinate surface, so the steppers
+    !> do not stop there; trace_orbit checks the reference radius after each
+    !> step, and classification must count the same markers as lost.
+    logical function left_reference_plasma(z)
+        real(dp), intent(in) :: z(5)
+
+        left_reference_plasma = .false.
+        if (isw_field_type /= ALBERT) return
+        left_reference_plasma = integ_to_ref_radius_albert(z(1:3)) >= 1.0_dp
+    end function left_reference_plasma
 
     pure subroutine classify_classifier_exit(ierr, mode, lost, exit_code)
         integer, intent(in) :: ierr, mode
