@@ -77,3 +77,6 @@ artifacts/plots/
 artifacts/notebooks/
 .venv/
 .sloptools/artifacts/
+
+# Figures of the history audit page
+!docs/verification/history-audit/*.png

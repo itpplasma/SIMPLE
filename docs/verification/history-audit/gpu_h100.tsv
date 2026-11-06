@@ -1,0 +1,4 @@
+kind	sha	date	markers	trace_time	trace_s	total_s	lost	gpu
+gpu_cuda	29eaf52da2	2026-11-05	1024	1d-2	19.392	21.530	1	H100
+gpu_cuda	29eaf52da2	2026-11-05	16384	1d-2	19.099	21.249	25	H100
+gpu_cuda	29eaf52da2	2026-11-05	65536	1d-2	25.711	27.919	104	H100
