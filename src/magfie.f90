@@ -486,7 +486,7 @@ end function cross_product
                       Bcovar_r,Bcovar_vartheta,Bcovar_varphi
   real(dp) :: cjac,bcov_s_vmec,bcov_t_vmec,bcov_p_vmec
   real(dp) :: dhs_dt,dhs_dp,dht_ds,dht_dp,dhp_ds,dhp_dt
-  real(dp) :: b_side(2), ht_side(2), hp_side(2), rho, hrho
+        real(dp) :: b_side(2), ht_side(2), hp_side(2), rho, hrho
   integer :: k
   real(dp), dimension(3), intent(in) :: x
   real(dp), dimension(3), intent(out) :: bder,hcovar,hctrvr,hcurl
@@ -495,23 +495,23 @@ end function cross_product
   !
   theta=x(2)
   varphi=x(3)
-  ! Fields vary like sqrt(s) near the axis, so a stencil in s is inaccurate
-  ! for s of a few hs and samples s < 0 below hs. Difference in rho = sqrt(s)
-  ! instead, with a step that stays below rho/2, and use d/ds = d/drho/(2 rho).
-  rho = sqrt(max(x(1), 1.d-16))
-  hrho = min(hs, 0.5d0*rho)
-  do k = 1, 2
-      s = (rho + (2*k - 3)*hrho)**2
+        ! Fields vary like sqrt(s) near the axis, so a stencil in s is inaccurate
+        ! for s of a few hs and samples s < 0 below hs. Difference in rho = sqrt(s)
+        ! instead, with a step that stays below rho/2, and use d/ds = d/drho/(2 rho).
+        rho = sqrt(max(x(1), 1.d-16))
+        hrho = min(hs, 0.5d0*rho)
+        do k = 1, 2
+            s = (rho + (2*k - 3)*hrho)**2
       call vmec_field(s, theta, varphi, A_theta, A_phi, dA_theta_ds, dA_phi_ds, aiota, &
                        sqg, alam, dl_ds, dl_dt, dl_dp, Bctrvr_vartheta, Bctrvr_varphi, &
                             Bcovar_r, Bcovar_vartheta, Bcovar_varphi)
          b_side(k) = sqrt(Bctrvr_vartheta*Bcovar_vartheta + Bctrvr_varphi*Bcovar_varphi)
-      ht_side(k) = (1.d0 + dl_dt)*Bcovar_vartheta/b_side(k)
-      hp_side(k) = (Bcovar_varphi + dl_dp*Bcovar_vartheta)/b_side(k)
-  end do
-  bder(1) = (b_side(2) - b_side(1))/(4.d0*hrho*rho)
-  dht_ds = (ht_side(2) - ht_side(1))/(4.d0*hrho*rho)
-  dhp_ds = (hp_side(2) - hp_side(1))/(4.d0*hrho*rho)
+            ht_side(k) = (1.d0 + dl_dt)*Bcovar_vartheta/b_side(k)
+            hp_side(k) = (Bcovar_varphi + dl_dp*Bcovar_vartheta)/b_side(k)
+        end do
+        bder(1) = (b_side(2) - b_side(1))/(4.d0*hrho*rho)
+        dht_ds = (ht_side(2) - ht_side(1))/(4.d0*hrho*rho)
+        dhp_ds = (hp_side(2) - hp_side(1))/(4.d0*hrho*rho)
   !
   ! End derivatives over s
   !
