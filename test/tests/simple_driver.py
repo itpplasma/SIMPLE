@@ -16,10 +16,13 @@ def run_simple_case(
     config: str,
     *,
     timeout: int = 90,
+    start: str | None = None,
 ) -> Path:
     work_root = Path(os.environ.get("CTEST_BINARY_DIRECTORY", Path.cwd()))
     case_dir = Path(tempfile.mkdtemp(prefix=f"{name}_", dir=work_root))
     (case_dir / "simple.in").write_text(config, encoding="utf-8")
+    if start is not None:
+        (case_dir / "start.dat").write_text(start, encoding="utf-8")
     link_or_copy(wout, case_dir / "wout.nc")
 
     result = subprocess.run(
