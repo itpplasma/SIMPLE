@@ -408,27 +408,14 @@ subroutine compute_transformation(ierr)
     integer, intent(out) :: ierr
     integer :: i_ctr
     integer, allocatable :: slice_status(:)
-    logical :: parallel_slices
 
     i_ctr = 0
     allocate(slice_status(n_phi), source=0)
-    parallel_slices = .true.
-    select type (field_noncan)
-    type is (spectre_field_t)
-        parallel_slices = .false.
-    end select
-
-    if (parallel_slices) then
-        !$omp parallel do private(i_ctr)
-        do i_ctr = 1, n_phi
-            call compute_phi_slice(i_ctr, slice_status(i_ctr))
-        end do
-        !$omp end parallel do
-    else
-        do i_ctr = 1, n_phi
-            call compute_phi_slice(i_ctr, slice_status(i_ctr))
-        end do
-    end if
+    !$omp parallel do private(i_ctr) schedule(dynamic)
+    do i_ctr = 1, n_phi
+        call compute_phi_slice(i_ctr, slice_status(i_ctr))
+    end do
+    !$omp end parallel do
     ierr = maxval(slice_status)
 end subroutine compute_transformation
 
