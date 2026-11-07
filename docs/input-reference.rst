@@ -25,7 +25,7 @@ and ``DOC/config.md`` for additional usage, units and option interactions.
 &config
 -------
 
-Source: ``src/params.f90:270``.
+Source: ``src/params.f90:274``.
 
 .. list-table::
    :header-rows: 1
@@ -643,6 +643,12 @@ Source: ``src/params.f90:270``.
      - ``scalar``
      - ``'guiding_centre'``
      - Loss at the outer SPECTRE boundary: 'guiding_centre' when the guiding centre crosses it, as for VMEC and GVEC fields; 'particle' when the full orbit touches it, a finite-Larmor-radius loss.
+   * - ``spectre_fo_jump_tol``
+     - ``real``
+     - ``dp``
+     - ``scalar``
+     - ``1.0e-3_dp``
+     - Interfaces whose largest jump of \|B\|/B or of the field direction is below this are crossed by the guiding centre directly, with an error of that size per crossing, instead of in full orbit.
    * - ``spectre_sbeg_is_toroidal_flux``
      - ``logical``
      - ``default``

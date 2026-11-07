@@ -176,6 +176,8 @@ controls ``spectre_fo_entry_larmor``, ``spectre_fo_tolerance`` and
 ``spectre_outer_loss`` sets the loss at the outer boundary: ``'guiding_centre'``
 (default) when the guiding centre crosses it, as for VMEC and GVEC fields,
 or ``'particle'`` when the full orbit touches it.
+Interfaces whose field jump is below ``spectre_fo_jump_tol`` (default
+:math:`10^{-3}`) are crossed by the guiding centre without full orbit.
 
 Each volume builds its own Meiss canonical coordinates on a grid of
 ``spectre_ncon_r`` (default 48) by ``spectre_ncon_th`` (48) by

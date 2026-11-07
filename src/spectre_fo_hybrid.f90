@@ -3,7 +3,7 @@ module spectre_fo_hybrid
     use magfie_sub, only: spectre_field
     use spectre_fo_field, only: spectre_fo_field_build, spectre_fo_field_local, &
         spectre_fo_field_locate, spectre_fo_local_t, fo_field_axisymmetric, &
-        FO_AXIS_RADIUS
+                                FO_AXIS_RADIUS, spectre_fo_interface_jump
     use spectre_kernels_generated, only: spectre_larmor_lift, spectre_gc_projection
     implicit none
     private
@@ -22,6 +22,10 @@ module spectre_fo_hybrid
     !> Outer-boundary loss when the particle touches it (finite Larmor radius)
     !> instead of when its guiding centre crosses it.
     logical :: particle_outer_loss = .false.
+    !> Largest field jump across each interior interface.
+    real(dp), allocatable, public :: interface_jump(:)
+    !> Interfaces with a smaller jump need no full orbit (0: none).
+    real(dp) :: smooth_jump_tol = 0.0_dp
     !> RK45 relative tolerance, configured before parallel tracing.
     real(dp) :: fo_tolerance = 1.0e-9_dp
     ! At most 0.1 rad (1/63 of a gyro-period). A cross-and-return hidden
@@ -61,23 +65,44 @@ module spectre_fo_hybrid
     public :: spectre_fo_radial_larmor
     public :: spectre_fo_advance_until_exit
     public :: spectre_fo_canonical_pzeta, entry_gyrophase
+    public :: spectre_fo_smooth_interface
 contains
-    subroutine spectre_fo_configure(tolerance, grid, particle_loss)
+    subroutine spectre_fo_configure(tolerance, grid, particle_loss, jump_tol)
         real(dp), intent(in) :: tolerance
         integer, intent(in), optional :: grid(3)
         logical, intent(in), optional :: particle_loss
-        integer :: n(3)
+        real(dp), intent(in), optional :: jump_tol
+        integer :: n(3), k
 
         if (tolerance <= 0.0_dp) &
             error stop 'spectre_fo_configure: tolerance must be positive'
         fo_tolerance = tolerance
         particle_outer_loss = .false.
         if (present(particle_loss)) particle_outer_loss = particle_loss
+        smooth_jump_tol = 0.0_dp
+        if (present(jump_tol)) smooth_jump_tol = jump_tol
         n = [32, 64, 32]
         if (present(grid)) n = grid
         if (all(spectre_field%data%in == 0)) n(3) = 7
         call spectre_fo_field_build(n(1), n(2), n(3))
+        if (allocated(interface_jump)) deallocate (interface_jump)
+        allocate (interface_jump(max(spectre_field%data%Mvol - 1, 0)))
+        do k = 1, size(interface_jump)
+            interface_jump(k) = spectre_fo_interface_jump(k)
+        end do
+        if (size(interface_jump) > 0) print '(A,*(ES10.2))', &
+            ' SPECTRE interface field jumps (max |dB|/B, |db|):', interface_jump
     end subroutine spectre_fo_configure
+    logical function spectre_fo_smooth_interface(k) result(smooth)
+        !> Interior interface k whose field jump is below the configured
+        !> tolerance, so that the guiding centre may cross it directly.
+        integer, intent(in) :: k
+
+        smooth = .false.
+        if (.not. allocated(interface_jump)) return
+        if (k < 1 .or. k > size(interface_jump)) return
+        smooth = interface_jump(k) < smooth_jump_tol
+    end function spectre_fo_smooth_interface
     subroutine spectre_fo_enter(state, y, owner, iface, ro0_bar, status)
         type(spectre_fo_state_t), intent(out) :: state
         real(dp), intent(in) :: y(5), ro0_bar
