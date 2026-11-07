@@ -151,6 +151,22 @@ set_tests_properties(test_spectre_fo_events PROPERTIES
     LABELS "integration"
     TIMEOUT 60)
 
+# Cylinder limit: R0/a = 100 SPECTRE torus against the Lundquist field.
+add_executable(test_spectre_cylinder_field.x test_spectre_cylinder_field.f90)
+target_link_libraries(test_spectre_cylinder_field.x simple)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_cylinder_field)
+add_test(NAME test_spectre_cylinder_field
+    COMMAND $<TARGET_FILE:test_spectre_cylinder_field.x>
+        ${CMAKE_CURRENT_SOURCE_DIR}/../data/cyl2vol.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/spectre_cylinder_field)
+set_tests_properties(test_spectre_cylinder_field PROPERTIES
+    LABELS "integration"
+    TIMEOUT 60)
+# Research driver of concept/spectre_cylinder; not a test.
+add_executable(cylinder_markers.x
+    ${CMAKE_SOURCE_DIR}/concept/spectre_cylinder/cylinder_markers.f90)
+target_link_libraries(cylinder_markers.x simple)
+
 add_executable(test_spectre_fo_throughput.x test_spectre_fo_throughput.f90)
 target_link_libraries(test_spectre_fo_throughput.x simple)
 foreach(threads IN ITEMS 1 4)
