@@ -831,7 +831,7 @@ contains
         use timing, only: print_phase_time
         use orbit_symplectic_base, only: sympl_rmax
         use spectre_fo_hybrid, only: spectre_fo_configure
-        use params, only: spectre_fo_tolerance, spectre_fo_grid
+        use params, only: spectre_fo_tolerance, spectre_fo_grid, spectre_outer_loss
 
         type(tracer_t), intent(inout) :: self
 
@@ -852,7 +852,8 @@ contains
         call set_magfie_spectre_field(sf)
 
         ! Shared by simple.x and simple_api, before any parallel tracing.
-        call spectre_fo_configure(spectre_fo_tolerance, spectre_fo_grid)
+        call spectre_fo_configure(spectre_fo_tolerance, spectre_fo_grid, &
+                                  trim(spectre_outer_loss) == 'particle')
 
         r00 = 0.0d0
         do ii = 1, sf%data%mn

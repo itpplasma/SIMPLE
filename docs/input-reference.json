@@ -4,7 +4,7 @@
   "namelists": {
     "config": {
       "source": "src/params.f90",
-      "source_line": 266,
+      "source_line": 270,
       "variables": [
         {
           "name": "notrace_passing",
@@ -1498,6 +1498,19 @@
           "source_line": 242
         },
         {
+          "name": "spectre_outer_loss",
+          "type": "character",
+          "kind": "",
+          "length": "16",
+          "shape": [],
+          "extent": [],
+          "default": "'guiding_centre'",
+          "default_value": "'guiding_centre'",
+          "documentation": "Loss at the outer SPECTRE boundary: 'guiding_centre' when the guiding centre crosses it, as for VMEC and GVEC fields; 'particle' when the full orbit touches it, a finite-Larmor-radius loss.",
+          "source": "src/params.f90",
+          "source_line": 246
+        },
+        {
           "name": "spectre_sbeg_is_toroidal_flux",
           "type": "logical",
           "kind": "",
@@ -1508,7 +1521,7 @@
           "default_value": ".false.",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 243
+          "source_line": 247
         },
         {
           "name": "spectre_ncon_r",
@@ -1521,7 +1534,7 @@
           "default_value": "48",
           "documentation": "SPECTRE per-volume Meiss construction grid (n_r, n_th, n_phi). Each volume allocates rank-3 arrays plus batch splines of this size, so the total peak memory scales as Mvol*n_r*n_th*n_phi. spectre_ncon_phi = -1 means automatic: 32 for fields with toroidal harmonics and a minimal phi grid for axisymmetric fields (all n = 0), the dominant memory saver for tokamak cases. A positive value forces that phi count verbatim, bypassing the axisymmetric clamp.",
           "source": "src/params.f90",
-          "source_line": 252,
+          "source_line": 256,
           "validation": {
             "min": 1
           }
@@ -1537,7 +1550,7 @@
           "default_value": "48",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 253,
+          "source_line": 257,
           "validation": {
             "min": 1
           }
@@ -1553,7 +1566,7 @@
           "default_value": "-1",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 254
+          "source_line": 258
         },
         {
           "name": "spectre_ncon_order",
@@ -1566,7 +1579,7 @@
           "default_value": "5",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 255,
+          "source_line": 259,
           "validation": {
             "min": 1
           }
@@ -1582,7 +1595,7 @@
           "default_value": "1000000",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 256,
+          "source_line": 260,
           "validation": {
             "min": 1
           }
@@ -1598,7 +1611,7 @@
           "default_value": "1.0e-2_dp",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 257,
+          "source_line": 261,
           "validation": {
             "positive": true
           }
@@ -1698,7 +1711,7 @@
           "default_value": ".true.",
           "documentation": "Removed &config keys. They are still read so that old input files run; a value other than the historical default prints a warning.",
           "source": "src/params.f90",
-          "source_line": 261
+          "source_line": 265
         },
         {
           "name": "loopskip",
@@ -1711,7 +1724,7 @@
           "default_value": "0",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 262
+          "source_line": 266
         },
         {
           "name": "bmod_ref",
@@ -1724,7 +1737,7 @@
           "default_value": "5.0d4",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 263
+          "source_line": 267
         },
         {
           "name": "macrostep_log_ratio",
@@ -1737,7 +1750,7 @@
           "default_value": "1.0d3",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 264
+          "source_line": 268
         }
       ]
     },

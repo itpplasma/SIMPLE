@@ -14,8 +14,14 @@ module spectre_fo_hybrid
     integer, parameter, public :: SPECTRE_FO_INVALID_STATE = 4
     integer, parameter, public :: SPECTRE_FO_STEP_LIMIT = 5
     integer, parameter, public :: SPECTRE_FO_LOSS = 6
+    !> Entry found no gyrophase that keeps the particle inside the outer
+    !> boundary while its guiding centre is inside (guiding-centre loss only).
+    integer, parameter, public :: SPECTRE_FO_OUTSIDE = 7
     real(dp), parameter :: OWNER_EPS = 1.0e-12_dp
     integer, parameter :: STAGE_IN = 0, STAGE_OUT = 1
+    !> Outer-boundary loss when the particle touches it (finite Larmor radius)
+    !> instead of when its guiding centre crosses it.
+    logical :: particle_outer_loss = .false.
     !> RK45 relative tolerance, configured before parallel tracing.
     real(dp) :: fo_tolerance = 1.0e-9_dp
     ! At most 0.1 rad (1/63 of a gyro-period). A cross-and-return hidden
@@ -27,7 +33,8 @@ module spectre_fo_hybrid
     !> is detected at most this angle late, and always at the end of a call.
     real(dp), parameter :: EXIT_CHECK_ANGLE = 1.0_dp
     integer, parameter :: MAX_SUBSTEPS = 100000
-    !> Phases tried when the p_zeta match would need |v_par| > |v|.
+    !> Phases tried when the p_zeta match would need |v_par| > |v|, or when
+    !> the particle would start outside the outer boundary.
     integer, parameter :: ENTRY_PHASE_TRIES = 8
     type, public :: spectre_fo_state_t
         real(dp) :: x(3) = 0.0_dp
@@ -55,14 +62,17 @@ module spectre_fo_hybrid
     public :: spectre_fo_advance_until_exit
     public :: spectre_fo_canonical_pzeta, entry_gyrophase
 contains
-    subroutine spectre_fo_configure(tolerance, grid)
+    subroutine spectre_fo_configure(tolerance, grid, particle_loss)
         real(dp), intent(in) :: tolerance
         integer, intent(in), optional :: grid(3)
+        logical, intent(in), optional :: particle_loss
         integer :: n(3)
 
         if (tolerance <= 0.0_dp) &
             error stop 'spectre_fo_configure: tolerance must be positive'
         fo_tolerance = tolerance
+        particle_outer_loss = .false.
+        if (present(particle_loss)) particle_outer_loss = particle_loss
         n = [32, 64, 32]
         if (present(grid)) n = grid
         if (all(spectre_field%data%in == 0)) n(3) = 7
@@ -75,7 +85,9 @@ contains
         integer, intent(out) :: status
         real(dp) :: x_gc(3), b(3), e1(3), e2(3), e_zeta(3)
         real(dp) :: acov(3), bmod, vpar, vperp, target, alpha, speed
+        real(dp) :: vpar0, vperp0
         integer :: locate_status, try
+        logical :: outside
         state = spectre_fo_state_t()
         if (ro0_bar <= 0.0_dp .or. y(4) <= 0.0_dp) then
             status = SPECTRE_FO_INVALID_STATE
@@ -101,29 +113,46 @@ contains
         ! the exact invariant p_zeta is matched through v_par instead, at
         ! fixed speed: a correction O(rho*^2) off a sheet, O(rho*) on it.
         alpha = entry_gyrophase(y)
-        if (axisymmetric()) then
-            speed = sqrt(vpar**2 + vperp**2)
-            do try = 1, ENTRY_PHASE_TRIES
+        vpar0 = vpar
+        vperp0 = vperp
+        speed = sqrt(vpar**2 + vperp**2)
+        outside = .false.
+        do try = 1, ENTRY_PHASE_TRIES
+            if (try > 1) then
+                ! Golden-angle steps keep the retried phases spread.
+                alpha = modulo(alpha + 2.399963229728653_dp, 8.0_dp*atan(1.0_dp))
+                vpar = vpar0
+                vperp = vperp0
+                state%u = y(1:3)
+                state%owner = owner
+            end if
+            if (axisymmetric()) then
                 call match_pzeta(alpha, x_gc, state%u, owner, b, e1, e2, &
                                  speed, target, dot_product(b, e_zeta), &
                                  ro0_bar, vpar, vperp, status)
-                if (status /= SPECTRE_FO_GYROPHASE_FAIL) exit
-                ! Golden-angle steps keep the retried phases spread.
-                alpha = modulo(alpha + 2.399963229728653_dp, &
-                               8.0_dp*atan(1.0_dp))
-            end do
-            if (status /= SPECTRE_FO_OK) return
-        end if
-        call lift(x_gc, b, e1, e2, bmod, vpar, vperp, alpha, ro0_bar, state%x, &
-                  state%v)
-        call spectre_fo_field_locate(state%x, state%u, state%owner, locate_status)
-        if (locate_status /= 0) then
-            status = SPECTRE_FO_LOCATE_FAIL
+                if (status == SPECTRE_FO_GYROPHASE_FAIL) cycle
+                if (status /= SPECTRE_FO_OK) return
+            end if
+            call lift(x_gc, b, e1, e2, bmod, vpar, vperp, alpha, ro0_bar, &
+                      state%x, state%v)
+            call spectre_fo_field_locate(state%x, state%u, state%owner, &
+                                         locate_status)
+            if (locate_status == 0) exit
             if (locate_status == 1 .and. &
                 state%u(1) > real(spectre_field%data%Mvol, dp)) then
-                state%active = .true.
-                status = SPECTRE_FO_LOSS
+                if (particle_outer_loss) then
+                    state%active = .true.
+                    status = SPECTRE_FO_LOSS
+                    return
+                end if
+                outside = .true.
+                cycle
             end if
+            status = SPECTRE_FO_LOCATE_FAIL
+            return
+        end do
+        if (try > ENTRY_PHASE_TRIES) then
+            status = merge(SPECTRE_FO_OUTSIDE, SPECTRE_FO_GYROPHASE_FAIL, outside)
             return
         end if
         if (axisymmetric()) then
@@ -230,6 +259,21 @@ contains
             h = min(h, hfac*RK_GYRO_ANGLE*ro0_bar/particle%bmod)
             call rk45_substep(state, h, ro0_bar, status, hfac*RK_GYRO_ANGLE, &
                 particle)
+            if (status == SPECTRE_FO_LOSS .and. .not. particle_outer_loss) then
+                ! The particle reached the outer boundary. Only a guiding
+                ! centre beyond it is lost; otherwise the guiding centre
+                ! continues, since there is no field outside.
+                dt_used = dt_used + h
+                call spectre_fo_field_local(state%u, state%owner, particle)
+                call gc_map(state, particle, ro0_bar, y, owner, map_status)
+                if (map_status /= SPECTRE_FO_OK) return
+                if (y(1) >= real(spectre_field%data%Mvol, dp)) return
+                state%last_y = y
+                state%active = .false.
+                exited = .true.
+                status = SPECTRE_FO_OK
+                return
+            end if
             if (status /= SPECTRE_FO_OK) then
                 if (status == SPECTRE_FO_LOSS) dt_used = dt_used + h
                 return

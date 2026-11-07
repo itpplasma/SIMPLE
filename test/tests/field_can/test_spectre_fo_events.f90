@@ -133,6 +133,7 @@ program test_spectre_fo_events
 
     ! An outer-domain trial stage must retry deterministically. Only an
     ! actually located terminal point can report physical loss.
+    call spectre_fo_configure(1.0e-6_dp, particle_loss=.true.)
     u = [1.99_dp, 0.0_dp, 0.0_dp]
     call sample(u, x, b, bmod)
     state = spectre_fo_state_t()
@@ -157,6 +158,25 @@ program test_spectre_fo_events
         exited, status)
     if (status /= SPECTRE_FO_LOSS .or. abs(used) > tiny(1.0_dp)) &
         error stop 'terminal sheet did not retain zero-time loss'
+    ! With the guiding-centre loss, the same particle reaching the boundary
+    ! with its guiding centre inside hands over to the guiding centre.
+    call spectre_fo_configure(1.0e-6_dp)
+    state = spectre_fo_state_t()
+    state%x = x
+    state%v = n
+    state%u = u
+    state%owner = 2
+    state%iface = 1
+    state%active = .true.
+    state%exit_rho = 10.0_dp
+    state%h_rk = dt
+    call spectre_fo_advance_until_exit(state, dt, RO, used, y, owner, &
+                                       exited, status)
+    if (status /= SPECTRE_FO_OK .or. .not. exited .or. state%active) &
+        error stop 'boundary contact with the guiding centre inside was a loss'
+    if (y(1) >= 2.0_dp .or. owner /= 2) &
+        error stop 'handover guiding centre is not inside the outer volume'
+    print '(A,F10.6)', 'guiding-centre handover at rho_g = ', y(1)
 
     call zero_time_field_jump
     call inward_thin_volume

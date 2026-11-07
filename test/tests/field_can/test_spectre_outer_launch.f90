@@ -34,6 +34,7 @@ program test_spectre_outer_launch
     write (unit, '(a)') "field_input='"//trim(fixture)//"'"
     write (unit, '(a)') 'integ_coords=6, integmode=3, crossing_level=3'
     write (unit, '(a)') 'ntestpart=1, ntimstep=65, npoiper2=1024'
+    write (unit, '(a)') "spectre_outer_loss='particle'"
     write (unit, '(a)') 'facE_al=1000, trace_time=2d-3, relerr=1d-12 /'
     close (unit)
     call simple_read_config('simple.in', status, message)

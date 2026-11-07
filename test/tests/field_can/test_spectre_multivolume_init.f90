@@ -43,6 +43,8 @@ program test_spectre_multivolume_init
     write (unit, '(A)') ' ntestpart = 1, ntimstep = 100, npoiper2 = 1024'
     write (unit, '(A)') ' facE_al = 1000d0, trace_time = 1d-3, relerr = 1d-13'
     write (unit, '(A)') ' spectre_ncon_phi = 32'
+    ! The edge-loss checks below use the finite-Larmor-radius loss.
+    write (unit, '(A)') " spectre_outer_loss = 'particle'"
     write (unit, '(A)') '/'
     close (unit)
     call simple_read_config('simple.in', status, message)

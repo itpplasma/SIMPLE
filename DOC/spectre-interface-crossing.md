@@ -16,7 +16,8 @@ sampling-only runs are unrestricted.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `spectre_fo_entry_larmor` | `1.5` | enter FO closer than this many radial gyroradii to a sheet or the outer boundary |
+| `spectre_fo_entry_larmor` | `1.5` | enter FO closer than this many radial gyroradii to a sheet (and to the outer boundary with `spectre_outer_loss = 'particle'`) |
+| `spectre_outer_loss` | `'guiding_centre'` | outer-boundary loss: when the guiding centre crosses it, as for VMEC and GVEC fields, or `'particle'` when the full orbit touches it |
 | `spectre_fo_tolerance` | `1d-9` | relative tolerance of the FO RK45 |
 | `spectre_fo_grid` | `32, 64, 32` | FO spline points per volume in $\rho_g$, $\vartheta$, $\zeta$ (per field period) |
 
@@ -25,8 +26,8 @@ sampling-only runs are unrestricted.
 In volume $k$ the GC is advanced by the symplectic integrator in that
 volume's Meiss chart (`src/spectre_sympl_orbit.f90`). After each microstep,
 `interface_proximity` takes the nearest integer $k' = \mathrm{nint}(\rho_g)$
-(an interior sheet or the outer boundary $M_\text{vol}$) and the radial
-gyroradius
+(an interior sheet, or with `spectre_outer_loss = 'particle'` also the outer
+boundary $M_\text{vol}$) and the radial gyroradius
 
 $$
 \rho_r = \frac{\bar\rho_0\,\bar v_\perp}{B}\,|\nabla\rho_g|,
@@ -104,7 +105,14 @@ otherwise $\bar v_\parallel = \bar{\mathbf v}\cdot\mathbf b_{gc}$.
 
 ## Losses and limits
 
-A marker is lost only at a located terminal point beyond $M_\text{vol}$; a
+With `spectre_outer_loss = 'guiding_centre'` (default) a marker is lost when
+its guiding centre reaches $M_\text{vol}$, the definition used for VMEC and
+GVEC fields. A full orbit whose particle reaches $M_\text{vol}$ while its
+guiding centre is inside hands over to the guiding centre, since the
+equilibrium defines no field outside; an entry tries further gyrophases
+before leaving such a marker in the guiding-centre model. With `'particle'`
+a marker is lost when the full orbit touches $M_\text{vol}$, a
+finite-Larmor-radius loss that counts more losses near a compressed edge. A
 location failure near the edge is a numerical failure. RK45 is not
 symplectic and can drift in energy over long FO phases. Losses are read
 from `times_lost.dat` (column 2, $0 < t <$ `trace_time`); FO loss counters
