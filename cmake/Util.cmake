@@ -1,47 +1,5 @@
 include(FetchContent)
 
-function(get_branch_or_main REPO_URL REMOTE_BRANCH)
-    execute_process(
-        COMMAND git rev-parse --abbrev-ref HEAD
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        OUTPUT_VARIABLE BRANCH
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-
-    set(CANDIDATE_BRANCH "${BRANCH}")
-
-    if(CANDIDATE_BRANCH STREQUAL "HEAD" OR CANDIDATE_BRANCH STREQUAL "")
-        if(DEFINED ENV{GITHUB_HEAD_REF} AND NOT "$ENV{GITHUB_HEAD_REF}" STREQUAL "")
-            set(CANDIDATE_BRANCH "$ENV{GITHUB_HEAD_REF}")
-        elseif(DEFINED ENV{GITHUB_REF_NAME} AND NOT "$ENV{GITHUB_REF_NAME}" STREQUAL "")
-            set(CANDIDATE_BRANCH "$ENV{GITHUB_REF_NAME}")
-        endif()
-    endif()
-
-    if(CANDIDATE_BRANCH STREQUAL "HEAD" OR CANDIDATE_BRANCH STREQUAL "")
-        set(CANDIDATE_BRANCH "main")
-    endif()
-
-    string(STRIP "${CANDIDATE_BRANCH}" CANDIDATE_BRANCH)
-
-    execute_process(
-        COMMAND git ls-remote --heads ${REPO_URL} ${CANDIDATE_BRANCH}
-        OUTPUT_VARIABLE BRANCH_EXISTS
-        ERROR_VARIABLE GIT_ERROR
-        RESULT_VARIABLE LS_REMOTE_RESULT
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-
-    if(LS_REMOTE_RESULT EQUAL 0 AND BRANCH_EXISTS)
-        set(${REMOTE_BRANCH} ${CANDIDATE_BRANCH} PARENT_SCOPE)
-    else()
-        if(NOT CANDIDATE_BRANCH STREQUAL "main")
-            message(WARNING "Requested branch ${CANDIDATE_BRANCH} not found in ${REPO_URL}; falling back to main")
-        endif()
-        set(${REMOTE_BRANCH} "main" PARENT_SCOPE)
-    endif()
-endfunction()
-
 function(find_or_fetch DEPENDENCY)
     string(TOUPPER "${DEPENDENCY}" _dep_upper)
     string(TOLOWER "${DEPENDENCY}" _dep_lower)
@@ -75,31 +33,11 @@ function(find_or_fetch DEPENDENCY)
 
     if("${_dep_lower}" STREQUAL "libneo")
         set(_repo_url "https://github.com/itpplasma/libneo.git")
-        set(_branch "")
-
-        # Override via -DLIBNEO_REF=<branch|tag|sha>; never read from $ENV.
-        if(DEFINED LIBNEO_REF AND NOT "${LIBNEO_REF}" STREQUAL "")
-            string(STRIP "${LIBNEO_REF}" _branch)
-        endif()
-
-        if(NOT _branch STREQUAL "")
-            execute_process(
-                COMMAND git ls-remote --heads ${_repo_url} ${_branch}
-                OUTPUT_VARIABLE _branch_exists
-                RESULT_VARIABLE _branch_check_status
-                OUTPUT_STRIP_TRAILING_WHITESPACE
-            )
-            set(_branch_valid FALSE)
-            if(_branch_check_status EQUAL 0 AND NOT _branch_exists STREQUAL "")
-                set(_branch_valid TRUE)
-            endif()
-            if(NOT _branch_valid)
-                message(WARNING "LIBNEO_REF='${_branch}' not found as a branch; treating as tag or SHA")
-            endif()
-        endif()
-
+        # LIBNEO_REF is the pin from cmake/dependency_versions.json unless
+        # -DLIBNEO_REF=<branch|tag|sha> overrides it; never read from $ENV.
+        string(STRIP "${LIBNEO_REF}" _branch)
         if(_branch STREQUAL "")
-            get_branch_or_main(${_repo_url} _branch)
+            message(FATAL_ERROR "LIBNEO_REF is empty; set it or pin libneo in cmake/dependency_versions.json")
         endif()
 
         # See the local-source case above. BUILD_TESTING is scoped to this

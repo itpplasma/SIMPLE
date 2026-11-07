@@ -2,14 +2,13 @@
 # Pack an offline CI bundle of the checked-out commit: ci/bundle.sh OUT.tar.zst
 #
 # The bundle holds everything ci/run.sh needs without network access to the
-# code forges: src/ (this commit, checked out on SCI_HEAD_REF so dependency
-# branch matching works), bare git mirrors of SIMPLE (main + this commit, for
+# code forges: src/ (this commit, checked out on SCI_HEAD_REF), bare git mirrors of SIMPLE (main + this commit, for
 # the golden-record reference) and of every FetchContent dependency, and the
 # downloaded test data and a pip wheel mirror for the cluster's Python 3.11.
 #
 # Environment:
 #   SCI_HEAD_REF    branch name to check out on (default: current branch)
-#   SCI_LIBNEO_REF  libneo ref for the build (default: branch matching)
+#   SCI_LIBNEO_REF  libneo ref for the build (default: the pin in cmake/dependency_versions.json)
 #   SCI_TIER        full bundles include the CGAL headers (default: full)
 #   SCI_CACHE       mirror and data cache (default: ~/.cache/sci-bundle)
 set -euo pipefail

@@ -54,8 +54,8 @@ cmake --build build -j 4
 ```
 
 Use Release, not `Fast`, which tunes for the build host. Without
-`LIBNEO_REF` CMake takes the libneo branch matching SIMPLE's branch name, or
-`main`; the value above is the tested pin. The clean build took 107 s.
+`LIBNEO_REF` CMake takes the libneo revision pinned in
+`cmake/dependency_versions.json`; the value above is the tested revision. The clean build took 107 s.
 
 ## Leonardo: test and run
 
