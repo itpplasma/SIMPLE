@@ -1568,6 +1568,20 @@ set_tests_properties(test_field_line_midpoint PROPERTIES
     LABELS "unit;spectre"
     TIMEOUT 15)
 
+# tools/spectre_rescale.py: field and geometry scale with the requested factors.
+add_executable(test_spectre_rescale.x test_spectre_rescale.f90)
+target_link_libraries(test_spectre_rescale.x simple)
+add_test(NAME test_spectre_rescale
+    COMMAND ${BOOZER_CHARTMAP_PYTHON}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_spectre_rescale.py
+        $<TARGET_FILE:test_spectre_rescale.x>
+        ${PROJECT_SOURCE_DIR}/tools/spectre_rescale.py
+        ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_spectre_rescale PROPERTIES
+    LABELS "unit;spectre;python"
+    TIMEOUT 60)
+
 # SPECTRE guiding-center RK45 tracing per volume with boundary-stop (#438).
 # Uses simple.x with the committed libneo SPECTRE HDF5 fixture; VMEC-free.
 add_test(NAME test_spectre_gc_rk45
