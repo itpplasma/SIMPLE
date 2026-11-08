@@ -75,8 +75,10 @@ Start positions
        :math:`(\text{int}(1/\text{grid\_density} - 1))^2` markers on a
        :math:`(\vartheta, \varphi)` grid instead and overrides ``ntestpart``.
    * - 2
-     - Read ``start.dat``: :math:`(s, \vartheta, \varphi, v/v_0, \lambda)`
-       per line, reference coordinates.
+     - Read ``start.dat``: :math:`(x_1, \vartheta, \varphi, v/v_0, \lambda)`
+       per line in reference coordinates, where :math:`x_1` is :math:`s` for
+       VMEC coordinates and the chart's own radius (:math:`\rho` for
+       ``rho_convention = rho_tor``) for a chartmap.
    * - 3
      - Read an ANTS-format file (``start_ants.dat`` with
        ``special_ants_file = .true.``, else ``start.dat``).
@@ -89,7 +91,11 @@ Start positions
        :math:`s \ge 0.01`; random angles. An upper bound below 0.01 stops
        the run.
    * - 6
-     - Read ``start.dat`` with positions in integration coordinates.
+     - Read ``start.dat`` with positions in integration coordinates. These
+       depend on ``isw_field_type``: on a Boozer chartmap the first column is
+       :math:`s` in Boozer mode (2) but :math:`\rho` in reference mode (5),
+       so a file written for one mode starts markers at the wrong radius in
+       the other.
    * - 7
      - D-T fusion births from ``&profiles``: :doc:`/alpha-birth`.
 

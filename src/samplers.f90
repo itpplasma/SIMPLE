@@ -103,9 +103,9 @@ contains
     end subroutine
 
     subroutine sample_read_integration(zstart, filename)
-        ! Read (s, theta_B, zeta_B, |v|/v0, v_parallel/|v|) and convert only
-        ! the position to SIMPLE's stored reference-coordinate convention.
-        ! This permits exact reuse of externally generated Boozer particles.
+        ! Read positions in integration coordinates, (s, theta_B, zeta_B) in
+        ! Boozer mode but (rho, theta, zeta) in reference mode on a rho chart,
+        ! then |v|/v0 and v_parallel/|v|; only the position is converted.
         use field_can_mod, only: integ_to_ref
 
         real(dp), dimension(:, :), intent(inout) :: zstart
