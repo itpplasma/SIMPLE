@@ -608,7 +608,8 @@ contains
                                    load_boozer_from_chartmap
         use timing, only: print_phase_time
         use magfie_sub, only: TEST, CANFLUX, VMEC, BOOZER, MEISS, ALBERT, &
-                              REFCOORDS, SPECTRE, set_magfie_refcoords_field
+                              REFCOORDS, SPECTRE, set_magfie_refcoords_field, &
+                              move_magfie_refcoords_field
 #ifdef SIMPLE_ENABLE_VMECPP
         use magfie_sub, only: VMECPP
 #endif
@@ -626,6 +627,7 @@ contains
         type(tracer_t), intent(inout) :: self
         integer, intent(in) :: ans_s, ans_tp, amultharm, aintegmode
         class(magnetic_field_t), allocatable :: field_temp
+        class(magnetic_field_t), allocatable :: field_splined_vmec
         character(:), allocatable :: vmec_equilibrium_file
         logical :: use_boozer_chartmap, use_spectre, use_vmecpp
 
@@ -746,13 +748,14 @@ contains
                     end select
                     select type (field_temp)
                     type is (splined_field_t)
-                        call set_magfie_refcoords_field(field_temp)
+                        continue
                     type is (vmec_field_t)
                         block
-                            type(splined_field_t) :: splined_vmec
+                            type(splined_field_t), allocatable :: splined_vmec
+                            allocate (splined_vmec)
                             call create_splined_field(field_temp, ref_coords, &
                                                       splined_vmec)
-                            call set_magfie_refcoords_field(splined_vmec)
+                            call move_alloc(splined_vmec, field_splined_vmec)
                         end block
                     class default
                         print *, &
@@ -763,6 +766,11 @@ contains
                             ' (splined onto coord_input)'
                         error stop
                     end select
+                    if (allocated(field_splined_vmec)) then
+                        call move_magfie_refcoords_field(field_splined_vmec)
+                    else
+                        call move_magfie_refcoords_field(field_temp)
+                    end if
                 end if
             end if
         end if
