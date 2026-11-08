@@ -65,6 +65,14 @@ subroutine set_magfie_refcoords_field(field)
   allocate (refcoords_field, source=field)
 end subroutine set_magfie_refcoords_field
 
+subroutine move_magfie_refcoords_field(field)
+    ! A splined chart field can take tens of GB; a copy would double peak memory.
+    class(magnetic_field_t), allocatable, intent(inout) :: field
+
+    if (allocated(refcoords_field)) deallocate (refcoords_field)
+    call move_alloc(field, refcoords_field)
+end subroutine move_magfie_refcoords_field
+
 subroutine set_magfie_spectre_field(field)
   type(spectre_field_t), intent(in) :: field
 
