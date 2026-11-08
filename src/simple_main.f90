@@ -416,7 +416,6 @@ contains
     integer function run_input_kind()
         use magfie_sub, only: TEST
         use field_boozer_chartmap, only: is_boozer_chartmap
-        use field, only: is_spectre_file
         use params, only: netcdffile
 
         run_input_kind = INPUT_VMEC
@@ -425,7 +424,7 @@ contains
         else if (is_vmecpp_input(netcdffile)) then
             run_input_kind = INPUT_VMECPP
         else if (len_trim(field_input) > 0) then
-            if (is_spectre_file(field_input)) then
+            if (is_spectre_input(field_input)) then
                 run_input_kind = INPUT_SPECTRE
             else if (is_boozer_chartmap(field_input)) then
                 run_input_kind = INPUT_CHARTMAP
@@ -602,7 +601,7 @@ contains
     subroutine init_field(self, vmec_file, ans_s, ans_tp, amultharm, aintegmode)
         use spectre_fo_field, only: spectre_fo_field_clear
         use field_base, only: magnetic_field_t
-        use field, only: field_from_file, is_spectre_file
+        use field, only: field_from_file
         use field_boozer_chartmap, only: boozer_chartmap_field_t, is_boozer_chartmap
         use boozer_chartmap, only: set_boozer_chartmap_spline_orders, &
                                    load_boozer_from_chartmap
@@ -649,7 +648,7 @@ contains
         use_spectre = .false.
         use_vmecpp = is_vmecpp_input(vmec_file)
         if (len_trim(field_input) > 0 .and. .not. use_vmecpp) then
-            use_spectre = is_spectre_file(field_input)
+            use_spectre = is_spectre_input(field_input)
             if (.not. use_spectre) use_boozer_chartmap = is_boozer_chartmap(field_input)
         end if
 
@@ -822,7 +821,6 @@ contains
     subroutine init_gc_tables(path)
         use field_coils, only: coils_field_t, create_coils_field
         use field_gc_tables, only: build_gc_tables_coils, build_gc_tables_frozen
-        use field, only: is_spectre_file
         use magfie_sub, only: gc_tables
         use params, only: field_tables_order
         use reference_coordinates, only: ref_coords
@@ -834,7 +832,7 @@ contains
         integer :: status, n
 
         n = len_trim(path)
-        if (n > 3 .and. .not. is_spectre_file(path)) then
+        if (n > 3) then
             if (path(n - 2:n) == '.h5') then
                 call load_frozen_current_field(path, frozen, status)
                 if (status /= 0) error stop 'init_gc_tables: cannot load '//path
@@ -847,6 +845,16 @@ contains
         call build_gc_tables_coils(raw_coils%coils, ref_coords, field_tables_order, &
                                    gc_tables)
     end subroutine init_gc_tables
+
+    !> With field tables an HDF5 field_input is a frozen-current field, which
+    !> shares the HDF5 signature with SPECTRE equilibria.
+    logical function is_spectre_input(path)
+        use field, only: is_spectre_file
+        use params, only: field_tables_order
+        character(*), intent(in) :: path
+
+        is_spectre_input = field_tables_order == 0 .and. is_spectre_file(path)
+    end function is_spectre_input
 
     logical function is_vmecpp_input(path)
         character(*), intent(in) :: path
