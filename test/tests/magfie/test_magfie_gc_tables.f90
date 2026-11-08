@@ -9,7 +9,8 @@ program test_magfie_gc_tables
     use field_coils, only: coils_field_t, create_coils_field
     use field_gc_tables, only: gc_tables_t, build_gc_tables_coils, evaluate_gc_tables
     use field_splined, only: splined_field_t, create_splined_field
-    use magfie_sub, only: set_magfie_refcoords_field, magfie_refcoords
+    use magfie_sub, only: magfie_splined_refcoords, gc_tables, init_magfie, &
+                          REFCOORDS, axis_radial_coordinate
     use libneo_coordinates, only: coordinate_system_t, chartmap_coordinate_system_t, &
                                   make_chartmap_coordinate_system, RHO_TOR
     use neo_biotsavart, only: compute_field_jacobian
@@ -22,10 +23,11 @@ program test_magfie_gc_tables
     type(gc_tables_t) :: coarse, fine
     type(splined_field_t) :: splined
     real(dp) :: err_route(GC_COUNT)
+    logical :: radial_is_rho
+    integer :: status
     real(dp) :: u(3, npts), exact(GC_COUNT, npts), err_coarse(GC_COUNT), &
                 err_fine(GC_COUNT), period
     integer :: k
-
     call make_chartmap_coordinate_system(chart, 'wout_ncsx.chartmap.nc')
     select type (chart)
     class is (chartmap_coordinate_system_t)
@@ -41,12 +43,18 @@ program test_magfie_gc_tables
     do k = 1, npts
         call exact_quantities(u(:, k), exact(:, k))
     end do
+    ! With the tables installed, the RK axis map must use the chart's rho.
+    call init_magfie(REFCOORDS)
+    call build_gc_tables_coils(raw%coils, chart, 3, gc_tables, n_r=17, n_th=33, &
+                               n_phi=65)
+    call axis_radial_coordinate(radial_is_rho, status)
+    if (status /= 0 .or. .not. radial_is_rho) error stop &
+        'tables must use the rho axis map'
     call build_gc_tables_coils(raw%coils, chart, 3, coarse)
     call build_gc_tables_coils(raw%coils, chart, 3, fine, n_r=33, n_th=65, n_phi=129)
     err_coarse = table_error(coarse)
     err_fine = table_error(fine)
     call create_splined_field(raw, chart, splined)
-    call set_magfie_refcoords_field(splined)
     err_route = route_error()
     print '(a)', ' quantity  tables chart grid  tables 2x   splined route'
     do k = 1, GC_COUNT
@@ -90,8 +98,8 @@ contains
 
         err = 0
         do i = 1, npts
-            call magfie_refcoords(u(:, i), q(1), q(2), q(3:5), q(6:8), q(9:11), &
-                                  q(12:14))
+            call magfie_splined_refcoords(splined, u(:, i), q(1), q(2), q(3:5), &
+                                          q(6:8), q(9:11), q(12:14))
             q(9:14) = q(2)*q(9:14)
             err = max(err, abs(q - regular(exact(:, i)))/regular_scale())
         end do

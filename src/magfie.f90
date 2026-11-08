@@ -91,6 +91,11 @@ end subroutine set_magfie_spectre_field
         radial_is_rho = .false.
         ierr = 0
         if (.not. associated(magfie, magfie_refcoords)) return
+        if (gc_tables%initialized) then
+            ! Tables are built only on rho charts (build_gc_tables_coils).
+            radial_is_rho = .true.
+            return
+        end if
         ierr = 2
         if (allocated(refcoords_field)) then
             call reference_axis_radial_coordinate(refcoords_field, radial_is_rho, ierr)
