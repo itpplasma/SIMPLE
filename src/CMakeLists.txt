@@ -184,6 +184,7 @@ target_link_libraries(simple PUBLIC
     LIBNEO::spectre_field
     LIBNEO::util
     LIBNEO::vmec_field
+    LIBNEO::frozen_current
 )
 
 # The abstract field_base module lives in its own decompose-neo-core target in

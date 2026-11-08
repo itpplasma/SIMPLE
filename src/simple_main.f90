@@ -738,7 +738,7 @@ contains
                 end if
 
                 if (isw_field_type == REFCOORDS .and. field_tables_order > 0) then
-                    call init_gc_tables_from_coils(trim(field_input))
+                    call init_gc_tables(trim(field_input))
                     call print_phase_time('Guiding-centre field tables completed')
                     return
                 end if
@@ -817,19 +817,36 @@ contains
         end if
     end subroutine init_field
 
-    subroutine init_gc_tables_from_coils(path)
+    !> Tables from a coil file, or from a solved frozen-current field (libneo
+    !> frozen_current.x field_file, HDF5).
+    subroutine init_gc_tables(path)
         use field_coils, only: coils_field_t, create_coils_field
-        use field_gc_tables, only: build_gc_tables_coils
+        use field_gc_tables, only: build_gc_tables_coils, build_gc_tables_frozen
+        use field, only: is_spectre_file
         use magfie_sub, only: gc_tables
         use params, only: field_tables_order
         use reference_coordinates, only: ref_coords
+        use neo_frozen_current_field, only: frozen_current_field_t
+        use neo_frozen_current_io, only: load_frozen_current_field
         character(*), intent(in) :: path
         type(coils_field_t) :: raw_coils
+        type(frozen_current_field_t) :: frozen
+        integer :: status, n
 
+        n = len_trim(path)
+        if (n > 3 .and. .not. is_spectre_file(path)) then
+            if (path(n - 2:n) == '.h5') then
+                call load_frozen_current_field(path, frozen, status)
+                if (status /= 0) error stop 'init_gc_tables: cannot load '//path
+                call build_gc_tables_frozen(frozen, ref_coords, field_tables_order, &
+                                            gc_tables)
+                return
+            end if
+        end if
         call create_coils_field(path, raw_coils)
         call build_gc_tables_coils(raw_coils%coils, ref_coords, field_tables_order, &
                                    gc_tables)
-    end subroutine init_gc_tables_from_coils
+    end subroutine init_gc_tables
 
     logical function is_vmecpp_input(path)
         character(*), intent(in) :: path

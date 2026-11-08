@@ -11,6 +11,7 @@ module field_gc_tables
     use libneo_coordinates, only: coordinate_system_t, &
                                   chartmap_coordinate_system_t, RHO_TOR
     use neo_biotsavart, only: coils_t, compute_field_jacobian
+    use neo_frozen_current_field, only: frozen_current_field_t
     use neo_guiding_centre_field, only: guiding_centre_quantities, GC_COUNT, &
                                   GC_BMOD, GC_SQRTG, GC_BDER, GC_HCOV, GC_HCTR, GC_HCURL
     use field_splined, only: configure_spline_grid
@@ -18,7 +19,8 @@ module field_gc_tables
     implicit none
     private
 
-    public :: gc_tables_t, build_gc_tables_coils, evaluate_gc_tables
+    public :: gc_tables_t, build_gc_tables_coils, build_gc_tables_frozen, &
+              evaluate_gc_tables
 
     type :: gc_tables_t
         type(BatchSplineData3D) :: spl
@@ -33,6 +35,27 @@ contains
     !> create_coils_field) on the grid of the chartmap coords.
     subroutine build_gc_tables_coils(coils, coords, order, tab, n_r, n_th, n_phi)
         type(coils_t), intent(in) :: coils
+        class(coordinate_system_t), intent(in) :: coords
+        integer, intent(in) :: order
+        type(gc_tables_t), intent(inout) :: tab
+        integer, intent(in), optional :: n_r, n_th, n_phi
+
+        call build_gc_tables(coils, coords, order, tab, n_r, n_th, n_phi)
+    end subroutine build_gc_tables_coils
+
+    !> Tables of a loaded frozen-current field (libneo, cm and G).
+    subroutine build_gc_tables_frozen(field, coords, order, tab, n_r, n_th, n_phi)
+        type(frozen_current_field_t), intent(in) :: field
+        class(coordinate_system_t), intent(in) :: coords
+        integer, intent(in) :: order
+        type(gc_tables_t), intent(inout) :: tab
+        integer, intent(in), optional :: n_r, n_th, n_phi
+
+        call build_gc_tables(field, coords, order, tab, n_r, n_th, n_phi)
+    end subroutine build_gc_tables_frozen
+
+    subroutine build_gc_tables(source, coords, order, tab, n_r, n_th, n_phi)
+        class(*), intent(in) :: source
         class(coordinate_system_t), intent(in) :: coords
         integer, intent(in) :: order
         type(gc_tables_t), intent(inout) :: tab
@@ -63,7 +86,12 @@ contains
                     u = xmin + step*real([i, j, k] - 1, dp)
                     call coords%evaluate_cart(u, x)
                     call coords%covariant_basis(u, e)
-                    call compute_field_jacobian(coils, x, a, da, b, db)
+                    select type (source)
+                    type is (coils_t)
+                        call compute_field_jacobian(source, x, a, da, b, db)
+                    type is (frozen_current_field_t)
+                        call source%compute_field_jacobian(x, b, db)
+                    end select
                     call guiding_centre_quantities(e, b, db, q)
                     q(GC_HCTR:GC_HCTR + 2) = q(GC_SQRTG)*q(GC_HCTR:GC_HCTR + 2)
                     q(GC_HCURL:GC_HCURL + 2) = q(GC_SQRTG)*q(GC_HCURL:GC_HCURL + 2)
@@ -76,7 +104,7 @@ contains
         call construct_batch_splines_3d(xmin, xmax, y, [order, order, order], &
                                         [.false., .true., .true.], tab%spl)
         tab%initialized = .true.
-    end subroutine build_gc_tables_coils
+    end subroutine build_gc_tables
 
     !> magfie outputs at x = (rho, theta, zeta) of the chart.
     subroutine evaluate_gc_tables(tab, x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
