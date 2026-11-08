@@ -616,7 +616,8 @@ contains
         use field_splined, only: splined_field_t, create_splined_field
         use field_vmec, only: vmec_field_t
         use reference_coordinates, only: init_reference_coordinates, ref_coords
-        use params, only: coord_input, field_input, wall_input, wall_units
+        use params, only: coord_input, field_input, wall_input, wall_units, &
+                          field_tables_order
         use field_can_mod, only: init_field_can_boozer_chartmap_compact, &
                                  set_refcoords_transform
         use libneo_coordinates, only: vmec_coordinate_system_t
@@ -736,6 +737,11 @@ contains
                     error stop
                 end if
 
+                if (isw_field_type == REFCOORDS .and. field_tables_order > 0) then
+                    call init_gc_tables_from_coils(trim(field_input))
+                    call print_phase_time('Guiding-centre field tables completed')
+                    return
+                end if
                 call field_from_file(field_input, field_temp)
                 call print_phase_time('Field from file loading completed')
 
@@ -810,6 +816,20 @@ contains
             call print_phase_time('Canonical field initialization completed')
         end if
     end subroutine init_field
+
+    subroutine init_gc_tables_from_coils(path)
+        use field_coils, only: coils_field_t, create_coils_field
+        use field_gc_tables, only: build_gc_tables_coils
+        use magfie_sub, only: gc_tables
+        use params, only: field_tables_order
+        use reference_coordinates, only: ref_coords
+        character(*), intent(in) :: path
+        type(coils_field_t) :: raw_coils
+
+        call create_coils_field(path, raw_coils)
+        call build_gc_tables_coils(raw_coils%coils, ref_coords, field_tables_order, &
+                                   gc_tables)
+    end subroutine init_gc_tables_from_coils
 
     logical function is_vmecpp_input(path)
         character(*), intent(in) :: path
