@@ -148,6 +148,8 @@ contains
         ! Refactor guard for the Newton drivers: field evaluations, one per stage
         ! and Newton iteration, as recorded with the per-scheme drivers that
         ! preceded the shared one, for the rate stop and the correction stop.
+        ! The counts follow the field; libneo#514 changed the VMEC spline grid
+        ! and moved three rate-stop counts by one or two.
         integer, intent(inout) :: nfail
         integer, parameter :: nschemes = 8
         character(8), parameter :: names(nschemes) = [character(8) :: 'euler1', &
@@ -155,7 +157,7 @@ contains
         integer, parameter :: modes(nschemes) = [EXPL_IMPL_EULER, IMPL_EXPL_EULER, &
                                      MIDPOINT, GAUSS1, GAUSS2, GAUSS3, GAUSS4, LOBATTO3]
         integer, parameter :: rate_counts(nschemes) = &
-                              [802, 964, 1678, 824, 1602, 2403, 3204, 2403]
+                              [802, 965, 1676, 825, 1602, 2403, 3204, 2403]
         integer, parameter :: correction_counts(nschemes) = &
                               [1332, 1698, 3200, 1600, 3200, 4800, 6400, 4800]
         real(dp) :: z(4), cost
