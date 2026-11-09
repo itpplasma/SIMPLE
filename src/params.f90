@@ -214,8 +214,9 @@ module params
     integer :: max_rk_recoveries = 1000
 
     character(1000) :: field_input = ''
-    !> Spline order of the guiding-centre field tables for a coil field_input in
-    !> reference coordinates (isw_field_type = 5); 0 keeps the splined field.
+    !> Spline order of the guiding-centre field tables in reference coordinates
+    !> (isw_field_type = 5) for a coil field_input or a frozen-current field
+    !> (.h5, libneo frozen_current.x field_file); 0 keeps the splined field.
     integer :: field_tables_order = 0
     character(1000) :: coord_input = ''
     !> Optional netCDF profile label s(R, phi, Z) for the collision profiles

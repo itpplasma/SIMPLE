@@ -819,31 +819,13 @@ contains
     !> Tables from a coil file, or from a solved frozen-current field (libneo
     !> frozen_current.x field_file, HDF5).
     subroutine init_gc_tables(path)
-        use field_coils, only: coils_field_t, create_coils_field
-        use field_gc_tables, only: build_gc_tables_coils, build_gc_tables_frozen
+        use field_gc_tables_input, only: build_gc_tables_from_file
         use magfie_sub, only: gc_tables
         use params, only: field_tables_order
         use reference_coordinates, only: ref_coords
-        use neo_frozen_current_field, only: frozen_current_field_t
-        use neo_frozen_current_io, only: load_frozen_current_field
         character(*), intent(in) :: path
-        type(coils_field_t) :: raw_coils
-        type(frozen_current_field_t) :: frozen
-        integer :: status, n
 
-        n = len_trim(path)
-        if (n > 3) then
-            if (path(n - 2:n) == '.h5') then
-                call load_frozen_current_field(path, frozen, status)
-                if (status /= 0) error stop 'init_gc_tables: cannot load '//path
-                call build_gc_tables_frozen(frozen, ref_coords, field_tables_order, &
-                                            gc_tables)
-                return
-            end if
-        end if
-        call create_coils_field(path, raw_coils)
-        call build_gc_tables_coils(raw_coils%coils, ref_coords, field_tables_order, &
-                                   gc_tables)
+        call build_gc_tables_from_file(path, ref_coords, field_tables_order, gc_tables)
     end subroutine init_gc_tables
 
     !> With field tables an HDF5 field_input is a frozen-current field, which

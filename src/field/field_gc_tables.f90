@@ -12,7 +12,6 @@ module field_gc_tables
                                   chartmap_coordinate_system_t, PSI_TOR_NORM, &
                                   PSI_POL_NORM
     use neo_biotsavart, only: coils_t, compute_field_jacobian
-    use neo_frozen_current_field, only: frozen_current_field_t
     use neo_guiding_centre_field, only: guiding_centre_quantities, GC_COUNT, &
                                   GC_BMOD, GC_SQRTG, GC_BDER, GC_HCOV, GC_HCTR, GC_HCURL
     use field_splined, only: configure_spline_grid
@@ -20,8 +19,8 @@ module field_gc_tables
     implicit none
     private
 
-    public :: gc_tables_t, build_gc_tables_coils, build_gc_tables_frozen, &
-              evaluate_gc_tables
+    public :: gc_tables_t, gc_field_source_t, build_gc_tables, &
+              build_gc_tables_coils, evaluate_gc_tables
 
     type :: gc_tables_t
         type(BatchSplineData3D) :: spl
@@ -29,6 +28,29 @@ module field_gc_tables
     contains
         final :: gc_tables_cleanup
     end type gc_tables_t
+
+    !> A Cartesian field B(x) with its Jacobian dB_i/dx_j (cm, G). Sources
+    !> outside this module (field_gc_tables_input) extend it, so that the
+    !> tracing modules using the tables never see their types.
+    type, abstract :: gc_field_source_t
+    contains
+        procedure(field_jacobian_i), deferred :: field_jacobian
+    end type gc_field_source_t
+
+    abstract interface
+        subroutine field_jacobian_i(self, x, b, db)
+            import :: dp, gc_field_source_t
+            class(gc_field_source_t), intent(in) :: self
+            real(dp), intent(in) :: x(3)
+            real(dp), intent(out) :: b(3), db(3, 3)
+        end subroutine field_jacobian_i
+    end interface
+
+    type, extends(gc_field_source_t) :: coil_source_t
+        type(coils_t) :: coils
+    contains
+        procedure :: field_jacobian => coil_field_jacobian
+    end type coil_source_t
 
 contains
 
@@ -41,22 +63,20 @@ contains
         type(gc_tables_t), intent(inout) :: tab
         integer, intent(in), optional :: n_r, n_th, n_phi
 
-        call build_gc_tables(coils, coords, order, tab, n_r, n_th, n_phi)
+        call build_gc_tables(coil_source_t(coils), coords, order, tab, n_r, n_th, n_phi)
     end subroutine build_gc_tables_coils
 
-    !> Tables of a loaded frozen-current field (libneo, cm and G).
-    subroutine build_gc_tables_frozen(field, coords, order, tab, n_r, n_th, n_phi)
-        type(frozen_current_field_t), intent(in) :: field
-        class(coordinate_system_t), intent(in) :: coords
-        integer, intent(in) :: order
-        type(gc_tables_t), intent(inout) :: tab
-        integer, intent(in), optional :: n_r, n_th, n_phi
+    subroutine coil_field_jacobian(self, x, b, db)
+        class(coil_source_t), intent(in) :: self
+        real(dp), intent(in) :: x(3)
+        real(dp), intent(out) :: b(3), db(3, 3)
+        real(dp) :: a(3), da(3, 3)
 
-        call build_gc_tables(field, coords, order, tab, n_r, n_th, n_phi)
-    end subroutine build_gc_tables_frozen
+        call compute_field_jacobian(self%coils, x, a, da, b, db)
+    end subroutine coil_field_jacobian
 
     subroutine build_gc_tables(source, coords, order, tab, n_r, n_th, n_phi)
-        class(*), intent(in) :: source
+        class(gc_field_source_t), intent(in) :: source
         class(coordinate_system_t), intent(in) :: coords
         integer, intent(in) :: order
         type(gc_tables_t), intent(inout) :: tab
@@ -64,7 +84,7 @@ contains
 
         real(dp), allocatable :: y(:, :, :, :)
         real(dp) :: xmin(3), xmax(3), step(3), u(3), x(3), e(3, 3), q(GC_COUNT)
-        real(dp) :: a(3), da(3, 3), b(3), db(3, 3)
+        real(dp) :: b(3), db(3, 3)
         integer :: nr, nth, nph, i, j, k
 
         ! The tables are splined in the chart's own radius, which the RK axis
@@ -84,19 +104,14 @@ contains
         step = (xmax - xmin)/real([nr, nth, nph] - 1, dp)
         allocate (y(nr, nth, nph, GC_COUNT))
         !$omp parallel do collapse(2) default(shared) &
-        !$omp private(i, j, k, u, x, e, a, da, b, db, q)
+        !$omp private(i, j, k, u, x, e, b, db, q)
         do k = 1, nph
             do j = 1, nth
                 do i = 1, nr
                     u = xmin + step*real([i, j, k] - 1, dp)
                     call coords%evaluate_cart(u, x)
                     call coords%covariant_basis(u, e)
-                    select type (source)
-                    type is (coils_t)
-                        call compute_field_jacobian(source, x, a, da, b, db)
-                    type is (frozen_current_field_t)
-                        call source%compute_field_jacobian(x, b, db)
-                    end select
+                    call source%field_jacobian(x, b, db)
                     call guiding_centre_quantities(e, b, db, q)
                     q(GC_HCTR:GC_HCTR + 2) = q(GC_SQRTG)*q(GC_HCTR:GC_HCTR + 2)
                     q(GC_HCURL:GC_HCURL + 2) = q(GC_SQRTG)*q(GC_HCURL:GC_HCURL + 2)

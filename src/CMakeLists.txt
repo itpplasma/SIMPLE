@@ -14,6 +14,7 @@
     field/field_coils.f90
     field/field_splined.f90
     field/field_gc_tables.f90
+    field/field_gc_tables_input.f90
     field/field_boozer_chartmap.f90
     field/field_newton.F90
     field.F90
