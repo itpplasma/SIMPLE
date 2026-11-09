@@ -5,7 +5,6 @@ use field_can_albert, only: magfie_albert
 use magfie_can_boozer_sub, only: magfie_can, magfie_boozer
 use field_base, only: magnetic_field_t
 use field_splined, only: splined_field_t
-    use field_gc_tables, only: gc_tables_t, evaluate_gc_tables
 use field_spectre, only: spectre_field_t
 #ifdef SIMPLE_ENABLE_VMECPP
     use field_vmecpp, only: magfie_vmecpp
@@ -49,14 +48,12 @@ integer, parameter :: TEST=-1, CANFLUX=0, VMEC=1, BOOZER=2, MEISS=3, ALBERT=4, &
                           REFCOORDS = 5, SPECTRE = 6, VMECPP = 7
 
 class(magnetic_field_t), allocatable :: refcoords_field
-    type(gc_tables_t) :: gc_tables
 type(spectre_field_t), allocatable :: spectre_field
 
 contains
 
 logical function has_magfie_refcoords_field()
-        has_magfie_refcoords_field = allocated(refcoords_field) &
-                                     .or. gc_tables%initialized
+        has_magfie_refcoords_field = allocated(refcoords_field)
   if (has_magfie_refcoords_field) return
   has_magfie_refcoords_field = allocated(field_noncan)
 end function has_magfie_refcoords_field
@@ -92,11 +89,6 @@ end subroutine set_magfie_spectre_field
         radial_is_rho = .false.
         ierr = 0
         if (.not. associated(magfie, magfie_refcoords)) return
-        if (gc_tables%initialized) then
-            ! Tables are built only on rho charts (build_gc_tables_coils).
-            radial_is_rho = .true.
-            return
-        end if
         ierr = 2
         if (allocated(refcoords_field)) then
             call reference_axis_radial_coordinate(refcoords_field, radial_is_rho, ierr)
@@ -202,11 +194,6 @@ subroutine magfie_refcoords(x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
   real(dp), intent(out) :: bmod, sqrtg
   real(dp), intent(out) :: bder(3), hcovar(3), hctrvr(3), hcurl(3)
 
-        if (gc_tables%initialized) then
-            call evaluate_gc_tables(gc_tables, x, bmod, sqrtg, bder, hcovar, &
-                                    hctrvr, hcurl)
-            return
-        end if
   if (allocated(refcoords_field)) then
     select type (refcoords_field)
     type is (splined_field_t)

@@ -198,6 +198,25 @@ contains
         field%initialized = .true.
     end subroutine create_splined_field
 
+    !> Splined field from values at the nodes of a uniform grid in reference
+    !> coordinates with identity scaling, laid out as in build_splines: A_i,
+    !> then the direction as (B_R, B^phi, B_Z), then |B|; the periodic theta
+    !> and phi endpoints are included.
+    subroutine create_splined_field_from_nodes(ref_coords, xmin, xmax, values, field)
+        class(coordinate_system_t), intent(in) :: ref_coords
+        real(dp), intent(in) :: xmin(3), xmax(3)
+        real(dp), intent(in) :: values(:, :, :, :)
+        type(splined_field_t), intent(out) :: field
+
+        if (size(values, 4) /= 7) error stop 'splined field: 7 nodal components'
+        field%regular_cartesian_direction = .true.
+        allocate (identity_scaling_t :: field%direction_scaling)
+        call construct_batch_splines_3d(xmin, xmax, values, [5, 5, 5], &
+                                        [.false., .true., .true.], field%splines)
+        allocate (field%coords, source=ref_coords)
+        field%initialized = .true.
+    end subroutine create_splined_field_from_nodes
+
     subroutine build_splines(source, ref_coords, spl, scaling, &
                          n_r_in, n_th_in, n_phi_in, xmin_in, xmax_in, regular_direction)
         !> Build splines by sampling source field on uniform grid.
