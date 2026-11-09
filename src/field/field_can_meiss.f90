@@ -606,6 +606,7 @@ subroutine integrate(i_r, i_th, i_phi, y, ierr)
     integer, parameter :: ndim = 2
     real(dp) :: r1, r2
     real(dp) :: relaxed_relerr
+        real(dp) :: dz_end(2), floor_abs(2)
     type(grid_indices_t) :: context
 #ifdef SIMPLE_NVHPC
     real(dp), parameter :: hp_threshold = 1d-12
@@ -630,10 +631,12 @@ subroutine integrate(i_r, i_th, i_phi, y, ierr)
     context = grid_indices_t(i_th, i_phi)
         ! On the line through the node where A was gauged to zero, chi and its
         ! derivative start at zero; without an absolute floor the step shrinks to
-        ! roundoff there.
+        ! roundoff there. The floor is 1e-6 of the change over one grid interval.
+        call rh_can(r2, y, dz_end, i_th, i_phi)
+        floor_abs = 1d-6*max(h_r*abs(dz_end), tiny(1d0))
         call odeint_allroutines(y, ndim, context, r1, r2, relaxed_relerr, &
                                 rh_can_wrapper, step_limit=ode_step_limit, ierr=ierr, &
-                                scale_floor=[1d0, 1d0])
+                                scale_floor=floor_abs)
     if (ierr /= 0) return
 
     lam_phi(i_r, i_th, i_phi) = y(1)
