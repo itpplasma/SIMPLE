@@ -621,6 +621,7 @@ contains
         use libneo_coordinates, only: vmec_coordinate_system_t
         use new_vmec_stuff_mod, only: nper
         use orbit_symplectic_base, only: sympl_rmax
+        use field_can_meiss, only: set_meiss_line_cut
 
         character(*), intent(in) :: vmec_file
         type(tracer_t), intent(inout) :: self
@@ -799,9 +800,14 @@ contains
         else if (isw_field_type == CANFLUX .or. isw_field_type == BOOZER .or. &
                  isw_field_type == MEISS .or. isw_field_type == ALBERT) then
             if (gpu_compact_init) return
+            call set_meiss_line_cut(wall_enabled .and. (isw_field_type == MEISS .or. &
+                                                        isw_field_type == ALBERT))
             call init_field_can(isw_field_type, field_temp, canonical_grid_nr, &
                                 canonical_grid_ntheta, canonical_grid_nphi, &
                                 canonical_ode_relerr)
+            if (wall_enabled .and. (isw_field_type == MEISS .or. &
+                                    isw_field_type == ALBERT)) &
+                call check_meiss_cuts_behind_wall
             if (isw_field_type == BOOZER .or. &
                 isw_field_type == CANFLUX) then
                 call set_magfie_refcoords_field(field_temp)
@@ -809,6 +815,64 @@ contains
             call print_phase_time('Canonical field initialization completed')
         end if
     end subroutine init_field
+
+    !> Meiss lines may end where h_phi nearly vanishes (field_can_meiss r_cut).
+    !> Count the lines that do not cross the wall before their last valid node:
+    !> markers reach their ends only through openings of the wall.
+    subroutine check_meiss_cuts_behind_wall
+        use field_can_meiss, only: meiss_cut_lines, integ_to_ref_meiss
+        use reference_coordinates, only: ref_coords
+        use stl_wall_intersection, only: stl_wall_first_hit_segment
+
+        integer :: n_lines, k, i, n_open
+        integer, allocatable :: n_nodes(:)
+        real(dp), allocatable :: nodes(:, :, :)
+        real(dp) :: xref(3), x0(3), x1(3), hit_m(3)
+        logical :: hit
+        logical, allocatable :: crossed(:)
+
+        call meiss_cut_lines(n_lines, n_nodes, nodes)
+        allocate (crossed(n_lines), source=.false.)
+        !$omp parallel do private(k, i, xref, x0, x1, hit, hit_m) schedule(dynamic)
+        do k = 1, n_lines
+            call integ_to_ref_meiss(nodes(:, 1, k), xref)
+            call ref_coords%evaluate_cart(xref, x0)
+            do i = 2, n_nodes(k)
+                call integ_to_ref_meiss(nodes(:, i, k), xref)
+                call ref_coords%evaluate_cart(xref, x1)
+                call stl_wall_first_hit_segment(wall, x0*chartmap_cart_scale_to_m, &
+                                                x1*chartmap_cart_scale_to_m, hit, hit_m)
+                if (hit) then
+                    crossed(k) = .true.
+                    exit
+                end if
+                x0 = x1
+            end do
+        end do
+        !$omp end parallel do
+        n_open = count(.not. crossed)
+        print '(a,i0,a,i0,a)', ' Meiss coordinates: ', n_lines - n_open, &
+            ' radial lines end behind the wall, ', n_open, &
+            ' before it (markers beyond stop as numerical domain exits)'
+    end subroutine check_meiss_cuts_behind_wall
+
+    !> A marker beyond the end of a Meiss radial line (field_can_meiss r_cut)
+    !> has left the domain of the canonical coordinates.
+    logical function outside_meiss_domain(z) result(outside)
+        use field_can_meiss, only: beyond_meiss_cut
+        use field_can_albert, only: albert_to_meiss
+        use magfie_sub, only: MEISS
+        real(dp), intent(in) :: z(:)
+        real(dp) :: xmeiss(3)
+
+        outside = .false.
+        if (isw_field_type == MEISS) then
+            outside = beyond_meiss_cut(z(1:3))
+        else if (isw_field_type == ALBERT) then
+            call albert_to_meiss(z(1:3), xmeiss)
+            outside = beyond_meiss_cut(xmeiss)
+        end if
+    end function outside_meiss_domain
 
     logical function is_spectre_input(path)
         use field, only: is_spectre_file
@@ -3369,6 +3433,11 @@ contains
                     rk_recovery_local%symplectic_steps = 0
                     ierr_orbit = WALL_HIT_EXIT
                     if (present(exit_step)) exit_step = wall_exit_step
+                    exit
+                end if
+                if (outside_meiss_domain(z)) then
+                    rk_recovery_local%symplectic_steps = 0
+                    ierr_orbit = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
                     exit
                 end if
             else

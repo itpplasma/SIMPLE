@@ -254,3 +254,12 @@ set_tests_properties(test_chartmap_field_meiss PROPERTIES
     LABELS "integration"
     RESOURCE_GROUPS "mem_gb:1"
     TIMEOUT 300)
+
+add_executable(test_meiss_line_cut.x test_meiss_line_cut.f90)
+target_link_libraries(test_meiss_line_cut.x simple)
+add_test(NAME test_meiss_line_cut
+    COMMAND $<TARGET_FILE:test_meiss_line_cut.x>
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..)
+set_tests_properties(test_meiss_line_cut PROPERTIES
+    LABELS "unit"
+    TIMEOUT 300)
