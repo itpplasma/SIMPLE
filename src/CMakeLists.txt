@@ -13,6 +13,8 @@
     coordinates/cartesian_coordinates.f90
     field/field_coils.f90
     field/field_splined.f90
+    field/field_gc_tables.f90
+    field/field_gc_tables_input.f90
     field/field_boozer_chartmap.f90
     field/field_newton.F90
     field.F90
@@ -183,6 +185,7 @@ target_link_libraries(simple PUBLIC
     LIBNEO::spectre_field
     LIBNEO::util
     LIBNEO::vmec_field
+    LIBNEO::frozen_current
 )
 
 # The abstract field_base module lives in its own decompose-neo-core target in
