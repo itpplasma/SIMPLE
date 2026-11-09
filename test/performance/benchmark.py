@@ -19,11 +19,10 @@ import statistics
 import subprocess
 import sys
 import time
-import urllib.request
 
 HERE = Path(__file__).resolve().parent
-WOUT_URL = ("https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/"
-            "wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc")
+sys.path.insert(0, str(HERE.parent))
+from test_data_fetch import WOUT_QA_SHA256, WOUT_QA_URL, fetch  # noqa: E402
 TRACE = re.compile(r"INFO: Particle tracing completed\s+([0-9.]+) s \(Total:\s+([0-9.]+) s\)")
 # Below this reference time the timer and process start dominate.
 MIN_PHASE_S = 0.2
@@ -64,9 +63,7 @@ def main():
 
     data = args.data or args.work/"data"
     data.mkdir(parents=True, exist_ok=True)
-    if not (data/"wout.nc").exists():
-        urllib.request.urlretrieve(WOUT_URL, data/"wout.nc.part")
-        (data/"wout.nc.part").rename(data/"wout.nc")
+    fetch(WOUT_QA_URL, data/"wout.nc", WOUT_QA_SHA256)
     env = dict(os.environ, OMP_NUM_THREADS="1", OMP_DYNAMIC="FALSE")
     exes = {"ref": args.ref.resolve(), "cur": args.cur.resolve()}
 

@@ -28,6 +28,7 @@ set_tests_properties(test_chartmap_boundary_param PROPERTIES RESOURCE_GROUPS "me
 add_pytest(test_engineering "engineering" 300)
 add_pytest(test_coil_clearance "engineering" 120)
 add_pytest(test_plotting "plotting" 120)
+add_pytest(test_test_data_fetch "data" 60)
 add_pytest(test_cli "plotting" 120)
 add_pytest(test_golden_orbit_results "golden" 120)
 add_pytest(test_golden_collision_results "golden;collisions" 120)

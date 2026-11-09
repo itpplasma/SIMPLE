@@ -61,20 +61,31 @@ echo "Checking for optional symplectic tokamak regression..."
 exec 9>"$TEST_DATA_DIR/.prepare.lock"
 flock 9
 
+# Test data pinned by URL and SHA-256 (as test/tests/CMakeLists.txt and
+# ci/bundle.sh, whose offline wget serves these URLs); transient server errors
+# are retried.
+fetch_test_data() {
+    local url=$1 out=$2 sha=$3
+    wget -q --tries=5 --waitretry=10 --retry-on-http-error=429,500,502,503,504 \
+        "$url" -O "$out.tmp.$$"
+    echo "$sha  $out.tmp.$$" | sha256sum -c --quiet
+    mv -f "$out.tmp.$$" "$out"
+}
+
 # Download wout.nc if not present in test data directory
 WOUT_FILE="$TEST_DATA_DIR/wout.nc"
 if [ ! -f "$WOUT_FILE" ]; then
     echo "Downloading wout.nc..."
-    wget -q https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc -O "$WOUT_FILE.tmp.$$"
-    mv -f "$WOUT_FILE.tmp.$$" "$WOUT_FILE"
+    fetch_test_data https://raw.githubusercontent.com/hiddenSymmetries/simsopt/912bdcc729d95433518c71df82b8cc45287908b3/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc \
+        "$WOUT_FILE" 333ab8cef64c4b4f406e76209266fc3bf4d7976e9c28c162983c2120e112e771
 fi
 
 # Download NCSX wout.nc for coils tests
 WOUT_NCSX_FILE="$TEST_DATA_DIR/wout_ncsx.nc"
 if [ ! -f "$WOUT_NCSX_FILE" ]; then
     echo "Downloading NCSX wout.nc..."
-    wget -q https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_c09r00_fixedBoundary_0.5T_vacuum_ns201.nc -O "$WOUT_NCSX_FILE.tmp.$$"
-    mv -f "$WOUT_NCSX_FILE.tmp.$$" "$WOUT_NCSX_FILE"
+    fetch_test_data https://raw.githubusercontent.com/hiddenSymmetries/simsopt/912bdcc729d95433518c71df82b8cc45287908b3/tests/test_files/wout_c09r00_fixedBoundary_0.5T_vacuum_ns201.nc \
+        "$WOUT_NCSX_FILE" 36926d748099bc7abc138d82bdd4b447d2579f08f50189f27d441cf96c1b51e0
 fi
 
 # Download and convert NCSX coils file
@@ -82,8 +93,8 @@ COILS_STELLOPT="$TEST_DATA_DIR/coils.c09r00"
 COILS_SIMPLE="$TEST_DATA_DIR/coils.c09r00.simple"
 if [ ! -f "$COILS_SIMPLE" ]; then
     echo "Downloading NCSX coils file..."
-    wget -q https://princetonuniversity.github.io/STELLOPT/examples/coils.c09r00 -O "$COILS_STELLOPT.tmp.$$"
-    mv -f "$COILS_STELLOPT.tmp.$$" "$COILS_STELLOPT"
+    fetch_test_data https://princetonuniversity.github.io/STELLOPT/examples/coils.c09r00 \
+        "$COILS_STELLOPT" 3c429da06f4c062887a497a16e2d2bd10f0ecb0b8858c252698631f3853da428
 
     # Always use this raw in-tree conversion, never an importable libneo
     # converter: the golden coil field must not depend on the Python

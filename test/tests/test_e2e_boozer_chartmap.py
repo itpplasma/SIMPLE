@@ -39,7 +39,7 @@ EQUILIBRIA = [
     {
         "name": "QA",
         "wout": TEST_DATA / "wout.nc",
-        "url": "https://raw.githubusercontent.com/hiddenSymmetries/simsopt/master/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc",
+        "url": "https://raw.githubusercontent.com/hiddenSymmetries/simsopt/912bdcc729d95433518c71df82b8cc45287908b3/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc",
         "trace_time": "1d-2",
         "facE_al": "1.0d0",
         "use_gvec": False,
@@ -53,7 +53,7 @@ EQUILIBRIA = [
     {
         "name": "QH",
         "wout": TEST_DATA / "wout_qh.nc",
-        "url": "https://raw.githubusercontent.com/hiddenSymmetries/simsopt/master/tests/test_files/wout_LandremanPaul2021_QH_reactorScale_lowres_reference.nc",
+        "url": "https://raw.githubusercontent.com/hiddenSymmetries/simsopt/912bdcc729d95433518c71df82b8cc45287908b3/tests/test_files/wout_LandremanPaul2021_QH_reactorScale_lowres_reference.nc",
         "trace_time": "1d-2",
         "facE_al": "1.0d0",
         "use_gvec": False,
@@ -66,7 +66,7 @@ EQUILIBRIA = [
     {
         "name": "NCSX",
         "wout": TEST_DATA / "wout_ncsx.nc",
-        "url": "https://raw.githubusercontent.com/hiddenSymmetries/simsopt/master/tests/test_files/wout_c09r00_fixedBoundary_0.5T_vacuum_ns201.nc",
+        "url": "https://raw.githubusercontent.com/hiddenSymmetries/simsopt/912bdcc729d95433518c71df82b8cc45287908b3/tests/test_files/wout_c09r00_fixedBoundary_0.5T_vacuum_ns201.nc",
         "trace_time": "1d-2",
         "facE_al": "100.0d0",
         "use_gvec": False,

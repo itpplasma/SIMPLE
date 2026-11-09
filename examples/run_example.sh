@@ -5,7 +5,7 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 SIMPLE_X="${1:-$REPO_ROOT/build/simple.x}"
-WOUT_URL="https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc"
+WOUT_URL="https://raw.githubusercontent.com/hiddenSymmetries/simsopt/912bdcc729d95433518c71df82b8cc45287908b3/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc"
 
 if [ ! -x "$SIMPLE_X" ]; then
     echo "Executable not found: $SIMPLE_X"

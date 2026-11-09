@@ -28,9 +28,10 @@ endif()
 # Download VMEC test file to unified test_data directory (shared with Python tests)
 set(TEST_DATA_DIR "${CMAKE_SOURCE_DIR}/test/test_data")
 set(WOUT_FILE "${TEST_DATA_DIR}/wout.nc")
-set(WOUT_URL "https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc")
+include(TestData)
+set(WOUT_URL "${SIMPLE_SIMSOPT_TEST_FILES}/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc")
 set(WOUT_QH_FILE "${TEST_DATA_DIR}/wout_qh.nc")
-set(WOUT_QH_URL "https://raw.githubusercontent.com/hiddenSymmetries/simsopt/master/tests/test_files/wout_LandremanPaul2021_QH_reactorScale_lowres_reference.nc")
+set(WOUT_QH_URL "${SIMPLE_SIMSOPT_TEST_FILES}/wout_LandremanPaul2021_QH_reactorScale_lowres_reference.nc")
 
 if(SIMPLE_ENABLE_VMECPP AND VMECPP_TEST_DATA_DIR)
     add_executable(test_vmecpp_field_parity.x test_vmecpp_field_parity.f90)
@@ -42,19 +43,10 @@ if(SIMPLE_ENABLE_VMECPP AND VMECPP_TEST_DATA_DIR)
         LABELS "integration;vmecpp")
 endif()
 
-# Download if not present
-if(NOT EXISTS "${WOUT_FILE}")
-    file(MAKE_DIRECTORY "${TEST_DATA_DIR}")
-    message(STATUS "Downloading VMEC test file to ${WOUT_FILE}...")
-    file(DOWNLOAD "${WOUT_URL}" "${WOUT_FILE}")
-    message(STATUS "Downloaded VMEC test file")
-endif()
-
-if(NOT EXISTS "${WOUT_QH_FILE}")
-    file(MAKE_DIRECTORY "${TEST_DATA_DIR}")
-    message(STATUS "Downloading QH VMEC file to ${WOUT_QH_FILE}...")
-    file(DOWNLOAD "${WOUT_QH_URL}" "${WOUT_QH_FILE}")
-endif()
+simple_fetch_test_data("${WOUT_URL}" "${WOUT_FILE}"
+    333ab8cef64c4b4f406e76209266fc3bf4d7976e9c28c162983c2120e112e771)
+simple_fetch_test_data("${WOUT_QH_URL}" "${WOUT_QH_FILE}"
+    249c397d67357949b2ab4690145224736d8388f5332f23c67c9cb0bf2aa9931e)
 
 # Create symlink in test binary directory for backward compatibility
 file(CREATE_LINK "${WOUT_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/wout.nc" SYMBOLIC)
@@ -318,19 +310,14 @@ endif()
 
 # Download NCSX test data for field equivalence tests (coils + wout)
 set(WOUT_NCSX_FILE "${TEST_DATA_DIR}/wout_ncsx.nc")
-set(WOUT_NCSX_URL "https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_c09r00_fixedBoundary_0.5T_vacuum_ns201.nc")
+set(WOUT_NCSX_URL "${SIMPLE_SIMSOPT_TEST_FILES}/wout_c09r00_fixedBoundary_0.5T_vacuum_ns201.nc")
 set(COILS_STELLOPT_FILE "${TEST_DATA_DIR}/coils.c09r00")
 set(COILS_STELLOPT_URL "https://princetonuniversity.github.io/STELLOPT/examples/coils.c09r00")
 
-if(NOT EXISTS "${WOUT_NCSX_FILE}")
-    message(STATUS "Downloading NCSX VMEC file to ${WOUT_NCSX_FILE}...")
-    file(DOWNLOAD "${WOUT_NCSX_URL}" "${WOUT_NCSX_FILE}")
-endif()
-
-if(NOT EXISTS "${COILS_STELLOPT_FILE}")
-    message(STATUS "Downloading NCSX coils file to ${COILS_STELLOPT_FILE}...")
-    file(DOWNLOAD "${COILS_STELLOPT_URL}" "${COILS_STELLOPT_FILE}")
-endif()
+simple_fetch_test_data("${WOUT_NCSX_URL}" "${WOUT_NCSX_FILE}"
+    36926d748099bc7abc138d82bdd4b447d2579f08f50189f27d441cf96c1b51e0)
+simple_fetch_test_data("${COILS_STELLOPT_URL}" "${COILS_STELLOPT_FILE}"
+    3c429da06f4c062887a497a16e2d2bd10f0ecb0b8858c252698631f3853da428)
 
 # Generate chartmap from NCSX VMEC and convert coils for field equivalence test
 set(CHARTMAP_NCSX_FILE "${CMAKE_CURRENT_BINARY_DIR}/wout_ncsx.chartmap.nc")

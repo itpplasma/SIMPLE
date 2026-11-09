@@ -18,7 +18,7 @@ from test_e2e_boozer_chartmap import (
 TEST_DATA = Path(__file__).resolve().parent.parent / "test_data"
 QA_WOUT = TEST_DATA / "wout.nc"
 QA_WOUT_URL = (
-    "https://raw.githubusercontent.com/hiddenSymmetries/simsopt/master/"
+    "https://raw.githubusercontent.com/hiddenSymmetries/simsopt/912bdcc729d95433518c71df82b8cc45287908b3/"
     "tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc"
 )
 
