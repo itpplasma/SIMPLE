@@ -1,14 +1,16 @@
-#!/usr/bin/env python3
 """Shared artifact helpers for Boozer chartmap integration tests."""
 
 from __future__ import annotations
 
 from pathlib import Path
 import subprocess
-import urllib.request
+import sys
 
 import netCDF4
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from test_data_fetch import fetch_pinned  # noqa: E402
 
 
 STYLES = {
@@ -41,12 +43,7 @@ def run_cmd(cmd: list[str], cwd: Path, label: str, timeout: int = 3600) -> str:
 
 
 def download_if_missing(path: Path, url: str) -> Path:
-    if path.exists():
-        return path
-    path.parent.mkdir(parents=True, exist_ok=True)
-    print(f"Downloading {url} -> {path}")
-    urllib.request.urlretrieve(url, path)
-    return path
+    return fetch_pinned(url, path)
 
 
 def load_confined_fraction(path: Path) -> np.ndarray:

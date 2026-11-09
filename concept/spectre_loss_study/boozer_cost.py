@@ -16,7 +16,7 @@ import time
 
 import numpy as np
 
-WOUT_URL = ("https://github.com/hiddenSymmetries/simsopt/raw/master/tests/"
+WOUT_URL = ("https://raw.githubusercontent.com/hiddenSymmetries/simsopt/912bdcc729d95433518c71df82b8cc45287908b3/tests/"
             "test_files/wout_li383_low_res_reference.nc")
 DURATION = 2e-3
 THREADS = 16

@@ -38,7 +38,7 @@ CONVERTER = TOOLS_DIR / "booz_xform_to_boozer_chartmap.py"
 TEST_DATA = SCRIPT_DIR.parent / "test_data"
 WOUT = TEST_DATA / "wout.nc"
 WOUT_URL = (
-    "https://raw.githubusercontent.com/hiddenSymmetries/simsopt/master/"
+    "https://raw.githubusercontent.com/hiddenSymmetries/simsopt/912bdcc729d95433518c71df82b8cc45287908b3/"
     "tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc"
 )
 

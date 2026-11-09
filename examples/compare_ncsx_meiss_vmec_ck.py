@@ -24,7 +24,7 @@ import numpy as np
 import netCDF4 as nc
 import matplotlib.pyplot as plt
 
-WOUT_URL = ("https://github.com/hiddenSymmetries/simsopt/raw/master/"
+WOUT_URL = ("https://raw.githubusercontent.com/hiddenSymmetries/simsopt/912bdcc729d95433518c71df82b8cc45287908b3/"
             "tests/test_files/wout_c09r00_fixedBoundary_0.5T_vacuum_ns201.nc")
 
 CFG = """&config

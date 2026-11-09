@@ -118,7 +118,7 @@ SIMPLE is a symplectic particle orbit tracer for fusion plasma physics, designed
 - `fort.6601`: Newton iteration convergence diagnostics
 
 ### Example Usage
-- Download test VMEC file: `wget https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc -O wout.nc`
+- Download test VMEC file: `wget https://raw.githubusercontent.com/hiddenSymmetries/simsopt/912bdcc729d95433518c71df82b8cc45287908b3/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc -O wout.nc`
 - Run with example input: `./build/simple.x` (requires `simple.in` in working directory)
 
 - Some important routines on fields and splines and ode integrators are found in ../libneo which is built and linked as a dependency in our build process

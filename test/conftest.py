@@ -7,8 +7,6 @@ of VMEC equilibrium file.
 
 import sys
 from pathlib import Path
-import urllib.request
-import hashlib
 import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -16,43 +14,16 @@ sys.path.insert(0, str(_REPO_ROOT / "python"))
 sys.path.insert(0, str(_REPO_ROOT / "build"))
 sys.path.insert(0, str(_REPO_ROOT / "build" / "python"))
 
+from test_data_fetch import WOUT_QA_SHA256, WOUT_QA_URL, fetch
+
 # Test data location - single source of truth for all tests
 TEST_DATA_DIR = Path(__file__).parent / "test_data"
 WOUT_FILE = TEST_DATA_DIR / "wout.nc"
-WOUT_URL = "https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc"
-
-WOUT_SHA256 = "333ab8cef64c4b4f406e76209266fc3bf4d7976e9c28c162983c2120e112e771"
-
-
-def _sha256sum(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def _ensure_wout_is_valid() -> None:
-    if not WOUT_FILE.exists():
-        return
-    if _sha256sum(WOUT_FILE) == WOUT_SHA256:
-        return
-    WOUT_FILE.unlink()
 
 
 def download_wout_file():
-    """Download VMEC equilibrium file if not present."""
-    _ensure_wout_is_valid()
-    if WOUT_FILE.exists():
-        return
-
-    TEST_DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-    print(f"Downloading test VMEC file to {WOUT_FILE}...")
-    try:
-        urllib.request.urlretrieve(WOUT_URL, WOUT_FILE)
-        if _sha256sum(WOUT_FILE) != WOUT_SHA256:
-            WOUT_FILE.unlink()
-            raise RuntimeError("Downloaded VMEC test file has unexpected SHA256 hash")
-        print(f"Downloaded {WOUT_FILE.stat().st_size} bytes")
-    except Exception as e:
-        raise RuntimeError(f"Failed to download VMEC test file: {e}")
+    """Download VMEC equilibrium file if not present or altered."""
+    fetch(WOUT_QA_URL, WOUT_FILE, WOUT_QA_SHA256)
 
 
 @pytest.fixture(scope="session")

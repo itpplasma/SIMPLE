@@ -28,7 +28,7 @@ With GNU Fortran, CMake ≥ 3.22, Ninja, NetCDF-C/Fortran and BLAS/LAPACK instal
 git clone https://github.com/itpplasma/SIMPLE.git && cd SIMPLE
 make
 mkdir -p run && cp examples/simple.in run/
-curl -L -o run/wout.nc https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc
+curl -L -o run/wout.nc https://raw.githubusercontent.com/hiddenSymmetries/simsopt/912bdcc729d95433518c71df82b8cc45287908b3/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc
 (cd run && ../build/simple.x simple.in && tail -1 confined_fraction.dat)
 ```
 

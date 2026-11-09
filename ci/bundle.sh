@@ -26,11 +26,12 @@ if [ "${SCI_TIER:-full}" = full ]; then
     deps="$deps dbstein/pybie2d dbstein/function_generator"
 fi
 
-# url<TAB>file name in test/test_data (shared with the golden-record runner).
-data_urls="https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc	wout.nc
-https://raw.githubusercontent.com/hiddenSymmetries/simsopt/master/tests/test_files/wout_LandremanPaul2021_QH_reactorScale_lowres_reference.nc	wout_qh.nc
-https://github.com/hiddenSymmetries/simsopt/raw/master/tests/test_files/wout_c09r00_fixedBoundary_0.5T_vacuum_ns201.nc	wout_ncsx.nc
-https://princetonuniversity.github.io/STELLOPT/examples/coils.c09r00	coils.c09r00"
+# url<TAB>file name in test/test_data<TAB>SHA-256 (shared with the golden-record
+# runner and test/tests/CMakeLists.txt, which pin the same files).
+data_urls="https://raw.githubusercontent.com/hiddenSymmetries/simsopt/912bdcc729d95433518c71df82b8cc45287908b3/tests/test_files/wout_LandremanPaul2021_QA_reactorScale_lowres_reference.nc	wout.nc	333ab8cef64c4b4f406e76209266fc3bf4d7976e9c28c162983c2120e112e771
+https://raw.githubusercontent.com/hiddenSymmetries/simsopt/912bdcc729d95433518c71df82b8cc45287908b3/tests/test_files/wout_LandremanPaul2021_QH_reactorScale_lowres_reference.nc	wout_qh.nc	249c397d67357949b2ab4690145224736d8388f5332f23c67c9cb0bf2aa9931e
+https://raw.githubusercontent.com/hiddenSymmetries/simsopt/912bdcc729d95433518c71df82b8cc45287908b3/tests/test_files/wout_c09r00_fixedBoundary_0.5T_vacuum_ns201.nc	wout_ncsx.nc	36926d748099bc7abc138d82bdd4b447d2579f08f50189f27d441cf96c1b51e0
+https://princetonuniversity.github.io/STELLOPT/examples/coils.c09r00	coils.c09r00	3c429da06f4c062887a497a16e2d2bd10f0ecb0b8858c252698631f3853da428"
 
 stage=$(mktemp -d "${TMPDIR:-/tmp}/sci-bundle.XXXXXX")
 trap 'rm -rf "$stage"' EXIT
@@ -75,15 +76,17 @@ git -C "$simple" symbolic-ref HEAD refs/heads/main
 git clone -q --branch "$head_ref" "$simple" "$stage/src"
 git -C "$stage/src" remote set-url origin https://github.com/itpplasma/SIMPLE.git
 
-while IFS=$'\t' read -r url name; do
-    key=$(printf '%s' "$url" | sha256sum | cut -c1-16)
-    if [ ! -s "$cache/data/$key" ]; then
-        curl -fsSL --retry 3 -o "$cache/data/$key.part" "$url"
+while IFS=$'\t' read -r url name sha; do
+    key=${sha:0:16}
+    if ! echo "$sha  $cache/data/$key" | sha256sum -c --status 2>/dev/null; then
+        curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 \
+            -o "$cache/data/$key.part" "$url"
+        echo "$sha  $cache/data/$key.part" | sha256sum -c --quiet
         mv "$cache/data/$key.part" "$cache/data/$key"
     fi
     cp "$cache/data/$key" "$stage/data/$name"
     ln "$stage/data/$name" "$stage/src/test/test_data/$name"
-    printf '%s\t%s\n' "$url" "$name" >> "$stage/data/urls.tsv"
+    printf '%s\t%s\t%s\n' "$url" "$name" "$sha" >> "$stage/data/urls.tsv"
 done <<< "$data_urls"
 
 # Compute nodes cannot fetch release archives. Keep CGAL out of fast bundles.

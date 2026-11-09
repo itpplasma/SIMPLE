@@ -1,15 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from urllib.request import urlopen
 
 import numpy as np
 import pytest
-
-
-def _download(url: str, out_path: Path) -> None:
-    with urlopen(url, timeout=60) as resp, open(out_path, "wb") as f:
-        f.write(resp.read())
+from test_data_fetch import fetch_pinned
 
 
 @pytest.mark.network
@@ -23,7 +18,7 @@ def test_chartmap_boundary_param_wall_area(tmp_path: Path) -> None:
 
     wout_url = "https://princetonuniversity.github.io/STELLOPT/examples/wout_ncsx_c09r00_fixed.nc"
     wout = tmp_path / "wout_ncsx.nc"
-    _download(wout_url, wout)
+    fetch_pinned(wout_url, wout)
 
     theta_chart = tmp_path / "chartmap_theta.nc"
     arc_chart = tmp_path / "chartmap_arc.nc"
