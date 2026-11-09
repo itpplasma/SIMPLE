@@ -1,6 +1,6 @@
 module field_gc_tables_input
     !> Guiding-centre tables from a field file: a solved frozen-current field
-    !> (.h5, libneo frozen_current.x field_file) or a coil file. The
+    !> (HDF5, libneo frozen_current.x field_file) or a coil file. The
     !> frozen-current types stay out of field_gc_tables: their modules bring
     !> IEEE-module symbols into every module that can see them, and gfortran
     !> then saves and restores the floating-point environment on each call of
@@ -27,26 +27,29 @@ module field_gc_tables_input
 contains
 
     subroutine build_gc_tables_from_file(path, coords, order, tab)
+        use field_file_kind, only: field_file_kind_of, FIELD_FILE_FROZEN_CURRENT, &
+                                   FIELD_FILE_COILS
         character(*), intent(in) :: path
         class(coordinate_system_t), intent(in) :: coords
         integer, intent(in) :: order
         type(gc_tables_t), intent(inout) :: tab
         type(coils_field_t) :: raw_coils
         type(frozen_current_field_t) :: frozen
-        integer :: status, n
+        integer :: status
 
-        n = len_trim(path)
-        if (n > 3) then
-            if (path(n - 2:n) == '.h5') then
-                call load_frozen_current_field(path, frozen, status)
-                if (status /= 0) error stop 'build_gc_tables_from_file: cannot load ' &
-                    //path
-                call build_gc_tables_frozen(frozen, coords, order, tab)
-                return
-            end if
-        end if
-        call create_coils_field(path, raw_coils)
-        call build_gc_tables_coils(raw_coils%coils, coords, order, tab)
+        select case (field_file_kind_of(path))
+        case (FIELD_FILE_FROZEN_CURRENT)
+            call load_frozen_current_field(path, frozen, status)
+            if (status /= 0) error stop 'build_gc_tables_from_file: cannot load ' &
+                //path
+            call build_gc_tables_frozen(frozen, coords, order, tab)
+        case (FIELD_FILE_COILS)
+            call create_coils_field(path, raw_coils)
+            call build_gc_tables_coils(raw_coils%coils, coords, order, tab)
+        case default
+            error stop 'build_gc_tables_from_file: '//trim(path)// &
+                ' is neither a frozen-current field nor a coil file'
+        end select
     end subroutine build_gc_tables_from_file
 
     !> Tables of a loaded frozen-current field (libneo, cm and G).

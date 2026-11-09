@@ -2,7 +2,9 @@ program test_frozen_current_meiss
     ! A frozen-current field file (coils plus plasma potential, libneo format)
     ! as field_input: the splined field must reproduce A and B of the file, agree
     ! with the guiding-centre tables of the same file, and carry Meiss
-    ! coordinates on which the implicit midpoint rule keeps H and p_phi.
+    ! coordinates on which the implicit midpoint rule keeps H and p_phi, and
+    ! RK45 in the reference coordinates of the same field must follow the
+    ! same orbit.
     ! The field is axisymmetric (a current on the z axis and an n = 0 plasma
     ! potential with arbitrary coefficients), so it has no nested flux surfaces
     ! by construction and p_phi is an exact invariant of the orbit.
@@ -22,8 +24,10 @@ program test_frozen_current_meiss
     use neo_frozen_current_io, only: save_frozen_current_field
     use field_can_meiss, only: init_meiss, get_meiss_coordinates
     use field_can_mod, only: field_can_t, field_can_from_id, ref_to_integ, &
-                             eval_field => evaluate, get_val
-    use magfie_sub, only: init_magfie, MEISS
+                             integ_to_ref, eval_field => evaluate, get_val
+    use magfie_sub, only: init_magfie, MEISS, REFCOORDS, set_magfie_refcoords_field
+    use alpha_lifetime_sub, only: orbit_timestep_axis
+    use parmot_mod, only: rk_ro0 => ro0, rmu
     use orbit_symplectic_base, only: symplectic_integrator_t, MIDPOINT
     use orbit_symplectic, only: orbit_sympl_init, orbit_timestep_sympl
     implicit none
@@ -202,6 +206,7 @@ contains
         type(field_can_t) :: f
         type(symplectic_integrator_t) :: integ
         real(dp) :: v0, ro0, x_ref(3), z(4), lambda, dtau, h0, p0, dh, dp_phi
+        real(dp) :: x_end(3), z_rk(5), x_sym(3), x_rk(3), gap
         integer :: j, ierr, taken
 
         call init_meiss(loaded, n_r_=32, n_th_=33, n_phi_=8, rmin=0.05_dp, &
@@ -240,9 +245,27 @@ contains
         end do
         print '(a,i0,a,2es11.3)', ' midpoint steps ', taken, &
             ', max dH/H, dp_phi/p_phi', dh, dp_phi
-        if (taken < 100) error stop 'orbit left the chart too early'
+        if (taken < nsteps) error stop 'orbit left the chart'
         if (dh > 1.0e-3_dp) error stop 'energy not conserved'
         if (dp_phi > 1.0e-9_dp) error stop 'p_phi not conserved'
+
+        ! RK45 time is v0 t; the symplectic step dtau is in units of v0 t/sqrt(2).
+        call integ_to_ref(integ%z(1:3), x_end)
+        rk_ro0 = ro0
+        rmu = 1.0e8_dp
+        call set_magfie_refcoords_field(loaded)
+        call init_magfie(REFCOORDS)
+        z_rk = [x_ref, 1.0_dp, lambda]
+        do j = 1, nsteps
+            call orbit_timestep_axis(z_rk, sqrt(2.0_dp)*dtau, sqrt(2.0_dp)*dtau, &
+                                     1.0e-10_dp, ierr)
+            if (ierr /= 0) error stop 'RK45 orbit failed'
+        end do
+        call ref_coords%evaluate_cart(x_end, x_sym)
+        call ref_coords%evaluate_cart(z_rk(1:3), x_rk)
+        gap = norm2(x_sym - x_rk)
+        print '(a,es11.3,a)', ' midpoint and RK45 end points differ by ', gap, ' cm'
+        if (gap > 1.0e-3_dp*a) error stop 'RK45 and midpoint orbits differ'
         print *, 'PASSED: frozen-current field file in Meiss coordinates'
     end subroutine check_midpoint_invariants
 

@@ -179,10 +179,14 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
 end subroutine
 ```
 
-`field_from_file` (`src/field.F90`) chooses the class: a frozen-current field
-file, SPECTRE HDF5, Boozer chartmap, VMEC `wout`, or a coils file (name
-starting with `coils` or ending in `.coils`). Coil and frozen-current files are
-wrapped in a splined field on `ref_coords`.
+`field_from_file` (`src/field.F90`) chooses the class from the file content,
+never from its name (`src/field/field_file_kind.f90`): an HDF5 file with the
+datasets `u`, `kmax` and `coil_points` is a frozen-current field, one with
+`input/physics/Nvol` and `output/Rbc` a SPECTRE equilibrium; other HDF5 and
+NetCDF files must be a Boozer chartmap or a VMEC `wout`, and an HDF5 file that
+is none of these stops with its root members listed. A text file that starts
+with a point count followed by rows of x, y, z and current is a coil file. Coil
+and frozen-current files are wrapped in a splined field on `ref_coords`.
 
 | Type | File | Native coordinates | `sqgBctr` |
 |---|---|---|---|
@@ -206,10 +210,10 @@ field file (libneo `frozen_current.x` `field_file`, HDF5, cm and G): coils plus
 the vector potential of the frozen plasma current. `field_frozen_current`
 (`src/field/field_frozen_current.f90`) evaluates $\mathbf A$ and $\mathbf B$
 with libneo's `compute_abfield` and splines them like a coil field, so Meiss and
-Albert coordinates and the symplectic integrators work on it up to the chart
-boundary. It tells the file from a SPECTRE equilibrium by its datasets `u`,
-`kmax` and `coil_points`. With `isw_field_type = 5` and `field_tables_order > 0`
-the same file instead feeds the guiding-centre tables. Only the splined field
+Albert coordinates, the symplectic integrators and RK45 in reference
+coordinates (`isw_field_type = 5`) work on it up to the chart boundary. With
+`isw_field_type = 5` and `field_tables_order > 0` the same file instead feeds
+the guiding-centre tables. Only the splined field
 leaves the module: the frozen-current types make gfortran save and restore the
 floating-point environment in every procedure of a module that can see them.
 
@@ -431,8 +435,8 @@ with fortplot (disabled without fortplot).
 ## 6. SPECTRE
 
 SPECTRE/SPEC MRxMHD equilibria (HDF5) are read by libneo `spectre_reader`
-(`load_spectre`); `field_input` is recognised by the `.h5` extension or the
-HDF5 signature (`field::is_spectre_file`) and loaded by `create_spectre_field`,
+(`load_spectre`); `field_input` is recognised by its groups `input/physics`
+and `output` (`field::is_spectre_file`) and loaded by `create_spectre_field`,
 which builds the stacked chart $\rho_g \in [0, M_\text{vol}]$, volume
 $l = \min(\lfloor\rho_g\rfloor + 1, M_\text{vol})$. libneo `spectre_basis`
 returns $(A_\vartheta, A_\zeta)$ and derivatives in the local coordinate

@@ -67,35 +67,36 @@ contains
     end subroutine field_clone
 
     subroutine field_from_file(filename, field)
-        !> Create appropriate field type from file.
-        !> Coil files and frozen-current field files (HDF5) become a
+        !> Create the field from a file, chosen by the file's content
+        !> (field_file_kind). Coil files and frozen-current field files become a
         !> splined_field_t on the reference coordinates.
         use reference_coordinates, only: ref_coords
         ! Imported here, not by the module: modules that use field must not see
-        ! the frozen-current types (see field_frozen_current).
-        use field_frozen_current, only: create_frozen_current_splined_field, &
-                                        is_frozen_current_file
+        ! the frozen-current or fortio types (see field_frozen_current).
+        use field_frozen_current, only: create_frozen_current_splined_field
+        use field_file_kind, only: field_file_kind_of, hdf5_root_members, &
+                                   FIELD_FILE_FROZEN_CURRENT, FIELD_FILE_SPECTRE, &
+                                   FIELD_FILE_HDF5, FIELD_FILE_NETCDF, FIELD_FILE_COILS
 
         character(*), intent(in) :: filename
         class(magnetic_field_t), allocatable, intent(out) :: field
 
-        character(len(filename)) :: stripped_name
         type(coils_field_t) :: raw_coils
         type(splined_field_t), allocatable :: splined_coils
         type(vmec_field_t) :: vmec_field
         type(boozer_chartmap_field_t), allocatable :: bc_temp
         type(spectre_field_t), allocatable :: spectre_temp
-        integer :: file_type, ierr
+        integer :: kind, file_type, ierr
         character(len=2048) :: message
 
-        stripped_name = strip_directory(filename)
-
-        if (is_frozen_current_file(filename)) then
+        kind = field_file_kind_of(filename)
+        select case (kind)
+        case (FIELD_FILE_FROZEN_CURRENT)
             allocate (splined_coils)
             call create_frozen_current_splined_field(filename, ref_coords, &
                                                      splined_coils)
             call move_alloc(splined_coils, field)
-        else if (is_spectre_file(filename)) then
+        case (FIELD_FILE_SPECTRE)
             allocate (spectre_temp)
             call create_spectre_field(spectre_temp, filename, ierr)
             if (ierr /= 0) then
@@ -104,132 +105,60 @@ contains
                 error stop
             end if
             call move_alloc(spectre_temp, field)
-        else if (endswith(filename, '.nc')) then
+        case (FIELD_FILE_HDF5, FIELD_FILE_NETCDF)
             if (is_boozer_chartmap(filename)) then
                 call create_boozer_chartmap_field(filename, bc_temp)
                 call move_alloc(bc_temp, field)
-            else
-                call detect_refcoords_file_type(filename, file_type, ierr, message)
-                if (ierr /= 0) then
-                    print *, 'field_from_file: NetCDF file detection error for ', &
-                        trim(filename)
-                    print *, trim(message)
-                    error stop
-                end if
-
-                select case (file_type)
-                case (refcoords_file_vmec_wout)
-                    call create_vmec_field(vmec_field)
-                    call field_clone(vmec_field, field)
-                case (refcoords_file_chartmap)
-                    print *, &
-                        'field_from_file: chartmap NetCDF is a coordinate system ', &
-                        'file, not a field:'
-                    print *, '  filename = ', trim(filename)
-                    print *, &
-                        'Set coord_input to this chartmap file and set field_input', &
-                        ' to a VMEC wout.'
-                    error stop
-                case (refcoords_file_unknown)
-                  print *, 'field_from_file: Unknown NetCDF file type: ', trim(filename)
-                    error stop
-                case default
-                print *, 'field_from_file: Unexpected file_type ', file_type, ' for ', &
-                        trim(filename)
-                    error stop
-                end select
+                return
             end if
-        else if (startswidth(stripped_name, 'coils') .or. &
-                 endswith(filename, '.coils')) then
+            call detect_refcoords_file_type(filename, file_type, ierr, message)
+            if (ierr /= 0) file_type = refcoords_file_unknown
+            select case (file_type)
+            case (refcoords_file_vmec_wout)
+                call create_vmec_field(vmec_field)
+                call field_clone(vmec_field, field)
+            case (refcoords_file_chartmap)
+                print *, &
+                    'field_from_file: chartmap NetCDF is a coordinate system ', &
+                    'file, not a field:'
+                print *, '  filename = ', trim(filename)
+                print *, &
+                    'Set coord_input to this chartmap file and set field_input', &
+                    ' to a VMEC wout.'
+                error stop
+            case default
+                if (kind == FIELD_FILE_HDF5) then
+                    print *, 'field_from_file: ', trim(filename), ' is HDF5 but ', &
+                        'neither a frozen-current field (u, kmax, coil_points), ', &
+                        'a SPECTRE equilibrium (input/physics/Nvol, output/Rbc) ', &
+                        'nor a VMEC wout or Boozer chartmap'
+                    print *, '  root members: ', hdf5_root_members(filename)
+                else
+                    print *, 'field_from_file: unknown NetCDF file type: ', &
+                        trim(filename)
+                    if (ierr /= 0) print *, trim(message)
+                end if
+                error stop
+            end select
+        case (FIELD_FILE_COILS)
             call create_coils_field(filename, raw_coils)
             allocate (splined_coils)
             call create_splined_field(raw_coils, ref_coords, splined_coils)
             call move_alloc(splined_coils, field)
-        else
-            print *, 'field_from_file: Unknown file name format ', filename
+        case default
+            print *, 'field_from_file: ', trim(filename), ' is neither HDF5, ', &
+                'NetCDF nor a coil file (point count, then x y z current rows)'
             error stop
-        end if
+        end select
     end subroutine field_from_file
 
-    function is_spectre_file(filename) result(is_spectre)
-        !> SPECTRE equilibria are HDF5. Accept a .h5 name or any non-.nc file whose
-        !> first bytes carry the HDF5 signature, so a mislabelled extension still
-        !> routes. NetCDF-4 is itself HDF5, so .nc is excluded from the magic sniff
-        !> to keep VMEC and chartmap files on the NetCDF path.
+    !> SPECTRE equilibrium by content: an HDF5 file with SPECTRE's input and
+    !> output groups.
+    logical function is_spectre_file(filename) result(is_spectre)
+        use field_file_kind, only: field_file_kind_of, FIELD_FILE_SPECTRE
         character(*), intent(in) :: filename
-        logical :: is_spectre
 
-        character(len=1) :: magic(8)
-        integer :: unit, ios, i
-        integer, parameter :: hdf5_magic(8) = [137, 72, 68, 70, 13, 10, 26, 10]
-
-        is_spectre = endswith(filename, '.h5')
-        if (is_spectre) return
-        if (endswith(filename, '.nc')) return
-
-        open (newunit=unit, file=filename, access='stream', form='unformatted', &
-              status='old', action='read', iostat=ios)
-        if (ios /= 0) return
-
-        read (unit, iostat=ios) magic
-        close (unit)
-        if (ios /= 0) return
-
-        is_spectre = .true.
-        do i = 1, 8
-            if (iachar(magic(i)) /= hdf5_magic(i)) then
-                is_spectre = .false.
-                return
-            end if
-        end do
+        is_spectre = field_file_kind_of(filename) == FIELD_FILE_SPECTRE
     end function is_spectre_file
-
-    function startswidth(text, start)
-        logical :: startswidth
-        character(*), intent(in) :: text
-        character(*), intent(in) :: start
-        integer :: len_text, len_start
-
-        len_text = len_trim(text)
-        len_start = len_trim(start)
-
-        startswidth = .false.
-        if (len_text >= len_start) then
-            if (text(1:len_start) == start) then
-                startswidth = .true.
-            end if
-        end if
-    end function startswidth
-
-    function endswith(text, ending)
-        logical :: endswith
-        character(*), intent(in) :: text
-        character(*), intent(in) :: ending
-        integer :: len_text, len_end
-
-        len_text = len_trim(text)
-        len_end = len_trim(ending)
-
-        endswith = .false.
-        if (len_text >= len_end) then
-            if (text(len_text - len_end + 1:len_text) == ending) then
-                endswith = .true.
-            end if
-        end if
-    end function endswith
-
-    function strip_directory(filename)
-        character(*), intent(in) :: filename
-        character(len(filename)) :: strip_directory
-        integer :: i
-
-        strip_directory = filename
-        do i = len(filename), 1, -1
-            if (filename(i:i) == '/') then
-                strip_directory = filename(i + 1:len(filename))
-                return
-            end if
-        end do
-    end function strip_directory
 
 end module field
