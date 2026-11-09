@@ -82,6 +82,15 @@ logical, parameter :: periodic(3) = [.False., .True., .True.]
 ! Coordinate scaling for s <-> r transform (default: r = sqrt(s))
 class(coordinate_scaling_t), allocatable :: coord_scaling
 
+! With a wall, a radial line may end where h_phi falls below hp_cut_fraction
+! of its first value: beyond, lambda' = -h_r/h_phi is unbounded or the field
+! winds backwards against the chart's toroidal tangent. Lambda and chi are held
+! from there on, so the canonical form holds only up to r_cut(i_th, i_phi);
+! the caller must show that the wall lies inside every cut line.
+    real(dp), parameter :: hp_cut_fraction = 0.2d0
+    logical :: allow_line_cut = .false.
+    real(dp), allocatable :: r_cut(:, :)
+
 ! Caller-owned harvest of one Meiss construction. field_can_spectre keeps one per
 ! SPECTRE volume; harvest_meiss_volume moves the module-level splines into a slot.
 type :: meiss_volume_t
@@ -274,6 +283,7 @@ end subroutine choose_default_scaling
         end if
 
         ! Clean up allocated arrays
+        if (allocated(r_cut)) deallocate (r_cut)
         if (allocated(lam_phi)) deallocate (lam_phi)
         if (allocated(chi_gauge)) deallocate (chi_gauge)
         if (allocated(field_noncan)) deallocate (field_noncan)
@@ -396,7 +406,9 @@ end subroutine init_transformation
 !> Initialize transformation arrays - can be called separately for diagnostics
         if (allocated(lam_phi)) deallocate (lam_phi)
         if (allocated(chi_gauge)) deallocate (chi_gauge)
+        if (allocated(r_cut)) deallocate (r_cut)
         allocate (lam_phi(n_r, n_th, n_phi), chi_gauge(n_r, n_th, n_phi))
+        allocate (r_cut(n_th, n_phi), source=xmax(1))
 
         ! Initialize to zero (boundary conditions)
         lam_phi = 0.0_dp
@@ -456,23 +468,94 @@ subroutine set_identity_slice(i_th, i_phi)
     enddo
 end subroutine set_identity_slice
 
-subroutine integrate_radial_slice(i_th, i_phi, y, ierr)
+    subroutine integrate_radial_slice(i_th, i_phi, y, ierr)
 !> Integrate along radial direction for given (i_th, i_phi)
-    integer, intent(in) :: i_th, i_phi
-    real(dp), intent(inout) :: y(2)
-    integer, intent(out) :: ierr
-    integer :: i_r
+        integer, intent(in) :: i_th, i_phi
+        real(dp), intent(inout) :: y(2)
+        integer, intent(out) :: ierr
 
-    ierr = 0
-    do i_r = 2, n_r
-        call integrate(i_r, i_th, i_phi, y, ierr)
-        if (ierr /= 0) then
-            write (*, '(A,I0,A,I0,A,I0)') 'Meiss ODE failed at r index ', i_r, &
-                ', theta index ', i_th, ', phi index ', i_phi
+        real(dp) :: phi_c, hp_first
+        integer :: i_r
+
+        ierr = 0
+        phi_c = xmin(3) + h_phi*(i_phi - 1)
+        hp_first = abs(hp_on_line(xmin(1), phi_c, i_th))
+        do i_r = 2, n_r
+            if (allow_line_cut) then
+                if (abs(hp_on_line(xmin(1) + h_r*(i_r - 1), &
+                                   modulo(phi_c + y(1), twopi), i_th)) < &
+                    hp_cut_fraction*hp_first) then
+                    call cut_line(i_r, i_th, i_phi)
+                    return
+                end if
+            end if
+            call integrate(i_r, i_th, i_phi, y, ierr)
+            if (ierr /= 0) then
+                if (allow_line_cut) then
+                    ierr = 0
+                    call cut_line(i_r, i_th, i_phi)
+                    return
+                end if
+                write (*, '(A,I0,A,I0,A,I0)') 'Meiss ODE failed at r index ', i_r, &
+                    ', theta index ', i_th, ', phi index ', i_phi
+                return
+            end if
+        end do
+    end subroutine integrate_radial_slice
+
+    real(dp) function hp_on_line(r, phi, i_th) result(hp)
+        real(dp), intent(in) :: r, phi
+        integer, intent(in) :: i_th
+        real(dp) :: Ar, Ap, hr
+
+        call ah_cov_on_slice(r, phi, i_th, Ar, Ap, hr, hp)
+    end function hp_on_line
+
+!> Hold lambda and chi from node i_r - 1 outwards (see r_cut).
+    subroutine cut_line(i_r, i_th, i_phi)
+        integer, intent(in) :: i_r, i_th, i_phi
+
+        r_cut(i_th, i_phi) = xmin(1) + h_r*(i_r - 2)
+        lam_phi(i_r:, i_th, i_phi) = lam_phi(i_r - 1, i_th, i_phi)
+        chi_gauge(i_r:, i_th, i_phi) = chi_gauge(i_r - 1, i_th, i_phi)
+    end subroutine cut_line
+
+!> Allow radial lines to end before the domain edge (see r_cut).
+    subroutine set_meiss_line_cut(allow)
+        logical, intent(in) :: allow
+
+        allow_line_cut = allow
+    end subroutine set_meiss_line_cut
+
+!> Integration coordinates (r, theta_c, phi_c) of the grid nodes of every cut
+!> line up to its last valid node, for the caller's wall check.
+    subroutine meiss_cut_lines(n_lines, n_nodes, nodes)
+        integer, intent(out) :: n_lines
+        integer, allocatable, intent(out) :: n_nodes(:)
+        real(dp), allocatable, intent(out) :: nodes(:, :, :)
+        integer :: i_th, i_phi, i_r, k
+
+        n_lines = 0
+        if (.not. allocated(r_cut)) then
+            allocate (n_nodes(0), nodes(3, n_r, 0))
             return
         end if
-    enddo
-end subroutine integrate_radial_slice
+        n_lines = count(r_cut < xmax(1))
+        allocate (n_nodes(n_lines), nodes(3, n_r, n_lines))
+        k = 0
+        do i_phi = 1, n_phi
+            do i_th = 1, n_th
+                if (r_cut(i_th, i_phi) >= xmax(1)) cycle
+                k = k + 1
+                n_nodes(k) = nint((r_cut(i_th, i_phi) - xmin(1))/h_r) + 1
+                do i_r = 1, n_nodes(k)
+                    nodes(:, i_r, k) = [xmin(1) + h_r*(i_r - 1), &
+                                        xmin(2) + h_th*(i_th - 1), &
+                                        xmin(3) + h_phi*(i_phi - 1)]
+                end do
+            end do
+        end do
+    end subroutine meiss_cut_lines
 
 subroutine print_progress(i_phi)
 !> Print integration progress
