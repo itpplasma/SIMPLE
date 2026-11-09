@@ -832,10 +832,14 @@ contains
     !> shares the HDF5 signature with SPECTRE equilibria.
     logical function is_spectre_input(path)
         use field, only: is_spectre_file
+        use field_frozen_current, only: is_frozen_current_file
         use params, only: field_tables_order
         character(*), intent(in) :: path
 
-        is_spectre_input = field_tables_order == 0 .and. is_spectre_file(path)
+        is_spectre_input = .false.
+        if (field_tables_order /= 0) return
+        if (.not. is_spectre_file(path)) return
+        is_spectre_input = .not. is_frozen_current_file(path)
     end function is_spectre_input
 
     logical function is_vmecpp_input(path)

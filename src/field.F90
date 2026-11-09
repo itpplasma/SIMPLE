@@ -68,8 +68,13 @@ contains
 
     subroutine field_from_file(filename, field)
         !> Create appropriate field type from file.
-        !> For coils files, creates a splined_field_t wrapping coils_field_t.
+        !> Coil files and frozen-current field files (HDF5) become a
+        !> splined_field_t on the reference coordinates.
         use reference_coordinates, only: ref_coords
+        ! Imported here, not by the module: modules that use field must not see
+        ! the frozen-current types (see field_frozen_current).
+        use field_frozen_current, only: create_frozen_current_splined_field, &
+                                        is_frozen_current_file
 
         character(*), intent(in) :: filename
         class(magnetic_field_t), allocatable, intent(out) :: field
@@ -85,7 +90,12 @@ contains
 
         stripped_name = strip_directory(filename)
 
-        if (is_spectre_file(filename)) then
+        if (is_frozen_current_file(filename)) then
+            allocate (splined_coils)
+            call create_frozen_current_splined_field(filename, ref_coords, &
+                                                     splined_coils)
+            call move_alloc(splined_coils, field)
+        else if (is_spectre_file(filename)) then
             allocate (spectre_temp)
             call create_spectre_field(spectre_temp, filename, ierr)
             if (ierr /= 0) then

@@ -179,9 +179,10 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
 end subroutine
 ```
 
-`field_from_file` (`src/field.F90`) chooses the class: SPECTRE HDF5,
-Boozer chartmap, VMEC `wout`, or a coils file (name starting with `coils` or
-ending in `.coils`), which it wraps in a splined field on `ref_coords`.
+`field_from_file` (`src/field.F90`) chooses the class: a frozen-current field
+file, SPECTRE HDF5, Boozer chartmap, VMEC `wout`, or a coils file (name
+starting with `coils` or ending in `.coils`). Coil and frozen-current files are
+wrapped in a splined field on `ref_coords`.
 
 | Type | File | Native coordinates | `sqgBctr` |
 |---|---|---|---|
@@ -199,7 +200,18 @@ of VMEC initialization. Their default toroidal grid resolves one chart field
 period with twice the chart toroidal sampling intervals, so the field need not
 share the geometry's bandwidth. Explicit grid sizes and bounds take precedence. Coil inputs supply a
 vacuum field only; a chart extending beyond the last closed flux surface does
-not add the plasma contribution to that field.
+not add the plasma contribution to that field. For the full field of a
+finite-pressure equilibrium inside and outside the plasma, use a frozen-current
+field file (libneo `frozen_current.x` `field_file`, HDF5, cm and G): coils plus
+the vector potential of the frozen plasma current. `field_frozen_current`
+(`src/field/field_frozen_current.f90`) evaluates $\mathbf A$ and $\mathbf B$
+with libneo's `compute_abfield` and splines them like a coil field, so Meiss and
+Albert coordinates and the symplectic integrators work on it up to the chart
+boundary. It tells the file from a SPECTRE equilibrium by its datasets `u`,
+`kmax` and `coil_points`. With `isw_field_type = 5` and `field_tables_order > 0`
+the same file instead feeds the guiding-centre tables. Only the splined field
+leaves the module: the frozen-current types make gfortran save and restore the
+floating-point environment in every procedure of a module that can see them.
 
 `coils_field_t` evaluates Biot–Savart from libneo `neo_biotsavart`;
 `create_coils_field` converts coil positions from m to cm and currents from A
