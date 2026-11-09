@@ -244,3 +244,13 @@ add_test(NAME test_spectre_fo_gauss2_incompatible_gauge COMMAND test_spectre_fo_
 set_tests_properties(test_spectre_fo_gauss2_incompatible_gauge PROPERTIES
     LABELS "unit" TIMEOUT 60
     PASS_REGULAR_EXPRESSION "interface normal fields disagree")
+
+add_executable(test_chartmap_field_meiss.x test_chartmap_field_meiss.f90)
+target_link_libraries(test_chartmap_field_meiss.x simple)
+add_test(NAME test_chartmap_field_meiss
+    COMMAND $<TARGET_FILE:test_chartmap_field_meiss.x>
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..)
+set_tests_properties(test_chartmap_field_meiss PROPERTIES
+    LABELS "integration"
+    RESOURCE_GROUPS "mem_gb:1"
+    TIMEOUT 300)

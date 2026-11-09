@@ -1224,6 +1224,18 @@ add_test(NAME test_refcoords_file_detection
 set_tests_properties(test_refcoords_file_detection PROPERTIES
     LABELS "unit")
 
+# Field files are classified by content, and an unknown HDF5 file stops with
+# its root members named.
+add_executable(test_field_file_kind.x test_field_file_kind.f90)
+target_link_libraries(test_field_file_kind.x simple)
+add_test(NAME test_field_file_kind
+    COMMAND test_field_file_kind.x
+        ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5 ${WOUT_FILE}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(test_field_file_kind PROPERTIES
+    LABELS "unit"
+    PASS_REGULAR_EXPRESSION "classification ok.*other.h5 is HDF5 but neither.*root members: .*temperature")
+
 # Collision profile radius for every integ_coords (issue #571)
 add_executable(test_profile_radius.x test_profile_radius.f90)
 target_link_libraries(test_profile_radius.x simple)

@@ -179,9 +179,14 @@ subroutine evaluate(self, x, Acov, hcov, Bmod, sqgBctr)
 end subroutine
 ```
 
-`field_from_file` (`src/field.F90`) chooses the class: SPECTRE HDF5,
-Boozer chartmap, VMEC `wout`, or a coils file (name starting with `coils` or
-ending in `.coils`), which it wraps in a splined field on `ref_coords`.
+`field_from_file` (`src/field.F90`) chooses the class from the file content,
+never from its name (`src/field/field_file_kind.f90`): an HDF5 file with
+`input/physics/Nvol` and `output/Rbc` is a SPECTRE equilibrium; other HDF5 and
+NetCDF files must be a field on a chartmap, a Boozer chartmap or a VMEC `wout`,
+and an HDF5 file that is none of these stops with its root members listed. A
+text file that starts with a point count followed by rows of x, y, z and
+current is a coil file. Coil files and fields on a chartmap become a splined
+field on `ref_coords`.
 
 | Type | File | Native coordinates | `sqgBctr` |
 |---|---|---|---|
@@ -200,6 +205,20 @@ period with twice the chart toroidal sampling intervals, so the field need not
 share the geometry's bandwidth. Explicit grid sizes and bounds take precedence. Coil inputs supply a
 vacuum field only; a chart extending beyond the last closed flux surface does
 not add the plasma contribution to that field.
+
+The full field of a finite-pressure equilibrium inside and outside the plasma
+comes as a field on a chartmap (libneo `libneo_chartmap_field`, written for a
+frozen-current field by `frozen_current_chartmap.x`): the chart plus the
+physical cylindrical components of $\mathbf A$ (G cm) and $\mathbf B$ (G) at
+its nodes. `coord_input` must be the same chart (the field file is itself a
+valid `coord_input`) with a $\rho$ or geometric radius.
+`field_chartmap_nodes` forms $A_i = \mathbf A \cdot \mathbf e_i$, $B_R$,
+$B^\varphi$, $B_Z$ and $|B|$ at the file's own nodes and splines them there
+(`create_splined_field_from_nodes`), without resampling or a Biot-Savart
+evaluation at start. The result is an ordinary splined field, so RK45 in
+reference coordinates, Meiss and Albert coordinates and the symplectic
+integrators all use it. A solved frozen-current HDF5 file given as
+`field_input` stops with a pointer to the converter.
 
 `coils_field_t` evaluates Biot–Savart from libneo `neo_biotsavart`;
 `create_coils_field` converts coil positions from m to cm and currents from A
@@ -419,8 +438,8 @@ with fortplot (disabled without fortplot).
 ## 6. SPECTRE
 
 SPECTRE/SPEC MRxMHD equilibria (HDF5) are read by libneo `spectre_reader`
-(`load_spectre`); `field_input` is recognised by the `.h5` extension or the
-HDF5 signature (`field::is_spectre_file`) and loaded by `create_spectre_field`,
+(`load_spectre`); `field_input` is recognised by its groups `input/physics`
+and `output` (`field::is_spectre_file`) and loaded by `create_spectre_field`,
 which builds the stacked chart $\rho_g \in [0, M_\text{vol}]$, volume
 $l = \min(\lfloor\rho_g\rfloor + 1, M_\text{vol})$. libneo `spectre_basis`
 returns $(A_\vartheta, A_\zeta)$ and derivatives in the local coordinate
