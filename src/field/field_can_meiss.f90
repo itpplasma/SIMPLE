@@ -86,9 +86,10 @@ class(coordinate_scaling_t), allocatable :: coord_scaling
 ! of its first value: beyond, lambda' = -h_r/h_phi is unbounded or the field
 ! winds backwards against the chart's toroidal tangent. Lambda and chi are held
 ! from there on, so the canonical form holds only up to r_cut(i_th, i_phi);
-! the caller must show that the wall lies inside every cut line.
-    real(dp), parameter :: hp_cut_fraction = 0.2d0
+! beyond_meiss_cut tells the tracer when a marker has left that domain.
+    real(dp), parameter :: hp_cut_fraction = 0.1d0
     logical :: allow_line_cut = .false.
+    logical :: any_line_cut = .false.
     real(dp), allocatable :: r_cut(:, :)
 
 ! Caller-owned harvest of one Meiss construction. field_can_spectre keeps one per
@@ -284,6 +285,7 @@ end subroutine choose_default_scaling
 
         ! Clean up allocated arrays
         if (allocated(r_cut)) deallocate (r_cut)
+        any_line_cut = .false.
         if (allocated(lam_phi)) deallocate (lam_phi)
         if (allocated(chi_gauge)) deallocate (chi_gauge)
         if (allocated(field_noncan)) deallocate (field_noncan)
@@ -409,6 +411,7 @@ end subroutine init_transformation
         if (allocated(r_cut)) deallocate (r_cut)
         allocate (lam_phi(n_r, n_th, n_phi), chi_gauge(n_r, n_th, n_phi))
         allocate (r_cut(n_th, n_phi), source=xmax(1))
+        any_line_cut = .false.
 
         ! Initialize to zero (boundary conditions)
         lam_phi = 0.0_dp
@@ -429,6 +432,7 @@ subroutine compute_transformation(ierr)
     end do
     !$omp end parallel do
     ierr = maxval(slice_status)
+        any_line_cut = any(r_cut < xmax(1))
 end subroutine compute_transformation
 
 subroutine compute_phi_slice(i_phi, ierr)
@@ -519,6 +523,23 @@ end subroutine set_identity_slice
         lam_phi(i_r:, i_th, i_phi) = lam_phi(i_r - 1, i_th, i_phi)
         chi_gauge(i_r:, i_th, i_phi) = chi_gauge(i_r - 1, i_th, i_phi)
     end subroutine cut_line
+
+!> True if Meiss integration coordinates x lie beyond the cut of a radial line
+!> of the surrounding grid cell, where the canonical form is not valid.
+    logical function beyond_meiss_cut(x) result(beyond)
+        real(dp), intent(in) :: x(3)
+        integer :: i, j
+        real(dp) :: r_lim
+
+        beyond = .false.
+        if (.not. any_line_cut) return
+        i = int(modulo(x(2) - xmin(2), xmax(2) - xmin(2))/h_th) + 1
+        j = int(modulo(x(3) - xmin(3), xmax(3) - xmin(3))/h_phi) + 1
+        i = min(max(i, 1), n_th - 1)
+        j = min(max(j, 1), n_phi - 1)
+        r_lim = min(r_cut(i, j), r_cut(i + 1, j), r_cut(i, j + 1), r_cut(i + 1, j + 1))
+        beyond = x(1) > r_lim
+    end function beyond_meiss_cut
 
 !> Allow radial lines to end before the domain edge (see r_cut).
     subroutine set_meiss_line_cut(allow)

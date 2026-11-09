@@ -36,9 +36,9 @@ program test_meiss_line_cut
     ! d rho^6 cos(phi). In B = B0 R0/R e_phi + Bz e_z, h_phi = b . e_phi is
     ! proportional to B0 R0 - Bz d rho^6 sin(phi) and changes sign near the
     ! chart edge, where the radial Meiss ODE has no solution. |h_phi| falls
-    ! below 0.2 of its axis value only for rho^6 sin(phi) > 0.53, rho > 0.9, so
-    ! some lines, not all, must end, none before rho = 0.85, and the canonical
-    ! field must stay finite on them.
+    ! below 0.1 of its axis value only for rho^6 sin(phi) > 0.6, rho > 0.9, so
+    ! some lines, not all, must end, none before rho = 0.85, the canonical
+    ! field must stay finite on them, and points past an end leave the domain.
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use util, only: twopi
     use new_vmec_stuff_mod, only: nper
@@ -47,7 +47,7 @@ program test_meiss_line_cut
     use libneo_coordinates, only: coordinate_system_t, make_chartmap_coordinate_system
     use libneo_chartmap_vmec_generator, only: write_chartmap_file
     use field_can_meiss, only: init_meiss, get_meiss_coordinates, set_meiss_line_cut, &
-                               meiss_cut_lines, evaluate_meiss
+                               meiss_cut_lines, evaluate_meiss, beyond_meiss_cut
     use field_can_base, only: field_can_t
     use meiss_line_cut_field, only: tilt_field_t, r0
     implicit none
@@ -87,6 +87,11 @@ program test_meiss_line_cut
         end do
     end do
     print '(a,f7.3)', ' smallest last valid radius ', r_last
+    k = 1
+    if (.not. beyond_meiss_cut(nodes(:, n_nodes(k), k) + [0.05_dp, 0.0_dp, 0.0_dp])) &
+        error stop 'a point beyond a cut must lie outside the Meiss domain'
+    if (beyond_meiss_cut([0.5_dp, nodes(2, 1, k), nodes(3, 1, k)])) &
+        error stop 'a point inside every line must lie in the Meiss domain'
     if (r_last < 0.85_dp) error stop 'a line was cut inside the regular region'
     call set_meiss_line_cut(.false.)
     print *, 'PASSED: Meiss lines end where h_phi vanishes'
