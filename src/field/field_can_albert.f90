@@ -92,6 +92,17 @@ contains
         call integ_to_ref_meiss(xmeiss, xref)
     end subroutine integ_to_ref_albert
 
+    !> Meiss integration coordinates of Albert integration coordinates.
+    subroutine albert_to_meiss(xinteg, xmeiss)
+        real(dp), intent(in) :: xinteg(3)
+        real(dp), intent(out) :: xmeiss(3)
+        real(dp) :: y_batch(1)
+
+        call evaluate_batch_splines_3d(spl_r_batch, xinteg, y_batch)
+        xmeiss(1) = y_batch(1)
+        xmeiss(2:3) = xinteg(2:3)
+    end subroutine albert_to_meiss
+
     !> Reference radius of integ_to_ref_albert without the angular splines.
     function integ_to_ref_radius_albert(xinteg) result(r_ref)
         use field_can_meiss, only: integ_to_ref_radius_meiss

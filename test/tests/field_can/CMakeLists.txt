@@ -244,3 +244,12 @@ add_test(NAME test_spectre_fo_gauss2_incompatible_gauge COMMAND test_spectre_fo_
 set_tests_properties(test_spectre_fo_gauss2_incompatible_gauge PROPERTIES
     LABELS "unit" TIMEOUT 60
     PASS_REGULAR_EXPRESSION "interface normal fields disagree")
+
+add_executable(test_meiss_line_cut.x test_meiss_line_cut.f90)
+target_link_libraries(test_meiss_line_cut.x simple)
+add_test(NAME test_meiss_line_cut
+    COMMAND $<TARGET_FILE:test_meiss_line_cut.x>
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..)
+set_tests_properties(test_meiss_line_cut PROPERTIES
+    LABELS "unit"
+    TIMEOUT 300)
