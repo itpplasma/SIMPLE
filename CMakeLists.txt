@@ -407,26 +407,39 @@ else()
     link_libraries(${NETCDF_FLIBS_LIST})
 endif()
 
-# CGAL (optional, for STL wall intersections)
-# CGAL 5.x is header-only, fetch headers via FetchContent (don't run CGAL's CMake)
+# CGAL (optional, for STL wall intersections). Header-only: an installed CGAL
+# >= 5.6 is used as is; otherwise 6.0.1 is fetched, pinned by hash, so a
+# download failure cannot hit hosts that have CGAL.
 if(SIMPLE_ENABLE_CGAL)
     # CGAL requires Boost headers
     find_package(Boost REQUIRED)
     message(STATUS "Boost found: ${Boost_VERSION}")
 
-    include(FetchContent)
-    FetchContent_Declare(
-        cgal
-        URL https://github.com/CGAL/cgal/releases/download/v6.0.1/CGAL-6.0.1.tar.xz
-        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-    )
-    FetchContent_GetProperties(cgal)
-    if(NOT cgal_POPULATED)
-        FetchContent_Populate(cgal)
+    find_path(CGAL_INCLUDE_DIR CGAL/version.h)
+    set(_cgal_version "")
+    if(CGAL_INCLUDE_DIR)
+        file(STRINGS "${CGAL_INCLUDE_DIR}/CGAL/version.h" _cgal_version_line
+             REGEX "^#define CGAL_VERSION ")
+        string(REGEX MATCH "[0-9]+\\.[0-9]+(\\.[0-9]+)?" _cgal_version
+               "${_cgal_version_line}")
     endif()
-    # CGAL 6.x is header-only, just add include path
-    set(CGAL_INCLUDE_DIR "${cgal_SOURCE_DIR}/include")
-    message(STATUS "CGAL enabled via FetchContent: 6.0.1 (header-only)")
+    if(_cgal_version AND _cgal_version VERSION_GREATER_EQUAL 5.6)
+        message(STATUS "CGAL enabled from ${CGAL_INCLUDE_DIR}: ${_cgal_version} (header-only)")
+    else()
+        include(FetchContent)
+        FetchContent_Declare(
+            cgal
+            URL https://github.com/CGAL/cgal/releases/download/v6.0.1/CGAL-6.0.1.tar.xz
+            URL_HASH SHA256=0acdfbf317c556630dd526f3253780f29b6ec9713ee92903e81b5c93c0f59b7f
+            DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+        )
+        FetchContent_GetProperties(cgal)
+        if(NOT cgal_POPULATED)
+            FetchContent_Populate(cgal)
+        endif()
+        set(CGAL_INCLUDE_DIR "${cgal_SOURCE_DIR}/include" CACHE PATH "CGAL headers" FORCE)
+        message(STATUS "CGAL enabled via FetchContent: 6.0.1 (header-only)")
+    endif()
     message(STATUS "CGAL include dir: ${CGAL_INCLUDE_DIR}")
     add_compile_definitions(SIMPLE_ENABLE_CGAL)
 else()
