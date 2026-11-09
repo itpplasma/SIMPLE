@@ -607,8 +607,12 @@ subroutine integrate(i_r, i_th, i_phi, y, ierr)
 #endif
 
     context = grid_indices_t(i_th, i_phi)
-    call odeint_allroutines(y, ndim, context, r1, r2, relaxed_relerr, &
-                            rh_can_wrapper, step_limit=ode_step_limit, ierr=ierr)
+        ! On the line through the node where A was gauged to zero, chi and its
+        ! derivative start at zero; without an absolute floor the step shrinks to
+        ! roundoff there.
+        call odeint_allroutines(y, ndim, context, r1, r2, relaxed_relerr, &
+                                rh_can_wrapper, step_limit=ode_step_limit, ierr=ierr, &
+                                scale_floor=[1d0, 1d0])
     if (ierr /= 0) return
 
     lam_phi(i_r, i_th, i_phi) = y(1)
