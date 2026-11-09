@@ -9,7 +9,8 @@ module field_gc_tables
     use interpolate, only: BatchSplineData3D, construct_batch_splines_3d, &
                            evaluate_batch_splines_3d, destroy_batch_splines_3d
     use libneo_coordinates, only: coordinate_system_t, &
-                                  chartmap_coordinate_system_t, RHO_TOR
+                                  chartmap_coordinate_system_t, PSI_TOR_NORM, &
+                                  PSI_POL_NORM
     use neo_biotsavart, only: coils_t, compute_field_jacobian
     use neo_frozen_current_field, only: frozen_current_field_t
     use neo_guiding_centre_field, only: guiding_centre_quantities, GC_COUNT, &
@@ -66,12 +67,16 @@ contains
         real(dp) :: a(3), da(3, 3), b(3), db(3, 3)
         integer :: nr, nth, nph, i, j, k
 
+        ! The tables are splined in the chart's own radius, which the RK axis
+        ! map treats as rho (magfie axis_radial_coordinate); a normalised-flux
+        ! radius would need the sqrt(s) scaling.
         select type (coords)
         class is (chartmap_coordinate_system_t)
-            if (coords%rho_convention /= RHO_TOR) error stop &
-                'build_gc_tables_coils: the chartmap radius must be rho_tor'
+            if (coords%rho_convention == PSI_TOR_NORM .or. &
+                coords%rho_convention == PSI_POL_NORM) error stop &
+                'build_gc_tables: the chartmap radius must not be normalised flux'
         class default
-            error stop 'build_gc_tables_coils: needs a chartmap reference chart'
+            error stop 'build_gc_tables: needs a chartmap reference chart'
         end select
         call configure_spline_grid(coords, n_r_in=n_r, n_th_in=n_th, &
                                    n_phi_in=n_phi, n_r=nr, n_th=nth, n_phi=nph, &

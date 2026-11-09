@@ -12,7 +12,7 @@ program test_magfie_gc_tables
     use magfie_sub, only: magfie_splined_refcoords, gc_tables, init_magfie, &
                           REFCOORDS, axis_radial_coordinate
     use libneo_coordinates, only: coordinate_system_t, chartmap_coordinate_system_t, &
-                                  make_chartmap_coordinate_system, RHO_TOR
+                                  make_chartmap_coordinate_system, RHO_TOR, UNKNOWN
     use neo_biotsavart, only: compute_field_jacobian
     use neo_guiding_centre_field, only: guiding_centre_quantities, GC_COUNT
     implicit none
@@ -60,6 +60,15 @@ program test_magfie_gc_tables
     do k = 1, GC_COUNT
         print '(i9, 3es12.3)', k, err_coarse(k), err_fine(k), err_route(k)
     end do
+    ! A chart with a geometric radius (convention UNKNOWN, as map2disc wall
+    ! charts) is tabulated like rho_tor.
+    select type (chart)
+    class is (chartmap_coordinate_system_t)
+        chart%rho_convention = UNKNOWN
+    end select
+    call build_gc_tables_coils(raw%coils, chart, 3, coarse)
+    if (any(abs(table_error(coarse) - err_coarse) > 0.0_dp)) error stop &
+        'geometric-radius chart tables differ'
     if (minval(err_coarse/err_fine) < 2.5_dp) error stop 'tables do not converge'
     if (maxval(err_fine) > 5.0e-3_dp) error stop 'tables too far from the exact field'
     print *, 'PASSED: guiding-centre tables converge to the exact coil field'
