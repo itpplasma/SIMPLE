@@ -822,9 +822,9 @@ contains
         end if
     end subroutine init_field
 
-    !> Meiss lines may end where h_phi nearly vanishes (field_can_meiss r_cut);
-    !> markers stop at the wall, so every such line must cross the wall before
-    !> its last valid node.
+    !> Meiss lines may end where h_phi nearly vanishes (field_can_meiss r_cut).
+    !> Count the lines that do not cross the wall before their last valid node:
+    !> markers reach their ends only through openings of the wall.
     subroutine check_meiss_cuts_behind_wall
         use field_can_meiss, only: meiss_cut_lines, integ_to_ref_meiss
         use reference_coordinates, only: ref_coords
@@ -857,16 +857,28 @@ contains
         end do
         !$omp end parallel do
         n_open = count(.not. crossed)
-        print '(a,i0,a,i0,a)', ' Meiss coordinates: ', n_lines, &
-            ' radial lines end behind the wall, ', n_open, ' before it'
-        if (n_open > 0) then
-            k = findloc(crossed, .false., dim=1)
-            print '(a,3es12.4)', ' first open line ends at (r, theta, phi) = ', &
-                nodes(:, n_nodes(k), k)
-            error stop 'Meiss coordinates end inside the wall; '// &
-                'use a chart with h_phi bounded away from zero there'
-        end if
+        print '(a,i0,a,i0,a)', ' Meiss coordinates: ', n_lines - n_open, &
+            ' radial lines end behind the wall, ', n_open, &
+            ' before it (markers beyond stop as numerical domain exits)'
     end subroutine check_meiss_cuts_behind_wall
+
+    !> A marker beyond the end of a Meiss radial line (field_can_meiss r_cut)
+    !> has left the domain of the canonical coordinates.
+    logical function outside_meiss_domain(z) result(outside)
+        use field_can_meiss, only: beyond_meiss_cut
+        use field_can_albert, only: albert_to_meiss
+        use magfie_sub, only: MEISS
+        real(dp), intent(in) :: z(:)
+        real(dp) :: xmeiss(3)
+
+        outside = .false.
+        if (isw_field_type == MEISS) then
+            outside = beyond_meiss_cut(z(1:3))
+        else if (isw_field_type == ALBERT) then
+            call albert_to_meiss(z(1:3), xmeiss)
+            outside = beyond_meiss_cut(xmeiss)
+        end if
+    end function outside_meiss_domain
 
     !> Tables from a coil file, or from a solved frozen-current field (libneo
     !> frozen_current.x field_file, HDF5).
@@ -3442,6 +3454,11 @@ contains
                     rk_recovery_local%symplectic_steps = 0
                     ierr_orbit = WALL_HIT_EXIT
                     if (present(exit_step)) exit_step = wall_exit_step
+                    exit
+                end if
+                if (outside_meiss_domain(z)) then
+                    rk_recovery_local%symplectic_steps = 0
+                    ierr_orbit = SYMPLECTIC_STEP_OUTSIDE_DOMAIN
                     exit
                 end if
             else
