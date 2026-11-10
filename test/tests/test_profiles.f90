@@ -15,6 +15,7 @@ program test_profiles
     call test_file_exterior_profiles()
     call test_tabulated_profiles()
     call test_power_series_evaluation(all_passed, n_failed)
+    call test_edge_values_beyond_lcfs(all_passed, n_failed)
     call test_two_power_evaluation(all_passed, n_failed)
     call test_zero_density_operator(all_passed, n_failed)
     call test_flat_profile_coefficients(all_passed, n_failed)
@@ -324,6 +325,48 @@ contains
         real(dp), parameter :: rtol = 1.0d-12
         rel_close = abs(a - b) <= rtol*max(abs(a), abs(b), tiny(1.0_dp))
     end function rel_close
+
+    subroutine test_edge_values_beyond_lcfs(passed, nfail)
+        ! Beyond s = 1 every caller (collisions, thermal stop) must see the
+        ! edge values. The W10 ion temperature fit of 20180822.12 turns
+        ! negative just outside the LCFS and grows to MeV by s = 2.
+        logical, intent(inout) :: passed
+        integer, intent(inout) :: nfail
+        real(dp), parameter :: ti_coef(10) = [1.0_dp, -4.2665891630390531_dp, &
+                 33.308477812418346_dp, -165.39598779023646_dp, 432.09552058231782_dp, &
+                 -546.71747663361998_dp, 177.40660993985139_dp, 292.51203798640370_dp, &
+                                          -300.00224127494835_dp, 80.072313387229258_dp]
+        real(dp), parameter :: radii(3) = [1.05_dp, 1.5_dp, 2.5_dp]
+        real(dp) :: edge(5), outside(5), s_out
+        integer :: i
+
+        print *, 'Testing profile values beyond the LCFS...'
+        active_profile = POWER_SERIES
+        Te_scale = 1579.1743069883589_dp; Ti1_scale = Te_scale; Ti2_scale = Te_scale
+        Te_coef = ti_coef; Ti1_coef = ti_coef; Ti2_coef = ti_coef
+        ni1_scale = 3.9e19_dp; ni2_scale = 1.0e18_dp
+        ni1_coef = 0.0_dp; ni2_coef = 0.0_dp; ni1_coef(1) = 1.0_dp; ni2_coef(1) = 1.0_dp
+        call get_plasma_params(1.0_dp, edge(1), edge(2), edge(3), edge(4), edge(5))
+        do i = 1, 3
+            s_out = radii(i)
+            call get_plasma_params(s_out, outside(1), outside(2), outside(3), &
+                                   outside(4), outside(5))
+            if (any(outside /= edge)) then
+                print *, '  FAIL: power series at s =', s_out, 'gives', outside(2), &
+                    'eV, edge', edge(2)
+                passed = .false.
+                nfail = nfail + 1
+                return
+            end if
+        end do
+        if (abs(edge(2) - 20.0_dp) > 0.1_dp) then
+            print *, '  FAIL: edge ion temperature', edge(2)
+            passed = .false.
+            nfail = nfail + 1
+            return
+        end if
+        print *, '  PASS: edge values hold beyond the LCFS'
+    end subroutine test_edge_values_beyond_lcfs
 
     subroutine test_power_series_evaluation(passed, nfail)
         logical, intent(inout) :: passed
