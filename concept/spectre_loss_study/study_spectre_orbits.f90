@@ -9,19 +9,20 @@ program study_spectre_orbits
     use simple_api, only: simple_read_config, simple_init, simple_sample_volume
     use simple, only: init_sympl
     use params, only: ntestpart, trace_time, v0, dtaumin, relerr, integmode, &
-        crossing_level
+                      crossing_level
     use magfie_sub, only: init_magfie, SPECTRE, spectre_field, M_TO_CM
     use field_can_mod, only: field_can_t, ref_to_integ, integ_to_ref
     use field_can_spectre, only: spectre_mvol, set_spectre_volume_lock
     use parmot_mod, only: ro0
-    use spectre_fo_hybrid, only: spectre_fo_enter, SPECTRE_FO_OK
+    use spectre_fo_hybrid, only: spectre_fo_enter, SPECTRE_FO_OK, &
+                                 spectre_fo_trace_unit
     use spectre_fo_field, only: spectre_fo_field_local, spectre_fo_field_locate, &
-        spectre_fo_local_t
+                                spectre_fo_local_t
     use orbit_symplectic_base, only: symplectic_integrator_t
     use spectre_sympl_orbit, only: sympl_spectre_state_t, sympl_spectre_reset, &
-        orbit_microstep_sympl_spectre, sympl_landing_stats_reset, sympl_fo_stats, &
-        sympl_bulk_recovery_stats, &
-        SYMPL_SPECTRE_OK, SYMPL_SPECTRE_LOSS
+             orbit_microstep_sympl_spectre, sympl_landing_stats_reset, sympl_fo_stats, &
+                                   sympl_bulk_recovery_stats, &
+                                   SYMPL_SPECTRE_OK, SYMPL_SPECTRE_LOSS
     use util, only: sqrt2, twopi
     implicit none
 
@@ -48,6 +49,8 @@ program study_spectre_orbits
     integer :: status, m, k, nsteps, stride, capacity, rec, unit, j, nfail
     integer :: entries, exits, losses, failures, counts(5), terminal, iface, side
     integer :: requested_samples, bulk(3), nthreads
+    character(len=1024) :: path_trace
+    real(dp) :: row_trace(12)
 
     call get_command_argument(1, fixture)
     call get_environment_variable('SIMPLE_SPECTRE_STUDY_INPUT', config_file)
@@ -98,7 +101,7 @@ program study_spectre_orbits
         close (unit)
     else if (trim(sampling) == 'volume') then
         call simple_sample_volume(ntestpart, 0.1_dp, &
-            real(spectre_mvol, dp) - 0.05_dp, starts)
+                                  real(spectre_mvol, dp) - 0.05_dp, starts)
     else
         ! Identical raw-field seeds on both revisions. Half-gyroradius offsets
         ! on both sides of every sheet ensure actual interface encounters.
@@ -106,15 +109,15 @@ program study_spectre_orbits
             iface = 1 + mod((m - 1)/2, spectre_mvol - 1)
             side = merge(1, -1, mod(m, 2) == 0)
             u = [real(iface, dp) + side*1.0e-10_dp, &
-                modulo(2.399963229728653_dp*m, twopi), &
-                modulo(1.414213562373095_dp*m, twopi)]
+                 modulo(2.399963229728653_dp*m, twopi), &
+                 modulo(1.414213562373095_dp*m, twopi)]
             y = [u, 1.0_dp, -0.9_dp + &
-                1.8_dp*real(m - 1, dp)/real(max(1, ntestpart - 1), dp)]
+                 1.8_dp*real(m - 1, dp)/real(max(1, ntestpart - 1), dp)]
             call spectre_field%evaluate(u, a, hc, bmag)
             call spectre_field%coords%metric_tensor(u, g, gi, jac)
             ! ro0 in G cm; raw B and metric use T and m.
             radial_larmor = ro0*sqrt(1 - y(5)**2)/(bmag*1.0e4_dp) &
-                *sqrt(gi(1, 1))/M_TO_CM
+                            *sqrt(gi(1, 1))/M_TO_CM
             y(1) = real(iface, dp) + side*0.5_dp*radial_larmor
             starts(:, m) = y
         end do
@@ -136,6 +139,9 @@ program study_spectre_orbits
     n_episodes = 0
     records = 0.0_dp
     result = 0.0_dp
+    call get_environment_variable('SIMPLE_SPECTRE_STUDY_PATH', path_trace)
+    if (len_trim(path_trace) > 0) open (newunit=spectre_fo_trace_unit, &
+                                        file=trim(path_trace), status='replace')
     call sympl_landing_stats_reset
     trace0 = get_wtime()
     ! Match production's one-marker dynamic chunks; FO-heavy markers are rare
@@ -154,12 +160,12 @@ program study_spectre_orbits
         call sympl_spectre_reset(state, si, spectre_mvol, integmode, crossing_level)
         if (trim(study_mode) == 'fo') then
             call spectre_fo_enter(state%fo, y, &
-                min(spectre_mvol, int(y(1)) + 1), nint(y(1)), &
-                ro0/sqrt2, status)
+                                  min(spectre_mvol, int(y(1)) + 1), nint(y(1)), &
+                                  ro0/sqrt2, status)
             if (status /= SPECTRE_FO_OK) error stop 'FO reference launch'
             if (trim(sampling) == 'phase') then
                 call rotate_launch(state, y, phase_offset + &
-                    twopi*real(m - 1, dp)/real(ntestpart, dp))
+                                   twopi*real(m - 1, dp)/real(ntestpart, dp))
             else if (phase_offset /= 0.0_dp) then
                 call rotate_launch(state, y, phase_offset)
             end if
@@ -177,6 +183,12 @@ program study_spectre_orbits
             fo_before = state%fo_elapsed
             call orbit_microstep_sympl_spectre(state, si, field, status, fraction)
             elapsed = elapsed + dt*fraction
+            if (spectre_fo_trace_unit /= 0) then
+                call sample_state(state, si, field, elapsed, row_trace)
+                write (spectre_fo_trace_unit, '(a,7es24.16,i3)') 'G', &
+                    row_trace(9:11), row_trace(2:4), row_trace(1), &
+                    nint(row_trace(7))
+            end if
             if (trim(study_mode) /= 'fo') then
                 if (.not. was_active .and. state%fo%active) then
                     call open_episode(m, elapsed, state%fo%u(1), state)
@@ -185,21 +197,21 @@ program study_spectre_orbits
                 else if (was_active .and. .not. state%fo%active .and. &
                          episode_open) then
                     call close_episode(m, elapsed, state%fo_elapsed - fo_start, &
-                        merge(2, 1, status == SYMPL_SPECTRE_LOSS), state)
+                                       merge(2, 1, status == SYMPL_SPECTRE_LOSS), state)
                     episode_open = .false.
                 else if (.not. was_active .and. .not. state%fo%active .and. &
                          state%fo_elapsed > fo_before) then
                     call open_episode(m, elapsed, -1.0_dp, state)
                     call close_episode(m, elapsed, state%fo_elapsed - fo_before, 4, &
-                        state)
+                                       state)
                 end if
             end if
             if (state%fo%active) then
                 worst_shell = max(worst_shell, &
-                    abs(sum(state%fo%v**2)/2 - starts(4, m)**2))
+                                  abs(sum(state%fo%v**2)/2 - starts(4, m)**2))
             else
                 worst_shell = max(worst_shell, &
-                    abs(field%H - starts(4, m)**2))
+                                  abs(field%H - starts(4, m)**2))
             end if
             if (mod(k, stride) == 0 .or. status /= SYMPL_SPECTRE_OK .or. &
                 k == nsteps) then
@@ -212,20 +224,20 @@ program study_spectre_orbits
             end if
         end do
         if (episode_open) call close_episode(m, elapsed, &
-            state%fo_elapsed - fo_start, merge(2, 3, terminal == SYMPL_SPECTRE_LOSS), &
-            state)
+             state%fo_elapsed - fo_start, merge(2, 3, terminal == SYMPL_SPECTRE_LOSS), &
+                                             state)
         samples(m) = rec
         result(:, m) = [elapsed, real(terminal, dp), &
-            state%fo_elapsed*sqrt2/v0/max(elapsed, tiny(1.0_dp)), &
+                        state%fo_elapsed*sqrt2/v0/max(elapsed, tiny(1.0_dp)), &
                         worst_shell, get_wtime() - begin_marker, &
-            real(state%warning_hold_count, dp), real(min(k, nsteps), dp)]
+                        real(state%warning_hold_count, dp), real(min(k, nsteps), dp)]
         call set_spectre_volume_lock(0)
     end do
     !$omp end parallel do
     trace_s = get_wtime() - trace0
     call sympl_fo_stats(entries, exits, losses, failures, counts)
     nfail = count(nint(result(2, :)) /= SYMPL_SPECTRE_OK .and. &
-        nint(result(2, :)) /= SYMPL_SPECTRE_LOSS)
+                  nint(result(2, :)) /= SYMPL_SPECTRE_LOSS)
     open (newunit=unit, file=trim(prefix)//'_markers.csv', status='replace')
     write (unit, '(a)') 'marker,time_s,status,fo_fraction,shell_error,'// &
         'wall_s,warning_hold_count,microsteps'
@@ -293,8 +305,8 @@ contains
         n = n_episodes(marker)
         if (n > episode_capacity) return
         episodes(:, n, marker) = [time, -1.0_dp, 0.0_dp, rho, 0.0_dp, &
-            real(st%fo%iface, dp), st%fo%exit_rho, st%fo%entry_rho, &
-            real(st%fo%entry_owner, dp), 0.0_dp, 0.0_dp]
+                               real(st%fo%iface, dp), st%fo%exit_rho, st%fo%entry_rho, &
+                                  real(st%fo%entry_owner, dp), 0.0_dp, 0.0_dp]
     end subroutine open_episode
 
     subroutine close_episode(marker, time, fo_clock, kind, st)
@@ -311,7 +323,7 @@ contains
         episodes(10, n, marker) = st%fo%last_y(1)
         episodes(11, n, marker) = real(st%fo%owner, dp)
         if (kind == 4) episodes(6:9, n, marker) = [real(st%fo%iface, dp), &
-            st%fo%exit_rho, st%fo%entry_rho, real(st%fo%entry_owner, dp)]
+                           st%fo%exit_rho, st%fo%entry_rho, real(st%fo%entry_owner, dp)]
     end subroutine close_episode
 
     subroutine rotate_launch(st, y_gc, phase)
@@ -341,7 +353,7 @@ contains
         real(dp), intent(in) :: a(3), b(3)
         real(dp) :: c(3)
         c = [a(2)*b(3) - a(3)*b(2), a(3)*b(1) - a(1)*b(3), &
-            a(1)*b(2) - a(2)*b(1)]
+             a(1)*b(2) - a(2)*b(1)]
     end function cross_product
 
     subroutine sample_state(st, integrator, f, time, row)
@@ -368,7 +380,7 @@ contains
             owner = min(spectre_mvol, int(coordinate(1)) + 1)
         end if
         row = [time, coordinate, speed, lambda, &
-            real(merge(1, 0, st%fo%active), dp), real(owner, dp), &
-            pos, st%fo_elapsed*sqrt2/v0]
+               real(merge(1, 0, st%fo%active), dp), real(owner, dp), &
+               pos, st%fo_elapsed*sqrt2/v0]
     end subroutine sample_state
 end program study_spectre_orbits

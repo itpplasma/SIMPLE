@@ -2,8 +2,8 @@ module spectre_fo_hybrid
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use magfie_sub, only: spectre_field
     use spectre_fo_field, only: spectre_fo_field_build, spectre_fo_field_local, &
-        spectre_fo_field_locate, spectre_fo_local_t, fo_field_axisymmetric, &
-        FO_AXIS_RADIUS
+                   spectre_fo_field_locate, spectre_fo_local_t, fo_field_axisymmetric, &
+                                FO_AXIS_RADIUS
     implicit none
     private
     integer, parameter, public :: SPECTRE_FO_OK = 0
@@ -53,6 +53,8 @@ module spectre_fo_hybrid
     public :: spectre_fo_radial_larmor
     public :: spectre_fo_advance_until_exit
     public :: spectre_fo_canonical_pzeta
+    ! Scratch hook for one-marker trajectory figures; 0 disables it.
+    integer, public :: spectre_fo_trace_unit = 0
 contains
     subroutine spectre_fo_configure(tolerance, grid)
         real(dp), intent(in) :: tolerance
@@ -97,7 +99,7 @@ contains
         alpha = 0.0_dp
         if (axisymmetric()) then
             call solve_gyrophase(x_gc, state%u, owner, b, e1, e2, vpar, &
-                vperp, target, ro0_bar, alpha, status)
+                                 vperp, target, ro0_bar, alpha, status)
             if (status /= SPECTRE_FO_OK) return
         end if
         eperp = cos(alpha)*e1 + sin(alpha)*e2
@@ -115,7 +117,7 @@ contains
         end if
         if (axisymmetric()) then
             call phase_residual(alpha, x_gc, y(1:3), owner, b, e1, e2, vpar, &
-                vperp, target, ro0_bar, state%entry_pzeta_defect, status)
+                               vperp, target, ro0_bar, state%entry_pzeta_defect, status)
             if (status /= SPECTRE_FO_OK) return
         end if
         state%active = .true.
@@ -140,11 +142,11 @@ contains
         type(spectre_fo_local_t) :: loc
 
         call spectre_fo_field_local(u, min(int(u(1)) + 1, &
-            spectre_field%data%Mvol), loc)
+                                           spectre_field%data%Mvol), loc)
         grad = norm2(loc%dual(:, 1))
     end function radial_gradient
     subroutine spectre_fo_advance_until_exit(state, dt, ro0_bar, dt_used, y, &
-            owner, exited, status, h_scale)
+                                             owner, exited, status, h_scale)
         type(spectre_fo_state_t), intent(inout) :: state
         real(dp), intent(in) :: dt, ro0_bar
         real(dp), intent(out) :: dt_used, y(5)
@@ -190,19 +192,21 @@ contains
             if (state%h_rk > 0.0_dp) h = min(remaining, hfac*state%h_rk)
             h = min(h, hfac*RK_GYRO_ANGLE*ro0_bar/particle%bmod)
             call rk45_substep(state, h, ro0_bar, status, hfac*RK_GYRO_ANGLE, &
-                particle)
+                              particle)
             if (status /= SPECTRE_FO_OK) then
                 if (status == SPECTRE_FO_LOSS) dt_used = dt_used + h
                 return
             end if
             dt_used = dt_used + h
+            if (spectre_fo_trace_unit /= 0) write (spectre_fo_trace_unit, &
+                                   '(a,6es24.16,i3)') 'F', state%x, state%u, state%owner
             remaining = remaining - h
             angle = angle + h*particle%bmod/ro0_bar
             if (angle < EXIT_CHECK_ANGLE .and. &
                 remaining > epsilon(1.0_dp)*max(dt, 1.0_dp)) cycle
             angle = 0.0_dp
             call gc_map(state, particle, ro0_bar, y, owner, map_status, &
-                exited=exited)
+                        exited=exited)
             if (map_status == SPECTRE_FO_OK) then
                 state%last_y = y
                 if (exited) then
@@ -338,9 +342,9 @@ contains
         step = merge(1, -1, to > from)
         do k = min(from, to), max(from, to) - 1
             call logical_sample([real(k, dp), 0.0_dp, 0.0_dp], k, x, b, bmod, &
-                a_low, e_zeta, status)
+                                a_low, e_zeta, status)
             call logical_sample([real(k, dp), 0.0_dp, 0.0_dp], k + 1, x, b, &
-                bmod, a_high, e_zeta, status)
+                                bmod, a_high, e_zeta, status)
             shift = shift + real(step, dp)*(a_high(3) - a_low(3))
         end do
     end function gauge_shift
@@ -360,7 +364,7 @@ contains
             return
         end if
         call cart_sample(state%x, state%u, state%owner, b, bmod, acov, &
-            e_zeta, status)
+                         e_zeta, status)
         if (status /= SPECTRE_FO_OK) return
         pzeta = dot_product(state%v, e_zeta) + acov(3)/ro0_bar
     end subroutine spectre_fo_canonical_pzeta
@@ -385,7 +389,7 @@ contains
         grazes = 0
         do attempt = 1, 60
             call dp_trial(state, h, ro0_bar, x1, v1, u1, owner1, err, status, &
-                particle, final, stage_sides, trial_angle)
+                          particle, final, stage_sides, trial_angle)
             if (status /= SPECTRE_FO_OK) then
                 ! A failed stage has no embedded error estimate.
                 h = 0.5_dp*h
@@ -416,7 +420,7 @@ contains
                 ! The first sheet of the initial owner, even if the endpoint
                 ! lies beyond a thin intermediate volume.
                 iface_rho = real(merge(state%owner, state%owner - 1, &
-                    owner1 > state%owner), dp)
+                                       owner1 > state%owner), dp)
                 opposite_stage = merge(STAGE_IN, STAGE_OUT, owner1 > state%owner)
                 a = 0.0_dp
                 fa = state%u(1) - iface_rho
@@ -427,7 +431,7 @@ contains
                         *radial_velocity(state%u, state%v) > 0.0_dp) then
                         ! The outgoing normal velocity leaves the home side.
                         state%owner = merge(state%owner + 1, state%owner - 1, &
-                            owner1 > state%owner)
+                                            owner1 > state%owner)
                         if (state%owner > spectre_field%data%Mvol) then
                             state%owner = spectre_field%data%Mvol
                             h = 0.0_dp
@@ -443,7 +447,7 @@ contains
                     ! at t=0 and bracket the later return at positive time.
                     a = h/32.0_dp
                     call dp_trial(state, a, ro0_bar, x1, v1, u1, owner1, err, &
-                        status, particle, final, stage_sides)
+                                  status, particle, final, stage_sides)
                     if (status /= SPECTRE_FO_OK) then
                         h = 0.5_dp*h
                         cycle
@@ -467,7 +471,7 @@ contains
                 do it = 1, 100
                     c = (a*fb - b*fa)/(fb - fa)
                     call dp_trial(state, c, ro0_bar, x1, v1, u1, owner1, err, &
-                        status, particle, final, stage_sides)
+                                  status, particle, final, stage_sides)
                     if (status /= SPECTRE_FO_OK) exit
                     if (btest(stage_sides, opposite_stage)) then
                         ! Shortened trials can expose an earlier opposite sheet
@@ -498,7 +502,7 @@ contains
                     ! belongs to the other volume. Switch and redo the step.
                     ! Repeated grazing must reduce/retry, never bypass landing.
                     state%owner = merge(state%owner + 1, state%owner - 1, &
-                        iface_rho >= real(state%owner, dp))
+                                        iface_rho >= real(state%owner, dp))
                     state%u(1) = iface_rho
                     if (state%owner > spectre_field%data%Mvol) then
                         state%owner = spectre_field%data%Mvol
@@ -518,7 +522,7 @@ contains
                 h = c
                 u1(1) = iface_rho
                 owner1 = merge(state%owner + 1, state%owner - 1, &
-                    iface_rho >= real(state%owner, dp))
+                               iface_rho >= real(state%owner, dp))
             end if
             if (owner1 == state%owner) then
                 ! The seventh RK stage is the accepted endpoint. Reuse its
@@ -541,7 +545,7 @@ contains
         status = SPECTRE_FO_STEP_LIMIT
     end subroutine rk45_substep
     subroutine dp_trial(state, h, ro0_bar, x1, v1, u1, owner1, err, status, &
-            initial, final, stage_sides, gyro_angle)
+                        initial, final, stage_sides, gyro_angle)
         !> Dormand-Prince on logical position and Cartesian velocity. The
         !> physical Lorentz equation is unchanged; du/dt = E^{-1} v replaces
         !> the iterative Cartesian-to-logical inversion at every RK stage.
@@ -573,11 +577,11 @@ contains
         w(3, 1:2) = [3.0_dp/40, 9.0_dp/40]
         w(4, 1:3) = [44.0_dp/45, -56.0_dp/15, 32.0_dp/9]
         w(5, 1:4) = [19372.0_dp/6561, -25360.0_dp/2187, 64448.0_dp/6561, &
-            -212.0_dp/729]
+                     -212.0_dp/729]
         w(6, 1:5) = [9017.0_dp/3168, -355.0_dp/33, 46732.0_dp/5247, &
-            49.0_dp/176, -5103.0_dp/18656]
+                     49.0_dp/176, -5103.0_dp/18656]
         w(7, 1:6) = [35.0_dp/384, 0.0_dp, 500.0_dp/1113, 125.0_dp/192, &
-            -2187.0_dp/6784, 11.0_dp/84]
+                     -2187.0_dp/6784, 11.0_dp/84]
         do i = 1, 7
             qs = q0
             vs = state%v
@@ -626,11 +630,11 @@ contains
         if (cartesian) x1 = qs
         owner1 = logical_owner(u1(1), state%owner)
         eu = h*(71.0_dp/57600*ku(:, 1) - 71.0_dp/16695*ku(:, 3) + &
-            71.0_dp/1920*ku(:, 4) - 17253.0_dp/339200*ku(:, 5) + &
-            22.0_dp/525*ku(:, 6) - 1.0_dp/40*ku(:, 7))
+                71.0_dp/1920*ku(:, 4) - 17253.0_dp/339200*ku(:, 5) + &
+                22.0_dp/525*ku(:, 6) - 1.0_dp/40*ku(:, 7))
         ev = h*(71.0_dp/57600*kv(:, 1) - 71.0_dp/16695*kv(:, 3) + &
-            71.0_dp/1920*kv(:, 4) - 17253.0_dp/339200*kv(:, 5) + &
-            22.0_dp/525*kv(:, 6) - 1.0_dp/40*kv(:, 7))
+                71.0_dp/1920*kv(:, 4) - 17253.0_dp/339200*kv(:, 5) + &
+                22.0_dp/525*kv(:, 6) - 1.0_dp/40*kv(:, 7))
         ex = eu
         if (.not. cartesian) ex = matmul(loc%e, eu)
         err = max(norm2(ex)/rho_l, norm2(ev)/norm2(state%v))/fo_tolerance
@@ -659,7 +663,7 @@ contains
     end subroutine synchronize_position
 
     subroutine solve_gyrophase(x_gc, u_gc, owner, b, e1, e2, vpar, vperp, &
-            target, ro0_bar, alpha, status)
+                               target, ro0_bar, alpha, status)
         real(dp), intent(in) :: x_gc(3), u_gc(3), b(3), e1(3), e2(3)
         real(dp), intent(in) :: vpar, vperp, target, ro0_bar
         integer, intent(in) :: owner
@@ -671,7 +675,7 @@ contains
         if (vperp <= sqrt(epsilon(1.0_dp))) then
             alpha = 0.0_dp
             call phase_residual(alpha, x_gc, u_gc, owner, b, e1, e2, vpar, &
-                vperp, target, ro0_bar, f0, ierr)
+                                vperp, target, ro0_bar, f0, ierr)
             scale = max(abs(target), 1.0_dp)
             if (ierr /= SPECTRE_FO_OK) then
                 status = ierr
@@ -688,7 +692,7 @@ contains
         do i = 0, NPHASE
             a1 = 8.0_dp*atan(1.0_dp)*real(i, dp)/real(NPHASE, dp)
             call phase_residual(a1, x_gc, u_gc, owner, b, e1, e2, vpar, &
-                vperp, target, ro0_bar, f1, ierr)
+                                vperp, target, ro0_bar, f1, ierr)
             if (ierr /= SPECTRE_FO_OK) then
                 have_previous = .false.
                 cycle
@@ -725,7 +729,7 @@ contains
         do i = 1, 60
             amid = 0.5_dp*(a0 + a1)
             call phase_residual(amid, x_gc, u_gc, owner, b, e1, e2, vpar, &
-                vperp, target, ro0_bar, fmid, ierr)
+                                vperp, target, ro0_bar, fmid, ierr)
             if (ierr /= SPECTRE_FO_OK) then
                 status = ierr
                 return
@@ -741,7 +745,7 @@ contains
         status = SPECTRE_FO_OK
     end subroutine solve_gyrophase
     subroutine phase_residual(alpha, x_gc, u_gc, owner, b_gc, e1, e2, vpar, &
-            vperp, target, ro0_bar, residual, status)
+                              vperp, target, ro0_bar, residual, status)
         real(dp), intent(in) :: alpha, x_gc(3), u_gc(3), b_gc(3), e1(3), e2(3)
         real(dp), intent(in) :: vpar, vperp, target, ro0_bar
         integer, intent(in) :: owner
@@ -759,7 +763,7 @@ contains
         if (status /= SPECTRE_FO_OK) return
         v = vpar*b_gc + vperp*eperp
         residual = dot_product(v, e_zeta) &
-            + (acov(3) - gauge_shift(owner, trial_owner))/ro0_bar - target
+                   + (acov(3) - gauge_shift(owner, trial_owner))/ro0_bar - target
     end subroutine phase_residual
     subroutine cart_sample(x, u, owner, b, bmod, acov, e_zeta, status)
         real(dp), intent(in) :: x(3)
@@ -805,7 +809,7 @@ contains
         type(spectre_fo_local_t) :: loc
 
         call spectre_fo_field_local(u, min(int(u(1)) + 1, &
-            spectre_field%data%Mvol), loc)
+                                           spectre_field%data%Mvol), loc)
         vrho = dot_product(v, loc%dual(:, 1))
     end function radial_velocity
 
@@ -828,6 +832,6 @@ contains
         real(dp), intent(in) :: a(3), b(3)
         real(dp) :: c(3)
         c = [a(2)*b(3) - a(3)*b(2), a(3)*b(1) - a(1)*b(3), &
-            a(1)*b(2) - a(2)*b(1)]
+             a(1)*b(2) - a(2)*b(1)]
     end function cross
 end module spectre_fo_hybrid
