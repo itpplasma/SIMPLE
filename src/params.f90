@@ -180,8 +180,21 @@ module params
 
     real(dp) :: v0
 
-    ! > 'full' (Coulomb operator) or 'lorentz_nustar' (monoenergetic pitch scattering)
+    ! > 'full' (Coulomb operator), 'lorentz_nustar' (monoenergetic pitch
+    ! > scattering), or the full operator restricted to one part for
+    ! > diagnostics: 'full_no_pitch' (slowing down and energy diffusion),
+    ! > 'pitch_only' (pitch scattering at fixed energy) or 'drag_only'
+    ! > (slowing down without energy diffusion or pitch scattering)
     character(24) :: collision_model = 'full'
+    ! > Collision step of the full operator: 'adaptive' (substepped, default)
+    ! > or 'euler', one Euler-Maruyama step per microstep in (p, lambda), term
+    ! > for term ASCOT5's mccc_gc_euler step, for marker-wise comparison.
+    character(16) :: collision_scheme = 'adaptive'
+    ! > Noise of the 'euler' scheme: 'random' (the marker's stream),
+    ! > 'counter' (shared with ASCOT5: a function of collision_noise_seed,
+    ! > marker index and microstep) or 'zero' (drift only)
+    character(16) :: collision_noise = 'random'
+    integer(8) :: collision_noise_seed = 0
     ! Stop a collisional marker once E < thermal_stop_factor*T_i(s); 0 disables.
     real(dp) :: thermal_stop_factor = 0.0d0
     ! > Lorentz mode: nu* = R0*nu/(abs(iota)*v0), must be >= 0
@@ -287,7 +300,8 @@ module params
         canonical_ode_relerr, &
         tcut, nturns, debug, &
         class_plot, cut_in_per, fast_class, vmec_B_scale, &
-        vmec_RZ_scale, swcoll, collision_model, thermal_stop_factor, nu_star_standard, &
+        vmec_RZ_scale, swcoll, collision_model, collision_scheme, collision_noise, &
+        collision_noise_seed, thermal_stop_factor, nu_star_standard, &
         lorentz_major_radius_cm, lorentz_iota, radial_electric_potential_slope, &
         deterministic, old_axis_healing, &
         old_axis_healing_boundary, axis_healing_power_law, rho_axis_heal, &
@@ -359,6 +373,8 @@ contains
         gpu_method = to_lower(trim(gpu_method))
         gpu_start_coordinates = to_lower(trim(gpu_start_coordinates))
         collision_model = to_lower(trim(collision_model))
+        collision_scheme = to_lower(trim(collision_scheme))
+        collision_noise = to_lower(trim(collision_noise))
 
         call reset_seed_if_deterministic
 
@@ -459,7 +475,7 @@ contains
             error stop 'particle_energy_eV and facE_al specify inconsistent energies'
 
         select case (trim(collision_model))
-        case ('full')
+        case ('full', 'full_no_pitch', 'pitch_only', 'drag_only')
         case ('lorentz_nustar')
             if (nu_star_standard < 0.0_dp) &
                 error stop 'nu_star_standard must be nonnegative in Lorentz mode'
@@ -468,7 +484,26 @@ contains
             if (abs(lorentz_iota) <= tiny(1.0_dp)) &
                 error stop 'lorentz_iota must be nonzero in Lorentz mode'
         case default
-            error stop 'collision_model must be full or lorentz_nustar'
+            error stop 'collision_model must be full, full_no_pitch, pitch_only, '// &
+                'drag_only or lorentz_nustar'
+        end select
+        select case (trim(collision_scheme))
+        case ('adaptive')
+            if (trim(collision_noise) /= 'random') &
+               error stop 'collision_noise counter or zero needs collision_scheme euler'
+        case ('euler')
+            if (trim(collision_model) == 'lorentz_nustar') &
+                error stop 'collision_scheme euler applies to the full operator only'
+        case default
+            error stop 'collision_scheme must be adaptive or euler'
+        end select
+        select case (trim(collision_noise))
+        case ('random', 'zero')
+        case ('counter')
+            if (collision_noise_seed < 0) &
+                error stop 'collision_noise_seed must be nonnegative'
+        case default
+            error stop 'collision_noise must be random, counter or zero'
         end select
     end subroutine validate_collision_config
 

@@ -185,3 +185,27 @@ module `spectre_kernels_generated`, with four pure scalar subroutines used by
 
 Build and run it as the generators above and format the output with
 `fprettify -c .fprettify`.
+
+Collision operator identities
+-----------------------------
+
+`derive_collision_operator` derives the guiding-centre collision operator of a
+test particle in a Maxwellian field species from the Rosenbluth potentials:
+the Itô drift of the speed (friction plus the two perpendicular half-rates over
+v), the speed diffusion D_par and the pitch rate nu. It proves, with
+`check_identity` (no probe evidence), that
+
+- ASCOT5's `mccc_coefs.h` coefficients (Dpara, Dperp, dDpara, K, nu) are these;
+- SIMPLE's `coleff_local` gives dpp*v0^3 = D_par, dhh*v0 = nu/2 and
+  fpeff*v0^2 = the zero-flux drift D_par' + D_par (2/v - m_a v/T_b), which
+  keeps a Maxwellian of the test species stationary when the Coulomb
+  logarithm L depends on v (D_par' includes dL/dv);
+- upstream ASCOT5's K misses D_par L'/L, and itpplasma/ascot5 (with the
+  Coulomb-logarithm derivative of its PR #23) equals SIMPLE's drift.
+
+It emits no kernel. Run it as the generators above, with an optional output
+path for the JSON suite record:
+
+```sh
+/scratch/derive_collision_operator /scratch/collision_operator_identities.json
+```

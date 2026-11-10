@@ -4,7 +4,7 @@
   "namelists": {
     "config": {
       "source": "src/params.f90",
-      "source_line": 274,
+      "source_line": 287,
       "variables": [
         {
           "name": "notrace_passing",
@@ -114,7 +114,7 @@
           "default_value": "1",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 205,
+          "source_line": 218,
           "validation": {
             "min": 0,
             "max": 2
@@ -727,7 +727,7 @@
           "default_value": "1000",
           "documentation": "RK recoveries one marker may need before it counts as unresolved.",
           "source": "src/params.f90",
-          "source_line": 214
+          "source_line": 227
         },
         {
           "name": "boundary_event_fraction_tolerance",
@@ -859,7 +859,7 @@
           "default_value": ".False.",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 197
+          "source_line": 210
         },
         {
           "name": "class_plot",
@@ -952,15 +952,54 @@
           "extent": [],
           "default": "'full'",
           "default_value": "'full'",
-          "documentation": "'full' (Coulomb operator) or 'lorentz_nustar' (monoenergetic pitch scattering)",
+          "documentation": "'full' (Coulomb operator), 'lorentz_nustar' (monoenergetic pitch scattering), or the full operator restricted to one part for diagnostics: 'full_no_pitch' (slowing down and energy diffusion), 'pitch_only' (pitch scattering at fixed energy) or 'drag_only' (slowing down without energy diffusion or pitch scattering)",
           "source": "src/params.f90",
-          "source_line": 184,
+          "source_line": 188,
           "validation": {
             "choices": [
               "full",
               "lorentz_nustar"
             ]
           }
+        },
+        {
+          "name": "collision_scheme",
+          "type": "character",
+          "kind": "",
+          "length": "16",
+          "shape": [],
+          "extent": [],
+          "default": "'adaptive'",
+          "default_value": "'adaptive'",
+          "documentation": "Collision step of the full operator: 'adaptive' (substepped, default) or 'euler', one Euler-Maruyama step per microstep in (p, lambda), term for term ASCOT5's mccc_gc_euler step, for marker-wise comparison.",
+          "source": "src/params.f90",
+          "source_line": 192
+        },
+        {
+          "name": "collision_noise",
+          "type": "character",
+          "kind": "",
+          "length": "16",
+          "shape": [],
+          "extent": [],
+          "default": "'random'",
+          "default_value": "'random'",
+          "documentation": "Noise of the 'euler' scheme: 'random' (the marker's stream), 'counter' (shared with ASCOT5: a function of collision_noise_seed, marker index and microstep) or 'zero' (drift only)",
+          "source": "src/params.f90",
+          "source_line": 196
+        },
+        {
+          "name": "collision_noise_seed",
+          "type": "integer",
+          "kind": "8",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "0",
+          "default_value": "0",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 197
         },
         {
           "name": "thermal_stop_factor",
@@ -973,7 +1012,7 @@
           "default_value": "0.0d0",
           "documentation": "Stop a collisional marker once E < thermal_stop_factor*T_i(s); 0 disables.",
           "source": "src/params.f90",
-          "source_line": 186
+          "source_line": 199
         },
         {
           "name": "nu_star_standard",
@@ -986,7 +1025,7 @@
           "default_value": "-1.0_dp",
           "documentation": "Lorentz mode: nu* = R0*nu/(abs(iota)*v0), must be >= 0",
           "source": "src/params.f90",
-          "source_line": 188
+          "source_line": 201
         },
         {
           "name": "lorentz_major_radius_cm",
@@ -999,7 +1038,7 @@
           "default_value": "-1.0_dp",
           "documentation": "Lorentz mode: local major radius R0 in cm, must be > 0",
           "source": "src/params.f90",
-          "source_line": 190
+          "source_line": 203
         },
         {
           "name": "lorentz_iota",
@@ -1012,7 +1051,7 @@
           "default_value": "0.0_dp",
           "documentation": "Lorentz mode: local rotational transform, must be nonzero",
           "source": "src/params.f90",
-          "source_line": 192
+          "source_line": 205
         },
         {
           "name": "radial_electric_potential_slope",
@@ -1025,7 +1064,7 @@
           "default_value": "0.0_dp",
           "documentation": "slope of Phi(s) = slope*s, added to the Boozer Hamiltonian H (normalized units)",
           "source": "src/params.f90",
-          "source_line": 195
+          "source_line": 208
         },
         {
           "name": "deterministic",
@@ -1268,7 +1307,7 @@
           "default_value": "2000000000",
           "documentation": "Initialize large so batch mode is not default",
           "source": "src/params.f90",
-          "source_line": 202,
+          "source_line": 215,
           "validation": {
             "min": 1
           }
@@ -1284,7 +1323,7 @@
           "default_value": "42",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 204
+          "source_line": 217
         },
         {
           "name": "particle_index_offset",
@@ -1297,7 +1336,7 @@
           "default_value": "0",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 203
+          "source_line": 216
         },
         {
           "name": "reuse_batch",
@@ -1310,7 +1349,7 @@
           "default_value": ".False.",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 206
+          "source_line": 219
         },
         {
           "name": "field_input",
@@ -1323,7 +1362,7 @@
           "default_value": "''",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 216
+          "source_line": 229
         },
         {
           "name": "coord_input",
@@ -1336,7 +1375,7 @@
           "default_value": "''",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 217
+          "source_line": 230
         },
         {
           "name": "profile_label_file",
@@ -1349,7 +1388,7 @@
           "default_value": "''",
           "documentation": "Optional netCDF profile label s(R, phi, Z) for the collision profiles with integ_coords = REFCOORDS (format: src/profile_label.f90).",
           "source": "src/params.f90",
-          "source_line": 220
+          "source_line": 233
         },
         {
           "name": "marker_weight_file",
@@ -1362,7 +1401,7 @@
           "default_value": "''",
           "documentation": "Optional file with one relative source weight per start.dat row (startmode 2 or 6), written to results.nc marker_weight.",
           "source": "src/params.f90",
-          "source_line": 224
+          "source_line": 237
         },
         {
           "name": "wall_input",
@@ -1375,7 +1414,7 @@
           "default_value": "''",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 221
+          "source_line": 234
         },
         {
           "name": "wall_units",
@@ -1388,7 +1427,7 @@
           "default_value": "'m'",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 226,
+          "source_line": 239,
           "validation": {
             "choices": [
               "m",
@@ -1407,7 +1446,7 @@
           "default_value": "'auto'",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 230,
+          "source_line": 243,
           "validation": {
             "choices": [
               "auto",
@@ -1428,7 +1467,7 @@
           "default_value": "-1000",
           "documentation": "Sentinel: -1000 means user did not set it",
           "source": "src/params.f90",
-          "source_line": 232
+          "source_line": 245
         },
         {
           "name": "crossing_level",
@@ -1441,7 +1480,7 @@
           "default_value": "3",
           "documentation": "SPECTRE interface treatment: only full orbit (3) is supported.",
           "source": "src/params.f90",
-          "source_line": 234,
+          "source_line": 247,
           "validation": {
             "choices": [
               3
@@ -1459,7 +1498,7 @@
           "default_value": "1.5_dp",
           "documentation": "Full orbit near SPECTRE interfaces: entry distance in radial gyroradii and the relative tolerance of RK45 on the sharp per-volume field. 1.5 keeps the switch's p_zeta invariant as at 3 (entry 1 breaks it) at about half the FO time (concept/spectre_loss_study/results/fo-residence).",
           "source": "src/params.f90",
-          "source_line": 239,
+          "source_line": 252,
           "validation": {
             "positive": true
           }
@@ -1475,7 +1514,7 @@
           "default_value": "1.0e-9_dp",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 240,
+          "source_line": 253,
           "validation": {
             "positive": true
           }
@@ -1495,7 +1534,7 @@
           "default_value": "(/32, 64, 32/)",
           "documentation": "Per-volume FO spline points: rho, theta, zeta per field period.",
           "source": "src/params.f90",
-          "source_line": 242
+          "source_line": 255
         },
         {
           "name": "spectre_outer_loss",
@@ -1508,7 +1547,7 @@
           "default_value": "'guiding_centre'",
           "documentation": "Loss at the outer SPECTRE boundary: 'guiding_centre' when the guiding centre crosses it, as for VMEC and GVEC fields; 'particle' when the full orbit touches it, a finite-Larmor-radius loss.",
           "source": "src/params.f90",
-          "source_line": 246
+          "source_line": 259
         },
         {
           "name": "spectre_fo_jump_tol",
@@ -1521,7 +1560,7 @@
           "default_value": "1.0e-3_dp",
           "documentation": "Interfaces whose largest jump of |B|/B or of the field direction is below this are crossed by the guiding centre directly, with an error of that size per crossing, instead of in full orbit.",
           "source": "src/params.f90",
-          "source_line": 250
+          "source_line": 263
         },
         {
           "name": "spectre_sbeg_is_toroidal_flux",
@@ -1534,7 +1573,7 @@
           "default_value": ".false.",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 251
+          "source_line": 264
         },
         {
           "name": "spectre_ncon_r",
@@ -1547,7 +1586,7 @@
           "default_value": "48",
           "documentation": "SPECTRE per-volume Meiss construction grid (n_r, n_th, n_phi). Each volume allocates rank-3 arrays plus batch splines of this size, so the total peak memory scales as Mvol*n_r*n_th*n_phi. spectre_ncon_phi = -1 means automatic: 32 for fields with toroidal harmonics and a minimal phi grid for axisymmetric fields (all n = 0), the dominant memory saver for tokamak cases. A positive value forces that phi count verbatim, bypassing the axisymmetric clamp.",
           "source": "src/params.f90",
-          "source_line": 260,
+          "source_line": 273,
           "validation": {
             "min": 1
           }
@@ -1563,7 +1602,7 @@
           "default_value": "48",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 261,
+          "source_line": 274,
           "validation": {
             "min": 1
           }
@@ -1579,7 +1618,7 @@
           "default_value": "-1",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 262
+          "source_line": 275
         },
         {
           "name": "spectre_ncon_order",
@@ -1592,7 +1631,7 @@
           "default_value": "5",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 263,
+          "source_line": 276,
           "validation": {
             "min": 1
           }
@@ -1608,7 +1647,7 @@
           "default_value": "1000000",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 264,
+          "source_line": 277,
           "validation": {
             "min": 1
           }
@@ -1624,7 +1663,7 @@
           "default_value": "1.0e-2_dp",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 265,
+          "source_line": 278,
           "validation": {
             "positive": true
           }
@@ -1640,7 +1679,7 @@
           "default_value": ".False.",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 198
+          "source_line": 211
         },
         {
           "name": "output_error",
@@ -1711,7 +1750,7 @@
           "default_value": ".False.",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 199
+          "source_line": 212
         },
         {
           "name": "local",
@@ -1724,7 +1763,7 @@
           "default_value": ".true.",
           "documentation": "Removed &config keys. They are still read so that old input files run; a value other than the historical default prints a warning.",
           "source": "src/params.f90",
-          "source_line": 269
+          "source_line": 282
         },
         {
           "name": "loopskip",
@@ -1737,7 +1776,7 @@
           "default_value": "0",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 270
+          "source_line": 283
         },
         {
           "name": "bmod_ref",
@@ -1750,7 +1789,7 @@
           "default_value": "5.0d4",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 271
+          "source_line": 284
         },
         {
           "name": "macrostep_log_ratio",
@@ -1763,7 +1802,7 @@
           "default_value": "1.0d3",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 272
+          "source_line": 285
         }
       ]
     },

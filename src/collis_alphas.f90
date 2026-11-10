@@ -581,6 +581,80 @@ contains
         z = initial
     end subroutine stost
 
+    !> One Euler-Maruyama step of the full operator in (p, lambda), term for
+    !> term the step of ASCOT5 (itpplasma/ascot5 mccc_gc_euler.c), so that
+    !> both codes apply the same kick for the same noise w:
+    !>   p' = p + fpeff*h + sqrt(2*dpp*h)*w(1),
+    !>   lambda' = lambda - 2*dhh*h*lambda + sqrt(2*dhh*h*(1 - lambda**2))*w(2),
+    !> with p' reflected below ASCOT5's cutoff 0.1*sqrt(T_e/m) and lambda'
+    !> reflected at +-1. iswmode as in stost.
+    subroutine stost_euler(z, dtauc, iswmode, w, ierr, s_profile)
+        use finite_check, only: is_finite
+
+        real(wp), intent(inout) :: z(5)
+        real(wp), intent(in) :: dtauc, w(2)
+        integer, intent(in) :: iswmode
+        integer, intent(out) :: ierr
+        real(wp), intent(in), optional :: s_profile
+
+        real(wp) :: p, lam, dpp, dhh, fpeff, cutoff
+        real(wp) :: efcolf_loc(nsorts), velrat_loc(nsorts), enrat_loc(nsorts)
+        real(wp) :: clog_loc(nsorts), bratio_loc(nsorts)
+
+        ierr = 0
+        if (.not. all(is_finite(z)) .or. .not. is_finite(dtauc) .or. &
+            .not. all(is_finite(w)) .or. z(4) <= 0.0_wp .or. &
+            abs(z(5)) > 1.0_wp .or. dtauc < 0.0_wp .or. &
+            iswmode < 1 .or. iswmode > 4) then
+            ierr = 1
+            return
+        end if
+        if (present(s_profile)) then
+            call get_local_coeffs(s_profile, efcolf_loc, velrat_loc, enrat_loc, &
+                                  clog_loc, bratio_loc)
+        else
+            call get_local_coeffs(z(1), efcolf_loc, velrat_loc, enrat_loc, &
+                                  clog_loc, bratio_loc)
+        end if
+        if (all(efcolf_loc == 0.0_wp)) return
+        p = z(4)
+        lam = z(5)
+        call coleff_local(p, efcolf_loc, velrat_loc, enrat_loc, dpp, dhh, fpeff, &
+                          clog_loc, bratio_loc)
+        if (iswmode /= 4) then
+            z(4) = p + fpeff*dtauc
+            if (iswmode < 3) z(4) = z(4) + sqrt(2.0_wp*dpp*dtauc)*w(1)
+            ! enrat(3) = E0/T_e and p = v/v0 with v0**2 = 2*E0/m.
+            cutoff = 0.1_wp/sqrt(2.0_wp*enrat_loc(3))
+            if (z(4) < cutoff) z(4) = 2.0_wp*cutoff - z(4)
+        end if
+        if (iswmode == 1 .or. iswmode == 4) then
+            z(5) = lam - 2.0_wp*dhh*dtauc*lam &
+                   + sqrt(2.0_wp*dhh*dtauc*(1.0_wp - lam**2))*w(2)
+            if (abs(z(5)) > 1.0_wp) z(5) = sign(2.0_wp - abs(z(5)), z(5))
+        end if
+        if (.not. all(is_finite(z)) .or. z(4) <= 0.0_wp) ierr = 1
+    end subroutine stost_euler
+
+    !> Standard normal number (seed, marker, step, component) shared with
+    !> ASCOT5; src/collision_noise.c.
+    function collision_noise_normal(seed, marker, step, component) result(x)
+        use, intrinsic :: iso_c_binding, only: c_double, c_int64_t
+        integer(8), intent(in) :: seed, marker, step, component
+        real(wp) :: x
+        interface
+            function simple_collision_noise_normal(seed, id, step, component) &
+                bind(C, name='simple_collision_noise_normal') result(r)
+                import :: c_double, c_int64_t
+                integer(c_int64_t), value :: seed, id, step, component
+                real(c_double) :: r
+            end function simple_collision_noise_normal
+        end interface
+        x = real(simple_collision_noise_normal(int(seed, c_int64_t), &
+                                         int(marker, c_int64_t), int(step, c_int64_t), &
+                                               int(component, c_int64_t)), wp)
+    end function collision_noise_normal
+
     subroutine getran(irand, ur)
         integer, intent(in) :: irand
         real, intent(out) :: ur

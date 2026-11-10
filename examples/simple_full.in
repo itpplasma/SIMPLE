@@ -121,7 +121,13 @@ cut_in_per = 0d0                 ! cut phi as a fraction of one field period, [0
 swcoll = .false.                 ! .true.: collisions with the background plasma (&profiles);
 !                                  incompatible with classification and full orbit
 collision_model = 'full'         ! 'full': Coulomb operator; 'lorentz_nustar': monoenergetic
-!                                  pitch-angle scattering, p_abs unchanged
+!                                  pitch-angle scattering, p_abs unchanged;
+!                                  'full_no_pitch', 'pitch_only', 'drag_only':
+!                                  one part of the full operator (diagnostics)
+collision_scheme = 'adaptive'    ! 'euler': one Euler step per microstep, as ASCOT5
+collision_noise = 'random'       ! euler noise: 'random', 'counter' (shared with
+!                                  ASCOT5) or 'zero'
+collision_noise_seed = 0         ! seed of the counter noise
 thermal_stop_factor = 0d0        ! stop a collisional marker once E < factor*T_i(s),
 !                                  counted confined (classification 5); 0 disables
 nu_star_standard = -1d0          ! Lorentz mode: nu* = R0*nu/(abs(iota)*v0), >= 0

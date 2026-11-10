@@ -617,6 +617,12 @@ add_test(NAME test_collision_slowing_down COMMAND test_collision_slowing_down.x)
 set_tests_properties(test_collision_slowing_down PROPERTIES
     LABELS "unit;collisions;physics" TIMEOUT 60)
 
+add_executable(test_collision_euler.x test_collision_euler.f90)
+target_link_libraries(test_collision_euler.x simple)
+add_test(NAME test_collision_euler COMMAND test_collision_euler.x)
+set_tests_properties(test_collision_euler PROPERTIES
+    LABELS "unit;collisions;physics" TIMEOUT 60)
+
 add_executable(test_collision_low_speed.x test_collision_low_speed.f90)
 target_link_libraries(test_collision_low_speed.x simple)
 add_test(NAME test_collision_low_speed COMMAND test_collision_low_speed.x)
