@@ -8,7 +8,8 @@ module simple_main
                       ORBIT_FO_NUMERICAL
     use diag_mod, only: icounter
     use collis_alp, only: loacol_alpha, stost, init_collision_profiles, &
-                          configure_lorentz_nustar, stost_lorentz
+                          configure_lorentz_nustar, stost_lorentz, stost_euler, &
+                          collision_noise_normal
     use magfie_sub, only: ALBERT, SPECTRE
     use samplers, only: sample
     use simple_mpi, only: mpi_rank, mpi_ranks, mpi_is_root, mpi_owned_count, &
@@ -132,6 +133,10 @@ module simple_main
     ! Collision operator, fixed by init_collisions from collision_model.
     integer, parameter :: COLLISIONS_FULL = 0, COLLISIONS_LORENTZ_NUSTAR = 1
     integer :: collision_kind = COLLISIONS_FULL
+    !> stost mode of the full operator: 1 all terms, 2 without pitch
+    !> scattering, 4 pitch scattering only (collision_model full_no_pitch,
+    !> pitch_only), for isolating one term against another code.
+    integer :: full_operator_mode = 1
 
 contains
 
@@ -1971,7 +1976,7 @@ contains
         use params, only: am1, am2, Z1, Z2, particle_energy_eV_effective, &
                           collision_model, nu_star_standard, lorentz_major_radius_cm, &
                           lorentz_iota, lorentz_nu, dchichi, slowrate, &
-                          dchichi_norm, slowrate_norm, v0, n_d, n_e
+                          dchichi_norm, slowrate_norm, v0, n_d, n_e, collision_scheme
         use simple_profiles, only: get_plasma_params
 
         real(dp) :: v0_coll, ealpha
@@ -1979,6 +1984,13 @@ contains
 
         ealpha = particle_energy_eV_effective
         collision_kind = COLLISIONS_FULL
+        full_operator_mode = 1
+        if (trim(collision_model) == 'full_no_pitch') full_operator_mode = 2
+        if (trim(collision_model) == 'pitch_only') full_operator_mode = 4
+        if (trim(collision_model) == 'drag_only') full_operator_mode = 3
+        if (trim(collision_scheme) == 'euler') &
+            print '(a,es24.17,a)', ' collision step h = ', dtaumin/v0, &
+            ' s (one euler collision step per microstep)'
         if (trim(collision_model) == 'lorentz_nustar') then
             collision_kind = COLLISIONS_LORENTZ_NUSTAR
             call configure_lorentz_nustar(nu_star_standard, &
@@ -3449,7 +3461,7 @@ contains
                 ! of this position serves both the collision and the stop test.
                 s_collision = 0.0_dp
                 if (collision_kind == COLLISIONS_FULL) s_collision = profile_s(z(1:3))
-                call collide(z, dtaumin, s_collision, ierr_coll)
+                call collide(z, dtaumin, s_collision, ierr_coll, ipart, kt)
                 if (ierr_coll /= 0) then
                     ! Reject the complete drift-plus-collision microstep.
                     ! A collision fault is numerical, never a boundary or hold.
@@ -3755,15 +3767,42 @@ contains
     end subroutine update_momentum
 
     !> s_profile is profile_s(z(1:3)); the Lorentz model does not use it.
-    subroutine collide(z, dt, s_profile, ierr_coll)
+    !> The counter-based noise of the euler scheme needs the marker index and
+    !> the number of microsteps the marker has completed.
+    subroutine collide(z, dt, s_profile, ierr_coll, ipart, step)
+        use params, only: collision_scheme, collision_noise, collision_noise_seed
         real(dp), intent(inout) :: z(5)
         real(dp), intent(in) :: dt, s_profile
         integer, intent(out) :: ierr_coll
+        integer, intent(in), optional :: ipart
+        integer(8), intent(in), optional :: step
+
+        real(dp) :: w(2), u(2)
+        integer(8) :: marker
 
         if (collision_kind == COLLISIONS_LORENTZ_NUSTAR) then
             call stost_lorentz(z, dt, ierr_coll)
+        else if (trim(collision_scheme) == 'euler') then
+            select case (trim(collision_noise))
+            case ('counter')
+                if (.not. (present(ipart) .and. present(step))) error stop &
+                    'collision_noise counter needs the marker index (a wall run)'
+                ! Components 3 and 4 are ASCOT5's speed and pitch noise.
+                marker = int(particle_stream_id(ipart), 8)
+                w(1) = collision_noise_normal(collision_noise_seed, marker, step, 3_8)
+                w(2) = collision_noise_normal(collision_noise_seed, marker, step, 4_8)
+            case ('zero')
+                w = 0.0_dp
+            case default
+                call random_number(u)
+                u(1) = 1.0_dp - u(1)
+                w(1) = sqrt(-2.0_dp*log(u(1)))*cos(twopi*u(2))
+                w(2) = sqrt(-2.0_dp*log(u(1)))*sin(twopi*u(2))
+            end select
+            call stost_euler(z, dt, full_operator_mode, w, ierr_coll, &
+                             s_profile=s_profile)
         else
-            call stost(z, dt, 1, ierr_coll, s_profile=s_profile)
+            call stost(z, dt, full_operator_mode, ierr_coll, s_profile=s_profile)
         end if
         if (ierr_coll /= 0) then
             print *, 'Error in stost: ', ierr_coll, 'z = ', z, 'dtaumin = ', dtaumin

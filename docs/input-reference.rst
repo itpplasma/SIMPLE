@@ -25,7 +25,7 @@ and ``DOC/config.md`` for additional usage, units and option interactions.
 &config
 -------
 
-Source: ``src/params.f90:274``.
+Source: ``src/params.f90:287``.
 
 .. list-table::
    :header-rows: 1
@@ -408,7 +408,25 @@ Source: ``src/params.f90:274``.
      - ``default``
      - ``scalar``
      - ``'full'``
-     - 'full' (Coulomb operator) or 'lorentz_nustar' (monoenergetic pitch scattering)
+     - 'full' (Coulomb operator), 'lorentz_nustar' (monoenergetic pitch scattering), or the full operator restricted to one part for diagnostics: 'full_no_pitch' (slowing down and energy diffusion), 'pitch_only' (pitch scattering at fixed energy) or 'drag_only' (slowing down without energy diffusion or pitch scattering)
+   * - ``collision_scheme``
+     - ``character(len=16)``
+     - ``default``
+     - ``scalar``
+     - ``'adaptive'``
+     - Collision step of the full operator: 'adaptive' (substepped, default) or 'euler', one Euler-Maruyama step per microstep in (p, lambda), term for term ASCOT5's mccc_gc_euler step, for marker-wise comparison.
+   * - ``collision_noise``
+     - ``character(len=16)``
+     - ``default``
+     - ``scalar``
+     - ``'random'``
+     - Noise of the 'euler' scheme: 'random' (the marker's stream), 'counter' (shared with ASCOT5: a function of collision_noise_seed, marker index and microstep) or 'zero' (drift only)
+   * - ``collision_noise_seed``
+     - ``integer``
+     - ``8``
+     - ``scalar``
+     - ``0``
+     -
    * - ``thermal_stop_factor``
      - ``real``
      - ``dp``

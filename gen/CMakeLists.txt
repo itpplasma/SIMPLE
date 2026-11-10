@@ -12,3 +12,6 @@ target_link_libraries(generate_orbit_systems PRIVATE fortsym::fortsym)
 
 add_executable(generate_spectre_kernels generate_spectre_kernels.f90)
 target_link_libraries(generate_spectre_kernels PRIVATE fortsym::fortsym)
+
+add_executable(derive_collision_operator derive_collision_operator.f90)
+target_link_libraries(derive_collision_operator PRIVATE fortsym::fortsym)
