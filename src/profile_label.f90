@@ -13,10 +13,15 @@ module profile_label
     !>   double label(phi, Z, R) finite profile label (netCDF/C order)
     !>   global attribute nfp    number of field periods (integer >= 1)
     !>
-    !> The label is interpolated trilinearly, periodically in phi modulo
-    !> 2*pi/nfp. A position outside the R-Z box is an error: the table must
-    !> cover the whole tracing domain.
+    !> The label is interpolated by tensor-product 4-point (cubic) Lagrange
+    !> stencils, periodically in phi modulo 2*pi/nfp; directions with fewer
+    !> than 4 points use all of them. Trilinear interpolation of a steep edge
+    !> label shifted s by up to 1e-3 between nodes, enough to change the edge
+    !> drag by 10 % where T_e falls steeply (itpplasma/SIMPLE#785). A position
+    !> outside the R-Z box is an error: the table must cover the whole tracing
+    !> domain.
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use plag_coeff_sub, only: plag_coeff_uniform, lagrange_stencil
 
     implicit none
 
@@ -156,8 +161,9 @@ contains
     function profile_label_at(x) result(s)
         real(dp), intent(in) :: x(3)
         real(dp) :: s
-        real(dp) :: qr, qz, qp, wr, wz, wp, c0, c1
-        integer :: ir, iz, ip, jp
+        integer, parameter :: mp = 4
+        real(dp) :: qr, qz, qp, cr(0:0, mp), cz(0:0, mp), cp(0:0, mp)
+        integer :: ir(mp), iz(mp), ip(mp), npr, npz, npp, i, j, k, first
 
         qr = (x(1) - r0)/dr
         qz = (x(3) - z0)/dz
@@ -167,28 +173,27 @@ contains
                 ' outside the profile label table'
             error stop 'profile_label_at: position outside the profile label table'
         end if
-        ir = min(int(qr), nr - 2)
-        iz = min(int(qz), nz - 2)
-        wr = qr - real(ir, dp)
-        wz = qz - real(iz, dp)
+        npr = min(mp, nr)
+        npz = min(mp, nz)
+        npp = min(mp, nphi)
+        call lagrange_stencil(min(int(qr), nr - 2) - (npr - 1)/2 + 1, nr, ir(:npr))
+        call lagrange_stencil(min(int(qz), nz - 2) - (npz - 1)/2 + 1, nz, iz(:npz))
+        call plag_coeff_uniform(npr, 0, qr, real(ir(1) - 1, dp), 1.0_dp, cr(:, :npr))
+        call plag_coeff_uniform(npz, 0, qz, real(iz(1) - 1, dp), 1.0_dp, cz(:, :npz))
         qp = modulo(x(2), period)/dphi
-        ip = min(int(qp), nphi - 1)
-        wp = qp - real(ip, dp)
-        jp = ip + 1
-        if (jp == nphi) jp = 0
-        c0 = bilinear(ir, iz, ip + 1, wr, wz)
-        c1 = bilinear(ir, iz, jp + 1, wr, wz)
-        s = (1.0_dp - wp)*c0 + wp*c1
+        first = min(int(qp), nphi - 1) - (npp - 1)/2
+        do k = 1, npp
+            ip(k) = modulo(first + k - 1, nphi) + 1
+        end do
+        call plag_coeff_uniform(npp, 0, qp, real(first, dp), 1.0_dp, cp(:, :npp))
+        s = 0.0_dp
+        do k = 1, npp
+            do j = 1, npz
+                do i = 1, npr
+                    s = s + cp(0, k)*cz(0, j)*cr(0, i)*table(ir(i), iz(j), ip(k))
+                end do
+            end do
+        end do
     end function profile_label_at
-
-    real(dp) function bilinear(ir, iz, k, wr, wz)
-        integer, intent(in) :: ir, iz, k
-        real(dp), intent(in) :: wr, wz
-
-        bilinear = (1.0_dp - wz)*((1.0_dp - wr)*table(ir + 1, iz + 1, k) &
-                                  + wr*table(ir + 2, iz + 1, k)) &
-                   + wz*((1.0_dp - wr)*table(ir + 1, iz + 2, k) &
-                         + wr*table(ir + 2, iz + 2, k))
-    end function bilinear
 
 end module profile_label

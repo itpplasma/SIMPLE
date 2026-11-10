@@ -26,7 +26,7 @@ program test_profile_radius
     real(dp), parameter :: s_known(3) = [0.09_dp, 0.25_dp, 0.64_dp]
     real(dp), parameter :: theta = 0.7_dp, phi = 0.3_dp
     !> Synthetic profile label table (cases label, label_outside).
-    integer, parameter :: nfp_label = 3, label_nr = 7, label_nz = 5, label_nphi = 8
+    integer, parameter :: nfp_label = 3, label_nr = 7, label_nz = 5, label_nphi = 64
     character(len=64) :: mode
     character(len=1024) :: file
     type(tracer_t) :: norb
@@ -207,9 +207,9 @@ contains
     subroutine check_label(chartmap_file, too_small)
         !> profile_label_file on a REFCOORDS chart: profile_s must be the
         !> tabulated label at the physical position, independently of the
-        !> chart radius. The analytic label is bilinear in (R, Z) plus a
-        !> periodic triangle wave in phi with kinks on grid nodes, which
-        !> trilinear interpolation reproduces exactly.
+        !> chart radius. The analytic label is cubic in (R, Z), which the
+        !> cubic stencils reproduce exactly and trilinear interpolation
+        !> misses by about 1e-3, plus a smooth periodic term in phi.
         use reference_coordinates, only: ref_coords
         use params, only: profile_label_file
         use profile_label, only: profile_label_at
@@ -245,24 +245,26 @@ contains
         call init_profile_radius
 
         do i = 1, n
-            call compare('label', analytic(x(:, i), box), u(:, i), 1.0e-12_dp)
+            call compare('label', analytic(x(:, i), box), u(:, i), 1.0e-6_dp)
         end do
         ! Periodicity in phi modulo 2*pi/nfp of the table.
         do i = 1, n
             xc = x(:, i) + [0.0_dp, real(i - 14, dp)*box(5), 0.0_dp]
-            if (abs(profile_label_at(xc) - analytic(x(:, i), box)) > 1.0e-12_dp) &
+            if (abs(profile_label_at(xc) - analytic(x(:, i), box)) > 1.0e-6_dp) &
                 error stop 'profile label is not periodic in phi'
         end do
     end subroutine check_label
 
     real(dp) function analytic(y, box)
         real(dp), intent(in) :: y(3), box(5)
+        real(dp), parameter :: pi = 3.141592653589793238462643383279_dp
         real(dp) :: a, b
 
         a = (y(1) - box(1))/(box(2) - box(1))
         b = (y(3) - box(3))/(box(4) - box(3))
-        analytic = 0.1_dp + 0.3_dp*a + 0.15_dp*b + 0.1_dp*a*b &
-                   + 0.4_dp*abs(modulo(y(2), box(5)) - 0.5_dp*box(5))/box(5)
+        analytic = 0.1_dp + 0.3_dp*a + 0.15_dp*b + 0.1_dp*a*b + 0.2_dp*a**3 &
+                   - 0.1_dp*a**2*b + 0.15_dp*b**3 &
+                   + 0.05_dp*cos(2.0_dp*pi*y(2)/box(5))
     end function analytic
 
     subroutine write_label_file(path, box)
