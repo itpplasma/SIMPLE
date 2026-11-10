@@ -175,9 +175,12 @@ contains
             ni1 = values(4)
             ni2 = values(5)
         else if (active_profile == TWO_POWER) then
-            call get_two_power(s, Te, Ti1, Ti2, ni1, ni2)
+            call get_two_power(max(0.0_dp, min(1.0_dp, s)), Te, Ti1, Ti2, ni1, ni2)
         else
-            call get_power_series(s, Te, Ti1, Ti2, ni1, ni2)
+            ! The fits are defined on 0 <= s <= 1; beyond the LCFS the edge
+            ! values hold, as for tables, instead of an extrapolated polynomial
+            ! (a W7-X fit gives T_i = -727 eV at s = 1.05).
+            call get_power_series(max(0.0_dp, min(1.0_dp, s)), Te, Ti1, Ti2, ni1, ni2)
         end if
     end subroutine get_plasma_params
 
