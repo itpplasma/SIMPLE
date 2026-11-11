@@ -1247,7 +1247,7 @@ add_executable(test_profile_radius.x test_profile_radius.f90)
 target_link_libraries(test_profile_radius.x simple)
 add_dependencies(test_profile_radius.x chartmap_test_data)
 foreach(case IN ITEMS rho_lcfs vmec canflux boozer meiss albert refcoords
-        meiss_chartmap spectre label label_outside)
+        meiss_chartmap spectre label label_meiss label_albert label_outside)
     if(case STREQUAL "spectre")
         set(case_file ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5)
     else()

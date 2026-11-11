@@ -67,16 +67,20 @@ program test_profile_radius
         call check_states('refcoords', sqrt(s_known), .false., 1.0e-14_dp, &
                           legacy_differs=.true.)
     case ('meiss_chartmap')
-        call init_meiss_chartmap(trim(file))
+        call init_canonical_chartmap(trim(file), MEISS)
         call check_states('meiss_chartmap', sqrt(s_known), .true., 1.0e-10_dp, &
                           legacy_differs=.true.)
     case ('spectre')
         call check_spectre(trim(file))
     case ('label')
-        call check_label(trim(file), .false.)
+        call check_label(trim(file), .false., REFCOORDS)
+    case ('label_meiss')
+        call check_label(trim(file), .false., MEISS)
+    case ('label_albert')
+        call check_label(trim(file), .false., ALBERT)
     case ('label_outside')
         ! Must stop: the table does not cover the marker position.
-        call check_label(trim(file), .true.)
+        call check_label(trim(file), .true., REFCOORDS)
     case default
         error stop 'usage: test_profile_radius.x <case> [file]'
     end select
@@ -109,25 +113,26 @@ contains
         call init_profile_radius
     end subroutine init_vmec_case
 
-    subroutine init_meiss_chartmap(chartmap_file)
-        !> MEISS on a field splined onto a rho_tor chartmap: the coils with
-        !> REFCOORDS chartmap path of the WP-STEL runs.
+    subroutine init_canonical_chartmap(chartmap_file, field_type)
+        !> MEISS or ALBERT on a field splined onto a rho_tor chartmap: the
+        !> coils with REFCOORDS chartmap path of the WP-STEL runs.
         use field_vmec, only: vmec_field_t, create_vmec_field
         use field_splined, only: splined_field_t, create_splined_field
         use reference_coordinates, only: ref_coords
         character(*), intent(in) :: chartmap_file
+        integer, intent(in) :: field_type
         type(vmec_field_t) :: vmec_field
         type(splined_field_t) :: splined
 
         call init_vmec_case(REFCOORDS, chartmap_file)
         call create_vmec_field(vmec_field)
         call create_splined_field(vmec_field, ref_coords, splined)
-        isw_field_type = MEISS
-        call init_field_can(MEISS, splined, canonical_grid_nr, &
+        isw_field_type = field_type
+        call init_field_can(field_type, splined, canonical_grid_nr, &
                             canonical_grid_ntheta, canonical_grid_nphi, &
                             canonical_ode_relerr)
         call init_profile_radius
-    end subroutine init_meiss_chartmap
+    end subroutine init_canonical_chartmap
 
     subroutine check_states(name, r_ref, to_integ, s_tol, legacy_differs)
         character(*), intent(in) :: name
@@ -204,10 +209,10 @@ contains
         call compare('spectre', label, [0.5_dp, theta, phi], 1.0e-12_dp)
     end subroutine check_spectre
 
-    subroutine check_label(chartmap_file, too_small)
-        !> profile_label_file on a REFCOORDS chart: profile_s must be the
-        !> tabulated label at the physical position, independently of the
-        !> chart radius. The analytic label is cubic in (R, Z), which the
+    subroutine check_label(chartmap_file, too_small, field_type)
+        !> profile_label_file on a REFCOORDS chart, or MEISS built on it:
+        !> profile_s must be the tabulated label at the physical position,
+        !> independently of the chart radius and of the canonical state. The analytic label is cubic in (R, Z), which the
         !> cubic stencils reproduce exactly and trilinear interpolation
         !> misses by about 1e-3, plus a smooth periodic term in phi.
         use reference_coordinates, only: ref_coords
@@ -215,14 +220,23 @@ contains
         use profile_label, only: profile_label_at
         character(*), intent(in) :: chartmap_file
         logical, intent(in) :: too_small
+        integer, intent(in) :: field_type
         real(dp), parameter :: pi = 3.141592653589793238462643383279_dp
-        real(dp) :: u(3, 27), x(3, 27), box(5), xc(3)
+        real(dp) :: u(3, 27), x(3, 27), z(3, 27), box(5), xc(3), naive, tol
         integer :: i, j, k, n
 
-        isw_field_type = REFCOORDS
-        field_input = 'wout.nc'
-        coord_input = chartmap_file
-        call init_field(norb, 'wout.nc', 5, 5, 3, 0)
+        ! The ALBERT inverse on this coarse grid round-trips s to ~1e-3.
+        tol = 1.0e-6_dp
+        if (field_type == ALBERT) tol = 2.0e-3_dp
+
+        if (field_type == MEISS .or. field_type == ALBERT) then
+            call init_canonical_chartmap(chartmap_file, field_type)
+        else
+            isw_field_type = REFCOORDS
+            field_input = 'wout.nc'
+            coord_input = chartmap_file
+            call init_field(norb, 'wout.nc', 5, 5, 3, 0)
+        end if
         n = 0
         do i = 1, 3
             do j = 1, 3
@@ -244,9 +258,20 @@ contains
         profile_label_file = 'profile_label.nc'
         call init_profile_radius
 
+        naive = 0.0_dp
         do i = 1, n
-            call compare('label', analytic(x(:, i), box), u(:, i), 1.0e-6_dp)
+            z(:, i) = u(:, i)
+            if (field_type /= REFCOORDS) call ref_to_integ(u(:, i), z(:, i))
+            call compare('label', analytic(x(:, i), box), z(:, i), tol)
+            if (field_type /= REFCOORDS) then
+                ! The label read at the canonical state taken as chart position.
+                call ref_coords%evaluate_cart(z(:, i), xc)
+                xc = [hypot(xc(1), xc(2)), atan2(xc(2), xc(1)), xc(3)]
+                naive = max(naive, abs(analytic(xc, box) - analytic(x(:, i), box)))
+            end if
         end do
+        if (field_type /= REFCOORDS .and. naive < 1.0e-3_dp) &
+            error stop 'case does not discriminate the canonical state from the chart'
         ! Periodicity in phi modulo 2*pi/nfp of the table.
         do i = 1, n
             xc = x(:, i) + [0.0_dp, real(i - 14, dp)*box(5), 0.0_dp]

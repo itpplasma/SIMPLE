@@ -229,7 +229,7 @@ module params
     character(1000) :: field_input = ''
     character(1000) :: coord_input = ''
     !> Optional netCDF profile label s(R, phi, Z) for the collision profiles
-    !> with integ_coords = REFCOORDS (format: src/profile_label.f90).
+    !> with integ_coords = REFCOORDS, MEISS or ALBERT (format: src/profile_label.f90).
     character(1000) :: profile_label_file = ''
     character(1000) :: wall_input = ''
     !> Optional file with one relative source weight per start.dat row

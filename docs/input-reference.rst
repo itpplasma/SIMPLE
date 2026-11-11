@@ -600,7 +600,7 @@ Source: ``src/params.f90:287``.
      - ``default``
      - ``scalar``
      - ``''``
-     - Optional netCDF profile label s(R, phi, Z) for the collision profiles with integ_coords = REFCOORDS (format: src/profile_label.f90).
+     - Optional netCDF profile label s(R, phi, Z) for the collision profiles with integ_coords = REFCOORDS, MEISS or ALBERT (format: src/profile_label.f90).
    * - ``marker_weight_file``
      - ``character(len=1000)``
      - ``default``

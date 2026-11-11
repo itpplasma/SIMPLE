@@ -100,7 +100,8 @@ charts give :math:`s = (\rho/\rho_\mathrm{lcfs})^2`. Radii without
 toroidal-flux meaning (geometric or poloidal chartmaps) are accepted only
 for radially uniform ``&profiles``, unless ``&config profile_label_file``
 supplies the profile radius as a table :math:`s(R,\varphi,Z)`. With
-``integ_coords = 5`` the label is then interpolated trilinearly at the
+``integ_coords = 5`` (reference coordinates), ``3`` (MEISS) or ``4``
+(ALBERT) the label is then interpolated by cubic Lagrange stencils at the
 marker's physical position, which the reference coordinates give, and
 periodically in :math:`\varphi` modulo :math:`2\pi/N_\mathrm{fp}`. The
 netCDF file has dimensions ``R``, ``Z`` and ``phi``, uniform coordinate
