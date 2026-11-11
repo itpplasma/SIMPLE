@@ -51,6 +51,7 @@ module field_splined
     contains
         procedure :: evaluate => splined_evaluate
         procedure :: evaluate_with_der => splined_evaluate_with_der
+        procedure :: evaluate_with_der_basis => splined_evaluate_with_der_basis
         final :: splined_field_cleanup
     end type splined_field_t
 
@@ -103,10 +104,31 @@ contains
         real(dp), intent(out) :: Acov(3), hcov(3), Bmod
         real(dp), intent(out) :: dAcov(3, 3), dhcov(3, 3), dBmod(3)
         real(dp), intent(out), optional :: sqgBctr(3)
+        real(dp) :: u(3), basis(3, 3)
+        logical :: have_basis
+
+        if (present(sqgBctr)) then
+            error stop "sqgBctr not implemented for splined_field_t"
+        end if
+        call splined_evaluate_with_der_basis(self, x, Acov, hcov, Bmod, dAcov, &
+                                             dhcov, dBmod, u, basis, have_basis)
+    end subroutine splined_evaluate_with_der
+
+    !> splined_evaluate_with_der that also returns the reference point u and
+    !> the covariant basis there when the field direction needed it
+    !> (have_basis), so callers do not evaluate the chart again.
+    subroutine splined_evaluate_with_der_basis(self, x, Acov, hcov, Bmod, dAcov, &
+                                               dhcov, dBmod, u, basis, have_basis)
+        class(splined_field_t), intent(in) :: self
+        real(dp), intent(in) :: x(3)
+        real(dp), intent(out) :: Acov(3), hcov(3), Bmod
+        real(dp), intent(out) :: dAcov(3, 3), dhcov(3, 3), dBmod(3)
+        real(dp), intent(out) :: u(3), basis(3, 3)
+        logical, intent(out) :: have_basis
 
         real(dp) :: y_batch(7)
         real(dp) :: dy_batch(3, 7)
-        real(dp) :: u(3), jacobian(3), second(3), basis(3, 3), dbasis(3, 3, 3)
+        real(dp) :: jacobian(3), second(3), dbasis(3, 3, 3)
         real(dp) :: scaled(3, 3), dscaled(3, 3, 3), direction(3), ddirection(3, 3)
         real(dp) :: position(3)
 
@@ -131,6 +153,9 @@ contains
         dhcov(:, 3) = dy_batch(:, 6)
 
         dBmod = dy_batch(:, 7)
+        have_basis = self%regular_cartesian_direction
+        u = 0.0_dp
+        basis = 0.0_dp
         if (self%regular_cartesian_direction) then
             call self%direction_scaling%inverse(x, u, jacobian)
             second = 0.0_dp
@@ -141,18 +166,14 @@ contains
             class default
                 error stop 'splined_evaluate_with_der: unsupported direction scaling'
             end select
-            call self%coords%covariant_basis_with_der(u, basis, dbasis)
+            call self%coords%cart_and_covariant_basis_with_der(u, position, basis, &
+                                                               dbasis)
             call scale_basis_der(jacobian, second, basis, dbasis, scaled, dscaled)
-            call self%coords%evaluate_cart(u, position)
             call cylindrical_field_direction_der(position, scaled, y_batch(4:6), &
                                      transpose(dy_batch(:, 4:6)), direction, ddirection)
          call pullback_covector_der(direction, ddirection, scaled, dscaled, hcov, dhcov)
         end if
-
-        if (present(sqgBctr)) then
-            error stop "sqgBctr not implemented for splined_field_t"
-        end if
-    end subroutine splined_evaluate_with_der
+    end subroutine splined_evaluate_with_der_basis
 
     subroutine create_splined_field(source, ref_coords, field, scaling, &
                                     n_r, n_th, n_phi, xmin, xmax)
