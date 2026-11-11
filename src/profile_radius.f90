@@ -8,10 +8,10 @@ module profile_radius
     !> source field; REFCOORDS integrates in the reference coordinates; SPECTRE
     !> integrates in the stacked volume chart rho_g in [0, Mvol].
     !>
-    !> With &config profile_label_file, REFCOORDS takes the profile radius from
-    !> a tabulated label at the physical position of the marker instead
-    !> (module profile_label), e.g. for geometric chartmaps without flux
-    !> meaning.
+    !> With &config profile_label_file, REFCOORDS, MEISS and ALBERT take the
+    !> profile radius from a tabulated label at the physical position of the
+    !> marker instead (module profile_label), e.g. for geometric chartmaps
+    !> without flux meaning.
     use, intrinsic :: iso_fortran_env, only: dp => real64
 
     implicit none
@@ -96,10 +96,23 @@ contains
 
         if (len_trim(profile_label_file) > 0) then
             ! The label replaces the chart radius; it needs the physical position,
-            ! which REFCOORDS states give through the reference coordinates.
-            if (isw_field_type /= REFCOORDS) &
+            ! which integ_to_ref and the reference coordinates give. MEISS and
+            ! ALBERT qualify only on a field splined onto those coordinates.
+            select case (isw_field_type)
+            case (REFCOORDS)
+            case (MEISS, ALBERT)
+                if (.not. allocated(field_noncan)) &
+                    error stop 'init_profile_radius: canonical source field not set'
+                select type (f => field_noncan)
+                type is (splined_field_t)
+                class default
+                    error stop 'init_profile_radius: profile_label_file with '// &
+                        'MEISS or ALBERT needs a field splined on coord_input'
+                end select
+            case default
                 error stop 'init_profile_radius: profile_label_file needs '// &
-                'integ_coords = REFCOORDS'
+                    'integ_coords = REFCOORDS, MEISS or ALBERT'
+            end select
             if (.not. allocated(ref_coords)) &
                 error stop 'init_profile_radius: no reference coordinates'
             call load_profile_label(profile_label_file)
@@ -237,7 +250,8 @@ contains
         end select
     end function profile_s
 
-    !> Profile label at the physical position of the REFCOORDS state z.
+    !> Profile label at the physical position of the REFCOORDS, MEISS or
+    !> ALBERT state z.
     function label_s_refcoords(z) result(s)
         use reference_coordinates, only: ref_coords
         use profile_label, only: profile_label_at

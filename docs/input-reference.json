@@ -1386,7 +1386,7 @@
           "extent": [],
           "default": "''",
           "default_value": "''",
-          "documentation": "Optional netCDF profile label s(R, phi, Z) for the collision profiles with integ_coords = REFCOORDS (format: src/profile_label.f90).",
+          "documentation": "Optional netCDF profile label s(R, phi, Z) for the collision profiles with integ_coords = REFCOORDS, MEISS or ALBERT (format: src/profile_label.f90).",
           "source": "src/params.f90",
           "source_line": 233
         },
