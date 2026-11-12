@@ -1,8 +1,84 @@
+module chart_call_probe
+    use, intrinsic :: iso_fortran_env, only: dp => real64
+    use libneo_coordinates, only: coordinate_system_t
+    implicit none
+    integer :: separate_calls = 0, combined_calls = 0, combined_der_calls = 0
+    type, extends(coordinate_system_t) :: probe_coordinates_t
+        class(coordinate_system_t), allocatable :: inner
+    contains
+        procedure :: evaluate_cart => probe_cart
+        procedure :: evaluate_cyl => probe_cyl
+        procedure :: covariant_basis => probe_basis
+        procedure :: covariant_basis_with_der => probe_basis_der
+        procedure :: metric_tensor => probe_metric
+        procedure :: from_cyl => probe_from_cyl
+        procedure :: cart_and_covariant_basis => probe_combined
+        procedure :: cart_and_covariant_basis_with_der => probe_combined_der
+    end type
+contains
+    subroutine probe_cart(self, u, x)
+        class(probe_coordinates_t), intent(in) :: self
+        real(dp), intent(in) :: u(3)
+        real(dp), intent(out) :: x(3)
+        separate_calls = separate_calls + 1
+        call self%inner%evaluate_cart(u, x)
+    end subroutine
+    subroutine probe_cyl(self, u, x)
+        class(probe_coordinates_t), intent(in) :: self
+        real(dp), intent(in) :: u(3)
+        real(dp), intent(out) :: x(3)
+        call self%inner%evaluate_cyl(u, x)
+    end subroutine
+    subroutine probe_basis(self, u, e_cov)
+        class(probe_coordinates_t), intent(in) :: self
+        real(dp), intent(in) :: u(3)
+        real(dp), intent(out) :: e_cov(3, 3)
+        separate_calls = separate_calls + 1
+        call self%inner%covariant_basis(u, e_cov)
+    end subroutine
+    subroutine probe_basis_der(self, u, basis, dbasis)
+        class(probe_coordinates_t), intent(in) :: self
+        real(dp), intent(in) :: u(3)
+        real(dp), intent(out) :: basis(3, 3), dbasis(3, 3, 3)
+        separate_calls = separate_calls + 1
+        call self%inner%covariant_basis_with_der(u, basis, dbasis)
+    end subroutine
+    subroutine probe_combined(self, u, x, e_cov)
+        class(probe_coordinates_t), intent(in) :: self
+        real(dp), intent(in) :: u(3)
+        real(dp), intent(out) :: x(3), e_cov(3, 3)
+        combined_calls = combined_calls + 1
+        call self%inner%cart_and_covariant_basis(u, x, e_cov)
+    end subroutine
+    subroutine probe_combined_der(self, u, x, basis, dbasis)
+        class(probe_coordinates_t), intent(in) :: self
+        real(dp), intent(in) :: u(3)
+        real(dp), intent(out) :: x(3), basis(3, 3), dbasis(3, 3, 3)
+        combined_der_calls = combined_der_calls + 1
+        call self%inner%cart_and_covariant_basis_with_der(u, x, basis, dbasis)
+    end subroutine
+    subroutine probe_metric(self, u, g, ginv, sqrtg)
+        class(probe_coordinates_t), intent(in) :: self
+        real(dp), intent(in) :: u(3)
+        real(dp), intent(out) :: g(3, 3), ginv(3, 3), sqrtg
+        call self%inner%metric_tensor(u, g, ginv, sqrtg)
+    end subroutine
+    subroutine probe_from_cyl(self, xcyl, u, ierr)
+        class(probe_coordinates_t), intent(in) :: self
+        real(dp), intent(in) :: xcyl(3)
+        real(dp), intent(out) :: u(3)
+        integer, intent(out) :: ierr
+        call self%inner%from_cyl(xcyl, u, ierr)
+    end subroutine
+end module chart_call_probe
+
 program test_splined_field_derivatives
     !> Verify splined_field_t derivative API against finite differences of
     !> splined_field_t%evaluate in the same coordinates.
 
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use chart_call_probe, only: probe_coordinates_t, separate_calls, &
+                                combined_calls, combined_der_calls
     use simple, only: init_vmec
     use util, only: twopi
     use new_vmec_stuff_mod, only: nper
@@ -14,6 +90,7 @@ program test_splined_field_derivatives
 
     type(coils_field_t) :: raw_coils
     type(splined_field_t) :: splined
+    type(probe_coordinates_t), target :: probe
 
     real(dp) :: dummy
     integer :: n_failed
@@ -37,7 +114,12 @@ program test_splined_field_derivatives
     call create_coils_field('coils.simple', raw_coils)
     call create_splined_field(raw_coils, ref_coords, splined, n_r=24, n_th=25, n_phi=24)
 
+    allocate (probe%inner, source=ref_coords)
+    splined%coords = probe
     phi_period = twopi/real(nper, dp)
+    call check_point(1, phi_period, splined, n_failed)
+    if (separate_calls /= 0 .or. combined_calls == 0 .or. &
+        combined_der_calls /= 1) error stop 'redundant chart evaluation in field path'
 
     do i = 1, n_points
         call check_point(i, phi_period, splined, n_failed)
