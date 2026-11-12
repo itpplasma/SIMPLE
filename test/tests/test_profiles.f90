@@ -29,7 +29,9 @@ program test_profiles
     call test_lorentz_legendre_relaxation(all_passed, n_failed)
     call test_lorentz_large_steps(all_passed, n_failed)
     call test_deterministic_particle_streams(all_passed, n_failed)
+#ifdef USE_FORTPLOT
     call plot_collision_frequency_comparison()
+#endif
 
     if (all_passed) then
         print *, 'All profile tests passed'
@@ -1126,6 +1128,7 @@ contains
         if (s > 0.0d0) h = h/s
     end subroutine normalize
 
+#ifdef USE_FORTPLOT
     subroutine plot_collision_frequency_comparison()
         use fortplot, only: figure, plot, savefig, xlabel, ylabel, title, legend
 
@@ -1197,5 +1200,6 @@ contains
 
         print *, '  Saved plot to collision_frequency_comparison.png'
     end subroutine plot_collision_frequency_comparison
+#endif
 
 end program test_profiles
