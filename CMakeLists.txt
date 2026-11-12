@@ -378,6 +378,11 @@ endif()
 
 itp_add_dependency(libneo REF ${_simple_libneo_ref} TARGET LIBNEO::neo)
 FetchContent_GetProperties(libneo)
+# ItpDeps builds only linked dependency targets; SIMPLE's Python tests also
+# import libneo's f2py extension.
+if(TARGET _efit_to_boozer)
+    set_target_properties(_efit_to_boozer PROPERTIES EXCLUDE_FROM_ALL FALSE)
+endif()
 
 # Consume the scientific-I/O target selected by libneo. The variable fallback
 # keeps released libneo revisions usable while the Fortio migration lands.
