@@ -4,7 +4,8 @@ module spectre_fo_hybrid
     use spectre_fo_field, only: spectre_fo_field_build, spectre_fo_field_local, &
         spectre_fo_field_locate, spectre_fo_local_t, fo_field_axisymmetric, &
                                 FO_AXIS_RADIUS, spectre_fo_interface_jump
-    use spectre_kernels_generated, only: spectre_larmor_lift, spectre_gc_projection
+    use spectre_kernels_generated, only: spectre_larmor_lift, &
+                                         spectre_gc_projection, spectre_flux_gradient
     implicit none
     private
     integer, parameter, public :: SPECTRE_FO_OK = 0
@@ -40,6 +41,18 @@ module spectre_fo_hybrid
     !> Phases tried when the p_zeta match would need |v_par| > |v|, or when
     !> the particle would start outside the outer boundary.
     integer, parameter :: ENTRY_PHASE_TRIES = 8
+    !> Gyroaveraged switches: an instantaneous first-order map makes an
+    !> O(rho*) error in mu at every switch, biased at a current sheet.
+    logical :: averaged_switches = .true.
+    !> Axisymmetric exit: restore the entry p_zeta by moving the averaged
+    !> guiding centre along grad A_zeta at fixed mu.
+    logical :: exit_pzeta_shift = .true.
+    !> Samples per gyroperiod of the gyroaverage.
+    integer, parameter :: AVG_SAMPLES = 32
+    !> Averaged entry: lifts (one gyroperiod each) and mu tolerance.
+    integer, parameter :: ENTRY_AVG_ITER = 5
+    real(dp), parameter :: ENTRY_AVG_TOL = 1.0e-9_dp
+    integer, parameter :: SHIFT_ITER = 12
     type, public :: spectre_fo_state_t
         real(dp) :: x(3) = 0.0_dp
         real(dp) :: v(3) = 0.0_dp
@@ -58,6 +71,10 @@ module spectre_fo_hybrid
         real(dp) :: exit_rho = 0.0_dp
         integer :: owner = 0
         integer :: iface = 0
+        !> This entry or exit used the instantaneous map because the
+        !> gyroaverage failed (entry) or left the volume (exit).
+        logical :: entry_fallback = .false.
+        logical :: exit_fallback = .false.
         logical :: has_y = .false.
         logical :: active = .false.
     end type spectre_fo_state_t
@@ -67,11 +84,15 @@ module spectre_fo_hybrid
     public :: spectre_fo_canonical_pzeta, entry_gyrophase
     public :: spectre_fo_smooth_interface
 contains
-    subroutine spectre_fo_configure(tolerance, grid, particle_loss, jump_tol)
+    subroutine spectre_fo_configure(tolerance, grid, particle_loss, jump_tol, &
+                                    averaged, pzeta_shift)
         real(dp), intent(in) :: tolerance
         integer, intent(in), optional :: grid(3)
         logical, intent(in), optional :: particle_loss
         real(dp), intent(in), optional :: jump_tol
+        !> Studies only: instantaneous switches (averaged = .false.), or the
+        !> averaged axisymmetric exit without the p_zeta shift.
+        logical, intent(in), optional :: averaged, pzeta_shift
         integer :: n(3), k
 
         if (tolerance <= 0.0_dp) &
@@ -81,6 +102,10 @@ contains
         if (present(particle_loss)) particle_outer_loss = particle_loss
         smooth_jump_tol = 0.0_dp
         if (present(jump_tol)) smooth_jump_tol = jump_tol
+        averaged_switches = .true.
+        if (present(averaged)) averaged_switches = averaged
+        exit_pzeta_shift = .true.
+        if (present(pzeta_shift)) exit_pzeta_shift = pzeta_shift
         n = [32, 64, 32]
         if (present(grid)) n = grid
         if (all(spectre_field%data%in == 0)) n(3) = 7
@@ -132,12 +157,23 @@ contains
         target = vpar*dot_product(b, e_zeta) + acov(3)/ro0_bar
         state%entry_pzeta = target
         state%entry_owner = owner
+        alpha = entry_gyrophase(y)
+        if (averaged_switches) then
+            call averaged_entry(state, y, x_gc, b, e1, e2, bmod, vpar, vperp, &
+                                alpha, ro0_bar, status)
+            if (status == SPECTRE_FO_OK .or. status == SPECTRE_FO_LOSS .or. &
+                status == SPECTRE_FO_OUTSIDE) return
+            state%u = y(1:3)
+            state%owner = owner
+            state%entry_fallback = .true.
+            alpha = entry_gyrophase(y)
+        end if
         ! The guiding centre carries no gyrophase, so it is drawn uniformly.
         ! A phase chosen to match p_zeta has no root on a current-carrying
         ! sheet and biases the phase elsewhere (SIMPLE#528). In axisymmetry
         ! the exact invariant p_zeta is matched through v_par instead, at
         ! fixed speed: a correction O(rho*^2) off a sheet, O(rho*) on it.
-        alpha = entry_gyrophase(y)
+        ! This is the fallback of the averaged entry.
         vpar0 = vpar
         vperp0 = vperp
         speed = sqrt(vpar**2 + vperp**2)
@@ -293,6 +329,8 @@ contains
                 call gc_map(state, particle, ro0_bar, y, owner, map_status)
                 if (map_status /= SPECTRE_FO_OK) return
                 if (y(1) >= real(spectre_field%data%Mvol, dp)) return
+                ! A gyroperiod from the boundary would leave the domain.
+                if (averaged_switches) state%exit_fallback = .true.
                 state%last_y = y
                 state%active = .false.
                 exited = .true.
@@ -312,6 +350,11 @@ contains
             call gc_map(state, particle, ro0_bar, y, owner, map_status, &
                 exited=exited)
             if (map_status == SPECTRE_FO_OK) then
+                if (exited .and. averaged_switches) then
+                    call averaged_exit(state, ro0_bar, y, owner, exited)
+                    ! Still straddling: the next check after a gyroperiod.
+                    if (.not. exited) angle = -8.0_dp*atan(1.0_dp)
+                end if
                 state%last_y = y
                 if (exited) then
                     state%active = .false.
@@ -353,7 +396,7 @@ contains
         logical, intent(out), optional :: exited
         type(spectre_fo_local_t) :: gc
         real(dp) :: b(3), b_gc(3), acov(3), e_zeta(3), bmod
-        real(dp) :: vpar, vperp2, rho_l(3), x_gc(3), speed, acov_gc(3)
+        real(dp) :: vpar, x_gc(3), speed, acov_gc(3)
         real(dp) :: e_zeta_gc(3), pzeta, h_zeta, perpendicular_energy, u_gc(3)
         real(dp) :: radial_larmor
         integer :: owner_gc
@@ -378,16 +421,9 @@ contains
         ! GC variables so a short recovery excursion cannot create a hidden
         ! p_zeta kick.
         if (axisymmetric()) pzeta = state%entry_pzeta
-        call spectre_gc_projection(particle%x(1), particle%x(2), particle%x(3), &
-                                   state%v(1), state%v(2), state%v(3), &
-                                   b(1), b(2), b(3), bmod, ro0_bar, &
-                                   x_gc(1), x_gc(2), x_gc(3), vpar, vperp2)
-        rho_l = particle%x - x_gc
-        u_gc = state%u - matmul(rho_l, particle%dual)
-        owner_gc = state%owner
-        call locate_cart(x_gc, u_gc, owner_gc, status)
+        call first_order_gc(state, particle, ro0_bar, x_gc, u_gc, owner_gc, gc, &
+                            status)
         if (status /= SPECTRE_FO_OK) return
-        call spectre_fo_field_local(u_gc, owner_gc, gc)
         b_gc = gc%b
         bmod = gc%bmod
         acov_gc = gc%acov
@@ -436,6 +472,262 @@ contains
         exited = exited .and. abs(particle%bmod - gc%bmod)/gc%bmod <= 0.05_dp
         exited = exited .and. norm2(particle%b - gc%b) <= 0.05_dp
     end subroutine gc_map
+
+    subroutine first_order_gc(state, particle, ro0_bar, x_gc, u_gc, owner_gc, &
+                              gc, status)
+        !> Guiding centre of the particle at first order in the Larmor radius.
+        type(spectre_fo_state_t), intent(in) :: state
+        type(spectre_fo_local_t), intent(in) :: particle
+        real(dp), intent(in) :: ro0_bar
+        real(dp), intent(out) :: x_gc(3), u_gc(3)
+        integer, intent(out) :: owner_gc, status
+        type(spectre_fo_local_t), intent(out) :: gc
+        real(dp) :: vpar, vperp2
+
+        call spectre_gc_projection(particle%x(1), particle%x(2), particle%x(3), &
+                                   state%v(1), state%v(2), state%v(3), &
+                                   particle%b(1), particle%b(2), particle%b(3), &
+                                   particle%bmod, ro0_bar, &
+                                   x_gc(1), x_gc(2), x_gc(3), vpar, vperp2)
+        u_gc = state%u - matmul(particle%x - x_gc, particle%dual)
+        owner_gc = state%owner
+        call locate_cart(x_gc, u_gc, owner_gc, status)
+        if (status /= SPECTRE_FO_OK) return
+        call spectre_fo_field_local(u_gc, owner_gc, gc)
+    end subroutine first_order_gc
+
+    subroutine gyro_moments(start, ro0_bar, one_volume, u_avg, owner_avg, &
+                            mu, vpar, status, crossed)
+        !> Gyroaveraged guiding centre of a scratch copy of the full orbit run
+        !> for one gyroperiod 2 pi ro0/|B(X)|: the first-order X (Cartesian),
+        !> v_par = v.b(X) and v_perp^2 averaged over AVG_SAMPLES equal
+        !> substeps; mu = <v_perp^2>/(2 B(<X>)), v_par from the energy with
+        !> the sign of <v_par>. one_volume fails if the copy changes volume.
+        type(spectre_fo_state_t), intent(in) :: start
+        real(dp), intent(in) :: ro0_bar
+        logical, intent(in) :: one_volume
+        real(dp), intent(out) :: u_avg(3), mu, vpar
+        integer, intent(out) :: owner_avg, status
+        !> Interface crossed by a one_volume copy (0: none).
+        integer, intent(out), optional :: crossed
+        type(spectre_fo_state_t) :: s
+        type(spectre_fo_local_t) :: particle, gc
+        real(dp) :: x_gc(3), u_gc(3), x_sum(3), vpar_sum, vperp2_sum, w, dt
+        real(dp) :: speed
+        integer :: k, owner_gc
+
+        u_avg = 0.0_dp
+        owner_avg = start%owner
+        if (present(crossed)) crossed = 0
+        mu = 0.0_dp
+        vpar = 0.0_dp
+        s = start
+        s%h_rk = 0.0_dp
+        speed = norm2(s%v)
+        call spectre_fo_field_local(s%u, s%owner, particle)
+        call first_order_gc(s, particle, ro0_bar, x_gc, u_gc, owner_gc, gc, &
+                            status)
+        if (status /= SPECTRE_FO_OK) return
+        dt = 8.0_dp*atan(1.0_dp)*ro0_bar/gc%bmod/real(AVG_SAMPLES, dp)
+        x_sum = 0.0_dp
+        vpar_sum = 0.0_dp
+        vperp2_sum = 0.0_dp
+        do k = 1, AVG_SAMPLES
+            call advance_scratch(s, dt, ro0_bar, particle, status)
+            if (status /= SPECTRE_FO_OK) return
+            if (one_volume .and. s%owner /= start%owner) then
+                if (present(crossed)) crossed = min(s%owner, start%owner)
+                status = SPECTRE_FO_LOCATE_FAIL
+                return
+            end if
+            call first_order_gc(s, particle, ro0_bar, x_gc, u_gc, owner_gc, gc, &
+                                status)
+            if (status /= SPECTRE_FO_OK) return
+            ! Equal weights: the trapezoid rule over one period.
+            w = dot_product(s%v, gc%b)
+            x_sum = x_sum + x_gc
+            vpar_sum = vpar_sum + w
+            vperp2_sum = vperp2_sum + speed**2 - w**2
+            if (k == 1) u_avg = u_gc
+        end do
+        owner_avg = owner_gc
+        call locate_cart(x_sum/AVG_SAMPLES, u_avg, owner_avg, status)
+        if (status /= SPECTRE_FO_OK) return
+        call spectre_fo_field_local(u_avg, owner_avg, gc)
+        mu = vperp2_sum/AVG_SAMPLES/(2.0_dp*gc%bmod)
+        if (2.0_dp*mu*gc%bmod > speed**2) then
+            status = SPECTRE_FO_INVALID_STATE
+            return
+        end if
+        vpar = sign(sqrt(speed**2 - 2.0_dp*mu*gc%bmod), vpar_sum)
+    end subroutine gyro_moments
+
+    subroutine advance_scratch(s, dt, ro0_bar, particle, status)
+        !> Full orbit over exactly dt without exit checks.
+        type(spectre_fo_state_t), intent(inout) :: s
+        real(dp), intent(in) :: dt, ro0_bar
+        type(spectre_fo_local_t), intent(inout) :: particle
+        integer, intent(out) :: status
+        real(dp) :: remaining, h
+        integer :: n
+
+        remaining = dt
+        do n = 1, MAX_SUBSTEPS
+            if (remaining <= epsilon(1.0_dp)*max(dt, 1.0_dp)) then
+                status = SPECTRE_FO_OK
+                return
+            end if
+            h = remaining
+            if (s%h_rk > 0.0_dp) h = min(remaining, s%h_rk)
+            h = min(h, RK_GYRO_ANGLE*ro0_bar/particle%bmod)
+            call rk45_substep(s, h, ro0_bar, status, RK_GYRO_ANGLE, particle)
+            if (status /= SPECTRE_FO_OK) return
+            remaining = remaining - h
+        end do
+        status = SPECTRE_FO_STEP_LIMIT
+    end subroutine advance_scratch
+
+    subroutine averaged_exit(state, ro0_bar, y, owner, exited)
+        !> Replace the instantaneous exit (y, owner) by the gyroaveraged one.
+        !> The scratch orbit is discarded, so no time passes; the averaged
+        !> guiding centre is that of half a gyroperiod later. A scratch orbit
+        !> that recrosses the passage's interface means the particle still
+        !> straddles it, so the full orbit continues (exited = .false.); any
+        !> other failure keeps the instantaneous exit.
+        type(spectre_fo_state_t), intent(inout) :: state
+        real(dp), intent(in) :: ro0_bar
+        real(dp), intent(inout) :: y(5)
+        integer, intent(inout) :: owner
+        logical, intent(inout) :: exited
+        real(dp) :: u(3), mu, vpar, speed
+        integer :: owner_avg, status, crossed
+
+        call gyro_moments(state, ro0_bar, .true., u, owner_avg, mu, vpar, &
+                          status, crossed)
+        if (crossed /= 0 .and. crossed == state%iface) then
+            exited = .false.
+            return
+        end if
+        speed = norm2(state%v)
+        if (status == SPECTRE_FO_OK .and. axisymmetric() .and. exit_pzeta_shift) &
+            call shift_to_pzeta(state, ro0_bar, speed, mu, u, owner_avg, vpar, &
+                                status)
+        if (status /= SPECTRE_FO_OK) then
+            state%exit_fallback = .true.
+            return
+        end if
+        y(1:3) = u
+        y(4) = speed/sqrt(2.0_dp)
+        y(5) = vpar/speed
+        owner = owner_avg
+    end subroutine averaged_exit
+
+    subroutine shift_to_pzeta(state, ro0_bar, speed, mu, u, owner, vpar, status)
+        !> Newton steps along grad A_zeta (across the flux surfaces) at fixed
+        !> mu and energy until the guiding-centre p_zeta equals the entry value.
+        type(spectre_fo_state_t), intent(in) :: state
+        real(dp), intent(in) :: ro0_bar, speed, mu
+        real(dp), intent(inout) :: u(3), vpar
+        integer, intent(inout) :: owner
+        integer, intent(out) :: status
+        type(spectre_fo_local_t) :: gc
+        real(dp) :: target, pzeta, g(3), x(3)
+        integer :: it
+
+        do it = 1, SHIFT_ITER
+            call spectre_fo_field_local(u, owner, gc)
+            if (2.0_dp*mu*gc%bmod > speed**2) then
+                status = SPECTRE_FO_INVALID_STATE
+                return
+            end if
+            vpar = sign(sqrt(speed**2 - 2.0_dp*mu*gc%bmod), vpar)
+            target = state%entry_pzeta &
+                     + gauge_shift(state%entry_owner, owner)/ro0_bar
+            pzeta = vpar*dot_product(gc%b, gc%e(:, 3)) + gc%acov(3)/ro0_bar
+            if (abs(pzeta - target) <= 1.0e-12_dp*max(abs(target), 1.0_dp)) then
+                status = SPECTRE_FO_OK
+                return
+            end if
+            call spectre_flux_gradient(gc%b(1), gc%b(2), gc%b(3), gc%bmod, &
+                                  gc%jac, gc%dual(1, 1), gc%dual(2, 1), gc%dual(3, 1), &
+                          gc%dual(1, 2), gc%dual(2, 2), gc%dual(3, 2), g(1), g(2), g(3))
+            x = gc%x + (target - pzeta)*ro0_bar*g/dot_product(g, g)
+            call locate_cart(x, u, owner, status)
+            if (status /= SPECTRE_FO_OK) return
+        end do
+        call spectre_fo_field_local(u, owner, gc)
+        status = SPECTRE_FO_INVALID_STATE
+        if (2.0_dp*mu*gc%bmod > speed**2) return
+        vpar = sign(sqrt(speed**2 - 2.0_dp*mu*gc%bmod), vpar)
+        status = SPECTRE_FO_OK
+    end subroutine shift_to_pzeta
+
+    subroutine averaged_entry(state, y, x_gc, b, e1, e2, bmod, vpar, vperp, &
+                              alpha, ro0_bar, status)
+        !> Lift at the uniform phase alpha with v_perp rescaled until the
+        !> gyroaveraged mu of the lifted particle (gyro_moments, scratch orbit
+        !> discarded) is the guiding-centre mu. Speed and the sign of v_par
+        !> are kept. SPECTRE_FO_OUTSIDE and SPECTRE_FO_LOSS as for the
+        !> instantaneous entry; any other failure asks for that entry.
+        type(spectre_fo_state_t), intent(inout) :: state
+        real(dp), intent(in) :: y(5), x_gc(3), b(3), e1(3), e2(3), bmod
+        real(dp), intent(in) :: vpar, vperp, ro0_bar
+        real(dp), intent(inout) :: alpha
+        integer, intent(out) :: status
+        real(dp) :: speed, mu_gc, mu_k, mu_bar, vpar_k, vperp_k, u(3), w
+        integer :: try, it, owner_avg, locate_status
+        logical :: outside
+
+        speed = sqrt(vpar**2 + vperp**2)
+        mu_gc = vperp**2/(2.0_dp*bmod)
+        outside = .false.
+        do try = 1, ENTRY_PHASE_TRIES
+            if (try > 1) alpha = modulo(alpha + 2.399963229728653_dp, &
+                                        8.0_dp*atan(1.0_dp))
+            mu_k = mu_gc
+            locate_status = 0
+            do it = 1, ENTRY_AVG_ITER
+                vperp_k = sqrt(2.0_dp*mu_k*bmod)
+                if (vperp_k > speed) exit
+                vpar_k = sign(sqrt(speed**2 - vperp_k**2), vpar)
+                call lift(x_gc, b, e1, e2, bmod, vpar_k, vperp_k, alpha, ro0_bar, &
+                          state%x, state%v)
+                state%u = y(1:3)
+                state%owner = state%entry_owner
+                call spectre_fo_field_locate(state%x, state%u, state%owner, &
+                                             locate_status)
+                if (locate_status /= 0) exit
+                state%active = .true.
+                call gyro_moments(state, ro0_bar, .false., u, owner_avg, mu_bar, &
+                                  w, status)
+                state%active = .false.
+                if (status /= SPECTRE_FO_OK) exit
+                if (abs(mu_bar/mu_gc - 1.0_dp) < ENTRY_AVG_TOL) then
+                    if (axisymmetric()) call phase_residual(alpha, x_gc, y(1:3), &
+                                        state%entry_owner, b, e1, e2, vpar_k, vperp_k, &
+                           state%entry_pzeta, ro0_bar, state%entry_pzeta_defect, status)
+                    if (status /= SPECTRE_FO_OK) return
+                    state%active = .true.
+                    return
+                end if
+                mu_k = mu_k*mu_gc/mu_bar
+            end do
+            if (it == 1 .and. locate_status == 1 .and. &
+                state%u(1) > real(spectre_field%data%Mvol, dp)) then
+                ! Only the first lift decides whether this phase is outside.
+                if (particle_outer_loss) then
+                    state%active = .true.
+                    status = SPECTRE_FO_LOSS
+                    return
+                end if
+                outside = .true.
+                cycle
+            end if
+            status = SPECTRE_FO_GYROPHASE_FAIL
+            return
+        end do
+        status = merge(SPECTRE_FO_OUTSIDE, SPECTRE_FO_GYROPHASE_FAIL, outside)
+    end subroutine averaged_entry
     real(dp) function gauge_shift(from, to) result(shift)
         !> Sum of the A_zeta jumps (in the field's acov units) across the
         !> interfaces from volume from to volume to, at theta = zeta = 0.

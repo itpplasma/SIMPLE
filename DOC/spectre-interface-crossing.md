@@ -69,16 +69,33 @@ $$
 $$
 
 The gyrophase $\alpha$ is drawn uniformly, as a hash of the guiding-centre
-state rounded to $10^{-9}$, so it is reproducible for any thread count. In an
+state rounded to $10^{-9}$, so it is reproducible for any thread count.
+
+A lift of this kind is correct only at zeroth order in the Larmor radius:
+the gyroaverage of the lifted particle's magnetic moment differs from the
+GC value $J_\perp$ by $O(\rho_*)$, with a mean over gyrophase that does not
+vanish near a current sheet. The entry therefore calibrates the lift. A
+scratch copy of the lifted particle is integrated for one gyroperiod
+$2\pi\bar\rho_0/B(\mathbf X)$, and the gyroaveraged moment
+$\langle J_\perp\rangle$ is computed with the estimator of the exit (below).
+$\bar v_\perp$ is rescaled by $\sqrt{J_\perp/\langle J_\perp\rangle}$ at fixed
+speed and sign of $\bar v_\parallel$, and the particle is lifted again at the
+same $\alpha$, until $|\langle J_\perp\rangle/J_\perp - 1| < 10^{-9}$, with at most
+five lifts. The scratch orbits are discarded and the FO starts from the last
+lift; no time passes. The particle's $\bar p_\zeta$ is not constrained; its
+difference from the GC value is kept in
+`spectre_fo_state_t%entry_pzeta_defect` in axisymmetry.
+
+If a lift lies outside the outer boundary, up to eight phases in all are
+tried in golden-angle steps (with `spectre_outer_loss = 'particle'` the
+marker is lost instead). If the iteration does not converge or its scratch
+orbit fails, the entry falls back to the instantaneous lift: in an
 axisymmetric field the particle's toroidal canonical momentum
-$\bar p_\zeta = \bar{\mathbf v}\cdot\mathbf e_\zeta + A_\zeta/\bar\rho_0$ is then
+$\bar p_\zeta = \bar{\mathbf v}\cdot\mathbf e_\zeta + A_\zeta/\bar\rho_0$ is
 made equal to the GC value by a secant solve for $\bar v_\parallel$ at fixed
-speed. Off a sheet the correction is $O(\rho_*^2)$; on a current-carrying
-sheet, where no gyrophase matches $\bar p_\zeta$ (SIMPLE#528), it is
-$O(\rho_*)$. If the match would need $|\bar v_\parallel| > |\bar{\mathbf v}|$,
-up to eight phases in all are tried in golden-angle steps before the step
-fails with `SPECTRE_FO_GYROPHASE_FAIL`. The remaining defect is kept in
-`spectre_fo_state_t%entry_pzeta_defect`.
+speed, with the same phase retries and `SPECTRE_FO_GYROPHASE_FAIL` when no
+phase works. `simple.x` prints the number of such instantaneous entries and
+exits after tracing.
 
 ## FO integration
 
@@ -113,14 +130,41 @@ interpolation of the equilibrium: refine `spectre_fo_grid` together with
 
 ## FO to GC
 
-`spectre_fo_to_gc` removes the Larmor vector,
+The first-order map removes the Larmor vector,
 $\mathbf X = \mathbf x - (\bar\rho_0/B)\,\mathbf b\times\bar{\mathbf v}_\perp$,
-locates $\mathbf X$, and sets $v/v_0 = |\bar{\mathbf v}|/\sqrt2$ and
-$J_\perp = \bar v_\perp^2/(2B_{gc})$. In an axisymmetric field
-$\bar v_\parallel = (\bar p_\zeta - A_\zeta/\bar\rho_0)/h_\zeta$ with the
-entry $\bar p_\zeta$ moved to the exit volume's gauge by the summed sheet
-jumps of $A_\zeta$, so FO excursions conserve $\bar p_\zeta$ exactly;
-otherwise $\bar v_\parallel = \bar{\mathbf v}\cdot\mathbf b_{gc}$.
+locates $\mathbf X$, and gives $\bar v_\parallel = \bar{\mathbf v}\cdot\mathbf b(\mathbf X)$
+and $\bar v_\perp^2 = \bar v^2 - \bar v_\parallel^2$. The exit test uses it at one
+instant. When the test passes, a scratch copy of the FO is integrated for one
+gyroperiod $2\pi\bar\rho_0/B(\mathbf X)$ and the map is applied at 32 equally
+spaced times. $\mathbf X$ (Cartesian), $\bar v_\parallel$ and $\bar v_\perp^2$
+are averaged, and the GC is placed at $\langle\mathbf X\rangle$ with
+$J_\perp = \langle\bar v_\perp^2\rangle/(2B(\langle\mathbf X\rangle))$,
+$v/v_0 = |\bar{\mathbf v}|/\sqrt2$ and $\bar v_\parallel$ from the energy with
+the sign of $\langle\bar v_\parallel\rangle$. The scratch orbit is discarded, so
+the GC resumes at the exit time with the state centred half a gyroperiod
+later.
+
+In an axisymmetric field the GC $\bar p_\zeta = \bar v_\parallel h_\zeta +
+A_\zeta/\bar\rho_0$ is then restored to the entry value, moved to the exit
+volume's gauge by the summed sheet jumps of $A_\zeta$. $\mathbf X$ is moved
+along $\nabla A_\zeta/|\nabla A_\zeta|^2$ at fixed $J_\perp$ and energy, with
+$\bar v_\parallel$ from the energy, until $\bar p_\zeta$ agrees to $10^{-12}$
+(at most 12 steps). Fixing $\bar v_\parallel$ from $\bar p_\zeta$ instead would
+bring back the $O(\rho_*)$ bias in $J_\perp$.
+
+If the scratch orbit crosses back over the interface of this FO phase, the
+particle still straddles the sheet and the FO continues; the next exit test
+follows a gyroperiod later. If it reaches another interface or the outer
+boundary, or the average fails, the exit falls back to the instantaneous
+map at the exit time, with $\bar v_\parallel$ from the entry $\bar p_\zeta$ in
+axisymmetry. `spectre_fo_to_gc` is the instantaneous map.
+
+On the axisymmetric tok2vol fixture at $\rho_r = 0.02$
+(`test_spectre_switch_mu_bias`), the mean change of $J_\perp$ per passage
+that the switches add to that of the full orbit is $-3.2\times10^{-4}$
+with the instantaneous maps and below $10^{-10}$ with the averaged ones,
+and $\bar p_\zeta$ is conserved to $10^{-12}$. Each averaged switch costs
+about one extra gyroperiod of FO, an entry one per lift.
 
 ## Losses and limits
 

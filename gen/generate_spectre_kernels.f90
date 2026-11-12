@@ -1,7 +1,8 @@
 program generate_spectre_kernels
     ! Pointwise kernels of the SPECTRE full-orbit path: the cylindrical chart
     ! (R, zeta, Z)(rho, theta, zeta), B = curl A with A_rho = 0, and the
-    ! guiding-centre <-> particle maps at zeroth order in the Larmor radius.
+    ! guiding-centre <-> particle maps at zeroth order in the Larmor radius,
+    ! and grad A_zeta in axisymmetry for the canonical-momentum shift.
     use fortsym_expr, only: expr_t, sym, num, sin, cos, sqrt
     use fortsym_expr, only: operator(+), operator(-), operator(*), &
                             operator(/), operator(**)
@@ -16,6 +17,7 @@ program generate_spectre_kernels
     type(expr_t) :: xg(3), b(3), e1(3), e2(3), bm, vpar, vperp, alpha, ro0
     type(expr_t) :: eperp(3), vp(3), x(3), v(3), rl(3), vpar_out, vperp2
     type(expr_t) :: geometry(22), field(4), lift(6), projection(5)
+    type(expr_t) :: d1(3), d2(3), flux(3)
     character(4096) :: output_dir
     integer :: i, j, unit, ios
 
@@ -117,6 +119,17 @@ program generate_spectre_kernels
     projection(4) = vpar_out
     projection(5) = dot(v, v) - vpar_out**2
 
+    ! Without zeta dependence, d_rho A_zeta = -|J| B^theta and
+    ! d_theta A_zeta = |J| B^rho, so grad A_zeta follows from the local B and
+    ! the dual basis d_i = grad u^i, with B^i = |B| b.d_i.
+    do i = 1, 3
+        d1(i) = sym('d'//digit(i)//'1')
+        d2(i) = sym('d'//digit(i)//'2')
+    end do
+    do i = 1, 3
+        flux(i) = abs_sym(jac)*bm*(dot(b, d1)*d2(i) - dot(b, d2)*d1(i))
+    end do
+
     open (newunit=unit, file=trim(output_dir)//'/spectre_kernels_generated.f90', &
           status='replace', action='write', iostat=ios)
     if (ios /= 0) error stop 'Cannot open generated SPECTRE kernel module'
@@ -136,6 +149,9 @@ program generate_spectre_kernels
     call emit('spectre_gc_projection', projection, &
               words('x1 x2 x3 v1 v2 v3 b1 b2 b3 bmod ro0'), &
               words('xg1 xg2 xg3 vpar vperp2'))
+    call emit('spectre_flux_gradient', flux, &
+              words('b1 b2 b3 bmod jac d11 d21 d31 d12 d22 d32'), &
+              words('g1 g2 g3'))
     write (unit, '(a)') 'end module spectre_kernels_generated'
     close (unit)
 contains

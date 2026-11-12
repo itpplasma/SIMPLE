@@ -27,7 +27,7 @@ module spectre_sympl_orbit
     public :: sympl_spectre_state_t, sympl_spectre_reset, recanon_pphi, &
         orbit_microstep_sympl_spectre, sympl_landing_stats_reset, &
         sympl_landing_stats, sympl_landing_eval_stats
-    public :: sympl_fo_stats, sympl_bulk_recovery_stats
+    public :: sympl_fo_stats, sympl_bulk_recovery_stats, sympl_fo_fallback_stats
     public :: SYMPL_SPECTRE_OK, SYMPL_SPECTRE_LOSS, SYMPL_SPECTRE_STOP
 
     integer, parameter :: SYMPL_SPECTRE_OK = 0
@@ -91,6 +91,8 @@ module spectre_sympl_orbit
     integer, allocatable :: n_landings(:), n_landing_evals(:), n_stops(:)
     integer, allocatable :: n_fo_entries(:), n_fo_exits(:), n_fo_losses(:)
     integer, allocatable :: n_fo_failures(:), n_fo_failure_status(:, :)
+    !> Switches that fell back from the gyroaveraged to the instantaneous map.
+    integer, allocatable :: n_entry_fallbacks(:), n_exit_fallbacks(:)
     !> Bulk GC failures handed to FO recovery: iteration cap, persistent
     !> teleport, persistent Newton failure at the minimum substep.
     integer, parameter :: BULK_ITERS = 1, BULK_TELEPORT = 2, BULK_NEWTON = 3
@@ -642,6 +644,9 @@ contains
         end if
         if (present(exit_rho)) state%fo%exit_rho = exit_rho
         call count_fo_entry
+        if (state%fo%entry_fallback .and. allocated(n_entry_fallbacks)) &
+            n_entry_fallbacks(stats_thread()) = &
+            n_entry_fallbacks(stats_thread()) + 1
         call continue_fo(state, si, f, budget, used, y_out, owner_out, &
             exited, ierr)
     end subroutine start_fo
@@ -674,6 +679,8 @@ contains
         end if
         if (.not. exited) return
         call count_fo_exit
+        if (state%fo%exit_fallback .and. allocated(n_exit_fallbacks)) &
+            n_exit_fallbacks(stats_thread()) = n_exit_fallbacks(stats_thread()) + 1
         call set_home_volume(state, owner_out)
         call recanonicalize(state, si, f, y_out)
     end subroutine continue_fo
@@ -910,7 +917,8 @@ contains
             deallocate(n_landings, n_landing_evals, n_stops, &
                 n_fo_entries, n_fo_exits, &
                 n_fo_losses, n_fo_failures, n_fo_failure_status, &
-                n_bulk_recover, max_landing_resid)
+                n_bulk_recover, max_landing_resid, n_entry_fallbacks, &
+                n_exit_fallbacks)
         end if
         allocate(n_landings(0:nthreads - 1), n_landing_evals(0:nthreads - 1), &
             n_stops(0:nthreads - 1), n_fo_entries(0:nthreads - 1), &
@@ -918,7 +926,10 @@ contains
             n_fo_failures(0:nthreads - 1), &
             n_fo_failure_status(5, 0:nthreads - 1), &
             n_bulk_recover(3, 0:nthreads - 1), &
-            max_landing_resid(0:nthreads - 1))
+           max_landing_resid(0:nthreads - 1), n_entry_fallbacks(0:nthreads - 1), &
+            n_exit_fallbacks(0:nthreads - 1))
+        n_entry_fallbacks = 0
+        n_exit_fallbacks = 0
         n_landings = 0
         n_landing_evals = 0
         n_stops = 0
@@ -995,6 +1006,16 @@ contains
             failure_status = sum(n_fo_failure_status, dim=2)
         end if
     end subroutine sympl_fo_stats
+
+    subroutine sympl_fo_fallback_stats(entry_fallbacks, exit_fallbacks)
+        integer, intent(out) :: entry_fallbacks, exit_fallbacks
+
+        entry_fallbacks = 0
+        exit_fallbacks = 0
+        if (.not. allocated(n_entry_fallbacks)) return
+        entry_fallbacks = sum(n_entry_fallbacks)
+        exit_fallbacks = sum(n_exit_fallbacks)
+    end subroutine sympl_fo_fallback_stats
 
     subroutine count_bulk_recovery(kind)
         integer, intent(in) :: kind

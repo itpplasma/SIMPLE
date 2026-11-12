@@ -366,6 +366,7 @@ contains
             call progress_finalize
         end if
         call print_phase_time('Particle tracing completed')
+        if (isw_field_type == SPECTRE) call print_fo_switch_stats
 
         call gather_results
         if (mpi_is_root()) then
@@ -375,6 +376,19 @@ contains
 
         call stl_wall_finalize(wall)
     end subroutine main
+
+    subroutine print_fo_switch_stats
+        use spectre_sympl_orbit, only: sympl_fo_stats, sympl_fo_fallback_stats
+        integer :: entries, exits, losses, failures, statuses(5)
+        integer :: entry_fallbacks, exit_fallbacks
+
+        call sympl_fo_stats(entries, exits, losses, failures, statuses)
+        if (entries == 0) return
+        call sympl_fo_fallback_stats(entry_fallbacks, exit_fallbacks)
+        print '(a,6(1x,i0))', ' SPECTRE full-orbit entries, exits, losses, '// &
+            'failures, instantaneous entries, instantaneous exits:', entries, &
+            exits, losses, failures, entry_fallbacks, exit_fallbacks
+    end subroutine print_fo_switch_stats
 
     !> Read and validate a simple.in file, including its &profiles group.
     subroutine load_config(config_file)
