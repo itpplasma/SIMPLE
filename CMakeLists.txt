@@ -8,6 +8,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 
 project (SIMPLE)
 enable_language(C Fortran)
+include(${PROJECT_SOURCE_DIR}/cmake/ItpDeps.cmake)
 
 # Optional: enable CGAL-based STL wall intersection support.
 option(SIMPLE_ENABLE_CGAL "Enable CGAL STL wall intersection support" OFF)
@@ -69,8 +70,6 @@ endif()
 
 # Note: Trampoline warnings are applied per-target to SIMPLE code only,
 # not globally, to avoid affecting subprojects like fortplot
-
-include(Util)
 
 set	(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set (CMAKE_Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/include)
@@ -289,7 +288,7 @@ set(CMAKE_MACOSX_RPATH 1)
 # they are not (notably nvfortran, whose .mod format differs from gfortran's),
 # builds a matching HDF5 + NetCDF stack from source. It exports the result as
 # NETCDFINCLUDE_DIR and NETCDF_FLIBS_LIST. SIMPLE consumes those after
-# find_or_fetch(libneo) below, so one toolchain decision drives both projects.
+# adding libneo below, so one toolchain decision drives both projects.
 
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     # Use NVHPC-provided BLAS/LAPACK to avoid pulling in libgomp via system OpenBLAS.
@@ -356,41 +355,34 @@ set(_dependency_versions_file "${CMAKE_CURRENT_SOURCE_DIR}/cmake/dependency_vers
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${_dependency_versions_file}")
 file(READ "${_dependency_versions_file}" _dependency_versions)
-foreach(_dependency IN ITEMS fortnum fortplot)
-    string(TOUPPER "${_dependency}" _dependency_upper)
-    if(NOT DEFINED ${_dependency_upper}_REF)
-        string(JSON ${_dependency_upper}_REF GET "${_dependency_versions}" ${_dependency})
-    endif()
+foreach(_dependency IN ITEMS libneo fortnum fortplot)
+    string(JSON _simple_${_dependency}_ref GET "${_dependency_versions}" ${_dependency})
 endforeach()
 
 # fortnum provides the root finder, the ODE integrators behind the explicit
-# integmodes, and the allocation-free GPU RK5(4) device
-# integrator used by SIMPLE. libneo declares fortnum as well, so this must be
-# declared first: FetchContent keeps the first declaration and silently ignores
-# later pins. Without this ordering, a clean clone can resolve an older
-# libneo-selected fortnum and miss fortnum_ode_rk54_device.mod.
-if(NOT TARGET fortnum)
-    include(FetchContent)
-    FetchContent_Declare(
-        fortnum
-        GIT_REPOSITORY https://github.com/lazy-fortran/fortnum.git
-        GIT_TAG ${FORTNUM_REF}
-    )
-    FetchContent_MakeAvailable(fortnum)
-endif()
+# integmodes, and the allocation-free GPU RK5(4) device integrator used by
+# SIMPLE. Added before libneo, so this pin is built even when libneo asks for
+# another fortnum (which ItpDeps then reports).
+itp_add_dependency(fortnum REF ${_simple_fortnum_ref}
+    GIT_REPOSITORY https://github.com/lazy-fortran/fortnum.git
+    TARGET fortnum)
 
-# libneo's fortfem declares fortplot too; declare SIMPLE's pin first so that
-# FetchContent, which keeps the first declaration, uses it.
+# Added before libneo, whose dependencies may ask for fortplot as well. SIMPLE
+# uses the native plotting API and does not need the fortarray adapter.
 if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
-    include(FetchContent)
-    FetchContent_Declare(
-        fortplot
+    itp_add_dependency(fortplot REF ${_simple_fortplot_ref}
         GIT_REPOSITORY https://github.com/lazy-fortran/fortplot.git
-        GIT_TAG ${FORTPLOT_REF}
-    )
+        TARGET fortplot
+        OPTIONS "FORTPLOT_BUILD_FORTARRAY_ADAPTER OFF")
 endif()
 
-find_or_fetch(libneo)
+itp_add_dependency(libneo REF ${_simple_libneo_ref} TARGET LIBNEO::neo)
+FetchContent_GetProperties(libneo)
+# ItpDeps builds only linked dependency targets; SIMPLE's Python tests also
+# import libneo's f2py extension.
+if(TARGET _efit_to_boozer)
+    set_target_properties(_efit_to_boozer PROPERTIES EXCLUDE_FROM_ALL FALSE)
+endif()
 
 # Consume the scientific-I/O target selected by libneo. The variable fallback
 # keeps released libneo revisions usable while the Fortio migration lands.
@@ -446,13 +438,8 @@ else()
     message(STATUS "CGAL disabled (SIMPLE_ENABLE_CGAL=OFF)")
 endif()
 
-# Fetch fortplot for diagnostic plotting (disabled for nvfortran due to compatibility issues)
+# Diagnostic plotting uses fortplot (disabled for nvfortran due to compatibility issues)
 if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
-    include(FetchContent)
-    # SIMPLE uses the native plotting API and does not need the fortarray adapter.
-    set(FORTPLOT_BUILD_FORTARRAY_ADAPTER OFF CACHE BOOL
-        "Build the optional fortarray plotting adapter")
-    FetchContent_MakeAvailable(fortplot)
     add_compile_definitions(USE_FORTPLOT)
 else()
     message(STATUS "Fortplot disabled for NVHPC compiler (compatibility issues)")

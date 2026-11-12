@@ -11,10 +11,10 @@ endif
 # $(origin) distinguishes a command-line assignment from an env import.
 unexport LIBNEO_REF LIBNEO_PATH
 ifeq ($(origin LIBNEO_REF),command line)
-  override FLAGS += -DLIBNEO_REF=$(LIBNEO_REF)
+  override FLAGS += -DITP_LIBNEO_REF=$(LIBNEO_REF)
 endif
 ifeq ($(origin LIBNEO_PATH),command line)
-  override FLAGS += -DLIBNEO_SOURCE_DIR=$(LIBNEO_PATH)
+  override FLAGS += -DFETCHCONTENT_SOURCE_DIR_LIBNEO=$(LIBNEO_PATH)
 endif
 BUILD_NINJA := $(BUILD_DIR)/build.ninja
 PYTHON_FOR_TESTS := $(if $(wildcard .venv/bin/python),$(CURDIR)/.venv/bin/python,python)
@@ -75,7 +75,7 @@ test-slow: build-deterministic
 	$(CTEST_CMD) -L "slow" -LE "regression|performance|scalability"
 
 # Run only regression tests (requires deterministic FP build without Python interface)
-test-regression: FLAGS += -DLIBNEO_REF=$(GOLDEN_LIBNEO_REF)
+test-regression: FLAGS += -DITP_LIBNEO_REF=$(GOLDEN_LIBNEO_REF)
 test-regression: build-deterministic-nopy
 	export GOLDEN_LIBNEO_REF=$(GOLDEN_LIBNEO_REF); $(CTEST_CMD) -L "regression"
 
@@ -99,12 +99,12 @@ test-all: build
 # Golden record test target
 # Compares current branch against main to enforce strict numerical reproducibility
 # Any differences must be manually reviewed before merging
-test-golden: FLAGS += -DLIBNEO_REF=$(GOLDEN_LIBNEO_REF)
+test-golden: FLAGS += -DITP_LIBNEO_REF=$(GOLDEN_LIBNEO_REF)
 test-golden: build-deterministic-nopy
 	cd $(BUILD_DIR) && ctest --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) -L "golden_record" $(if $(TEST),-R "$(TEST)")
 
 # Golden record tests without deterministic FP (faster, for local iteration only)
-test-golden-fast: FLAGS += -DLIBNEO_REF=$(GOLDEN_LIBNEO_REF)
+test-golden-fast: FLAGS += -DITP_LIBNEO_REF=$(GOLDEN_LIBNEO_REF)
 test-golden-fast: build
 	cd $(BUILD_DIR) && ctest --output-on-failure $(if $(filter 1,$(VERBOSE)),-V) -L "golden_record" $(if $(TEST),-R "$(TEST)")
 

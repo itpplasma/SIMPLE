@@ -99,7 +99,7 @@ regression_suite() {
     # The golden reference runner uses Release; match its architecture flags.
     stamp "build-deterministic-nopy (libneo $golden)" &&
         make build-deterministic-nopy CONFIG=Release \
-            FLAGS="-DLIBNEO_REF=$golden -DENABLE_COVERAGE=OFF -DSIMPLE_TEST_MEMORY_GB=$reg_mem" || return
+            FLAGS="-DITP_LIBNEO_REF=$golden -DENABLE_COVERAGE=OFF -DSIMPLE_TEST_MEMORY_GB=$reg_mem" || return
     # Start the longest serial test first; ctest orders by recorded cost.
     mkdir -p build/test/Testing/Temporary
     printf '%s\n' 'test_fo_gauss2_resolution_large_matched_policy 1 1200' \

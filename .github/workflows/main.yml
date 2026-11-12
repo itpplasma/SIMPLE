@@ -52,6 +52,9 @@ permissions:
   actions: read
 
 jobs:
+  itpdeps-copy:
+    uses: itpplasma/cmake-deps/.github/workflows/check-copy.yml@v1
+
   changed-line-lint:
     permissions:
       contents: read
@@ -500,7 +503,7 @@ jobs:
           # Same libneo as the other jobs: SIMPLE links its frozen-current field.
           REF="${{ inputs.libneo_ref }}"
           make test CONFIG=Fast \
-            FLAGS="-DSIMPLE_ENABLE_CGAL=ON -DENABLE_PYTHON_INTERFACE=ON -DSIMPLE_ENABLE_PYTHON_TOOLS=ON -DLIBNEO_REF=$REF" \
+            FLAGS="-DSIMPLE_ENABLE_CGAL=ON -DENABLE_PYTHON_INTERFACE=ON -DSIMPLE_ENABLE_PYTHON_TOOLS=ON -DITP_LIBNEO_REF=$REF" \
             TEST='test_chartmap_metadata|test_stl_wall_intersection|test_collisional_stl_wall_fast|test_triangle_heat_load|test_profiles' VERBOSE=1
           # A missing Python interface must not silently omit the integration test.
           ctest --test-dir build/test -N -R '^test_collisional_stl_wall_fast$' | grep 'Test.*test_collisional_stl_wall_fast'

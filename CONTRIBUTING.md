@@ -35,8 +35,10 @@ source .venv/bin/activate
 make test-fast                # before every push
 ```
 
-Select dependencies on the first configuration with
-`make LIBNEO_REF=<branch|tag|sha>` or `make LIBNEO_PATH=/path/to/libneo`;
+Dependency commits are pinned in `cmake/dependency_versions.json` and added
+through [ItpDeps](https://github.com/itpplasma/cmake-deps). Select another
+libneo on the first configuration with `make LIBNEO_REF=<branch|tag|sha>` or
+`make LIBNEO_PATH=/path/to/libneo`;
 run `make clean` before changing them or the compiler. To change the profile
 of an existing build, run `make reconfigure CONFIG=Debug` before `make`.
 
