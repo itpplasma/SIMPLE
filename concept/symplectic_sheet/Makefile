@@ -6,7 +6,7 @@ BUILD := $(ROOT)/build
 
 MODULES := sheet_field.f90 fo_sheet.f90 sheet_setup.f90 rk_reference.f90 gc_hybrid.f90
 OBJECTS := $(addprefix $(BUILD)/,$(MODULES:%.f90=%.o))
-PROGRAMS := study_mu_scattering study_hybrid
+PROGRAMS := study_mu_scattering study_hybrid study_crossing
 
 all: $(PROGRAMS:%=$(BUILD)/%.x)
 

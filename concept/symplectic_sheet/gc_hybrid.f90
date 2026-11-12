@@ -10,20 +10,31 @@ module gc_hybrid
     !> (e1, e2 = b x e1), so the gyroradius vector is rho = -(v x b)/|B|.
     !>
     !> FO -> GC is the first-order transform X = x + (v x B)/B^2 with mu chosen
-    !> so that v_par^2/2 + mu B(X) equals the FO energy. GC -> FO lifts with a
-    !> gyrophase: either the GC one (generic) or the one closest to it that
-    !> keeps the exact invariant p_phi (axisymmetric only).
-    use, intrinsic :: iso_fortran_env, only: dp => real64
+    !> so that v_par^2/2 + mu B(X) equals the FO energy (fo_to_gc), or, as in
+    !> SIMPLE, with v_par from a pinned GC p_phi (fo_to_gc_pinned). GC -> FO
+    !> lifts with a gyrophase: either the GC one (generic), the one closest to
+    !> it that keeps the exact invariant p_phi (axisymmetric only), or the rule of
+    !> SIMPLE's spectre_fo_hybrid: a uniform gyrophase hashed from the GC state
+    !> with v_par re-solved at fixed speed to keep p_phi (the GC value, or the
+    !> gyrophase average of the lifted p_phi).
+    use, intrinsic :: iso_fortran_env, only: dp => real64, int64
     use sheet_field, only: field_params_t, region_of, psi_derivatives, &
         psi_value, sheet_distance
     implicit none
     private
 
-    public :: gc_state_t, fo_to_gc, gc_to_fo, gc_advance, fo_velocity
-    public :: LIFT_GYROPHASE, LIFT_PPHI
+    public :: gc_state_t, fo_to_gc, fo_to_gc_pinned, gc_to_fo, gc_advance
+    public :: fo_velocity, gc_bmod, gc_from_moments
+    public :: gc_pphi, entry_gyrophase
+    public :: LIFT_GYROPHASE, LIFT_PPHI, LIFT_UNIFORM, LIFT_UNIFORM_AVG
 
-    integer, parameter :: LIFT_GYROPHASE = 1, LIFT_PPHI = 2
+    integer, parameter :: LIFT_GYROPHASE = 1, LIFT_PPHI = 2, LIFT_UNIFORM = 3
+    integer, parameter :: LIFT_UNIFORM_AVG = 4
+    !> Phases of the trapezoidal gyroaverage, spectrally accurate in the phase.
+    integer, parameter :: NAVG = 16
     real(dp), parameter :: TWOPI = 6.283185307179586_dp
+    real(dp), parameter :: GOLDEN_ANGLE = 2.399963229728653_dp
+    integer, parameter :: ENTRY_PHASE_TRIES = 8
 
     type :: gc_state_t
         real(dp) :: r = 0.0_dp
@@ -109,10 +120,127 @@ contains
         gc%zeta = atan2(dot_product(vperp, e2), dot_product(vperp, e1))
     end function fo_to_gc
 
+    function fo_to_gc_pinned(par, z, pphi_gc, ok) result(gc)
+        !> Exit of SIMPLE's spectre_fo_hybrid in axisymmetry: GC position from
+        !> the first-order transform, v_par such that the GC p_phi equals
+        !> pphi_gc (the entry GC value), speed kept, mu from the energy.
+        !> ok = .false. if that v_par exceeds the speed (then fo_to_gc).
+        type(field_params_t), intent(in) :: par
+        real(dp), intent(in) :: z(4), pphi_gc
+        logical, intent(out) :: ok
+        type(gc_state_t) :: gc
+
+        type(local_field_t) :: lf
+        real(dp) :: v(3), speed, vpar, psi
+
+        gc = fo_to_gc(par, z)
+        v = fo_velocity(par, z)
+        speed = norm2(v)
+        lf = local_field(par, [gc%r, gc%z])
+        psi = psi_value(par, region_of(par, [gc%r, gc%z]), [gc%r, gc%z])
+        vpar = (pphi_gc - psi)/(gc%r*lf%h(2))
+        ok = abs(vpar) <= speed
+        if (.not. ok) return
+        gc%vpar = vpar
+        gc%mu = 0.5_dp*(speed*speed - vpar*vpar)/lf%bmod
+    end function fo_to_gc_pinned
+
+    real(dp) function gc_bmod(par, q) result(bmod)
+        !> |B| at q = (R, Z).
+        type(field_params_t), intent(in) :: par
+        real(dp), intent(in) :: q(2)
+
+        type(local_field_t) :: lf
+
+        lf = local_field(par, q)
+        bmod = lf%bmod
+    end function gc_bmod
+
+    function gc_from_moments(par, q, vperp2, vpar_mean, speed, pin, pphi_gc, &
+                             ok) result(gc)
+        !> GC at q from gyroaveraged moments: mu = <v_perp^2>/(2 B(q)) and v_par
+        !> from the energy with the sign of <v_par>; with pin, v_par from the
+        !> GC p_phi pphi_gc instead and mu from the energy. ok = .false. if the
+        !> energy is exceeded.
+        type(field_params_t), intent(in) :: par
+        real(dp), intent(in) :: q(2), vperp2, vpar_mean, speed, pphi_gc
+        logical, intent(in) :: pin
+        logical, intent(out) :: ok
+        type(gc_state_t) :: gc
+
+        type(local_field_t) :: lf
+        real(dp) :: psi
+
+        lf = local_field(par, q)
+        gc%r = q(1)
+        gc%z = q(2)
+        if (pin) then
+            psi = psi_value(par, region_of(par, q), q)
+            gc%vpar = (pphi_gc - psi)/(q(1)*lf%h(2))
+            ok = abs(gc%vpar) <= speed
+            gc%mu = 0.5_dp*max(speed*speed - gc%vpar**2, 0.0_dp)/lf%bmod
+        else
+            gc%mu = 0.5_dp*vperp2/lf%bmod
+            ok = 2.0_dp*gc%mu*lf%bmod <= speed*speed
+            gc%vpar = sign(sqrt(max(speed*speed - 2.0_dp*gc%mu*lf%bmod, 0.0_dp)), &
+                           vpar_mean)
+        end if
+    end function gc_from_moments
+
+    function gc_pphi(par, gc) result(p)
+        !> Canonical toroidal momentum of the GC, R v_par b_phi + psi(X).
+        type(field_params_t), intent(in) :: par
+        type(gc_state_t), intent(in) :: gc
+        real(dp) :: p
+
+        type(local_field_t) :: lf
+
+        lf = local_field(par, [gc%r, gc%z])
+        p = gc%r*gc%vpar*lf%h(2) + psi_value(par, region_of(par, [gc%r, gc%z]), &
+                                             [gc%r, gc%z])
+    end function gc_pphi
+
+    pure real(dp) function entry_gyrophase(y) result(alpha)
+        !> Uniform gyrophase in [0, 2 pi) hashed from the state y rounded to
+        !> 1e-9, as in SIMPLE's spectre_fo_hybrid.
+        real(dp), intent(in) :: y(:)
+        integer(int64), parameter :: MASK32 = 4294967295_int64
+        integer(int64), parameter :: MULT = 73244475_int64
+        real(dp), parameter :: QUANTUM = 1.0e-9_dp
+        integer(int64) :: q, h
+        integer :: i
+
+        h = 2166136261_int64
+        do i = 1, size(y)
+            q = nint(y(i)/QUANTUM, int64)
+            h = mix32(ieor(h, iand(q, MASK32)))
+            h = mix32(ieor(h, iand(shiftr(q, 32), MASK32)))
+        end do
+        alpha = TWOPI*real(h, dp)/4294967296.0_dp
+
+    contains
+
+        pure integer(int64) function mix32(x) result(m)
+            integer(int64), intent(in) :: x
+
+            m = iand(ieor(shiftr(x, 16), x)*MULT, MASK32)
+            m = iand(ieor(shiftr(m, 16), m)*MULT, MASK32)
+            m = ieor(shiftr(m, 16), m)
+        end function mix32
+
+    end function entry_gyrophase
+
     subroutine gc_to_fo(par, gc, lift, pphi_target, z, pphi, ok)
         !> Particle state of a GC. LIFT_PPHI picks the gyrophase nearest to
         !> gc%zeta at which the FO p_phi equals pphi_target; ok = .false. if
-        !> there is none (then the GC gyrophase is used).
+        !> there is none (then the GC gyrophase is used). LIFT_UNIFORM draws the
+        !> gyrophase from entry_gyrophase and solves for v_par at fixed speed so
+        !> that the FO p_phi equals pphi_target, retrying up to
+        !> ENTRY_PHASE_TRIES golden-angle phases; ok = .false. if all fail (then
+        !> the first phase is used with the GC v_par). LIFT_UNIFORM_AVG does the
+        !> same but targets the gyrophase average of the lifted p_phi at the GC
+        !> v_par, ignoring pphi_target, so that the v_par correction has zero
+        !> mean over the phase.
         type(field_params_t), intent(in) :: par
         type(gc_state_t), intent(in) :: gc
         integer, intent(in) :: lift
@@ -121,23 +249,47 @@ contains
         logical, intent(out) :: ok
 
         integer, parameter :: NSCAN = 64
-        real(dp) :: zeta, a, b, fa, fb, c, fc, best, d
-        integer :: k, it
+        real(dp) :: zeta, a, b, fa, fb, c, fc, best, d, speed, vpar, h_phi, target
+        integer :: k, it, try
+        type(local_field_t) :: lf0
 
         ok = .true.
         zeta = gc%zeta
-        if (lift == LIFT_PPHI) then
+        lf0 = local_field(par, [gc%r, gc%z])
+        speed = sqrt(gc%vpar**2 + 2.0_dp*gc%mu*lf0%bmod)
+        vpar = gc%vpar
+        target = pphi_target
+        if (lift == LIFT_UNIFORM_AVG) then
+            target = 0.0_dp
+            do k = 0, NAVG - 1
+                target = target + lifted_pphi(TWOPI*real(k, dp)/NAVG, gc%vpar)/NAVG
+            end do
+        end if
+        if (lift == LIFT_UNIFORM .or. lift == LIFT_UNIFORM_AVG) then
+            h_phi = gc%r*lf0%h(2)
+            zeta = entry_gyrophase([gc%r, gc%z, gc%vpar, gc%mu])
+            ok = .false.
+            do try = 1, ENTRY_PHASE_TRIES
+                call match_vpar(zeta, vpar, ok)
+                if (ok) exit
+                zeta = modulo(zeta + GOLDEN_ANGLE, TWOPI)
+            end do
+            if (.not. ok) then
+                zeta = entry_gyrophase([gc%r, gc%z, gc%vpar, gc%mu])
+                vpar = gc%vpar
+            end if
+        else if (lift == LIFT_PPHI) then
             ok = .false.
             best = huge(1.0_dp)
             do k = 0, NSCAN - 1
                 a = gc%zeta + TWOPI*real(k, dp)/NSCAN
                 b = a + TWOPI/NSCAN
-                fa = lifted_pphi(a) - pphi_target
-                fb = lifted_pphi(b) - pphi_target
+                fa = lifted_pphi(a, gc%vpar) - pphi_target
+                fb = lifted_pphi(b, gc%vpar) - pphi_target
                 if (fa*fb > 0.0_dp) cycle
                 do it = 1, 60
                     c = 0.5_dp*(a + b)
-                    fc = lifted_pphi(c) - pphi_target
+                    fc = lifted_pphi(c, gc%vpar) - pphi_target
                     if (fa*fc <= 0.0_dp) then
                         b = c
                     else
@@ -153,19 +305,54 @@ contains
                 end if
             end do
         end if
-        call lifted_state(zeta, z, pphi)
+        call lifted_state(zeta, z, pphi, vpar)
 
     contains
 
-        real(dp) function lifted_pphi(zt) result(p)
+        subroutine match_vpar(zt, w, found)
+            !> Secant for v_par at fixed speed, as match_pzeta in SIMPLE.
             real(dp), intent(in) :: zt
+            real(dp), intent(inout) :: w
+            logical, intent(out) :: found
+
+            real(dp) :: w0, w1, w2, f0, f1, scale
+            integer :: i
+
+            found = .false.
+            scale = max(abs(target), 1.0_dp)
+            w0 = gc%vpar
+            f0 = lifted_pphi(zt, w0) - target
+            if (abs(f0) <= 1.0e-12_dp*scale) then
+                w = w0
+                found = .true.
+                return
+            end if
+            w1 = w0 - f0/h_phi
+            do i = 1, 60
+                if (abs(w1) > speed) return
+                f1 = lifted_pphi(zt, w1) - target
+                if (abs(f1) <= 1.0e-12_dp*scale) then
+                    w = w1
+                    found = .true.
+                    return
+                end if
+                if (abs(f1 - f0) < tiny(1.0_dp)) return
+                w2 = w1 - f1*(w1 - w0)/(f1 - f0)
+                w0 = w1
+                f0 = f1
+                w1 = w2
+            end do
+        end subroutine match_vpar
+
+        real(dp) function lifted_pphi(zt, w) result(p)
+            real(dp), intent(in) :: zt, w
             real(dp) :: zz(4)
 
-            call lifted_state(zt, zz, p)
+            call lifted_state(zt, zz, p, w)
         end function lifted_pphi
 
-        subroutine lifted_state(zt, zz, p)
-            real(dp), intent(in) :: zt
+        subroutine lifted_state(zt, zz, p, w)
+            real(dp), intent(in) :: zt, w
             real(dp), intent(out) :: zz(4), p
 
             type(local_field_t) :: lf
@@ -173,8 +360,8 @@ contains
 
             lf = local_field(par, [gc%r, gc%z])
             call frame(lf%h, e1, e2)
-            vperp = sqrt(2.0_dp*gc%mu*lf%bmod)
-            v = gc%vpar*lf%h + vperp*(cos(zt)*e1 + sin(zt)*e2)
+            vperp = sqrt(max(speed*speed - w*w, 0.0_dp))
+            v = w*lf%h + vperp*(cos(zt)*e1 + sin(zt)*e2)
             x = [gc%r, 0.0_dp, gc%z] - cross(v, lf%b)/lf%bmod**2
             zz = [x(1), x(3), v(1), v(3) - par%f_tor*log(x(1))]
             p = x(1)*v(2) + psi_value(par, region_of(par, zz(1:2)), zz(1:2))
