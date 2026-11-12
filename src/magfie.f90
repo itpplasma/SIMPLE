@@ -233,15 +233,21 @@ end subroutine magfie_refcoords
         real(dp) :: g(3, 3), ginv_u(3, 3), ginv_x(3, 3)
         real(dp) :: u_ref(3), J
         real(dp) :: e_cov(3, 3), jac_signed
-        real(dp) :: sqrtg_abs
+        real(dp) :: sqrtg_abs, u_dir(3), basis(3, 3)
+        logical :: have_basis
 
-        call field%evaluate_with_der(x, Acov, hcovar, Bmod_local, dAcov, dhcov, &
-                                     dBmod)
+        call field%evaluate_with_der_basis(x, Acov, hcovar, Bmod_local, dAcov, dhcov, &
+                                           dBmod, u_dir, basis, have_basis)
         bmod = Bmod_local
         bder = dBmod/max(bmod, 1.0d-30)
 
         call scaled_to_ref_coords(field%coords, x, u_ref, J)
-        call field%coords%covariant_basis(u_ref, e_cov)
+        ! The field direction already evaluated the chart basis at this point.
+        if (have_basis .and. all(u_dir == u_ref)) then
+            e_cov = basis
+        else
+            call field%coords%covariant_basis(u_ref, e_cov)
+        end if
         call metric_from_basis(e_cov, g, ginv_u, sqrtg_abs)
 
         jac_signed = signed_jacobian(e_cov)
