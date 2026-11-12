@@ -53,12 +53,14 @@ def read_rows(path: Path) -> list[list[float]]:
 
 
 def main() -> int:
-    if len(sys.argv) != 4:
+    if len(sys.argv) not in (4, 5):
         print(
-            "usage: test_class_scores_driver.py SIMPLE_X WOUT_FILE SCORE_TEST",
+            "usage: test_class_scores_driver.py SIMPLE_X WOUT_FILE SCORE_TEST [TRACE_TIMEOUT]",
             file=sys.stderr,
         )
         return 2
+
+    trace_timeout = int(sys.argv[4]) if len(sys.argv) == 5 else 90
 
     controls = subprocess.run(
         [str(Path(sys.argv[3]).resolve()), "--legacy-controls"],
@@ -83,7 +85,8 @@ def main() -> int:
         )
 
     case = run_simple_case(
-        Path(sys.argv[1]).resolve(), Path(sys.argv[2]).resolve(), "class_scores", CONFIG
+        Path(sys.argv[1]).resolve(), Path(sys.argv[2]).resolve(), "class_scores", CONFIG,
+        timeout=trace_timeout,
     )
 
     scores = read_rows(case / "class_scores.dat")
