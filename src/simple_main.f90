@@ -620,7 +620,8 @@ contains
         use field_splined, only: splined_field_t, create_splined_field
         use field_vmec, only: vmec_field_t
         use reference_coordinates, only: init_reference_coordinates, ref_coords
-        use params, only: coord_input, field_input, wall_input, wall_units
+        use params, only: coord_input, field_input, wall_input, wall_units, &
+                          field_tables_order
         use field_can_mod, only: init_field_can_boozer_chartmap_compact, &
                                  set_refcoords_transform
         use libneo_coordinates, only: vmec_coordinate_system_t
@@ -741,6 +742,11 @@ contains
                     error stop
                 end if
 
+                if (isw_field_type == REFCOORDS .and. field_tables_order > 0) then
+                    call init_gc_tables(trim(field_input))
+                    call print_phase_time('Guiding-centre field tables completed')
+                    return
+                end if
                 call field_from_file(field_input, field_temp)
                 call print_phase_time('Field from file loading completed')
 
@@ -879,11 +885,26 @@ contains
         end if
     end function outside_meiss_domain
 
-    logical function is_spectre_input(path)
-        use field, only: is_spectre_file
+    !> Tables from a coil file, or from a solved frozen-current field (libneo
+    !> frozen_current.x field_file, HDF5).
+    subroutine init_gc_tables(path)
+        use field_gc_tables_input, only: build_gc_tables_from_file
+        use magfie_sub, only: gc_tables
+        use params, only: field_tables_order
+        use reference_coordinates, only: ref_coords
         character(*), intent(in) :: path
 
-        is_spectre_input = is_spectre_file(path)
+        call build_gc_tables_from_file(path, ref_coords, field_tables_order, gc_tables)
+    end subroutine init_gc_tables
+
+    !> With field tables an HDF5 field_input is a frozen-current field, which
+    !> shares the HDF5 signature with SPECTRE equilibria.
+    logical function is_spectre_input(path)
+        use field, only: is_spectre_file
+        use params, only: field_tables_order
+        character(*), intent(in) :: path
+
+        is_spectre_input = field_tables_order == 0 .and. is_spectre_file(path)
     end function is_spectre_input
 
     logical function is_vmecpp_input(path)

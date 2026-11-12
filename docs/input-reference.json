@@ -4,7 +4,7 @@
   "namelists": {
     "config": {
       "source": "src/params.f90",
-      "source_line": 287,
+      "source_line": 291,
       "variables": [
         {
           "name": "notrace_passing",
@@ -1365,46 +1365,20 @@
           "source_line": 229
         },
         {
-          "name": "coord_input",
-          "type": "character",
+          "name": "field_tables_order",
+          "type": "integer",
           "kind": "",
-          "length": "1000",
+          "length": "",
           "shape": [],
           "extent": [],
-          "default": "''",
-          "default_value": "''",
-          "documentation": "",
-          "source": "src/params.f90",
-          "source_line": 230
-        },
-        {
-          "name": "profile_label_file",
-          "type": "character",
-          "kind": "",
-          "length": "1000",
-          "shape": [],
-          "extent": [],
-          "default": "''",
-          "default_value": "''",
-          "documentation": "Optional netCDF profile label s(R, phi, Z) for the collision profiles with integ_coords = REFCOORDS, MEISS or ALBERT (format: src/profile_label.f90).",
+          "default": "0",
+          "default_value": "0",
+          "documentation": "Spline order of the guiding-centre field tables in reference coordinates (isw_field_type = 5) for a coil field_input or a frozen-current field (.h5, libneo frozen_current.x field_file); 0 keeps the splined field.",
           "source": "src/params.f90",
           "source_line": 233
         },
         {
-          "name": "marker_weight_file",
-          "type": "character",
-          "kind": "",
-          "length": "1000",
-          "shape": [],
-          "extent": [],
-          "default": "''",
-          "default_value": "''",
-          "documentation": "Optional file with one relative source weight per start.dat row (startmode 2 or 6), written to results.nc marker_weight.",
-          "source": "src/params.f90",
-          "source_line": 237
-        },
-        {
-          "name": "wall_input",
+          "name": "coord_input",
           "type": "character",
           "kind": "",
           "length": "1000",
@@ -1417,6 +1391,45 @@
           "source_line": 234
         },
         {
+          "name": "profile_label_file",
+          "type": "character",
+          "kind": "",
+          "length": "1000",
+          "shape": [],
+          "extent": [],
+          "default": "''",
+          "default_value": "''",
+          "documentation": "Optional netCDF profile label s(R, phi, Z) for the collision profiles with integ_coords = REFCOORDS, MEISS or ALBERT (format: src/profile_label.f90).",
+          "source": "src/params.f90",
+          "source_line": 237
+        },
+        {
+          "name": "marker_weight_file",
+          "type": "character",
+          "kind": "",
+          "length": "1000",
+          "shape": [],
+          "extent": [],
+          "default": "''",
+          "default_value": "''",
+          "documentation": "Optional file with one relative source weight per start.dat row (startmode 2 or 6), written to results.nc marker_weight.",
+          "source": "src/params.f90",
+          "source_line": 241
+        },
+        {
+          "name": "wall_input",
+          "type": "character",
+          "kind": "",
+          "length": "1000",
+          "shape": [],
+          "extent": [],
+          "default": "''",
+          "default_value": "''",
+          "documentation": "",
+          "source": "src/params.f90",
+          "source_line": 238
+        },
+        {
           "name": "wall_units",
           "type": "character",
           "kind": "",
@@ -1427,7 +1440,7 @@
           "default_value": "'m'",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 239,
+          "source_line": 243,
           "validation": {
             "choices": [
               "m",
@@ -1446,7 +1459,7 @@
           "default_value": "'auto'",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 243,
+          "source_line": 247,
           "validation": {
             "choices": [
               "auto",
@@ -1467,7 +1480,7 @@
           "default_value": "-1000",
           "documentation": "Sentinel: -1000 means user did not set it",
           "source": "src/params.f90",
-          "source_line": 245
+          "source_line": 249
         },
         {
           "name": "crossing_level",
@@ -1480,7 +1493,7 @@
           "default_value": "3",
           "documentation": "SPECTRE interface treatment: only full orbit (3) is supported.",
           "source": "src/params.f90",
-          "source_line": 247,
+          "source_line": 251,
           "validation": {
             "choices": [
               3
@@ -1498,7 +1511,7 @@
           "default_value": "1.5_dp",
           "documentation": "Full orbit near SPECTRE interfaces: entry distance in radial gyroradii and the relative tolerance of RK45 on the sharp per-volume field. 1.5 keeps the switch's p_zeta invariant as at 3 (entry 1 breaks it) at about half the FO time (concept/spectre_loss_study/results/fo-residence).",
           "source": "src/params.f90",
-          "source_line": 252,
+          "source_line": 256,
           "validation": {
             "positive": true
           }
@@ -1514,7 +1527,7 @@
           "default_value": "1.0e-9_dp",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 253,
+          "source_line": 257,
           "validation": {
             "positive": true
           }
@@ -1534,7 +1547,7 @@
           "default_value": "(/32, 64, 32/)",
           "documentation": "Per-volume FO spline points: rho, theta, zeta per field period.",
           "source": "src/params.f90",
-          "source_line": 255
+          "source_line": 259
         },
         {
           "name": "spectre_outer_loss",
@@ -1547,7 +1560,7 @@
           "default_value": "'guiding_centre'",
           "documentation": "Loss at the outer SPECTRE boundary: 'guiding_centre' when the guiding centre crosses it, as for VMEC and GVEC fields; 'particle' when the full orbit touches it, a finite-Larmor-radius loss.",
           "source": "src/params.f90",
-          "source_line": 259
+          "source_line": 263
         },
         {
           "name": "spectre_fo_jump_tol",
@@ -1560,7 +1573,7 @@
           "default_value": "1.0e-3_dp",
           "documentation": "Interfaces whose largest jump of |B|/B or of the field direction is below this are crossed by the guiding centre directly, with an error of that size per crossing, instead of in full orbit.",
           "source": "src/params.f90",
-          "source_line": 263
+          "source_line": 267
         },
         {
           "name": "spectre_sbeg_is_toroidal_flux",
@@ -1573,7 +1586,7 @@
           "default_value": ".false.",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 264
+          "source_line": 268
         },
         {
           "name": "spectre_ncon_r",
@@ -1586,7 +1599,7 @@
           "default_value": "48",
           "documentation": "SPECTRE per-volume Meiss construction grid (n_r, n_th, n_phi). Each volume allocates rank-3 arrays plus batch splines of this size, so the total peak memory scales as Mvol*n_r*n_th*n_phi. spectre_ncon_phi = -1 means automatic: 32 for fields with toroidal harmonics and a minimal phi grid for axisymmetric fields (all n = 0), the dominant memory saver for tokamak cases. A positive value forces that phi count verbatim, bypassing the axisymmetric clamp.",
           "source": "src/params.f90",
-          "source_line": 273,
+          "source_line": 277,
           "validation": {
             "min": 1
           }
@@ -1602,7 +1615,7 @@
           "default_value": "48",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 274,
+          "source_line": 278,
           "validation": {
             "min": 1
           }
@@ -1618,7 +1631,7 @@
           "default_value": "-1",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 275
+          "source_line": 279
         },
         {
           "name": "spectre_ncon_order",
@@ -1631,7 +1644,7 @@
           "default_value": "5",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 276,
+          "source_line": 280,
           "validation": {
             "min": 1
           }
@@ -1647,7 +1660,7 @@
           "default_value": "1000000",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 277,
+          "source_line": 281,
           "validation": {
             "min": 1
           }
@@ -1663,7 +1676,7 @@
           "default_value": "1.0e-2_dp",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 278,
+          "source_line": 282,
           "validation": {
             "positive": true
           }
@@ -1763,7 +1776,7 @@
           "default_value": ".true.",
           "documentation": "Removed &config keys. They are still read so that old input files run; a value other than the historical default prints a warning.",
           "source": "src/params.f90",
-          "source_line": 282
+          "source_line": 286
         },
         {
           "name": "loopskip",
@@ -1776,7 +1789,7 @@
           "default_value": "0",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 283
+          "source_line": 287
         },
         {
           "name": "bmod_ref",
@@ -1789,7 +1802,7 @@
           "default_value": "5.0d4",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 284
+          "source_line": 288
         },
         {
           "name": "macrostep_log_ratio",
@@ -1802,7 +1815,7 @@
           "default_value": "1.0d3",
           "documentation": "",
           "source": "src/params.f90",
-          "source_line": 285
+          "source_line": 289
         }
       ]
     },

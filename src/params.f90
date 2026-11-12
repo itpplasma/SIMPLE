@@ -227,6 +227,10 @@ module params
     integer :: max_rk_recoveries = 1000
 
     character(1000) :: field_input = ''
+    !> Spline order of the guiding-centre field tables in reference coordinates
+    !> (isw_field_type = 5) for a coil field_input or a frozen-current field
+    !> (.h5, libneo frozen_current.x field_file); 0 keeps the splined field.
+    integer :: field_tables_order = 0
     character(1000) :: coord_input = ''
     !> Optional netCDF profile label s(R, phi, Z) for the collision profiles
     !> with integ_coords = REFCOORDS, MEISS or ALBERT (format: src/profile_label.f90).
@@ -309,7 +313,7 @@ module params
         am1, am2, Z1, Z2, &
         densi1, densi2, tempi1, tempi2, tempe, &
         batch_size, ran_seed, particle_index_offset, reuse_batch, &
-        field_input, coord_input, profile_label_file, &
+        field_input, field_tables_order, coord_input, profile_label_file, &
         marker_weight_file, &
         wall_input, wall_units, chart_boundary_kind, integ_coords, crossing_level, &
         spectre_fo_entry_larmor, spectre_fo_tolerance, spectre_fo_grid, &
@@ -429,7 +433,21 @@ contains
         call set_radial_electric_potential_slope(radial_electric_potential_slope)
 
         call validate_gpu_config
+        call validate_field_tables
     end subroutine finalize_config
+
+    subroutine validate_field_tables
+        ! The tables replace only the RK guiding-centre field of a coil source;
+        ! full orbits and symplectic schemes need the vector potential.
+        if (field_tables_order == 0) return
+        if (field_tables_order < 3 .or. field_tables_order > 5) error stop &
+            'field_tables_order must be 0 or 3 to 5'
+        if (isw_field_type /= REFCOORDS) error stop &
+            'field_tables_order requires reference integ_coords (5)'
+        if (integmode > 0) error stop 'field_tables_order requires integmode <= 0'
+        if (orbit_model /= ORBIT_GC) error stop &
+            'field_tables_order requires guiding-centre orbits'
+    end subroutine validate_field_tables
 
     subroutine validate_marker_weight_file
         ! Rows must align with start.dat; batch subsetting would reorder them.
