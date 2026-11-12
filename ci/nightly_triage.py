@@ -16,8 +16,10 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -29,6 +31,17 @@ WORKFLOW = "nightly.yml"
 LABEL = "nightly-failure"
 MARKER = re.compile(r"<!-- nightly-failing-jobs: (.*?) -->")
 FAILED = ("failure", "timed_out")
+# A JSON list of jobs the bisection does not rerun: a job that waits on other
+# CI runs would hold the runner those runs need.
+NO_BISECT_ENV = "NIGHTLY_NO_BISECT"
+# The bisection stops after this many minutes and still files the issue, so a
+# long range does not hold a test runner for hours.
+BUDGET_ENV = "NIGHTLY_BISECT_MINUTES"
+DEFAULT_BUDGET_MINUTES = 90
+
+
+class BisectTimeout(Exception):
+    pass
 
 
 def load_jobs(path=CONFIG):
@@ -57,6 +70,10 @@ def failing_jobs(jobs, configured):
         if key and job.get("conclusion") in FAILED:
             names.add(key)
     return sorted(names)
+
+
+def bisect_targets(failed, skipped):
+    return [name for name in failed if name not in skipped]
 
 
 def last_green(runs, current_run):
@@ -150,11 +167,26 @@ def cmd_step(args):
     return 0
 
 
-def bisect(good, bad, commands):
+def run_bounded(command, deadline):
+    """Return code of command; BisectTimeout and its process group killed at deadline."""
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise BisectTimeout
+    process = subprocess.Popen(command, start_new_session=True)
+    try:
+        return process.wait(timeout=remaining)
+    except subprocess.TimeoutExpired:
+        os.killpg(process.pid, signal.SIGKILL)
+        process.wait()
+        raise BisectTimeout from None
+
+
+def bisect(good, bad, commands, deadline):
     """First bad commit in good..bad for the given commands.
 
     Returns None when the commands also fail at the green commit, since then
-    no commit in the range introduced the failure.
+    no commit in the range introduced the failure. Raises BisectTimeout at
+    deadline (time.monotonic()), with the tree back at bad.
     """
     script = Path(os.environ.get("RUNNER_TEMP", "/tmp")) / "nightly_triage.py"
     shutil.copy(__file__, script)  # bisect checks out older versions of this file
@@ -163,7 +195,7 @@ def bisect(good, bad, commands):
         step += ["--command", command]
     git("checkout", "--quiet", good)
     try:
-        good_still_passes = subprocess.run(step).returncode == 0
+        good_still_passes = run_bounded(step, deadline) == 0
     finally:
         git("clean", "-ffdxq")
         git("checkout", "--quiet", bad)
@@ -171,10 +203,13 @@ def bisect(good, bad, commands):
         return None
     git("bisect", "start", bad, good)
     try:
-        subprocess.run(["git", "bisect", "run", *step], check=True)
+        returncode = run_bounded(["git", "bisect", "run", *step], deadline)
+        if returncode:
+            raise subprocess.CalledProcessError(returncode, "git bisect run")
         sha = git("rev-parse", "refs/bisect/bad")
     finally:
         print(git("bisect", "log", check=False))
+        git("clean", "-ffdxq", check=False)
         git("bisect", "reset", check=False)
     return {"sha": sha, "subject": git("log", "-1", "--format=%s", sha)}
 
@@ -204,21 +239,34 @@ def cmd_failure(args):
              "conclusion": r["conclusion"]} for r in runs]
     green = last_green(runs, run_id)
     good = green["headSha"] if green else None
-    culprit, pull, note, commits = None, None, None, 0
+    skipped = set(json.loads(os.environ.get(NO_BISECT_ENV) or "[]"))
+    targets = bisect_targets(failed, skipped)
+    budget = float(os.environ.get(BUDGET_ENV) or DEFAULT_BUDGET_MINUTES)
+    culprit, pull, notes, commits = None, None, [], 0
+    if set(failed) - set(targets):
+        notes.append("Not bisected, since it waits on other CI runs: "
+                     + ", ".join(sorted(set(failed) - set(targets))) + ".")
     if good:
         commits = int(git("rev-list", "--count", f"{good}..{bad}"))
         if good == bad:
-            note = "No commit since the last green nightly: the failure is not from a code change."
+            notes.append("No commit since the last green nightly: the failure is not from a code change.")
         elif subprocess.run(["git", "merge-base", "--is-ancestor", good, bad]).returncode:
-            note = "The last green commit is not an ancestor; bisection skipped."
-        else:
-            culprit = bisect(good, bad, [configured[name] for name in failed])
-            if culprit:
-                pulls = api(f"repos/{repo}/commits/{culprit['sha']}/pulls")
-                pull = pulls[0]["number"] if pulls else None
+            notes.append("The last green commit is not an ancestor; bisection skipped.")
+        elif targets:
+            try:
+                culprit = bisect(good, bad, [configured[name] for name in targets],
+                                 time.monotonic() + 60*budget)
+            except BisectTimeout:
+                notes.append(f"Bisection stopped after its budget of {budget:g} minutes; "
+                             "the run log lists the steps it completed.")
             else:
-                note = ("The failing jobs also fail at the last green commit when "
-                        "rerun, so the failure is not from a commit in the range.")
+                if culprit:
+                    pulls = api(f"repos/{repo}/commits/{culprit['sha']}/pulls")
+                    pull = pulls[0]["number"] if pulls else None
+                else:
+                    notes.append("The failing jobs also fail at the last green commit when "
+                                 "rerun, so the failure is not from a commit in the range.")
+    note = " ".join(notes) or None
     body = failure_report(
         branch=branch, bad=bad, good=good, commits=commits, culprit=culprit,
         pull=pull, failed=failed, run_url=f"{server}/{repo}/actions/runs/{run_id}",
