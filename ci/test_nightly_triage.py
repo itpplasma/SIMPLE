@@ -1,6 +1,8 @@
 """Guards for the nightly triage logic, with no GitHub or git access."""
+import os
 import subprocess
 import sys
+import time
 import tempfile
 import unittest
 from pathlib import Path
@@ -59,6 +61,41 @@ class TriageTests(unittest.TestCase):
             self.assertEqual(subprocess.run(step, cwd=tmp).returncode, 0)
             Path(tmp, "ok").write_text("0")
             self.assertEqual(subprocess.run(step, cwd=tmp).returncode, 1)
+
+    def test_bisect_targets_leave_out_skipped_jobs(self):
+        failed = ["Downstream gate", "unit"]
+        self.assertEqual(nt.bisect_targets(failed, {"Downstream gate"}), ["unit"])
+        self.assertEqual(nt.bisect_targets(failed, set()), failed)
+
+    def test_bisect_stops_at_its_budget(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as temp:
+            def git(*args):
+                return subprocess.run(["git", "-C", tmp, *args], check=True,
+                                      capture_output=True, text=True).stdout.strip()
+            git("init", "-q")
+            for content in ("1", "0"):
+                Path(tmp, "ok").write_text(content)
+                git("add", "ok")
+                git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", content)
+            good, bad = git("rev-parse", "HEAD~1"), git("rev-parse", "HEAD")
+            pidfile = Path(temp, "pid")
+            cwd, old_temp = os.getcwd(), os.environ.get("RUNNER_TEMP")
+            os.chdir(tmp)
+            os.environ["RUNNER_TEMP"] = temp
+            try:
+                start = time.monotonic()
+                with self.assertRaises(nt.BisectTimeout):
+                    nt.bisect(good, bad, [f"echo $$ > {pidfile}; sleep 60"], start + 1)
+                self.assertLess(time.monotonic() - start, 15)
+            finally:
+                os.chdir(cwd)
+                if old_temp is None:
+                    os.environ.pop("RUNNER_TEMP")
+                else:
+                    os.environ["RUNNER_TEMP"] = old_temp
+            self.assertEqual(git("rev-parse", "HEAD"), bad)
+            with self.assertRaises(ProcessLookupError):
+                os.kill(int(pidfile.read_text()), 0)
 
 
 if __name__ == "__main__":

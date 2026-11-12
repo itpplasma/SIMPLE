@@ -56,7 +56,8 @@ jobs:
     needs: [full, vmecpp]
     if: failure() && needs.full.result == 'failure'
     runs-on: [self-hosted, itp-dispatch]
-    timeout-minutes: 600
+    # The bisection budget (NIGHTLY_BISECT_MINUTES) plus time to report.
+    timeout-minutes: 120
     permissions:
       actions: read
       contents: read
@@ -69,6 +70,7 @@ jobs:
       - name: Bisect and file or update the nightly-failure issue
         env:
           GH_TOKEN: ${{ github.token }}
+          NIGHTLY_BISECT_MINUTES: "90"
         run: python3 ci/nightly_triage.py failure --jobs "Build and Test (full)"
 
   triage-vmecpp:
@@ -76,7 +78,8 @@ jobs:
     needs: [full, vmecpp, triage-full]
     if: always() && needs.vmecpp.result == 'failure'
     runs-on: [self-hosted, itp-ubuntu24, itp-mem16]
-    timeout-minutes: 600
+    # The bisection budget (NIGHTLY_BISECT_MINUTES) plus time to report.
+    timeout-minutes: 120
     env:
       OMP_NUM_THREADS: 1
       OPENBLAS_NUM_THREADS: 1
@@ -93,6 +96,7 @@ jobs:
       - name: Bisect and file or update the nightly-failure issue
         env:
           GH_TOKEN: ${{ github.token }}
+          NIGHTLY_BISECT_MINUTES: "90"
         run: python3 ci/nightly_triage.py failure --jobs "VMEC++ Direct Geometry"
 
   close:
