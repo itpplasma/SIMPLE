@@ -894,6 +894,12 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
         LABELS "integration;system"
         TIMEOUT 300)
 
+    set(class_scores_timeout 90)
+    if(ENABLE_COVERAGE)
+        # Instrumented traces exceed the normal deadline without changing results.
+        set(class_scores_timeout 240)
+    endif()
+    math(EXPR class_scores_ctest_timeout "${class_scores_timeout} + 30")
     add_test(NAME test_class_scores_driver
         COMMAND ${CMAKE_COMMAND} -E env
             CTEST_BINARY_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}
@@ -902,10 +908,11 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
             $<TARGET_FILE:simple.x>
             ${WOUT_FILE}
             $<TARGET_FILE:test_continuous_classifier_scores.x>
+            ${class_scores_timeout}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(test_class_scores_driver PROPERTIES
         LABELS "integration;system"
-        TIMEOUT 120)
+        TIMEOUT ${class_scores_ctest_timeout})
 
     # The script runs simple.x with OMP_NUM_THREADS=1 and 4 and compares.
     add_test(NAME test_class_plot_threads
