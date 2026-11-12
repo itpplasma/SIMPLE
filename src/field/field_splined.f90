@@ -81,11 +81,10 @@ contains
         Bmod = y_batch(7)
         if (self%regular_cartesian_direction) then
             call self%direction_scaling%inverse(x, u, jacobian)
-            call self%coords%covariant_basis(u, basis)
+            call self%coords%cart_and_covariant_basis(u, position, basis)
             zeros = 0.0_dp
             call scale_basis_der(jacobian, [0.0_dp, 0.0_dp, 0.0_dp], basis, zeros, &
                                  scaled, unused)
-            call self%coords%evaluate_cart(u, position)
             call cylindrical_field_direction(position, y_batch(4:6), direction)
             call pullback_covector(direction, scaled, hcov)
         end if
