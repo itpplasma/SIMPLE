@@ -49,7 +49,7 @@ source examples/hpc/cineca/leonardo-gcc-env.sh
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
     -DENABLE_OPENMP=ON -DSIMPLE_DETERMINISTIC_FP=ON \
     -DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF \
-    -DLIBNEO_REF=f6090e8150c2f5b1c0afde09baadf79b50b1ffe7
+    -DITP_LIBNEO_REF=f6090e8150c2f5b1c0afde09baadf79b50b1ffe7
 cmake --build build -j 4
 ```
 
@@ -64,7 +64,7 @@ keeping the libneo pin in `FLAGS`:
 
 ```bash
 make test-fast CONFIG=Release \
-    FLAGS='-DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF -DENABLE_OPENMP=ON -DLIBNEO_REF=f6090e8150c2f5b1c0afde09baadf79b50b1ffe7' \
+    FLAGS='-DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF -DENABLE_OPENMP=ON -DITP_LIBNEO_REF=f6090e8150c2f5b1c0afde09baadf79b50b1ffe7' \
     TEST='^(test_config_reference|test_finite_check|test_profiles|test_deterministic_seed|test_orbit_invariants|test_stencil_utils|test_orbit_symplectic_base|test_newton_solver_status|test_spectre_fo_spline_tok2vol|test_spectre_fo_spline_ncsx_freeboundary|test_diag_albert)$'
 ```
 
@@ -108,7 +108,7 @@ module load cuda/12.3
 cmake -S . -B build-cuda -G Ninja -DCMAKE_BUILD_TYPE=Release \
     -DSIMPLE_ENABLE_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=80 \
     -DENABLE_PYTHON_INTERFACE=OFF -DSIMPLE_ENABLE_PYTHON_TOOLS=OFF \
-    -DLIBNEO_REF=f6090e8150c2f5b1c0afde09baadf79b50b1ffe7
+    -DITP_LIBNEO_REF=f6090e8150c2f5b1c0afde09baadf79b50b1ffe7
 cmake --build build-cuda -j 4 --target \
     simple.x test_cuda_native_rk54.x test_cuda_native_bridge.x
 cuobjdump --list-elf build-cuda/libsimple_cuda_native_rk54.so   # expect sm_80

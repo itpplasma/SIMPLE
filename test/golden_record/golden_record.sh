@@ -306,7 +306,9 @@ build() {
 
     # Enable deterministic floating-point for reproducible golden record tests
     CMAKE_OPTS="$CMAKE_OPTS -DSIMPLE_DETERMINISTIC_FP=ON -DLIBNEO_DETERMINISTIC_FP=ON"
-    CMAKE_OPTS="$CMAKE_OPTS -DLIBNEO_REF=$GOLDEN_LIBNEO_REF -DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+    # Older SIMPLE versions read LIBNEO_REF, current ones ITP_LIBNEO_REF.
+    CMAKE_OPTS="$CMAKE_OPTS -DLIBNEO_REF=$GOLDEN_LIBNEO_REF -DITP_LIBNEO_REF=$GOLDEN_LIBNEO_REF"
+    CMAKE_OPTS="$CMAKE_OPTS -DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
 
     cmake -S . -Bbuild -GNinja $CMAKE_OPTS > $PROJECT_ROOT/configure.log 2>&1
     if [ $? -ne 0 ]; then
