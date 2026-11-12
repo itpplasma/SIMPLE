@@ -67,6 +67,9 @@ boundary_event_radial_tolerance = -1d0   ! radial residual tolerance of the s = 
 field_input = ''                 ! field file, recognised by content: VMEC wout,
 !                                  Boozer chartmap, field on the coord_input chartmap,
 !                                  SPECTRE or coils file; '' = use netcdffile
+field_tables_order = 0           ! spline order (3 to 5) of guiding-centre tables of a coil
+!                                  or frozen-current (.h5) field_input with
+!                                  isw_field_type = 5; 0 = splined field
 coord_input = ''                 ! reference coordinate file: VMEC wout or chartmap (.nc);
 !                                  '' = netcdffile, then field_input
 profile_label_file = ''          ! netCDF label s(R,phi,Z) as &profiles radius for
