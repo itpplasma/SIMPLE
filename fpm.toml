@@ -7,8 +7,10 @@ copyright = "Copyright 2025, Plasma Physics at TU Graz"
 
 [dependencies]
 libneo.git = "https://github.com/itpplasma/libneo.git"
+# libneo and fortarray pin different fortio commits; use libneo's.
+fortio = { git = "https://github.com/lazy-fortran/fortio.git", rev = "6929247e03cc8657cc3f6aabf210525f16237fd7" }
 # Same fortnum as cmake/dependency_versions.json; libneo pins an older one.
-fortnum = { git = "https://github.com/lazy-fortran/fortnum.git", rev = "7d479d2b5f5bb9b6c255ccdb62638a9a9c75695c" }
+fortnum = { git = "https://github.com/lazy-fortran/fortnum.git", rev = "d88d09c7a7b6c0c265b8c30c199d7f8f4219909c" }
 openmp = "*"
 hdf5 = "*"
 netcdf = "*"
