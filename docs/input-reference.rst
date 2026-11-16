@@ -25,7 +25,7 @@ and ``DOC/config.md`` for additional usage, units and option interactions.
 &config
 -------
 
-Source: ``src/params.f90:291``.
+Source: ``src/params.f90:288``.
 
 .. list-table::
    :header-rows: 1
@@ -589,12 +589,6 @@ Source: ``src/params.f90:291``.
      - ``scalar``
      - ``''``
      -
-   * - ``field_tables_order``
-     - ``integer``
-     - ``default``
-     - ``scalar``
-     - ``0``
-     - Spline order of the guiding-centre field tables in reference coordinates (isw_field_type = 5) for a coil field_input or a frozen-current field (.h5, libneo frozen_current.x field_file); 0 keeps the splined field.
    * - ``coord_input``
      - ``character(len=1000)``
      - ``default``
@@ -774,6 +768,12 @@ Source: ``src/params.f90:291``.
      - ``dp``
      - ``scalar``
      - ``1.0d3``
+     -
+   * - ``field_tables_order``
+     - ``integer``
+     - ``default``
+     - ``scalar``
+     - ``0``
      -
 
 &profiles

@@ -20,13 +20,16 @@ module field_gc_tables
     private
 
     public :: gc_tables_t, gc_field_source_t, build_gc_tables, &
-              build_gc_tables_coils, evaluate_gc_tables
+              build_gc_tables_coils, evaluate_gc_tables, clear_gc_tables
+
+    ! Cubic, the order the tables were validated and timed with.
+    integer, parameter :: gc_tables_order = 3
 
     type :: gc_tables_t
         type(BatchSplineData3D) :: spl
         logical :: initialized = .false.
     contains
-        final :: gc_tables_cleanup
+        final :: clear_gc_tables
     end type gc_tables_t
 
     !> A Cartesian field B(x) with its Jacobian dB_i/dx_j (cm, G). Sources
@@ -56,14 +59,13 @@ contains
 
     !> Tables of the coil field (coordinates in cm, currents in statA, as
     !> create_coils_field) on the grid of the chartmap coords.
-    subroutine build_gc_tables_coils(coils, coords, order, tab, n_r, n_th, n_phi)
+    subroutine build_gc_tables_coils(coils, coords, tab, n_r, n_th, n_phi)
         type(coils_t), intent(in) :: coils
         class(coordinate_system_t), intent(in) :: coords
-        integer, intent(in) :: order
         type(gc_tables_t), intent(inout) :: tab
         integer, intent(in), optional :: n_r, n_th, n_phi
 
-        call build_gc_tables(coil_source_t(coils), coords, order, tab, n_r, n_th, n_phi)
+        call build_gc_tables(coil_source_t(coils), coords, tab, n_r, n_th, n_phi)
     end subroutine build_gc_tables_coils
 
     subroutine coil_field_jacobian(self, x, b, db)
@@ -75,10 +77,9 @@ contains
         call compute_field_jacobian(self%coils, x, a, da, b, db)
     end subroutine coil_field_jacobian
 
-    subroutine build_gc_tables(source, coords, order, tab, n_r, n_th, n_phi)
+    subroutine build_gc_tables(source, coords, tab, n_r, n_th, n_phi)
         class(gc_field_source_t), intent(in) :: source
         class(coordinate_system_t), intent(in) :: coords
-        integer, intent(in) :: order
         type(gc_tables_t), intent(inout) :: tab
         integer, intent(in), optional :: n_r, n_th, n_phi
 
@@ -120,8 +121,8 @@ contains
             end do
         end do
         !$omp end parallel do
-        if (tab%initialized) call destroy_batch_splines_3d(tab%spl)
-        call construct_batch_splines_3d(xmin, xmax, y, [order, order, order], &
+        call clear_gc_tables(tab)
+        call construct_batch_splines_3d(xmin, xmax, y, spread(gc_tables_order, 1, 3), &
                                         [.false., .true., .true.], tab%spl)
         tab%initialized = .true.
     end subroutine build_gc_tables
@@ -142,11 +143,11 @@ contains
         hcurl = y(GC_HCURL:GC_HCURL + 2)/sqrtg
     end subroutine evaluate_gc_tables
 
-    subroutine gc_tables_cleanup(tab)
+    subroutine clear_gc_tables(tab)
         type(gc_tables_t), intent(inout) :: tab
 
         if (tab%initialized) call destroy_batch_splines_3d(tab%spl)
         tab%initialized = .false.
-    end subroutine gc_tables_cleanup
+    end subroutine clear_gc_tables
 
 end module field_gc_tables

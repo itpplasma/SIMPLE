@@ -9,7 +9,7 @@ module params
                                   netcdffile, ns_s, ns_tp, multharm, vmec_B_scale, &
                                   vmec_RZ_scale
     use velo_mod, only: isw_field_type
-    use magfie_sub, only: TEST, BOOZER, REFCOORDS
+    use magfie_sub, only: TEST, BOOZER
     use field_can_mod, only: eval_field => evaluate, field_can_t
     use field_can_base, only: set_radial_electric_potential_slope
     use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
@@ -227,10 +227,6 @@ module params
     integer :: max_rk_recoveries = 1000
 
     character(1000) :: field_input = ''
-    !> Spline order of the guiding-centre field tables in reference coordinates
-    !> (isw_field_type = 5) for a coil field_input or a frozen-current field
-    !> (.h5, libneo frozen_current.x field_file); 0 keeps the splined field.
-    integer :: field_tables_order = 0
     character(1000) :: coord_input = ''
     !> Optional netCDF profile label s(R, phi, Z) for the collision profiles
     !> with integ_coords = REFCOORDS, MEISS or ALBERT (format: src/profile_label.f90).
@@ -287,6 +283,7 @@ module params
     integer :: loopskip = 0
     real(dp) :: bmod_ref = 5.0d4
     real(dp) :: macrostep_log_ratio = 1.0d3
+    integer :: field_tables_order = 0
 
     namelist /config/ notrace_passing, nper, npoiper, ntimstep, ntestpart, &
         trace_time, num_surf, sbeg, phibeg, thetabeg, contr_pp, &
@@ -313,7 +310,7 @@ module params
         am1, am2, Z1, Z2, &
         densi1, densi2, tempi1, tempi2, tempe, &
         batch_size, ran_seed, particle_index_offset, reuse_batch, &
-        field_input, field_tables_order, coord_input, profile_label_file, &
+        field_input, coord_input, profile_label_file, &
         marker_weight_file, &
         wall_input, wall_units, chart_boundary_kind, integ_coords, crossing_level, &
         spectre_fo_entry_larmor, spectre_fo_tolerance, spectre_fo_grid, &
@@ -324,7 +321,8 @@ module params
         output_results_netcdf, &
         output_error, output_orbits_macrostep, &  ! callback
         macrostep_time_grid, checkpoint_interval, restart, &
-        local, loopskip, bmod_ref, macrostep_log_ratio  ! removed, ignored
+        local, loopskip, bmod_ref, macrostep_log_ratio, &  ! removed, ignored
+        field_tables_order
 
     integer(int8), allocatable :: wall_hit(:)
     integer, allocatable :: wall_hit_triangle(:)
@@ -433,21 +431,7 @@ contains
         call set_radial_electric_potential_slope(radial_electric_potential_slope)
 
         call validate_gpu_config
-        call validate_field_tables
     end subroutine finalize_config
-
-    subroutine validate_field_tables
-        ! The tables replace only the RK guiding-centre field of a coil source;
-        ! full orbits and symplectic schemes need the vector potential.
-        if (field_tables_order == 0) return
-        if (field_tables_order < 3 .or. field_tables_order > 5) error stop &
-            'field_tables_order must be 0 or 3 to 5'
-        if (isw_field_type /= REFCOORDS) error stop &
-            'field_tables_order requires reference integ_coords (5)'
-        if (integmode > 0) error stop 'field_tables_order requires integmode <= 0'
-        if (orbit_model /= ORBIT_GC) error stop &
-            'field_tables_order requires guiding-centre orbits'
-    end subroutine validate_field_tables
 
     subroutine validate_marker_weight_file
         ! Rows must align with start.dat; batch subsetting would reorder them.
@@ -466,6 +450,9 @@ contains
             'is ignored; use vmec_B_scale to scale the field'
         if (macrostep_log_ratio /= 1.0d3) print *, 'WARNING: removed &config key ', &
             'macrostep_log_ratio is ignored'
+        if (field_tables_order /= 0) print *, 'WARNING: removed &config key ', &
+            'field_tables_order is ignored; guiding-centre tables are used ', &
+            'whenever field_input and the run allow them'
     end subroutine warn_removed_config_keys
 
     subroutine validate_radial_electric_potential

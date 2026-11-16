@@ -16,7 +16,7 @@ module field_gc_tables_input
     implicit none
     private
 
-    public :: build_gc_tables_from_file, build_gc_tables_frozen
+    public :: gc_tables_apply, build_gc_tables_from_file, build_gc_tables_frozen
 
     type, extends(gc_field_source_t) :: frozen_source_t
         type(frozen_current_field_t) :: field
@@ -26,39 +26,59 @@ module field_gc_tables_input
 
 contains
 
-    subroutine build_gc_tables_from_file(path, coords, order, tab)
+    !> True when field_input is a coil file or a frozen-current field and the
+    !> reference chart is a chartmap with a radius that is not normalised flux,
+    !> the cases build_gc_tables accepts.
+    logical function gc_tables_apply(path, coords)
+        use field_file_kind, only: field_file_kind_of, FIELD_FILE_FROZEN_CURRENT, &
+                                   FIELD_FILE_COILS
+        use libneo_coordinates, only: chartmap_coordinate_system_t, PSI_TOR_NORM, &
+                                      PSI_POL_NORM
         character(*), intent(in) :: path
         class(coordinate_system_t), intent(in) :: coords
-        integer, intent(in) :: order
+
+        gc_tables_apply = .false.
+        select type (coords)
+        class is (chartmap_coordinate_system_t)
+            if (coords%rho_convention == PSI_TOR_NORM .or. &
+                coords%rho_convention == PSI_POL_NORM) return
+        class default
+            return
+        end select
+        select case (field_file_kind_of(path))
+        case (FIELD_FILE_FROZEN_CURRENT, FIELD_FILE_COILS)
+            gc_tables_apply = .true.
+        end select
+    end function gc_tables_apply
+
+    subroutine build_gc_tables_from_file(path, coords, tab)
+        use field_file_kind, only: field_file_kind_of, FIELD_FILE_FROZEN_CURRENT
+        character(*), intent(in) :: path
+        class(coordinate_system_t), intent(in) :: coords
         type(gc_tables_t), intent(inout) :: tab
         type(coils_field_t) :: raw_coils
         type(frozen_current_field_t) :: frozen
-        integer :: status, n
+        integer :: status
 
-        n = len_trim(path)
-        if (n > 3) then
-            if (path(n - 2:n) == '.h5') then
-                call load_frozen_current_field(path, frozen, status)
-                if (status /= 0) error stop 'build_gc_tables_from_file: cannot load ' &
-                    //path
-                call build_gc_tables_frozen(frozen, coords, order, tab)
-                return
-            end if
+        if (field_file_kind_of(path) == FIELD_FILE_FROZEN_CURRENT) then
+            call load_frozen_current_field(path, frozen, status)
+            if (status /= 0) error stop 'build_gc_tables_from_file: cannot load ' &
+                //path
+            call build_gc_tables_frozen(frozen, coords, tab)
+            return
         end if
         call create_coils_field(path, raw_coils)
-        call build_gc_tables_coils(raw_coils%coils, coords, order, tab)
+        call build_gc_tables_coils(raw_coils%coils, coords, tab)
     end subroutine build_gc_tables_from_file
 
     !> Tables of a loaded frozen-current field (libneo, cm and G).
-    subroutine build_gc_tables_frozen(field, coords, order, tab, n_r, n_th, n_phi)
+    subroutine build_gc_tables_frozen(field, coords, tab, n_r, n_th, n_phi)
         type(frozen_current_field_t), intent(in) :: field
         class(coordinate_system_t), intent(in) :: coords
-        integer, intent(in) :: order
         type(gc_tables_t), intent(inout) :: tab
         integer, intent(in), optional :: n_r, n_th, n_phi
 
-        call build_gc_tables(frozen_source_t(field), coords, order, tab, n_r, n_th, &
-                             n_phi)
+        call build_gc_tables(frozen_source_t(field), coords, tab, n_r, n_th, n_phi)
     end subroutine build_gc_tables_frozen
 
     subroutine frozen_field_jacobian(self, x, b, db)

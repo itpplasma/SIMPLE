@@ -45,6 +45,10 @@ add_executable(test_magfie_gc_tables.x test_magfie_gc_tables.f90)
 target_link_libraries(test_magfie_gc_tables.x simple)
 add_dependencies(test_magfie_gc_tables.x ncsx_test_data)
 
+add_executable(test_gc_tables_selection.x test_gc_tables_selection.f90)
+target_link_libraries(test_gc_tables_selection.x simple)
+add_dependencies(test_gc_tables_selection.x ncsx_test_data)
+
 add_executable(test_orbit_refcoords_rk45.x test_orbit_refcoords_rk45.f90)
 target_link_libraries(test_orbit_refcoords_rk45.x simple)
 
@@ -123,6 +127,11 @@ add_test(NAME test_magfie_refcoords_splines
 
 add_test(NAME test_magfie_gc_tables
     COMMAND $<TARGET_FILE:test_magfie_gc_tables.x>
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
+)
+
+add_test(NAME test_gc_tables_selection
+    COMMAND $<TARGET_FILE:test_gc_tables_selection.x>
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
 )
 

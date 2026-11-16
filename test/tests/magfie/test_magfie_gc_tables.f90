@@ -45,13 +45,13 @@ program test_magfie_gc_tables
     end do
     ! With the tables installed, the RK axis map must use the chart's rho.
     call init_magfie(REFCOORDS)
-    call build_gc_tables_coils(raw%coils, chart, 3, gc_tables, n_r=17, n_th=33, &
+    call build_gc_tables_coils(raw%coils, chart, gc_tables, n_r=17, n_th=33, &
                                n_phi=65)
     call axis_radial_coordinate(radial_is_rho, status)
     if (status /= 0 .or. .not. radial_is_rho) error stop &
         'tables must use the rho axis map'
-    call build_gc_tables_coils(raw%coils, chart, 3, coarse)
-    call build_gc_tables_coils(raw%coils, chart, 3, fine, n_r=33, n_th=65, n_phi=129)
+    call build_gc_tables_coils(raw%coils, chart, coarse)
+    call build_gc_tables_coils(raw%coils, chart, fine, n_r=33, n_th=65, n_phi=129)
     err_coarse = table_error(coarse)
     err_fine = table_error(fine)
     call create_splined_field(raw, chart, splined)
@@ -66,7 +66,7 @@ program test_magfie_gc_tables
     class is (chartmap_coordinate_system_t)
         chart%rho_convention = UNKNOWN
     end select
-    call build_gc_tables_coils(raw%coils, chart, 3, coarse)
+    call build_gc_tables_coils(raw%coils, chart, coarse)
     if (any(abs(table_error(coarse) - err_coarse) > 0.0_dp)) error stop &
         'geometric-radius chart tables differ'
     if (minval(err_coarse/err_fine) < 2.5_dp) error stop 'tables do not converge'

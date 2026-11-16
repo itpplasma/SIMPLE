@@ -217,8 +217,21 @@ $B^\varphi$, $B_Z$ and $|B|$ at the file's own nodes and splines them there
 (`create_splined_field_from_nodes`), without resampling or a Biot-Savart
 evaluation at start. The result is an ordinary splined field, so RK45 in
 reference coordinates, Meiss and Albert coordinates and the symplectic
-integrators all use it. A solved frozen-current HDF5 file given as
-`field_input` stops with a pointer to the converter.
+integrators all use it.
+
+For RK guiding-centre orbits in reference coordinates (`isw_field_type = 5`,
+`integmode <= 0`) on a chartmap `coord_input` whose radius is $\rho$ or
+geometric, a coil file or a solved frozen-current HDF5 file (libneo
+`frozen_current.x` `field_file`) as `field_input` is not splined as a field.
+`init_field` instead builds guiding-centre tables (`field_gc_tables`): $|B|$,
+$\sqrt g$, $\partial_j \log|B|$, $h_j$, $\sqrt g\,h^j$ and
+$\sqrt g\,(\nabla\times\mathbf h)^j$ from the exact field and its Jacobian
+at the chart nodes, as one cubic batch spline, so each `magfie` call is one
+spline evaluation. The choice follows the file content (`field_file_kind`:
+a frozen-current file holds `u`, `kmax` and `coil_points`, a SPECTRE file
+`input/physics/Nvol` and `output/Rbc`) and has no input key. In every other
+case a solved frozen-current file as `field_input` stops with a pointer to
+the converter.
 
 `coils_field_t` evaluates Biot–Savart from libneo `neo_biotsavart`;
 `create_coils_field` converts coil positions from m to cm and currents from A
