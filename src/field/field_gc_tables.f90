@@ -24,6 +24,8 @@ module field_gc_tables
 
     ! Cubic, the order the tables were validated and timed with.
     integer, parameter :: gc_tables_order = 3
+    ! sqrt(g) -> 0 at the axis, where its cubic interpolant can change sign
+    ! (#799); within this many radial cells it comes from the chart basis.
     real(dp), parameter :: axis_cells = 2.0_dp
 
     type :: gc_tables_t

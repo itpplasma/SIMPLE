@@ -227,7 +227,11 @@ geometric, a coil file or a solved frozen-current HDF5 file (libneo
 $\sqrt g$, $\partial_j \log|B|$, $h_j$, $\sqrt g\,h^j$ and
 $\sqrt g\,(\nabla\times\mathbf h)^j$ from the exact field and its Jacobian
 at the chart nodes, as one cubic batch spline, so each `magfie` call is one
-spline evaluation. The choice follows the file content (`field_file_kind`:
+spline evaluation. Within two radial cells of the chart's inner edge,
+$\sqrt g$ is taken from the chart basis at the point instead: there
+$\sqrt g \to 0$ at the axis, and its cubic interpolant lost the relative
+accuracy that the division of the contravariant parts needs, up to the wrong
+sign on a 65-node chart (#799). The choice follows the file content (`field_file_kind`:
 a frozen-current file holds `u`, `kmax` and `coil_points`, a SPECTRE file
 `input/physics/Nvol` and `output/Rbc`) and has no input key. In every other
 case a solved frozen-current file as `field_input` stops with a pointer to
