@@ -24,9 +24,12 @@ module field_gc_tables
 
     ! Cubic, the order the tables were validated and timed with.
     integer, parameter :: gc_tables_order = 3
+    real(dp), parameter :: axis_cells = 4.0_dp
 
     type :: gc_tables_t
         type(BatchSplineData3D) :: spl
+        !> The chart, for sqrt(g) near the axis.
+        class(coordinate_system_t), allocatable :: coords
         logical :: initialized = .false.
     contains
         final :: clear_gc_tables
@@ -122,6 +125,7 @@ contains
         end do
         !$omp end parallel do
         call clear_gc_tables(tab)
+        allocate (tab%coords, source=coords)
         call construct_batch_splines_3d(xmin, xmax, y, spread(gc_tables_order, 1, 3), &
                                         [.false., .true., .true.], tab%spl)
         tab%initialized = .true.
@@ -132,13 +136,19 @@ contains
         type(gc_tables_t), intent(in) :: tab
         real(dp), intent(in) :: x(3)
         real(dp), intent(out) :: bmod, sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
-        real(dp) :: y(GC_COUNT)
+        real(dp) :: y(GC_COUNT), e(3, 3)
 
         call evaluate_batch_splines_3d(tab%spl, x, y)
         bmod = y(GC_BMOD)
         sqrtg = y(GC_SQRTG)
         bder = y(GC_BDER:GC_BDER + 2)
         hcovar = y(GC_HCOV:GC_HCOV + 2)
+        if (x(1) < tab%spl%x_min(1) + axis_cells*tab%spl%h_step(1)) then
+            call tab%coords%covariant_basis(x, e)
+            sqrtg = dot_product(e(:, 1), [e(2, 2)*e(3, 3) - e(3, 2)*e(2, 3), &
+                                          e(3, 2)*e(1, 3) - e(1, 2)*e(3, 3), &
+                                          e(1, 2)*e(2, 3) - e(2, 2)*e(1, 3)])
+        end if
         hctrvr = y(GC_HCTR:GC_HCTR + 2)/sqrtg
         hcurl = y(GC_HCURL:GC_HCURL + 2)/sqrtg
     end subroutine evaluate_gc_tables
@@ -147,6 +157,7 @@ contains
         type(gc_tables_t), intent(inout) :: tab
 
         if (tab%initialized) call destroy_batch_splines_3d(tab%spl)
+        if (allocated(tab%coords)) deallocate (tab%coords)
         tab%initialized = .false.
     end subroutine clear_gc_tables
 
