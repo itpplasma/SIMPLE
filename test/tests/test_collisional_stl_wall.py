@@ -199,12 +199,13 @@ def main() -> None:
     reference = run_case(base, "collisionless", simple, starts,
                          collisions=False, density=2.5e20)
     hit_ref = check_hits(reference, "collisionless")
-    # Stored Fast-build reference; allow small platform-dependent orbit shifts.
-    # Regenerated for the doubled chart toroidal grid; doubling it again keeps
-    # 21 of 22 hits with median loss-time change 0.06 %.
-    assert abs(np.count_nonzero(hit_ref) - 21) <= 2, "collisionless hit-count drift"
+    # Stored reference; allow small platform-dependent orbit shifts.
+    # Regenerated for the guiding-centre tables. On a chart of twice the
+    # resolution, tables and splined field give the same 22 hits with median
+    # loss-time difference 0.02 %; on this chart one marker differs.
+    assert abs(np.count_nonzero(hit_ref) - 22) <= 2, "collisionless hit-count drift"
     np.testing.assert_allclose(np.mean(reference["times_lost"][hit_ref]),
-                               2.3778794840036737e-4, rtol=0.03, atol=0)
+                               2.478447e-4, rtol=0.03, atol=0)
     # Resolve the Cartesian segment interpolation independently of the stored
     # reference. Use known hits so this inexpensive subset covers real impacts.
     indices = np.flatnonzero(hit_ref)[:32]

@@ -66,10 +66,10 @@ boundary_event_radial_tolerance = -1d0   ! radial residual tolerance of the s = 
 ! Field and coordinates
 field_input = ''                 ! field file, recognised by content: VMEC wout,
 !                                  Boozer chartmap, field on the coord_input chartmap,
-!                                  SPECTRE or coils file; '' = use netcdffile
-field_tables_order = 0           ! spline order (3 to 5) of guiding-centre tables of a coil
-!                                  or frozen-current (.h5) field_input with
-!                                  isw_field_type = 5; 0 = splined field
+!                                  SPECTRE, frozen-current (libneo) or coils file;
+!                                  '' = use netcdffile. Coil and frozen-current fields
+!                                  with isw_field_type = 5, integmode <= 0 and a chartmap
+!                                  coord_input use guiding-centre field tables
 coord_input = ''                 ! reference coordinate file: VMEC wout or chartmap (.nc);
 !                                  '' = netcdffile, then field_input
 profile_label_file = ''          ! netCDF label s(R,phi,Z) as &profiles radius for
@@ -221,6 +221,7 @@ local = .true.
 loopskip = 0
 bmod_ref = 5d4
 macrostep_log_ratio = 1d3
+field_tables_order = 0
 /
 
 &profiles
