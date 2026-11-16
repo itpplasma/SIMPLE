@@ -78,22 +78,29 @@ contains
 
     !> Within the first radial cells sqrt(g) -> 0, and a cubic interpolant of it
     !> lost its relative accuracy, up to the wrong sign on finer charts (#799);
-    !> h^j and (curl h)^j divide by it. The tables must return the chart's.
+    !> h^j and (curl h)^j divide by it. The tables must return the chart's
+    !> sqrt(g), and h^j and (curl h)^j there within 5 % of the largest
+    !> component (they erred by 20 % on the chart grid).
     subroutine check_axis_sqrtg(tab)
         type(gc_tables_t), intent(in) :: tab
-        real(dp), parameter :: rho(3) = [1.0e-3_dp, 0.01_dp, 0.05_dp]
-        real(dp) :: x(3), q(GC_COUNT), qe(GC_COUNT)
+        real(dp), parameter :: rho(3) = [1.0e-3_dp, 0.011_dp, 0.03_dp]
+        real(dp) :: x(3), q(GC_COUNT), qe(GC_COUNT), err
         integer :: i, j
 
         do i = 1, size(rho)
-            do j = 1, 16
-                x = [rho(i), 0.39_dp*j, 0.13_dp*j]
+            do j = 0, 383
+                x = [rho(i), twopi*mod(j, 48)/48.0_dp, period*(j/48)/8.0_dp]
                 call exact_quantities(x, qe)
                 call evaluate_gc_tables(tab, x, q(1), q(2), q(3:5), q(6:8), q(9:11), &
                                         q(12:14))
                 if (abs(q(2)/qe(2) - 1) > 1.0e-12_dp) then
                     print *, 'rho, theta, zeta', x, ' sqrt(g) table, chart', q(2), qe(2)
                     error stop 'sqrt(g) near the axis differs from the chart'
+                end if
+                err = maxval(abs(q(9:14) - qe(9:14)))/maxval(abs(qe(9:14)))
+                if (err > 0.05_dp) then
+                    print *, 'rho, theta, zeta', x, ' h^j, curl relative error', err
+                    error stop 'h^j or (curl h)^j near the axis too far from exact'
                 end if
             end do
         end do

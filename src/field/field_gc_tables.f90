@@ -24,13 +24,19 @@ module field_gc_tables
 
     ! Cubic, the order the tables were validated and timed with.
     integer, parameter :: gc_tables_order = 3
-    ! sqrt(g) -> 0 at the axis, where its cubic interpolant can change sign
-    ! (#799); within this many radial cells it comes from the chart basis.
-    real(dp), parameter :: axis_cells = 2.0_dp
+    ! sqrt(g) -> 0 at the axis, and the contravariant parts are divided by it.
+    ! Interpolated across the first radial cells it erred by O(h**2) relative
+    ! to a vanishing value, up to the wrong sign (#799). Within axis_cells
+    ! cells, a table axis_refine times finer in rho and the chart's sqrt(g)
+    ! are used instead.
+    integer, parameter :: axis_cells = 2, axis_refine = 4
 
     type :: gc_tables_t
         type(BatchSplineData3D) :: spl
-        !> The chart, for sqrt(g) near the axis.
+        !> The same quantities, axis_refine times finer in rho, below axis_rho.
+        type(BatchSplineData3D) :: axis_spl
+        real(dp) :: axis_rho = -huge(1.0_dp)
+        !> The chart, for sqrt(g) below axis_rho.
         class(coordinate_system_t), allocatable :: coords
         logical :: initialized = .false.
     contains
@@ -88,10 +94,8 @@ contains
         type(gc_tables_t), intent(inout) :: tab
         integer, intent(in), optional :: n_r, n_th, n_phi
 
-        real(dp), allocatable :: y(:, :, :, :)
-        real(dp) :: xmin(3), xmax(3), step(3), u(3), x(3), e(3, 3), q(GC_COUNT)
-        real(dp) :: b(3), db(3, 3)
-        integer :: nr, nth, nph, i, j, k
+        real(dp) :: xmin(3), xmax(3), step(3), axis_max(3)
+        integer :: nr, nth, nph
 
         ! The tables are splined in the chart's own radius, which the RK axis
         ! map treats as rho (magfie axis_radial_coordinate); a normalised-flux
@@ -108,12 +112,35 @@ contains
                                    n_phi_in=n_phi, n_r=nr, n_th=nth, n_phi=nph, &
                                    xmin=xmin, xmax=xmax)
         step = (xmax - xmin)/real([nr, nth, nph] - 1, dp)
-        allocate (y(nr, nth, nph, GC_COUNT))
+        call clear_gc_tables(tab)
+        allocate (tab%coords, source=coords)
+        call tabulate(source, coords, xmin, xmax, [nr, nth, nph], tab%spl)
+        tab%axis_rho = xmin(1) + axis_cells*step(1)
+        axis_max = xmax
+        axis_max(1) = xmin(1) + (axis_cells + 1)*step(1)
+        call tabulate(source, coords, xmin, axis_max, &
+                      [axis_refine*(axis_cells + 1) + 1, nth, nph], tab%axis_spl)
+        tab%initialized = .true.
+    end subroutine build_gc_tables
+
+    subroutine tabulate(source, coords, xmin, xmax, n, spl)
+        class(gc_field_source_t), intent(in) :: source
+        class(coordinate_system_t), intent(in) :: coords
+        real(dp), intent(in) :: xmin(3), xmax(3)
+        integer, intent(in) :: n(3)
+        type(BatchSplineData3D), intent(out) :: spl
+
+        real(dp), allocatable :: y(:, :, :, :)
+        real(dp) :: step(3), u(3), x(3), e(3, 3), q(GC_COUNT), b(3), db(3, 3)
+        integer :: i, j, k
+
+        step = (xmax - xmin)/real(n - 1, dp)
+        allocate (y(n(1), n(2), n(3), GC_COUNT))
         !$omp parallel do collapse(2) default(shared) &
         !$omp private(i, j, k, u, x, e, b, db, q)
-        do k = 1, nph
-            do j = 1, nth
-                do i = 1, nr
+        do k = 1, n(3)
+            do j = 1, n(2)
+                do i = 1, n(1)
                     u = xmin + step*real([i, j, k] - 1, dp)
                     call coords%evaluate_cart(u, x)
                     call coords%covariant_basis(u, e)
@@ -126,12 +153,9 @@ contains
             end do
         end do
         !$omp end parallel do
-        call clear_gc_tables(tab)
-        allocate (tab%coords, source=coords)
         call construct_batch_splines_3d(xmin, xmax, y, spread(gc_tables_order, 1, 3), &
-                                        [.false., .true., .true.], tab%spl)
-        tab%initialized = .true.
-    end subroutine build_gc_tables
+                                        [.false., .true., .true.], spl)
+    end subroutine tabulate
 
     !> magfie outputs at x = (rho, theta, zeta) of the chart.
     subroutine evaluate_gc_tables(tab, x, bmod, sqrtg, bder, hcovar, hctrvr, hcurl)
@@ -140,17 +164,19 @@ contains
         real(dp), intent(out) :: bmod, sqrtg, bder(3), hcovar(3), hctrvr(3), hcurl(3)
         real(dp) :: y(GC_COUNT), e(3, 3)
 
-        call evaluate_batch_splines_3d(tab%spl, x, y)
+        if (x(1) < tab%axis_rho) then
+            call evaluate_batch_splines_3d(tab%axis_spl, x, y)
+            call tab%coords%covariant_basis(x, e)
+            y(GC_SQRTG) = dot_product(e(:, 1), [e(2, 2)*e(3, 3) - e(3, 2)*e(2, 3), &
+                                                e(3, 2)*e(1, 3) - e(1, 2)*e(3, 3), &
+                                                e(1, 2)*e(2, 3) - e(2, 2)*e(1, 3)])
+        else
+            call evaluate_batch_splines_3d(tab%spl, x, y)
+        end if
         bmod = y(GC_BMOD)
         sqrtg = y(GC_SQRTG)
         bder = y(GC_BDER:GC_BDER + 2)
         hcovar = y(GC_HCOV:GC_HCOV + 2)
-        if (x(1) < tab%spl%x_min(1) + axis_cells*tab%spl%h_step(1)) then
-            call tab%coords%covariant_basis(x, e)
-            sqrtg = dot_product(e(:, 1), [e(2, 2)*e(3, 3) - e(3, 2)*e(2, 3), &
-                                          e(3, 2)*e(1, 3) - e(1, 2)*e(3, 3), &
-                                          e(1, 2)*e(2, 3) - e(2, 2)*e(1, 3)])
-        end if
         hctrvr = y(GC_HCTR:GC_HCTR + 2)/sqrtg
         hcurl = y(GC_HCURL:GC_HCURL + 2)/sqrtg
     end subroutine evaluate_gc_tables
@@ -158,7 +184,10 @@ contains
     subroutine clear_gc_tables(tab)
         type(gc_tables_t), intent(inout) :: tab
 
-        if (tab%initialized) call destroy_batch_splines_3d(tab%spl)
+        if (tab%initialized) then
+            call destroy_batch_splines_3d(tab%spl)
+            call destroy_batch_splines_3d(tab%axis_spl)
+        end if
         if (allocated(tab%coords)) deallocate (tab%coords)
         tab%initialized = .false.
     end subroutine clear_gc_tables
