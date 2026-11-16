@@ -24,7 +24,7 @@ module field_gc_tables
 
     ! Cubic, the order the tables were validated and timed with.
     integer, parameter :: gc_tables_order = 3
-    real(dp), parameter :: axis_cells = 4.0_dp
+    real(dp), parameter :: axis_cells = 2.0_dp
 
     type :: gc_tables_t
         type(BatchSplineData3D) :: spl
