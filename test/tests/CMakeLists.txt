@@ -977,9 +977,9 @@ set_tests_properties(test_continuous_classifier_scores PROPERTIES LABELS "unit")
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "unit")
 
-    # Boozer chartmap test: generate test file with a compiled NetCDF tool, then run Fortran test
-    add_executable(generate_test_boozer_chartmap.x generate_test_boozer_chartmap.c)
-    target_link_libraries(generate_test_boozer_chartmap.x netcdf m)
+    # Boozer chartmap test: generate the test file with fortio, then run the Fortran test
+    add_executable(generate_test_boozer_chartmap.x generate_test_boozer_chartmap.f90)
+    target_link_libraries(generate_test_boozer_chartmap.x simple)
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/test_boozer_chartmap.nc
         COMMAND $<TARGET_FILE:generate_test_boozer_chartmap.x> ${CMAKE_CURRENT_BINARY_DIR}/test_boozer_chartmap.nc
