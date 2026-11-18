@@ -14,7 +14,7 @@ program test_nbi_torque
     use nbi_torque, only: nbi_tally_total
     use timing, only: init_timer
     implicit none
-    real(dp) :: total(5)
+    real(dp) :: total(6)
     real(dp), allocatable :: z(:, :)
     character(1024) :: filename, mode
     integer :: unit
@@ -59,7 +59,8 @@ program test_nbi_torque
     call simple_trace
     call simple_write_output
     total = nbi_tally_total()
-    print '(a,5es14.5)', 'bulk field lost fast injected [N m] ', total
+    print '(a,5es14.5)', 'bulk field lost fast injected [N m] ', total(1:5)
+    print '(a,es14.5)', 'beam-target neutrons [1/s] ', total(6)
     if (abs(sum(total(1:4))/total(5) - 1.0_dp) > 1.0e-10_dp) &
         error stop 'angular momentum budget does not close'
     if (abs(total(2)) > 1.0e-3_dp*abs(total(1))) &

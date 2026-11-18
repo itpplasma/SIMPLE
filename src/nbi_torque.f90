@@ -18,7 +18,7 @@ module nbi_torque
     integer :: nbins = 0
     ! Per-bin angular momentum transfer [kg m^2/s per marker].
     real(dp), allocatable :: dep_birth(:), dep_coll(:), dep_jxb(:), dep_therm(:), &
-                             dep_field(:)
+                             dep_field(:), dep_neutron(:)
     real(dp), allocatable :: last_l(:), last_a(:), last_s(:), neutral_l(:)
     real(dp) :: lost_l = 0.0_dp, alive_l = 0.0_dp, marker_rate = 0.0_dp
     integer :: n_lost = 0, n_therm = 0, n_alive = 0, n_begin = 0
@@ -36,9 +36,10 @@ contains
         n = size(angmom)
         nbins = n_bins
         if (allocated(dep_birth)) deallocate (dep_birth, dep_coll, dep_jxb, dep_therm, &
-                                           dep_field, last_l, last_a, last_s, neutral_l)
+                                              dep_field, dep_neutron, last_l, last_a, &
+                                              last_s, neutral_l)
         allocate (dep_birth(nbins), dep_coll(nbins), dep_jxb(nbins), dep_therm(nbins), &
-                  dep_field(nbins), source=0.0_dp)
+                  dep_field(nbins), dep_neutron(nbins), source=0.0_dp)
         allocate (last_l(n), last_a(n), last_s(n), source=0.0_dp)
         allocate (neutral_l(n), source=angmom)
         lost_l = 0.0_dp
@@ -108,7 +109,27 @@ contains
         last_l(ipart) = l
         last_a(ipart) = a
         last_s(ipart) = s
+        call add(dep_neutron, s, beam_target_neutrons(z, s))
     end subroutine nbi_tally_drift
+
+    function beam_target_neutrons(z, s) result(yield)
+        !> Expected D(d,n)3He reactions of one deuteron during one microstep on
+        !> a deuterium target at rest: n_D sigma(E/2) v dt.
+        use params, only: n_d, v0, dtaumin, particle_energy_eV_effective, am1, am2
+        use simple_profiles, only: get_plasma_params
+        use fusion_source, only: dd_neutron_cross_section
+        real(dp), intent(in) :: z(5), s
+        real(dp) :: yield, te, ti1, ti2, n1, n2, nd
+
+        yield = 0.0_dp
+        if (nint(n_d) /= 2) return
+        call get_plasma_params(s, te, ti1, ti2, n1, n2)
+        nd = 0.0_dp
+        if (nint(am1) == 2) nd = nd + n1
+        if (nint(am2) == 2) nd = nd + n2
+   yield = nd*dd_neutron_cross_section(0.5e-3_dp*particle_energy_eV_effective*z(4)**2) &
+                *1.0e-2_dp*v0*z(4)*dtaumin/v0
+    end function beam_target_neutrons
 
     subroutine nbi_tally_collision(ipart, z)
         !> Collisions change only the velocity at fixed position.
@@ -143,14 +164,16 @@ contains
 
     pure function nbi_tally_total() result(total)
         !> Bulk torque, field torque, lost and still-fast angular momentum
-        !> rates [N m], and the injected rate of the markers.
-        real(dp) :: total(5)
+        !> rates [N m], the injected rate of the markers, and the beam-target
+        !> neutron rate [1/s].
+        real(dp) :: total(6)
         total(1) = marker_rate*(sum(dep_birth) + sum(dep_coll) + sum(dep_jxb) + &
                                 sum(dep_therm))
         total(2) = marker_rate*sum(dep_field)
         total(3) = marker_rate*lost_l
         total(4) = marker_rate*alive_l
         total(5) = marker_rate*sum(neutral_l)
+        total(6) = marker_rate*sum(dep_neutron)
     end function nbi_tally_total
 
     subroutine nbi_tally_write(filename)
@@ -159,7 +182,7 @@ contains
         character(len=*), intent(in) :: filename
         integer, parameter :: ns = 8, nt = 64, np = 128
         real(dp), parameter :: twopi = 2.0_dp*acos(-1.0_dp)
-        real(dp) :: volume(nbins), g(3, 3), ginv(3, 3), sqrtg, u(3), total(5)
+        real(dp) :: volume(nbins), g(3, 3), ginv(3, 3), sqrtg, u(3), total(6)
         integer :: k, i, j, m, unit
 
         volume = 0.0_dp
@@ -185,13 +208,14 @@ contains
         write (unit, '(a,es24.16)') '# lost_angular_momentum_rate ', total(3)
         write (unit, '(a,es24.16)') '# still_fast_angular_momentum_rate ', total(4)
        write (unit, '(a,es24.16)') '# injected_ionized_angular_momentum_rate ', total(5)
+        write (unit, '(a,es24.16)') '# beam_target_neutron_rate_per_s ', total(6)
       write (unit, '(a,4i8)') '# markers begun thermalized lost still_fast ', n_begin, &
             n_therm, n_lost, n_alive
-     write (unit, '(a)') '# s_lo s_hi volume_m3 birth collisional jxb thermalized field'
+     write (unit, '(a)') '# s_lo s_hi volume_m3 birth collisional jxb thermalized field neutrons_per_s'
         do k = 1, nbins
-           write (unit, '(2f10.5,6es20.11)') real(k - 1, dp)/nbins, real(k, dp)/nbins, &
+           write (unit, '(2f10.5,7es20.11)') real(k - 1, dp)/nbins, real(k, dp)/nbins, &
                 volume(k), marker_rate*[dep_birth(k), dep_coll(k), dep_jxb(k), &
-                                        dep_therm(k), dep_field(k)]
+                                        dep_therm(k), dep_field(k), dep_neutron(k)]
         end do
         close (unit)
     end subroutine nbi_tally_write
