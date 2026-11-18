@@ -22,7 +22,7 @@ program test_nbi_birth_equilibrium
     real(dp) :: at, ap, dat, dap, iota, sqg, alam, dl_ds, dl_dt, dl_dp, bctr_t, bctr_p
     real(dp) :: bco_s, bco_t, bco_p, e_cov(3, 3), bcart(3), direction(3), worst_pitch
     real(dp) :: rho, speed, lam, worst, injected, ionized, shine, value
-    character(1024) :: filename, mode, key
+    character(1024) :: filename, mode, key, line
     integer :: i, unit, ios
 
     call get_command_argument(1, filename)
@@ -55,15 +55,23 @@ program test_nbi_birth_equilibrium
     allocate (z(5, ntestpart))
     call simple_sample(ntestpart, z)
 
+    injected = -1.0_dp
+    ionized = -1.0_dp
+    shine = -1.0_dp
     open (newunit=unit, file='nbi_source.dat', status='old')
     do
-        read (unit, *, iostat=ios) key, value
+        read (unit, '(a)', iostat=ios) line
         if (ios /= 0) exit
+        line = adjustl(line)
+        if (line(1:1) == '#' .or. len_trim(line) == 0) cycle
+        read (line, *, iostat=ios) key, value
+        if (ios /= 0) cycle
         if (key == 'injected_rate') injected = value
         if (key == 'ionized_rate') ionized = value
         if (key == 'shine_rate') shine = value
     end do
     close (unit)
+if (min(injected, ionized, shine) < 0.0_dp) error stop 'rates missing in nbi_source.dat'
     if (abs((ionized + shine)/injected - 1.0_dp) > 1.0e-12_dp) &
         error stop 'ionized plus shine-through differs from injected'
 
