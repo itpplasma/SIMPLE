@@ -54,6 +54,10 @@
     util.F90
     samplers.f90
     fusion_source.f90
+    beam_stopping.f90
+    nbi_source.f90
+    nbi_birth.f90
+    nbi_torque.f90
     cut_detector.f90
     classification.f90
     simple.f90

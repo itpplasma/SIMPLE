@@ -78,6 +78,10 @@ module params
     logical          :: generate_start_only = .False.
     integer          :: startmode = 1
     integer :: fusion_grid(3) = (/128, 32, 32/)
+    !> Neutral beam births (startmode 8): beamlet file, path step and length [m].
+    character(1000) :: nbi_file = 'nbi_beamlets.dat'
+    real(dp) :: nbi_path_step = 0.005d0, nbi_path_length = 8.0d0
+    integer :: nbi_torque_bins = 50
     real(dp) :: grid_density = 0d0
     logical          :: special_ants_file = .False.
 
@@ -290,6 +294,7 @@ module params
         facE_al, particle_energy_eV, npoiper2, n_e, n_d, netcdffile, &
         ns_s, ns_tp, multharm, &
         isw_field_type, generate_start_only, startmode, fusion_grid, grid_density, &
+        nbi_file, nbi_path_step, nbi_path_length, nbi_torque_bins, &
         special_ants_file, integmode, orbit_model, orbit_coord, relerr, &
         gpu_mode, gpu_backend, gpu_method, gpu_start_coordinates, &
         gpu_landreman, gpu_compact_init, gpu_work_order, gpu_num_devices, &
