@@ -2,11 +2,12 @@ program test_beam_stopping
     !> Compare the Suzuki et al. (1998) fit with the independent C
     !> implementation in ASCOT5 (src/suzuki.c, itpplasma/ascot5 a6cc085a),
     !> evaluated at the same points, and check the impurity enhancement.
+    !> The last two points extrapolate the low-energy fit below 10 keV/amu.
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use beam_stopping, only: suzuki_stopping
     implicit none
     ! E [keV/amu], ne [m^-3], Te [eV], impurity Z, n_Z/n_e, ASCOT5 sigma [m^2]
-    real(dp), parameter :: ref(6, 8) = reshape([ &
+    real(dp), parameter :: ref(6, 10) = reshape([ &
                      30.0_dp, 3e19_dp, 1000.0_dp, 0.0_dp, 0.0_dp, 5.4711179033e-20_dp, &
                      46.5_dp, 5e19_dp, 2500.0_dp, 0.0_dp, 0.0_dp, 3.9416465970e-20_dp, &
                       10.0_dp, 2e19_dp, 300.0_dp, 0.0_dp, 0.0_dp, 1.0517221776e-19_dp, &
@@ -14,7 +15,9 @@ program test_beam_stopping
                      46.5_dp, 6e19_dp, 800.0_dp, 6.0_dp, 0.01_dp, 4.4450763464e-20_dp, &
                    200.0_dp, 5e19_dp, 5000.0_dp, 6.0_dp, 0.01_dp, 1.4865516954e-20_dp, &
                    500.0_dp, 8e19_dp, 10000.0_dp, 0.0_dp, 0.0_dp, 6.6838449862e-21_dp, &
-             15.5_dp, 4e19_dp, 1500.0_dp, 5.0_dp, 0.03_dp, 8.0549463431e-20_dp], [6, 8])
+                    15.5_dp, 4e19_dp, 1500.0_dp, 5.0_dp, 0.03_dp, 8.0549463431e-20_dp, &
+                     9.58_dp, 4e19_dp, 1500.0_dp, 0.0_dp, 0.0_dp, 9.8326043781e-20_dp, &
+              9.0_dp, 4e19_dp, 1500.0_dp, 0.0_dp, 0.0_dp, 1.0038777741e-19_dp], [6, 10])
     real(dp) :: sigma, zeff, nz, nd, err
     integer :: i, z
 
