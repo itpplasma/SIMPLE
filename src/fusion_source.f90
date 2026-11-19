@@ -3,7 +3,8 @@ module fusion_source
     use finite_check, only: is_finite
     implicit none
     private
-    public :: dt_reactivity, build_birth_cdf, draw_birth, alpha_energy_joule
+    public :: dt_reactivity, build_birth_cdf, draw_birth, alpha_energy_joule, &
+              dd_neutron_cross_section
 
     real(dp), parameter :: pi = acos(-1.0_dp)
     real(dp), parameter :: alpha_energy_joule = 3.5e6_dp*1.602176634e-19_dp
@@ -18,8 +19,8 @@ contains
         real(dp) :: rate, t, theta, xi
         real(dp), parameter :: bg = 34.3827_dp, mrc2 = 1124656.0_dp
         real(dp), parameter :: c(7) = [1.17302e-9_dp, 1.51361e-2_dp, &
-            7.51886e-2_dp, 4.60643e-3_dp, 1.35000e-2_dp, &
-            -1.06750e-4_dp, 1.36600e-5_dp]
+                                       7.51886e-2_dp, 4.60643e-3_dp, 1.35000e-2_dp, &
+                                       -1.06750e-4_dp, 1.36600e-5_dp]
 
         if (.not. is_finite(temperature_ev)) &
             error stop 'fusion source: nonfinite ion temperature'
@@ -30,10 +31,29 @@ contains
         ! Below this temperature exp(-3*xi) underflows to zero.
         if (t < 1.0e-6_dp) return
         theta = t/(1.0_dp - t*(c(2) + t*(c(4) + t*c(6)))/ &
-            (1.0_dp + t*(c(3) + t*(c(5) + t*c(7)))))
+                   (1.0_dp + t*(c(3) + t*(c(5) + t*c(7)))))
         xi = (bg**2/(4.0_dp*theta))**(1.0_dp/3.0_dp)
         rate = 1.0e-6_dp*c(1)*theta*sqrt(xi/(mrc2*t**3))*exp(-3.0_dp*xi)
     end function dt_reactivity
+
+    function dd_neutron_cross_section(e_cm_kev) result(sigma)
+        ! H.-S. Bosch & G.M. Hale, Nuclear Fusion 32 (1992) 611, Eqs. (8), (9),
+        ! Table IV, D(d,n)3He, valid for 0.5 <= E_cm <= 4900 keV. Returns m^2.
+        real(dp), intent(in) :: e_cm_kev
+        real(dp) :: sigma, e, s
+        real(dp), parameter :: bg = 31.3970_dp
+        real(dp), parameter :: a(5) = [5.3701e4_dp, 3.3027e2_dp, -1.2706e-1_dp, &
+                                       2.9327e-5_dp, -2.5151e-9_dp]
+
+        if (.not. is_finite(e_cm_kev)) error stop 'dd cross section: nonfinite energy'
+        if (e_cm_kev > 4900.0_dp) error stop 'dd cross section: energy above 4900 keV'
+        sigma = 0.0_dp
+        if (e_cm_kev < 0.5_dp) return
+        e = e_cm_kev
+        s = a(1) + e*(a(2) + e*(a(3) + e*(a(4) + e*a(5))))
+        ! mb to m^2
+        sigma = s/(e*exp(bg/sqrt(e)))*1.0e-31_dp
+    end function dd_neutron_cross_section
 
     subroutine build_birth_cdf(slo, shi, grid, cdf, power)
         use simple_profiles, only: get_plasma_params

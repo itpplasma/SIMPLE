@@ -47,6 +47,9 @@ simple_fetch_test_data("${WOUT_URL}" "${WOUT_FILE}"
     333ab8cef64c4b4f406e76209266fc3bf4d7976e9c28c162983c2120e112e771)
 simple_fetch_test_data("${WOUT_QH_URL}" "${WOUT_QH_FILE}"
     249c397d67357949b2ab4690145224736d8388f5332f23c67c9cb0bf2aa9931e)
+set(WOUT_ITER_FILE "${TEST_DATA_DIR}/wout_iter_model.nc")
+simple_fetch_test_data("${SIMPLE_SIMSOPT_TEST_FILES}/wout_ITERModel_reference.nc"
+    "${WOUT_ITER_FILE}" e6695c3da8fa823838d6b2bb493b2e2a048fc918169a74e2fa092463235f1ddb)
 
 # Create symlink in test binary directory for backward compatibility
 file(CREATE_LINK "${WOUT_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/wout.nc" SYMBOLIC)
@@ -634,6 +637,19 @@ target_link_libraries(test_profiles.x simple)
 add_test(NAME test_profiles COMMAND test_profiles.x)
 set_tests_properties(test_profiles PROPERTIES LABELS "unit")
 
+add_executable(test_beam_stopping.x test_beam_stopping.f90)
+target_link_libraries(test_beam_stopping.x simple)
+add_test(NAME test_beam_stopping COMMAND test_beam_stopping.x)
+set_tests_properties(test_beam_stopping PROPERTIES LABELS "unit")
+
+add_executable(test_nbi_source.x test_nbi_source.f90)
+target_link_libraries(test_nbi_source.x simple)
+add_test(NAME test_nbi_source COMMAND test_nbi_source.x)
+set_tests_properties(test_nbi_source PROPERTIES LABELS "unit")
+add_test(NAME test_nbi_source_truncated COMMAND test_nbi_source.x truncated)
+set_tests_properties(test_nbi_source_truncated PROPERTIES LABELS "unit"
+    PASS_REGULAR_EXPRESSION "beam path ends inside the plasma")
+
 add_executable(test_fusion_source.x test_fusion_source.f90)
 target_link_libraries(test_fusion_source.x simple)
 foreach(case IN ITEMS flat peaked power negative_density zero_source invalid_bounds
@@ -663,6 +679,36 @@ add_test(NAME test_api_repeated_sampling
 set_tests_properties(test_api_repeated_sampling PROPERTIES LABELS "integration"
     TIMEOUT 120 ENVIRONMENT "OMP_NUM_THREADS=1"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+add_executable(test_nbi_field_direction_axis.x test_nbi_field_direction_axis.f90)
+target_link_libraries(test_nbi_field_direction_axis.x simple)
+add_test(NAME test_nbi_field_direction_axis
+    COMMAND test_nbi_field_direction_axis.x ${WOUT_FILE})
+set_tests_properties(test_nbi_field_direction_axis PROPERTIES LABELS "integration"
+    TIMEOUT 120 ENVIRONMENT "OMP_NUM_THREADS=1"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+add_executable(test_nbi_birth_equilibrium.x test_nbi_birth_equilibrium.f90)
+target_link_libraries(test_nbi_birth_equilibrium.x simple)
+foreach(case IN ITEMS radial tangential)
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/nbi_${case})
+    add_test(NAME test_nbi_birth_${case}
+        COMMAND test_nbi_birth_equilibrium.x ${WOUT_FILE} ${case})
+    set_tests_properties(test_nbi_birth_${case} PROPERTIES LABELS "integration"
+        TIMEOUT 120 ENVIRONMENT "OMP_NUM_THREADS=1"
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/nbi_${case})
+endforeach()
+
+add_executable(test_nbi_torque.x test_nbi_torque.f90)
+target_link_libraries(test_nbi_torque.x simple)
+foreach(case IN ITEMS collisional collisionless)
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/nbi_torque_${case})
+    add_test(NAME test_nbi_torque_${case}
+        COMMAND test_nbi_torque.x ${WOUT_ITER_FILE} ${case})
+    set_tests_properties(test_nbi_torque_${case} PROPERTIES
+        LABELS "integration;collisions" TIMEOUT 600
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/nbi_torque_${case})
+endforeach()
 
 add_executable(test_fusion_birth_equilibrium.x test_fusion_birth_equilibrium.f90)
 target_link_libraries(test_fusion_birth_equilibrium.x simple)

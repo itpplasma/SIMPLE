@@ -47,7 +47,9 @@ module simple_main
                       ORBIT_EXIT_NUMERICAL_MAXITER, ORBIT_EXIT_NUMERICAL_LINEAR, &
                       ORBIT_EXIT_NUMERICAL_EVENT, ORBIT_EXIT_NUMERICAL_FULL_ORBIT
     use params, only: radial_electric_potential_slope
-    use params, only: thermal_stop_factor, ORBIT_EXIT_THERMALIZED
+use params, only: thermal_stop_factor, ORBIT_EXIT_THERMALIZED, notrace_passing, contr_pp
+    use nbi_torque, only: nbi_tally_enabled, nbi_tally_begin, nbi_tally_drift, &
+                          nbi_tally_collision, nbi_tally_end, nbi_tally_write
     use params, only: max_rk_recoveries, ORBIT_EXIT_RECOVERY_STORM
     use params, only: orbit_warning_hold_count, orbit_first_warning_step, &
                       orbit_terminal_exit_code, orbit_terminal_time
@@ -447,6 +449,11 @@ contains
         use samplers, only: init_starting_surf
         use timing, only: print_phase_time
 
+        if (startmode == 8 .and. run_input_kind() /= INPUT_VMEC) &
+            error stop 'neutral beam births require a VMEC equilibrium'
+        ! Skipped passing markers would drop the torque they carry.
+        if (startmode == 8 .and. (notrace_passing == 1 .or. contr_pp > -1.0d10)) &
+      error stop 'neutral beam births require notrace_passing = 0 and contr_pp <= -1e10'
         if (startmode == 7) then
             if (run_input_kind() == INPUT_TEST .or. &
                 run_input_kind() == INPUT_SPECTRE) &
@@ -577,7 +584,7 @@ contains
         use params, only: restart, deterministic
 
         if (.not. restart .or. deterministic) return
-        if (startmode == 1 .or. startmode == 5 .or. startmode == 7 .or. &
+   if (startmode == 1 .or. startmode == 5 .or. startmode == 7 .or. startmode == 8 .or. &
             run_input_kind() == INPUT_TEST) error stop &
             'restart with random start points needs deterministic=.true.'
     end subroutine validate_restart_starts
@@ -2049,6 +2056,9 @@ contains
                             sample_read_integration, &
                         sample_surface_fieldline, sample_surface_fieldline_from_integ, &
                             sample_fusion_birth, load_marker_weights
+        use nbi_birth, only: sample_nbi_birth, nbi_marker_angmom, nbi_marker_rate
+        use nbi_torque, only: nbi_tally_init
+        use params, only: nbi_torque_bins
         use params, only: marker_weight_file, marker_weights_input
 
         logical, intent(in), optional :: xstart_is_integ_coords
@@ -2093,6 +2103,10 @@ contains
             case default
                 error stop 'fusion births require num_surf=0, 1 or 2'
             end select
+
+        elseif (8 == startmode) then
+            call sample_nbi_birth(zstart, convert_surface_starts)
+            call nbi_tally_init(nbi_torque_bins, nbi_marker_angmom, nbi_marker_rate)
 
         elseif (5 == startmode) then
             if (0 == num_surf) then
@@ -2621,6 +2635,7 @@ contains
 
         kt = 0
         it_final = 0
+        if (nbi_tally_enabled) call nbi_tally_begin(ipart, z)
         do it = 1, ntimstep
             if (it >= 2) then
                 if (wall_enabled) then
@@ -2634,7 +2649,7 @@ contains
                     call macrostep(anorb, z, kt, ierr_orbit, ntau_macro(it), &
                                    exit_step, hold_streak=hold_streak, &
                                    numerical_hold_any=numerical_hold, &
-                                   rk_recovery=rk_recovery)
+                                   rk_recovery=rk_recovery, ipart=ipart)
                 end if
                 if (rk_recovery%total_activations > max_rk_recoveries .and. &
                     .not. recovery_storm) then
@@ -2720,6 +2735,7 @@ contains
             end do
         end if
 
+       if (nbi_tally_enabled) call nbi_tally_end(ipart, thermalized_exit, physical_exit)
         !$omp critical
         call integ_to_ref(z(1:3), zend(1:3, ipart))
         zend(4:5, ipart) = z(4:5)
@@ -3477,6 +3493,7 @@ contains
                 call advance_rk_recovery(anorb, z, rk_recovery_local, &
                                          hold_streak_local, recovery_method)
             end if
+            if (nbi_tally_enabled .and. present(ipart)) call nbi_tally_drift(ipart, z)
             if (swcoll) then
                 ! Collisions change only the momentum, so the profile radius
                 ! of this position serves both the collision and the stop test.
@@ -3499,6 +3516,8 @@ contains
                 if (rk_recovery_local%active) then
                     rk_recovery_local%momentum_reference = z(4)
                 end if
+                if (nbi_tally_enabled .and. present(ipart)) &
+                    call nbi_tally_collision(ipart, z)
                 if (thermalized(z, s_collision)) then
                     ierr_orbit = THERMALIZED_EXIT
                     kt = kt + 1
@@ -3886,6 +3905,7 @@ contains
                 call write_results_netcdf('results.nc', wall%facet_count)
             end if
         end if
+        if (nbi_tally_enabled) call nbi_tally_write('nbi_torque.dat')
     end subroutine write_output
 
     subroutine write_results

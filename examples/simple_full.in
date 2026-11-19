@@ -16,8 +16,15 @@ startmode = 1                    ! initial conditions, see the list below
 !   5 = uniform random s in the range set by num_surf, random angles
 !   6 = read start.dat with positions in integration coordinates (e.g. Boozer)
 !   7 = D-T fusion births from &profiles and the volume Jacobian; see docs/alpha-birth.md
+!   8 = neutral-beam births from nbi_file, Suzuki stopping on &profiles
 !   Modes 1, 5 and 7 write start.dat. Random pitch v_par/v in [-1, 1].
 fusion_grid = 128, 32, 32        ! mode 7 midpoint cells: s, poloidal, toroidal (full torus)
+nbi_file = 'nbi_beamlets.dat'    ! mode 8 beamlets, one per line: name mass energy_eV power_W
+!                                  f_full f_half f_third x y z dx dy dz (m, Cartesian)
+nbi_path_step = 0.005d0          ! mode 8 path step for the beam optical depth, m
+nbi_path_length = 8d0            ! mode 8 path length from the source, m; must end outside
+!                                  the plasma (stops otherwise)
+nbi_torque_bins = 50             ! mode 8 radial bins in s of nbi_torque.dat
 sbeg = 1024*0.5d0                ! start surfaces: normalized toroidal flux s (SPECTRE: rho_g
 !                                  unless spectre_sbeg_is_toroidal_flux; TEST field: r/a)
 num_surf = 1                     ! startmode 5/7 range: 0 = [0,1], 1 = [0,sbeg(1)],

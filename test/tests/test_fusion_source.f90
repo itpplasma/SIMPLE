@@ -7,7 +7,7 @@ contains
         real(dp), intent(out) :: bmod, jac, bder(3), hcov(3), hctr(3), hcurl(3)
         ! An analytic, left-handed toroidal volume chart in cm^3.
         jac = -2.0e6_dp*(1.0_dp + x(1))*(1.0_dp + 0.4_dp*cos(x(2)))* &
-            (1.0_dp + 0.3_dp*cos(x(3)))
+              (1.0_dp + 0.3_dp*cos(x(3)))
         bmod = 1.0_dp
         bder = 0.0_dp
         hcov = 0.0_dp
@@ -18,8 +18,8 @@ end module fusion_source_fixture
 
 program test_fusion_source
     use, intrinsic :: iso_fortran_env, only: dp => real64
-    use fusion_source, only: dt_reactivity, build_birth_cdf, draw_birth, &
-        alpha_energy_joule
+    use fusion_source, only: dt_reactivity, dd_neutron_cross_section, build_birth_cdf, draw_birth, &
+                             alpha_energy_joule
     use fusion_source_fixture, only: analytic_magfie
     use simple_profiles
     use magfie_sub, only: magfie
@@ -65,6 +65,11 @@ program test_fusion_source
     end select
 
     ! Values from an independent evaluation of the published Table VII fit.
+    ! Bosch & Hale (1992) Table V, D(d,n)3He in mb, four significant digits.
+    if (abs(dd_neutron_cross_section(30.0_dp)/6.857e-31_dp - 1) > 1e-3_dp .or. &
+        abs(dd_neutron_cross_section(100.0_dp)/3.701e-30_dp - 1) > 1e-3_dp .or. &
+        abs(dd_neutron_cross_section(400.0_dp)/8.702e-30_dp - 1) > 1e-3_dp) &
+        error stop 'D(d,n) cross section differs from Bosch and Hale Table V'
     if (abs(dt_reactivity(1.0e3_dp)/6.85688424959328e-27_dp - 1) > 1e-12_dp) &
         error stop '1 keV reactivity'
     if (abs(dt_reactivity(1.0e4_dp)/1.1361654705836232e-22_dp - 1) > 1e-12_dp) &
@@ -140,7 +145,7 @@ program test_fusion_source
     reference = 1.5_dp
     if (trim(mode) == 'peaked') reference = primitive(1.0_dp)
     reference = reference*2*(2*acos(-1.0_dp))**2*ni1_scale*ni2_scale* &
-        dt_reactivity(1.0e4_dp)*alpha_energy_joule
+                dt_reactivity(1.0e4_dp)*alpha_energy_joule
     if (abs(power/reference - 1) > 2e-5_dp) error stop 'analytic total power'
     print *, 'PASS radial histogram, angular Jacobian, pitch, energy, total power'
 contains
