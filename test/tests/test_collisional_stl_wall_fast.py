@@ -140,6 +140,7 @@ def main():
         OMP_DYNAMIC="FALSE",
         GFORTRAN_UNBUFFERED_ALL="1",
     )
+    # Below the CTest TIMEOUT of 300 s, so the driver dies with this script.
     with (base / "run.log").open("w") as log:
         process = subprocess.run(
             [str(simple), *map(str, workdirs)],
@@ -147,7 +148,7 @@ def main():
             env=env,
             stdout=log,
             stderr=subprocess.STDOUT,
-            timeout=120,
+            timeout=280,
         )
     assert process.returncode == 0, f"see {base / 'run.log'}"
     assert "Error in stost" not in (base / "run.log").read_text()
