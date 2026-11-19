@@ -82,6 +82,16 @@ module params
     character(1000) :: nbi_file = 'nbi_beamlets.dat'
     real(dp) :: nbi_path_step = 0.005d0, nbi_path_length = 8.0d0
     integer :: nbi_torque_bins = 50
+    !> Thermal delta-f NTV tally (thermal_ntv.f90), writes thermal_ntv.dat.
+    logical :: ntv_tally = .false.
+    !> A_1, A_2 of the weight equation dw = -(A_1 + A_2 E/T) ds.
+    real(dp) :: ntv_drive(2) = 0.0d0
+    !> Background temperature T of the tally [eV].
+    real(dp) :: ntv_temperature_eV = 0.0d0
+    !> Range of s in which the torque is tallied.
+    real(dp) :: ntv_bin(2) = (/0.0d0, 1.0d0/)
+    !> Start of the tally window [s].
+    real(dp) :: ntv_window_start = 0.0d0
     real(dp) :: grid_density = 0d0
     logical          :: special_ants_file = .False.
 
@@ -295,6 +305,7 @@ module params
         ns_s, ns_tp, multharm, &
         isw_field_type, generate_start_only, startmode, fusion_grid, grid_density, &
         nbi_file, nbi_path_step, nbi_path_length, nbi_torque_bins, &
+        ntv_tally, ntv_drive, ntv_temperature_eV, ntv_bin, ntv_window_start, &
         special_ants_file, integmode, orbit_model, orbit_coord, relerr, &
         gpu_mode, gpu_backend, gpu_method, gpu_start_coordinates, &
         gpu_landreman, gpu_compact_init, gpu_work_order, gpu_num_devices, &
