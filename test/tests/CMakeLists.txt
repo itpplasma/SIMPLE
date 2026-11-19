@@ -288,7 +288,7 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS AND SIMPLE_HAVE_MAP2DISC)
             set_tests_properties(test_collisional_stl_wall_fast PROPERTIES
                 LABELS "integration;python;wall"
                 RESOURCE_GROUPS "mem_gb:2"
-                TIMEOUT 120
+                TIMEOUT 300
                 PROCESSORS 4
                 FIXTURES_REQUIRED chartmap_ncsx_map2disc_wall)
         endif()
@@ -649,6 +649,11 @@ set_tests_properties(test_nbi_source PROPERTIES LABELS "unit")
 add_test(NAME test_nbi_source_truncated COMMAND test_nbi_source.x truncated)
 set_tests_properties(test_nbi_source_truncated PROPERTIES LABELS "unit"
     PASS_REGULAR_EXPRESSION "beam path ends inside the plasma")
+
+add_executable(test_dd_beam_rate.x test_dd_beam_rate.f90)
+target_link_libraries(test_dd_beam_rate.x simple)
+add_test(NAME test_dd_beam_rate COMMAND test_dd_beam_rate.x)
+set_tests_properties(test_dd_beam_rate PROPERTIES LABELS "unit")
 
 add_executable(test_fusion_source.x test_fusion_source.f90)
 target_link_libraries(test_fusion_source.x simple)

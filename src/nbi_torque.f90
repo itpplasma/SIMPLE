@@ -29,6 +29,7 @@ module nbi_torque
 contains
 
     subroutine nbi_tally_init(n_bins, angmom, rate)
+        use fusion_source, only: init_hermite
         integer, intent(in) :: n_bins
         real(dp), intent(in) :: angmom(:), rate
         integer :: n
@@ -49,6 +50,8 @@ contains
         n_alive = 0
         marker_rate = rate
         nbi_tally_enabled = .true.
+        ! Quadrature nodes before the parallel orbit loop.
+        call init_hermite
     end subroutine nbi_tally_init
 
     subroutine nbi_gc_momentum(z, l, a, s)
@@ -114,21 +117,30 @@ contains
 
     function beam_target_neutrons(z, s) result(yield)
         !> Expected D(d,n)3He reactions of one deuteron during one microstep on
-        !> a deuterium target at rest: n_D sigma(E/2) v dt.
-        use params, only: n_d, v0, dtaumin, particle_energy_eV_effective, am1, am2
+        !> Maxwellian deuterium at the local ion temperature: n_D <sigma u> dt.
+        use params, only: n_d, v0, dtaumin, am1, am2
         use simple_profiles, only: get_plasma_params
-        use fusion_source, only: dd_neutron_cross_section
+        use fusion_source, only: dd_beam_maxwellian_rate
+        use util, only: p_mass
         real(dp), intent(in) :: z(5), s
-        real(dp) :: yield, te, ti1, ti2, n1, n2, nd
+        real(dp) :: yield, te, ti1, ti2, n1, n2, nd, ti
 
         yield = 0.0_dp
         if (nint(n_d) /= 2) return
         call get_plasma_params(s, te, ti1, ti2, n1, n2)
         nd = 0.0_dp
-        if (nint(am1) == 2) nd = nd + n1
-        if (nint(am2) == 2) nd = nd + n2
-   yield = nd*dd_neutron_cross_section(0.5e-3_dp*particle_energy_eV_effective*z(4)**2) &
-                *1.0e-2_dp*v0*z(4)*dtaumin/v0
+        ti = 0.0_dp
+        if (nint(am2) == 2) then
+            nd = nd + n2
+            ti = ti2
+        end if
+        if (nint(am1) == 2) then
+            nd = nd + n1
+            ti = ti1
+        end if
+        ! Speed in m/s; SIMPLE's ions have mass n_d m_p, p_mass in g.
+        yield = nd*dd_beam_maxwellian_rate(1.0e-2_dp*v0*z(4), ti, 2.0e-3_dp*p_mass) &
+                *dtaumin/v0
     end function beam_target_neutrons
 
     subroutine nbi_tally_collision(ipart, z)
