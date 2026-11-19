@@ -15,6 +15,7 @@ program test_magfie_gc_tables
                                   make_chartmap_coordinate_system, RHO_TOR, UNKNOWN
     use neo_biotsavart, only: compute_field_jacobian
     use neo_guiding_centre_field, only: guiding_centre_quantities, GC_COUNT
+    use coarse_coils, only: write_coarse_coils
     implicit none
 
     integer, parameter :: npts = 200
@@ -34,7 +35,8 @@ program test_magfie_gc_tables
         chart%rho_convention = RHO_TOR
         period = twopi/real(chart%num_field_periods, dp)
     end select
-    call create_coils_field('coils.simple', raw)
+    call write_coarse_coils('coils.simple', 'coils_gc_tables.simple', 16)
+    call create_coils_field('coils_gc_tables.simple', raw)
     call random_seed(put=[(20261108 + k, k=1, 64)])
     call random_number(u)
     u(1, :) = 0.02_dp + 0.9_dp*u(1, :)
