@@ -9,7 +9,7 @@ program test_nbi_torque
     use params, only: field_input, coord_input, startmode, isw_field_type, integmode, &
                      deterministic, n_d, n_e, particle_energy_eV, nbi_file, ntestpart, &
                   swcoll, thermal_stop_factor, trace_time, ntimstep, am1, am2, Z1, Z2, &
-                      contr_pp, relerr
+                      contr_pp, relerr, nbi_path_length
     use simple_profiles, only: Te_scale, Ti1_scale, Ti2_scale, ni1_scale, ni2_scale
     use nbi_torque, only: nbi_tally_total
     use timing, only: init_timer
@@ -49,6 +49,8 @@ program test_nbi_torque
     ni1_scale = 0.3e20_dp
     ni2_scale = 0.0_dp
     nbi_file = 'beamlets.dat'
+    ! From 9 m before tangency through the far side of the plasma.
+    nbi_path_length = 20.0_dp
     open (newunit=unit, file='beamlets.dat', status='replace')
     ! Tangential to R = 6 m in the midplane, co-current direction undetermined.
     write (unit, '(a)') 'T 2 1.0e5 1.0e6 1.0 0.0 0.0 6.0 -9.0 0.0 0.0 1.0 0.0'

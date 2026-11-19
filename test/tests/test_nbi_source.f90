@@ -26,13 +26,21 @@ program test_nbi_source
     type(nbi_segment_t), allocatable :: seg(:)
   real(dp) :: injected, shine, sigma, lambda, deposited, l, expected, x(3), v(3), xgc(3)
     integer :: i
+    character(16) :: mode
 
+    call get_command_argument(1, mode)
     b%mass = 2
     b%energy_ev = 60.0e3_dp
     b%power_w = 1.0e6_dp
     b%fraction = [0.6_dp, 0.3_dp, 0.1_dp]
     b%origin = 0.0_dp
     b%direction = [1.0_dp, 0.0_dp, 0.0_dp]
+    if (trim(mode) == 'truncated') then
+        ! Must stop: the path ends 0.5 m before the far side of the slab.
+        call beamlet_deposition(b, 1, slab, 1.0e-3_dp, 2.0_dp, seg, injected, shine)
+        print '(a)', 'truncated path accepted'
+        stop
+    end if
     call beamlet_deposition(b, 1, slab, 1.0e-3_dp, 3.0_dp, seg, injected, shine)
     sigma = suzuki_stopping(30.0_dp, 3.0e19_dp, 1.0e3_dp, 2, 1.0_dp, 0)
     lambda = 3.0e19_dp*sigma

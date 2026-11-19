@@ -646,6 +646,9 @@ add_executable(test_nbi_source.x test_nbi_source.f90)
 target_link_libraries(test_nbi_source.x simple)
 add_test(NAME test_nbi_source COMMAND test_nbi_source.x)
 set_tests_properties(test_nbi_source PROPERTIES LABELS "unit")
+add_test(NAME test_nbi_source_truncated COMMAND test_nbi_source.x truncated)
+set_tests_properties(test_nbi_source_truncated PROPERTIES LABELS "unit"
+    PASS_REGULAR_EXPRESSION "beam path ends inside the plasma")
 
 add_executable(test_fusion_source.x test_fusion_source.f90)
 target_link_libraries(test_fusion_source.x simple)

@@ -135,6 +135,8 @@ contains
                                        injected*(survive0 - survive1))
             call move_alloc(tmp, segments)
         end do
+        ! A path that ends inside the plasma would count the rest as shine-through.
+        if (p%inside) error stop 'nbi source: beam path ends inside the plasma, raise nbi_path_length'
         shine = injected*exp(-tau)
     end subroutine beamlet_deposition
 
