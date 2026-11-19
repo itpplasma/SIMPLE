@@ -25,7 +25,7 @@ and ``DOC/config.md`` for additional usage, units and option interactions.
 &config
 -------
 
-Source: ``src/params.f90:288``.
+Source: ``src/params.f90:292``.
 
 .. list-table::
    :header-rows: 1
@@ -186,6 +186,30 @@ Source: ``src/params.f90:288``.
      - ``dp``
      - ``scalar``
      - ``0d0``
+     -
+   * - ``nbi_file``
+     - ``character(len=1000)``
+     - ``default``
+     - ``scalar``
+     - ``'nbi_beamlets.dat'``
+     - Neutral beam births (startmode 8): beamlet file, path step and length [m].
+   * - ``nbi_path_step``
+     - ``real``
+     - ``dp``
+     - ``scalar``
+     - ``0.005d0``
+     -
+   * - ``nbi_path_length``
+     - ``real``
+     - ``dp``
+     - ``scalar``
+     - ``8.0d0``
+     -
+   * - ``nbi_torque_bins``
+     - ``integer``
+     - ``default``
+     - ``scalar``
+     - ``50``
      -
    * - ``special_ants_file``
      - ``logical``
