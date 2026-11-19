@@ -2105,3 +2105,67 @@ add_full_python_driver(test_spectre_sympl_volume 300
 add_subdirectory(
     "${CMAKE_SOURCE_DIR}/concept/fo_gc_derivations/D_canonical_switch"
     "${CMAKE_CURRENT_BINARY_DIR}/canonical_switch")
+
+# Above 10 s in the merge-queue fast tier (4 CPUs, ctest -j2), so they run
+# in the full tier only.
+foreach(test IN ITEMS
+        orbit_netcdf_output
+        orbit_netcdf_verify
+        test_ants_start_rows
+        test_axis_crossing
+        test_axis_crossing_gauss1
+        test_axis_crossing_gauss2
+        test_axis_crossing_gauss3
+        test_axis_crossing_gauss4
+        test_axis_crossing_lobatto3
+        test_axis_crossing_midpoint
+        test_axis_crossing_midpoint_multivolume
+        test_axis_loss_consistency
+        test_axis_regular_rhs
+        test_bder_from_splines
+        test_bminmax_driver
+        test_boozer_regular_axis_field_chartmap
+        test_boozer_regular_axis_field_vmec
+        test_chartmap_rz_consistency
+        test_class_plot_records
+        test_class_plot_threads
+        test_class_scores_driver
+        test_classifier_albert_boundary
+        test_classifier_boundary_1
+        test_classifier_boundary_2
+        test_classifier_boundary_offgrid
+        test_classifier_log_macrosteps
+        test_classifier_start_coordinates
+        test_classifier_thread_counts
+        test_collision_substeps
+        test_coordinate_refactoring
+        test_explicit_loss_detection
+        test_fast_class_driver
+        test_fo_boris
+        test_fusion_interior
+        test_fusion_trace
+        test_fusion_vmec
+        test_fusion_vmec_parallel
+        test_fusion_vmec_peaked
+        test_gpu_midpoint_bench
+        test_gpu_orbit_bench
+        test_gpu_two_devices
+        test_marker_weight_input
+        test_mpi_two_ranks
+        test_nbi_torque_collisional
+        test_nbi_torque_collisionless
+        test_profile_radius_boozer
+        test_profiles
+        test_skipped_physics_rejection
+        test_spectre_construction_grid
+        test_spectre_gc_rk45
+        test_spectre_sympl_volume
+        test_spectre_validation
+        test_splined_field_derivatives
+        test_thermal_stop
+        test_volume_start_flux
+    )
+    if(TEST ${test})
+        set_property(TEST ${test} APPEND PROPERTY LABELS slow)
+    endif()
+endforeach()

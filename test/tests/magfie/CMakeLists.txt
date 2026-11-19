@@ -216,3 +216,19 @@ add_test(NAME test_refcoords_cartesian_axis
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
 )
 set_tests_properties(test_refcoords_cartesian_axis PROPERTIES TIMEOUT 120)
+
+# Above 10 s in the merge-queue fast tier (4 CPUs, ctest -j2), so they run
+# in the full tier only.
+foreach(test IN ITEMS
+        test_gc_tables_selection
+        test_magfie_gc_tables
+        test_magfie_refcoords_splines
+        test_orbit_chartmap_comparison
+        test_orbit_chartmap_comparison_map2disc
+        test_orbit_refcoords_rk45
+        test_refcoords_vmec_start
+    )
+    if(TEST ${test})
+        set_property(TEST ${test} APPEND PROPERTY LABELS slow)
+    endif()
+endforeach()

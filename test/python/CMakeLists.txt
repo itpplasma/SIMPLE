@@ -42,3 +42,13 @@ if(SIMPLE_ENABLE_CGAL)
         ENVIRONMENT "${PYSIMPLE_PATH};SIMPLE_WALL_FIXTURE=${CMAKE_BINARY_DIR}/test/tests"
         FIXTURES_REQUIRED stl_wall_hits)
 endif()
+
+# Above 10 s in the merge-queue fast tier (4 CPUs, ctest -j2), so they run
+# in the full tier only.
+foreach(test IN ITEMS
+        test_engineering
+    )
+    if(TEST ${test})
+        set_property(TEST ${test} APPEND PROPERTY LABELS slow)
+    endif()
+endforeach()

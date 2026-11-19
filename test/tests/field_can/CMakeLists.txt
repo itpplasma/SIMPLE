@@ -263,3 +263,19 @@ add_test(NAME test_meiss_line_cut
 set_tests_properties(test_meiss_line_cut PROPERTIES
     LABELS "unit"
     TIMEOUT 300)
+
+# Above 10 s in the merge-queue fast tier (4 CPUs, ctest -j2), so they run
+# in the full tier only.
+foreach(test IN ITEMS
+        test_boozer_spline_derivatives
+        test_boozer_start_period
+        test_spectre_fo_events
+        test_spectre_multivolume_init
+        test_spectre_outer_launch
+        test_spectre_smooth_crossing
+        test_spectre_sympl_volume_construction
+    )
+    if(TEST ${test})
+        set_property(TEST ${test} APPEND PROPERTY LABELS slow)
+    endif()
+endforeach()
