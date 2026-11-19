@@ -58,6 +58,7 @@
     nbi_source.f90
     nbi_birth.f90
     nbi_torque.f90
+    thermal_ntv.f90
     cut_detector.f90
     classification.f90
     simple.f90

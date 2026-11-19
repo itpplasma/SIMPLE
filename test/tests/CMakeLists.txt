@@ -746,6 +746,17 @@ foreach(case IN ITEMS collisional collisionless)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/nbi_torque_${case})
 endforeach()
 
+add_executable(test_thermal_ntv.x test_thermal_ntv.f90)
+target_link_libraries(test_thermal_ntv.x simple)
+foreach(case IN ITEMS collisional collisionless)
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/thermal_ntv_${case})
+    add_test(NAME test_thermal_ntv_${case}
+        COMMAND test_thermal_ntv.x ${WOUT_ITER_FILE} ${case})
+    set_tests_properties(test_thermal_ntv_${case} PROPERTIES
+        LABELS "integration;collisions" TIMEOUT 600
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/thermal_ntv_${case})
+endforeach()
+
 add_executable(test_fusion_birth_equilibrium.x test_fusion_birth_equilibrium.f90)
 target_link_libraries(test_fusion_birth_equilibrium.x simple)
 add_dependencies(test_fusion_birth_equilibrium.x generate_test_boozer_chartmap)
