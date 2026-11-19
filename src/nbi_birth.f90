@@ -3,6 +3,7 @@ module nbi_birth
     !> equilibrium. Each marker carries an equal share of the total ionization
     !> rate and the toroidal angular momentum its neutral brought in.
     use, intrinsic :: iso_fortran_env, only: dp => real64
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use nbi_source, only: nbi_beamlet_t, nbi_plasma_t, nbi_segment_t, &
                           read_nbi_beamlets, beamlet_deposition, guiding_centre_shift, &
                           ev_joule
@@ -10,7 +11,7 @@ module nbi_birth
     implicit none
     private
     public :: sample_nbi_birth, vmec_beam_plasma, nbi_marker_angmom, nbi_marker_rate, &
-              nbi_marker_position
+              nbi_marker_position, field_direction
 
     !> Toroidal angular momentum of each marker's neutral [kg m^2/s], about the
     !> machine axis along +Z, and the ionizations per second it represents.
@@ -66,11 +67,13 @@ contains
             xm = xi
             xp(i) = xp(i) + h(i)
             xm(i) = xm(i) - h(i)
+            ! Within h of the axis the backward point would lie at negative s.
+            if (i == 1) xm(1) = max(xm(1), 0.0_dp)
             call integ_to_ref(xp, up)
             call integ_to_ref(xm, um)
             call ref_coords%evaluate_cart(up, cp)
             call ref_coords%evaluate_cart(um, cm)
-            e(:, i) = (cp - cm)/(2.0_dp*h(i))
+            e(:, i) = (cp - cm)/(xp(i) - xm(i))
         end do
         bhat = matmul(e, hctr)
         bhat = bhat/norm2(bhat)
@@ -179,6 +182,8 @@ contains
             call field_direction(u, bhat, bmod)
             omega = e_cgs*bmod/(1.0e3_dp*mass*c_cgs)
             xgc = guiding_centre_shift(100.0_dp*x, 100.0_dp*v, bhat, omega)
+            if (.not. all(ieee_is_finite(xgc))) &
+                error stop 'NBI birth: non-finite guiding centre'
       call ref_coords%from_cyl([hypot(xgc(1), xgc(2)), atan2(xgc(2), xgc(1)), xgc(3)], &
                                      ugc, ierr)
             if (ierr /= 0 .or. ugc(1) >= 1.0_dp) then
