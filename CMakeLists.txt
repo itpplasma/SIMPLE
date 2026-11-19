@@ -355,7 +355,7 @@ set(_dependency_versions_file "${CMAKE_CURRENT_SOURCE_DIR}/cmake/dependency_vers
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${_dependency_versions_file}")
 file(READ "${_dependency_versions_file}" _dependency_versions)
-foreach(_dependency IN ITEMS libneo fortnum fortplot)
+foreach(_dependency IN ITEMS libneo fortio fortnum fortplot)
     string(JSON _simple_${_dependency}_ref GET "${_dependency_versions}" ${_dependency})
 endforeach()
 
@@ -375,6 +375,12 @@ if(NOT CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
         TARGET fortplot
         OPTIONS "FORTPLOT_BUILD_FORTARRAY_ADAPTER OFF")
 endif()
+
+# fortio before libneo: wout files written by netCDF4-python need the dense
+# HDF5 link reader of 0d745aa, and libneo still pins an older fortio.
+itp_add_dependency(fortio REF ${_simple_fortio_ref}
+    GIT_REPOSITORY https://github.com/lazy-fortran/fortio.git
+    TARGET fortio)
 
 itp_add_dependency(libneo REF ${_simple_libneo_ref} TARGET LIBNEO::neo)
 FetchContent_GetProperties(libneo)
