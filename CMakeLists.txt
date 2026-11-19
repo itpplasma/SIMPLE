@@ -490,7 +490,7 @@ if (ENABLE_OPENMP)
         foreach(flag IN LISTS SIMPLE_OPENMP_LINK_FLAGS)
             add_link_options("$<$<LINK_LANGUAGE:CXX>:${flag}>")
         endforeach()
-        if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND NOT APPLE)
             # GCC appends offload registration objects after the OpenMP library.
             add_link_options("$<$<LINK_LANGUAGE:CXX>:-Wl,--no-as-needed>")
         endif()
