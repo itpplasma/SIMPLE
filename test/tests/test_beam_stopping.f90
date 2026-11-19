@@ -20,6 +20,10 @@ program test_beam_stopping
                     15.5_dp, 4e19_dp, 1500.0_dp, 5.0_dp, 0.03_dp, 8.0549463431e-20_dp, &
                      9.58_dp, 4e19_dp, 1500.0_dp, 0.0_dp, 0.0_dp, 9.8326043781e-20_dp, &
               9.0_dp, 4e19_dp, 1500.0_dp, 0.0_dp, 0.0_dp, 1.0038777741e-19_dp], [6, 10])
+    ! E [keV/amu], sigma [m^2] at ne = 4e19 m^-3, Te = 1500 eV
+    real(dp), parameter :: low_ref(2, 3) = reshape([8.2_dp, 1.0313201044e-19_dp, &
+                                                    7.5_dp, 1.0529486209e-19_dp, &
+                                                    7.0_dp, 1.0657552881e-19_dp], [2, 3])
     real(dp) :: sigma, zeff, nz, nd, err
     integer :: i, z
 
@@ -35,11 +39,14 @@ program test_beam_stopping
        if (err > 1.0e-9_dp) error stop 'beam stopping differs from the ASCOT5 reference'
     end do
     ! Impurities increase stopping at these conditions (Suzuki Fig. 3).
-    ! E/3 of a 50 keV deuterium beam.
-    sigma = suzuki_stopping(8.2_dp, 4e19_dp, 1500.0_dp, 2, 1.0_dp, 0)
-    err = abs(sigma/1.0313201044e-19_dp - 1.0_dp)
-    print '(a,es16.8,a,es9.2)', '8.2 keV/amu sigma = ', sigma, ' rel. error ', err
-    if (err > 1.0e-9_dp) error stop 'beam stopping at 8.2 keV/amu differs from the reference'
+    ! E/3 of 50, 45 and 42 keV deuterium beams.
+    do i = 1, size(low_ref, 2)
+        sigma = suzuki_stopping(low_ref(1, i), 4e19_dp, 1500.0_dp, 2, 1.0_dp, 0)
+        err = abs(sigma/low_ref(2, i) - 1.0_dp)
+        print '(f4.1,a,es16.8,a,es9.2)', low_ref(1, i), ' keV/amu sigma = ', sigma, &
+            ' rel. error ', err
+        if (err > 1.0e-9_dp) error stop 'beam stopping below 9 keV/amu differs from the reference'
+    end do
     if (suzuki_stopping(30.0_dp, 3e19_dp, 1000.0_dp, 2, 2.0_dp, 6) <= &
         suzuki_stopping(30.0_dp, 3e19_dp, 1000.0_dp, 2, 1.0_dp, 6)) &
         error stop 'carbon does not increase beam stopping'
