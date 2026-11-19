@@ -103,6 +103,21 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS)
         LABELS "integration;python" TIMEOUT 300)
 endif()
 
+# netCDF-4 wout as written by netCDF4-python (e.g. VMEC++ HDF5 converters).
+if(SIMPLE_ENABLE_PYTHON_TOOLS)
+    add_executable(test_vmec_netcdf4.x test_vmec_netcdf4.f90)
+    target_link_libraries(test_vmec_netcdf4.x simple)
+    add_test(NAME write_wout_netcdf4
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/write_wout_netcdf4.py
+            ${WOUT_FILE} ${CMAKE_CURRENT_BINARY_DIR}/wout_netcdf4.nc)
+    set_tests_properties(write_wout_netcdf4 PROPERTIES
+        FIXTURES_SETUP wout_netcdf4 LABELS "unit;python" TIMEOUT 60)
+    add_test(NAME test_vmec_netcdf4
+        COMMAND test_vmec_netcdf4.x ${WOUT_FILE} ${CMAKE_CURRENT_BINARY_DIR}/wout_netcdf4.nc)
+    set_tests_properties(test_vmec_netcdf4 PROPERTIES
+        FIXTURES_REQUIRED wout_netcdf4 LABELS "unit" TIMEOUT 60)
+endif()
+
 add_test(
     NAME test_openmp_optional
     COMMAND ${Python3_EXECUTABLE}
