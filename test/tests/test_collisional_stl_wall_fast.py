@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Reduced ensembles; the unchanged 192-marker test remains the full-tier oracle."""
+"""Reduced ensembles and coil polylines; the unchanged 192-marker test with the
+full coils remains the full-tier oracle."""
 
 from math import comb
 from pathlib import Path
@@ -37,6 +38,23 @@ def check_hits(result, name):
     )
     print(f"{name}: {hit.sum()}/{len(hit)} STL hits", flush=True)
     return hit
+
+
+# The Biot-Savart guiding-centre tables cost (segments) x (chart nodes) and
+# dominated the run. Every 16th polyline vertex keeps the closed coils and their
+# currents, so the test field stays a valid coil field.
+COIL_STRIDE = 16
+
+
+def coarsen_coils(data):
+    """Keep every COIL_STRIDE-th vertex and the zero-current end of each coil."""
+    keep = []
+    first = 0
+    for end in np.flatnonzero(data[:, 3] == 0):
+        keep.extend(range(first, end, COIL_STRIDE))
+        keep.append(end)
+        first = end + 1
+    return data[keep]
 
 
 def write_case(base, case):
@@ -98,6 +116,7 @@ def main():
             link.symlink_to(source)
     data = np.loadtxt(coils, skiprows=1)
     data[:, 3] *= full.COIL_CURRENT_SCALE
+    data = coarsen_coils(data)
     np.savetxt(
         base / "coils.simple", data, header=str(len(data)), comments="", fmt="%.17e"
     )
@@ -107,7 +126,7 @@ def main():
         theta, zeta = (np.asarray(ds[key][:]) for key in ("theta", "zeta"))
     rng = np.random.default_rng(541)
     # Subsample the original ensemble, without changing the physical duration,
-    # fields, integration tolerances, collision density or wall resolution.
+    # integration tolerances, collision density or wall resolution.
     starts = np.column_stack(
         (
             np.full(full.NMARKERS, rho),
@@ -119,9 +138,9 @@ def main():
     )
     ref_indices = np.linspace(0, full.NMARKERS - 1, 32, dtype=int)
     coll_indices = np.linspace(0, full.NMARKERS - 1, 64, dtype=int)
-    # Stored collisionless impacts in the 32-marker subset; replay all three
-    # at doubled segment resolution.
-    fine_indices = np.array([98, 117, 172])
+    # Collisionless impacts in the 32-marker subset that persist when the chart
+    # toroidal grid is doubled; replay them at doubled segment resolution.
+    fine_indices = np.array([98, 117, 129])
     cases = (
         ("collisionless", starts[ref_indices], False, 64),
         ("dilute", starts[ref_indices], True, 64),
@@ -147,7 +166,8 @@ def main():
             env=env,
             stdout=log,
             stderr=subprocess.STDOUT,
-            timeout=120,
+            # Below the CTest limit, so the log of a hung driver survives.
+            timeout=75,
         )
     assert process.returncode == 0, f"see {base / 'run.log'}"
     assert "Error in stost" not in (base / "run.log").read_text()
@@ -188,13 +208,11 @@ def main():
     hit_ref = check_hits(reference, "collisionless")
     hit_coll = check_hits(collisional, "collisional")
     # Numerical drift budgets are unchanged; the stored mean is recomputed for
-    # this exact deterministic subset, rather than widened for a smaller sample.
-    # Regenerated for the doubled chart toroidal grid; doubling it again
-    # changes the mean by 0.2 %.
-    assert abs(np.count_nonzero(hit_ref) - 3) <= 2, "collisionless hit-count drift"
+    # this exact deterministic subset and the coarsened coils.
+    assert abs(np.count_nonzero(hit_ref) - 5) <= 2, "collisionless hit-count drift"
     np.testing.assert_allclose(
         np.mean(reference["times_lost"][hit_ref]),
-        2.443281401763228e-4,
+        2.7896600869895384e-4,
         rtol=0.03,
         atol=0,
     )

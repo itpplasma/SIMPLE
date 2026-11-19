@@ -303,7 +303,7 @@ if(SIMPLE_ENABLE_PYTHON_TOOLS AND SIMPLE_HAVE_MAP2DISC)
             set_tests_properties(test_collisional_stl_wall_fast PROPERTIES
                 LABELS "integration;python;wall"
                 RESOURCE_GROUPS "mem_gb:2"
-                TIMEOUT 300
+                TIMEOUT 90
                 PROCESSORS 4
                 FIXTURES_REQUIRED chartmap_ncsx_map2disc_wall)
         endif()
