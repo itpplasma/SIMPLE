@@ -4,10 +4,14 @@ module fusion_source
     implicit none
     private
     public :: dt_reactivity, build_birth_cdf, draw_birth, alpha_energy_joule, &
-              dd_neutron_cross_section
+             dd_neutron_cross_section, dd_neutron_reactivity, dd_beam_maxwellian_rate, &
+              init_hermite
 
     real(dp), parameter :: pi = acos(-1.0_dp)
     real(dp), parameter :: alpha_energy_joule = 3.5e6_dp*1.602176634e-19_dp
+    integer, parameter :: nherm = 32
+    real(dp) :: hermite_x(nherm) = 0.0_dp, hermite_w(nherm) = 0.0_dp
+    logical :: hermite_ready = .false.
 
 contains
 
@@ -54,6 +58,131 @@ contains
         ! mb to m^2
         sigma = s/(e*exp(bg/sqrt(e)))*1.0e-31_dp
     end function dd_neutron_cross_section
+
+    function dd_neutron_reactivity(temperature_ev) result(rate)
+        ! Bosch & Hale (1992) Eq. (12), Table VII, D(d,n)3He, valid for
+        ! 0.2-100 keV. Input eV, returns m^3/s.
+        real(dp), intent(in) :: temperature_ev
+        real(dp) :: rate, t, theta, xi
+        real(dp), parameter :: bg = 31.3970_dp, mrc2 = 937814.0_dp
+        real(dp), parameter :: c1 = 5.43360e-12_dp, c2 = 5.85778e-3_dp, &
+                               c3 = 7.68222e-3_dp, c5 = -2.964e-6_dp
+
+        if (.not. is_finite(temperature_ev)) &
+            error stop 'dd reactivity: nonfinite ion temperature'
+        if (temperature_ev < 0.0_dp .or. temperature_ev > 1.0e5_dp) &
+            error stop 'dd reactivity: ion temperature outside [0,100000] eV'
+        rate = 0.0_dp
+        t = temperature_ev*1.0e-3_dp
+        if (t < 1.0e-6_dp) return
+        theta = t/(1.0_dp - t*c2/(1.0_dp + t*(c3 + t*c5)))
+        xi = (bg**2/(4.0_dp*theta))**(1.0_dp/3.0_dp)
+        rate = 1.0e-6_dp*c1*theta*sqrt(xi/(mrc2*t**3))*exp(-3.0_dp*xi)
+    end function dd_neutron_reactivity
+
+    function dd_beam_maxwellian_rate(speed, temperature_ev, mass_kg) result(rate)
+        ! <sigma u> [m^3/s] of a deuteron of speed v [m/s] on Maxwellian deuterons
+        ! of temperature T [eV] and mass m [kg], relative speed u, E_cm = m u^2/4,
+        ! target thermal speed w = sqrt(2 T/m):
+        ! <sigma u> = (sqrt(pi) v w)^-1 int_R sgn(u) u^2 sigma(|u|) exp(-(u - v)^2/w^2) du.
+        real(dp), intent(in) :: speed, temperature_ev, mass_kg
+        real(dp) :: rate, w, lo, hi, h, u, f, weight
+        real(dp), parameter :: ev = 1.602176634e-19_dp, span = 10.0_dp, emax = 4900.0_dp
+        integer, parameter :: n = 400
+        integer :: k
+
+        if (.not. all(is_finite([speed, temperature_ev, mass_kg])) .or. speed < 0.0_dp &
+            .or. temperature_ev < 0.0_dp .or. mass_kg <= 0.0_dp) &
+            error stop 'dd beam rate: invalid speed, temperature or mass'
+        w = sqrt(2.0_dp*temperature_ev*ev/mass_kg)
+        if (w <= 1.0e-6_dp*speed) then
+            rate = speed*dd_neutron_cross_section(e_cm(speed))
+            return
+        end if
+        rate = 0.0_dp
+        if (speed >= 2.0_dp*w) then
+            ! Gauss-Hermite in y = (u - v)/w; the integrand is smooth here.
+            if (.not. hermite_ready) call init_hermite
+            do k = 1, nherm
+                u = speed + w*hermite_x(k)
+                if (u > 0.0_dp .and. e_cm(u) <= emax) rate = rate + hermite_w(k)*u**2* &
+                                                       dd_neutron_cross_section(e_cm(u))
+            end do
+            rate = rate/(sqrt(pi)*speed)
+            return
+        end if
+        lo = 0.0_dp
+        hi = speed + span*w
+        ! The cross-section fit ends at emax, the Maxwellian tail there is negligible.
+        hi = min(hi, sqrt(4.0e3_dp*emax*ev/mass_kg))
+        h = (hi - lo)/n
+        do k = 1, n
+            u = lo + k*h
+            weight = merge(1.0_dp, merge(4.0_dp, 2.0_dp, mod(k, 2) == 1), k == n)
+            if (speed < 1.0e-3_dp*w) then
+                ! Limit v -> 0 of the bracket divided by v.
+                f = 4.0_dp*u**3*exp(-(u/w)**2)/w**2
+            else
+                f = u**2*(exp(-((u - speed)/w)**2) - exp(-((u + speed)/w)**2))/speed
+            end if
+            rate = rate + weight*f*dd_neutron_cross_section(e_cm(u))
+        end do
+        rate = rate*h/3.0_dp/(sqrt(pi)*w)
+    contains
+        pure function e_cm(v) result(e)
+            real(dp), intent(in) :: v
+            real(dp) :: e
+            e = 0.25_dp*mass_kg*v**2/ev*1.0e-3_dp
+        end function e_cm
+    end function dd_beam_maxwellian_rate
+
+    subroutine init_hermite
+        ! Nodes and weights for int exp(-y^2) f(y) dy by Newton iteration on the
+        ! orthonormal Hermite recurrence (Press et al., Numerical Recipes, gauher).
+        real(dp) :: x(nherm), wt(nherm), z, z1, p1, p2, p3, pp
+        integer :: i, j, its, m
+
+        m = (nherm + 1)/2
+        z = 0.0_dp
+        do i = 1, m
+            select case (i)
+            case (1)
+    z = sqrt(real(2*nherm + 1, dp)) - 1.85575_dp*real(2*nherm + 1, dp)**(-1.0_dp/6.0_dp)
+            case (2)
+                z = z - 1.14_dp*real(nherm, dp)**0.426_dp/z
+            case (3)
+                z = 1.86_dp*z - 0.86_dp*x(1)
+            case (4)
+                z = 1.91_dp*z - 0.91_dp*x(2)
+            case default
+                z = 2.0_dp*z - x(i - 2)
+            end select
+            do its = 1, 100
+                p1 = pi**(-0.25_dp)
+                p2 = 0.0_dp
+                do j = 1, nherm
+                    p3 = p2
+                    p2 = p1
+                    p1 = z*sqrt(2.0_dp/j)*p2 - sqrt(real(j - 1, dp)/j)*p3
+                end do
+                pp = sqrt(2.0_dp*nherm)*p2
+                z1 = z
+                z = z1 - p1/pp
+                if (abs(z - z1) <= 1.0e-14_dp) exit
+            end do
+            x(i) = z
+            x(nherm + 1 - i) = -z
+            wt(i) = 2.0_dp/(pp*pp)
+            wt(nherm + 1 - i) = wt(i)
+        end do
+        !$omp critical (fusion_source_hermite)
+        if (.not. hermite_ready) then
+            hermite_x = x
+            hermite_w = wt
+            hermite_ready = .true.
+        end if
+        !$omp end critical (fusion_source_hermite)
+    end subroutine init_hermite
 
     subroutine build_birth_cdf(slo, shi, grid, cdf, power)
         use simple_profiles, only: get_plasma_params
