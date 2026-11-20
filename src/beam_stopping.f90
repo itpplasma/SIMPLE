@@ -16,7 +16,7 @@ module beam_stopping
                               0.465_dp, -0.273_dp, 0.0751_dp, -0.0630_dp, -5.08e-4_dp, &
                                    -74.2_dp, -1.18_dp, 0.0843_dp, 0.0139_dp, 0.453_dp, &
                       0.491_dp, -0.294_dp, 0.0788_dp, -0.0612_dp, -1.85e-4_dp], [10, 3])
-    real(dp), parameter, public :: e_min_kev_amu = 9.0_dp
+    real(dp), parameter, public :: e_min_kev_amu = 8.0_dp
 
     ! Table 2(a), 100 <= E <= 10000 keV/amu.
     real(dp), parameter :: a_high(10, 3) = reshape([ &
@@ -88,10 +88,10 @@ contains
         if (beam_mass < 1 .or. beam_mass > 3) &
             error stop 'beam stopping: beam mass number must be 1, 2 or 3'
         ! The low-energy fit holds from 10 keV/amu. It is extrapolated down to
-        ! 9 keV/amu, as in ASCOT5, for the E/3 component of 55-60 keV
-        ! deuterium beams.
+        ! 8 keV/amu (ASCOT5 stops at 9) for the E/3 component of 50 keV
+        ! deuterium beams. The fit stays smooth and monotone down to 6 keV/amu.
         if (e_kev_amu < e_min_kev_amu .or. e_kev_amu > 1.0e4_dp) &
-            error stop 'beam stopping: energy outside [9,10000] keV/amu'
+            error stop 'beam stopping: energy outside [8,10000] keV/amu'
         if (ne_m3 <= 0.0_dp .or. te_ev <= 0.0_dp) &
             error stop 'beam stopping: nonpositive density or temperature'
         if (zeff < 1.0_dp) error stop 'beam stopping: Zeff below one'
