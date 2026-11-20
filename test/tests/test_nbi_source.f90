@@ -12,20 +12,34 @@ contains
         p%te = 1.0e3_dp
         p%zeff = 1.0_dp
     end function slab
+
+    function peaked(x) result(p)
+        !> n_e = 5e19 (1 - 0.96 u^2), T_e = 3 keV (1 - 0.67 u^2), u = x - 1.5,
+        !> carbon at Z_eff = 1.6, for 0.5 <= x <= 2.5 m.
+        real(dp), intent(in) :: x(3)
+        type(nbi_plasma_t) :: p
+        p%inside = x(1) >= 0.5_dp .and. x(1) <= 2.5_dp
+        p%ne = 5.0e19_dp*(1.0_dp - 0.96_dp*(x(1) - 1.5_dp)**2)
+        p%te = 3.0e3_dp*(1.0_dp - 0.67_dp*(x(1) - 1.5_dp)**2)
+        p%zeff = 1.6_dp
+        p%z_impurity = 6
+    end function peaked
 end module nbi_slab
 
 program test_nbi_source
-    !> Slab attenuation against exp(-n_e sigma L) and the guiding-centre
-    !> shift of a gyrating ion in a uniform field.
+    !> Slab attenuation against exp(-n_e sigma L), attenuation in a peaked
+    !> profile against an independent quadrature of the optical depth, and the
+    !> guiding-centre shift of a gyrating ion in a uniform field.
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use nbi_source
-    use nbi_slab, only: slab
+    use nbi_slab, only: slab, peaked
     use beam_stopping, only: suzuki_stopping
     implicit none
     type(nbi_beamlet_t) :: b
     type(nbi_segment_t), allocatable :: seg(:)
   real(dp) :: injected, shine, sigma, lambda, deposited, l, expected, x(3), v(3), xgc(3)
-    integer :: i
+    real(dp) :: tau
+    integer :: i, j
     character(16) :: mode
 
     call get_command_argument(1, mode)
@@ -60,10 +74,40 @@ program test_nbi_source
     if (abs(l/expected - 1.0_dp) > 1.0e-10_dp) error stop 'deposition profile not exponential'
     print '(a,f8.5,a,f8.5)', 'shine fraction ', shine/injected, ', analytic ', exp(-2*lambda)
 
+    ! Peaked profile, half-energy component: composite Simpson rule on 2e5
+    ! intervals for tau = int n_e sigma dx. The midpoint error of the 1 mm
+    ! path step is below 1e-7 of tau.
+    do j = 2, 3
+        call beamlet_deposition(b, j, peaked, 1.0e-3_dp, 3.0_dp, seg, injected, shine)
+        tau = simpson_tau(b%energy_ev/j*1.0e-3_dp/b%mass, 200000)
+        if (abs(log(injected/shine)/tau - 1.0_dp) > 1.0e-6_dp) &
+            error stop 'optical depth in a peaked profile differs from quadrature'
+        if (abs((sum(seg%rate) + shine)/injected - 1.0_dp) > 1.0e-12_dp) &
+           error stop 'peaked profile: ionized plus shine-through differs from injected'
+    end do
+
     ! Positive ion moving along -y in B along +z gyrates about x - rho e_x.
     x = [1.0_dp, 2.0_dp, 3.0_dp]
     v = [0.0_dp, -2.0_dp, 0.0_dp]
     xgc = guiding_centre_shift(x, v, [0.0_dp, 0.0_dp, 1.0_dp], 4.0_dp)
     if (norm2(xgc - [0.5_dp, 2.0_dp, 3.0_dp]) > 1.0e-14_dp) error stop 'guiding-centre shift'
     print '(a)', 'PASS'
+
+contains
+
+    function simpson_tau(e_kev_amu, n) result(tau)
+        real(dp), intent(in) :: e_kev_amu
+        integer, intent(in) :: n
+        real(dp) :: tau, h, w
+        type(nbi_plasma_t) :: p
+        integer :: k
+        h = 2.0_dp/n
+        tau = 0.0_dp
+        do k = 0, n
+            p = peaked([0.5_dp + k*h, 0.0_dp, 0.0_dp])
+            w = merge(1.0_dp, merge(4.0_dp, 2.0_dp, mod(k, 2) == 1), k == 0 .or. k == n)
+      tau = tau + w*p%ne*suzuki_stopping(e_kev_amu, p%ne, p%te, 2, p%zeff, p%z_impurity)
+        end do
+        tau = tau*h/3.0_dp
+    end function simpson_tau
 end program test_nbi_source
