@@ -157,7 +157,7 @@ add_library(${F2PY_MODULE_NAME} SHARED
 
 add_dependencies(${F2PY_MODULE_NAME} simple)
 
-target_link_libraries(${F2PY_MODULE_NAME} PRIVATE ${Python_LIBRARIES} simple)
+target_link_libraries(${F2PY_MODULE_NAME} PRIVATE Python::Module simple)
 
 set_target_properties(
     ${F2PY_MODULE_NAME}
