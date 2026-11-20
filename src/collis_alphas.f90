@@ -132,8 +132,10 @@ contains
         real(wp), intent(in) :: v
         real(wp), intent(out) :: dp, dh, dpd
 
-        real(wp), parameter :: sqp = 1.7724538d0
-        real(wp), parameter :: cons = 0.75225278d0
+        ! Full precision: the difference er/v3 - 2 ex/v2 below cancels the
+        ! leading digits for small v.
+        real(wp), parameter :: sqp = sqrt(4.0_wp*atan(1.0_wp))
+        real(wp), parameter :: cons = 4.0_wp/(3.0_wp*sqp)
         real(wp) :: v2, v3, ex, er
 
         v2 = v**2
@@ -165,7 +167,7 @@ contains
         real(wp), intent(out) :: dpar, dperp, a
         real(wp), intent(in), optional :: clog_loc(nsorts), bratio_loc(nsorts)
 
-        real(wp), parameter :: cons = 0.75225278d0
+        real(wp), parameter :: cons = 4.0_wp/(3.0_wp*sqrt(4.0_wp*atan(1.0_wp)))
         integer :: i
         real(wp) :: x, dp, dh, dpd, g, f, df
 
