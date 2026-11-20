@@ -222,7 +222,7 @@ Source: ``src/params.f90:304``.
      - ``dp``
      - ``2``
      - ``0.0d0``
-     - A_1, A_2 of the weight equation dw = -(A_1 + A_2 E/T) ds.
+     - A_1, A_2 of the weight equation dw = -(A_1 + A_2 E/T) dP/(dP/ds).
    * - ``ntv_temperature_ev``
      - ``real``
      - ``dp``

@@ -86,7 +86,7 @@ module params
     integer :: nbi_torque_bins = 50
     !> Thermal delta-f NTV tally (thermal_ntv.f90), writes thermal_ntv.dat.
     logical :: ntv_tally = .false.
-    !> A_1, A_2 of the weight equation dw = -(A_1 + A_2 E/T) ds.
+    !> A_1, A_2 of the weight equation dw = -(A_1 + A_2 E/T) dP/(dP/ds).
     real(dp) :: ntv_drive(2) = 0.0d0
     !> Background temperature T of the tally [eV].
     real(dp) :: ntv_temperature_eV = 0.0d0

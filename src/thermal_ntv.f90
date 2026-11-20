@@ -1,13 +1,18 @@
 module thermal_ntv
     !> Linear delta-f tally of the thermal NTV torque density.
     !>
-    !> Markers sample a local Maxwellian F_M(s, E) at the background temperature.
-    !> Along each orbit the weight w = delta f / F_M follows
-    !>   dw = -(A_1 + A_2 E/T) ds,
+    !> The background is the canonical Maxwellian F_c(P, H), the local Maxwellian
+    !> with s replaced by the flux label of the canonical toroidal momentum P. It
+    !> solves the unperturbed collisionless equation, so w = delta f / F_c = 0 at
+    !> birth is the steady state without the perturbation. A local Maxwellian
+    !> F_M(s) is not: with dw = -A ds the weights carry the bounce displacement
+    !> s(0) - <s> of their birth, which only collisions remove. Along each
+    !> collisionless step the weight follows
+    !>   dw = -(A_1 + A_2 E/T) dP / (dP/ds),
     !> with A_1 = n'/n + e Phi'/T - 3/2 T'/T and A_2 = T'/T, ' = d/ds, the
-    !> derivative of ln F_M at fixed total energy. Collisions move markers at
-    !> fixed weight, which is the linear test-particle operator acting on delta f
-    !> since F_M is its null vector. The torque on a particle from the field is
+    !> derivative of ln F_c at fixed total energy. Collisions move markers at
+    !> fixed weight; the source C[F_c] of the collisional axisymmetric response
+    !> is not included. The torque on a particle from the field is
     !> the change of canonical toroidal momentum P = (q/c) psi* along a
     !> collisionless step, zero in an axisymmetric field. The torque density on
     !> the species is n <w dP/dt>, estimated per marker by
@@ -70,6 +75,15 @@ contains
         momentum_unit = n_e*e_charge/c*to_si
     end function momentum_unit
 
+    real(dp) function momentum_per_s(z)
+        !> dP/ds = (q/c) dA_phi/ds at the marker [kg m^2/s].
+        use field_can_mod, only: eval_field => evaluate, field_can_t
+        real(dp), intent(in) :: z(5)
+        type(field_can_t) :: f
+        call eval_field(f, z(1), z(2), z(3), 0)
+        momentum_per_s = momentum_unit()*f%dAph(1)
+    end function momentum_per_s
+
     pure real(dp) function flux_label(z)
         !> s, the first Boozer integration coordinate (ntv_tally_init).
         real(dp), intent(in) :: z(5)
@@ -98,7 +112,7 @@ contains
 
         p = momentum_unit()*ro0/sqrt(2.0_dp)*pphi
         s = flux_label(z)
-        dw = -(a1 + a2*energy_ratio*z(4)**2)*(s - last_s(ipart))
+        dw = -(a1 + a2*energy_ratio*z(4)**2)*(p - last_p(ipart))/momentum_per_s(z)
         w_mid = w(ipart) + 0.5_dp*dw
         w(ipart) = w(ipart) + dw
         if (time >= t_start .and. 0.5_dp*(s + last_s(ipart)) >= s_lo .and. &

@@ -457,7 +457,7 @@
           ],
           "default": "0.0d0",
           "default_value": "0.0d0",
-          "documentation": "A_1, A_2 of the weight equation dw = -(A_1 + A_2 E/T) ds.",
+          "documentation": "A_1, A_2 of the weight equation dw = -(A_1 + A_2 E/T) dP/(dP/ds).",
           "source": "src/params.f90",
           "source_line": 90
         },
