@@ -90,7 +90,7 @@ module params
     real(dp) :: ntv_drive(2) = 0.0d0
     !> Background temperature T of the tally [eV].
     real(dp) :: ntv_temperature_eV = 0.0d0
-    !> Range of s in which the torque is tallied.
+    !> Range of the birth s of the markers whose torque is tallied.
     real(dp) :: ntv_bin(2) = (/0.0d0, 1.0d0/)
     !> Start of the tally window [s].
     real(dp) :: ntv_window_start = 0.0d0

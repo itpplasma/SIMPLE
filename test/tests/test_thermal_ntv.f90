@@ -3,7 +3,8 @@ program test_thermal_ntv
     !> conserved along every collisionless step, so the torque vanishes with and
     !> without collisions, and every weight stays zero: the canonical Maxwellian
     !> solves the unperturbed equation. A drive by ds would move the weights
-    !> with the bounce displacement of the orbits.
+    !> with the bounce displacement of the orbits. The bin selects markers by
+    !> birth, so a bin narrower than the orbits still holds their whole trace.
     use, intrinsic :: iso_fortran_env, only: dp => real64
   use simple_api, only: simple_reset_config, simple_init, simple_sample, simple_trace, &
                           simple_write_output
@@ -53,7 +54,7 @@ program test_thermal_ntv
     ntv_tally = .true.
     ntv_drive = [a1, a2]
     ntv_temperature_eV = 1.0e3_dp
-    ntv_bin = [0.0_dp, 1.0_dp]
+    ntv_bin = [s0 - 1.0e-6_dp, s0 + 1.0e-6_dp]
     call simple_init
     allocate (z(5, ntestpart))
     call simple_sample(ntestpart, z)
@@ -71,7 +72,9 @@ program test_thermal_ntv
     end do
     print '(a,3es14.5)', 'max |c_i| [kg m^2/s], dwell [s], max |w| ', &
         torque, dwell, wmax
-    if (dwell <= 0) error stop 'no marker time in the tally bin'
+    ! Every marker starts on s0 and stays confined for the whole trace.
+    if (abs(dwell/(ntestpart*trace_time) - 1) > 1.0e-6_dp) &
+        error stop 'tally misses marker time outside the birth bin'
     ! A thermal NTV of 1e-21 N m per particle over the 1e-4 s run gives
     ! |c_i| ~ 1e-25 kg m^2/s.
    if (torque > 1.0e-30_dp) error stop 'torque does not vanish in an axisymmetric field'

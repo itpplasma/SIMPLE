@@ -17,8 +17,11 @@ module thermal_ntv
     !> collisionless step, zero in an axisymmetric field. The torque density on
     !> the species is n <w dP/dt>, estimated per marker by
     !>   c_i = int w dP,  d_i = int dt
-    !> over the steps after window_start with the marker in the bin [s_lo, s_hi],
-    !> and n sum c_i / sum d_i.
+    !> over the steps after window_start of the markers born in the bin
+    !> [s_lo, s_hi), and n sum c_i / sum d_i. Selecting by birth rather than by
+    !> the present s keeps markers whose orbits leave the bin: with markers born
+    !> only near the bin, a positional bin misses the widest orbits through it.
+    !> Markers must fill the bin uniformly in volume and velocity.
     use, intrinsic :: iso_fortran_env, only: dp => real64
     implicit none
     private
@@ -28,6 +31,7 @@ module thermal_ntv
     logical :: ntv_tally_enabled = .false.
     real(dp) :: a1 = 0, a2 = 0, energy_ratio = 0, s_lo = 0, s_hi = 1, t_start = 0
     real(dp), allocatable :: w(:), last_p(:), last_s(:), contrib(:), dwell(:)
+    logical, allocatable :: born_in_bin(:)
 
     ! g cm^2/s to kg m^2/s
     real(dp), parameter :: to_si = 1.0e-7_dp
@@ -48,9 +52,10 @@ contains
         s_lo = bin(1)
         s_hi = bin(2)
         t_start = window_start
-        if (allocated(w)) deallocate (w, last_p, last_s, contrib, dwell)
+        if (allocated(w)) deallocate (w, last_p, last_s, contrib, dwell, born_in_bin)
         allocate (w(n_markers), last_p(n_markers), last_s(n_markers), &
                   contrib(n_markers), dwell(n_markers), source=0.0_dp)
+        allocate (born_in_bin(n_markers), source=.false.)
         ntv_tally_enabled = .true.
     end subroutine ntv_tally_init
 
@@ -97,6 +102,7 @@ contains
         contrib(ipart) = 0
         dwell(ipart) = 0
         call momentum_and_s(z, last_p(ipart), last_s(ipart))
+        born_in_bin(ipart) = last_s(ipart) >= s_lo .and. last_s(ipart) < s_hi
     end subroutine ntv_tally_begin
 
     subroutine ntv_tally_drift(ipart, z, time, pphi)
@@ -115,8 +121,7 @@ contains
         dw = -(a1 + a2*energy_ratio*z(4)**2)*(p - last_p(ipart))/momentum_per_s(z)
         w_mid = w(ipart) + 0.5_dp*dw
         w(ipart) = w(ipart) + dw
-        if (time >= t_start .and. 0.5_dp*(s + last_s(ipart)) >= s_lo .and. &
-            0.5_dp*(s + last_s(ipart)) < s_hi) then
+        if (time >= t_start .and. born_in_bin(ipart)) then
             contrib(ipart) = contrib(ipart) + w_mid*(p - last_p(ipart))
             dwell(ipart) = dwell(ipart) + dtaumin/v0
         end if

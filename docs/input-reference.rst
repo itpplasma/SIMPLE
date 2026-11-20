@@ -234,7 +234,7 @@ Source: ``src/params.f90:304``.
      - ``dp``
      - ``2``
      - ``(/0.0d0, 1.0d0/)``
-     - Range of s in which the torque is tallied.
+     - Range of the birth s of the markers whose torque is tallied.
    * - ``ntv_window_start``
      - ``real``
      - ``dp``
