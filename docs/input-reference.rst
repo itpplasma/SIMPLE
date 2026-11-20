@@ -25,7 +25,7 @@ and ``DOC/config.md`` for additional usage, units and option interactions.
 &config
 -------
 
-Source: ``src/params.f90:292``.
+Source: ``src/params.f90:294``.
 
 .. list-table::
    :header-rows: 1
@@ -210,7 +210,7 @@ Source: ``src/params.f90:292``.
      - ``default``
      - ``scalar``
      - ``50``
-     -
+     - Radial bins of the beam torque tally in VMEC s; 0 switches the tally off, as needed on chartmap reference coordinates.
    * - ``special_ants_file``
      - ``logical``
      - ``default``
