@@ -25,7 +25,7 @@ and ``DOC/config.md`` for additional usage, units and option interactions.
 &config
 -------
 
-Source: ``src/params.f90:294``.
+Source: ``src/params.f90:304``.
 
 .. list-table::
    :header-rows: 1
@@ -211,6 +211,36 @@ Source: ``src/params.f90:294``.
      - ``scalar``
      - ``50``
      - Radial bins of the beam torque tally in VMEC s; 0 switches the tally off, as needed on chartmap reference coordinates.
+   * - ``ntv_tally``
+     - ``logical``
+     - ``default``
+     - ``scalar``
+     - ``.false.``
+     - Thermal delta-f NTV tally (thermal_ntv.f90), writes thermal_ntv.dat.
+   * - ``ntv_drive``
+     - ``real``
+     - ``dp``
+     - ``2``
+     - ``0.0d0``
+     - A_1, A_2 of the weight equation dw = -(A_1 + A_2 E/T) dP/(dP/ds).
+   * - ``ntv_temperature_ev``
+     - ``real``
+     - ``dp``
+     - ``scalar``
+     - ``0.0d0``
+     - Background temperature T of the tally [eV].
+   * - ``ntv_bin``
+     - ``real``
+     - ``dp``
+     - ``2``
+     - ``(/0.0d0, 1.0d0/)``
+     - Range of the birth s of the markers whose torque is tallied.
+   * - ``ntv_window_start``
+     - ``real``
+     - ``dp``
+     - ``scalar``
+     - ``0.0d0``
+     - Start of the tally window [s].
    * - ``special_ants_file``
      - ``logical``
      - ``default``

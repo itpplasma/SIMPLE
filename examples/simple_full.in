@@ -25,6 +25,11 @@ nbi_path_step = 0.005d0          ! mode 8 path step for the beam optical depth, 
 nbi_path_length = 8d0            ! mode 8 path length from the source, m; must end outside
 !                                  the plasma (stops otherwise)
 nbi_torque_bins = 50             ! mode 8 radial bins in s of nbi_torque.dat
+ntv_tally = .false.              ! thermal delta-f NTV tally, writes thermal_ntv.dat
+ntv_drive = 0d0, 0d0             ! A_1, A_2 of dw = -(A_1 + A_2 E/T) ds
+ntv_temperature_eV = 0d0         ! background temperature T of the tally [eV]
+ntv_bin = 0d0, 1d0               ! s range of the tally
+ntv_window_start = 0d0           ! tally start time [s]
 sbeg = 1024*0.5d0                ! start surfaces: normalized toroidal flux s (SPECTRE: rho_g
 !                                  unless spectre_sbeg_is_toroidal_flux; TEST field: r/a)
 num_surf = 1                     ! startmode 5/7 range: 0 = [0,1], 1 = [0,sbeg(1)],

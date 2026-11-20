@@ -50,6 +50,8 @@ module simple_main
 use params, only: thermal_stop_factor, ORBIT_EXIT_THERMALIZED, notrace_passing, contr_pp
     use nbi_torque, only: nbi_tally_enabled, nbi_tally_begin, nbi_tally_drift, &
                           nbi_tally_collision, nbi_tally_end, nbi_tally_write
+    use thermal_ntv, only: ntv_tally_enabled, ntv_tally_begin, ntv_tally_drift, &
+                           ntv_tally_collision, ntv_tally_write
     use params, only: max_rk_recoveries, ORBIT_EXIT_RECOVERY_STORM
     use params, only: orbit_warning_hold_count, orbit_first_warning_step, &
                       orbit_terminal_exit_code, orbit_terminal_time
@@ -2060,6 +2062,9 @@ contains
         use nbi_torque, only: nbi_tally_init
         use params, only: nbi_torque_bins
         use profile_radius, only: init_profile_radius
+        use params, only: ntv_tally, ntv_drive, ntv_temperature_eV, ntv_bin, &
+                          ntv_window_start
+        use thermal_ntv, only: ntv_tally_init
         use params, only: marker_weight_file, marker_weights_input
 
         logical, intent(in), optional :: xstart_is_integ_coords
@@ -2132,6 +2137,9 @@ contains
         else
             print *, 'Unknown startmode: ', startmode
         end if
+
+        if (ntv_tally) call ntv_tally_init(size(zstart, 2), ntv_drive, &
+                                          ntv_temperature_eV, ntv_bin, ntv_window_start)
 
         if (allocated(marker_weights_input)) deallocate (marker_weights_input)
         if (len_trim(marker_weight_file) > 0) then
@@ -2655,6 +2663,7 @@ contains
         kt = 0
         it_final = 0
         if (nbi_tally_enabled) call nbi_tally_begin(ipart, z)
+        if (ntv_tally_enabled) call ntv_tally_begin(ipart, z)
         do it = 1, ntimstep
             if (it >= 2) then
                 if (wall_enabled) then
@@ -3513,6 +3522,9 @@ contains
                                          hold_streak_local, recovery_method)
             end if
             if (nbi_tally_enabled .and. present(ipart)) call nbi_tally_drift(ipart, z)
+            if (ntv_tally_enabled .and. present(ipart)) &
+                call ntv_tally_drift(ipart, z, real(kt + 1, dp)*dtaumin/v0, &
+                                     anorb%si%z(4))
             if (swcoll) then
                 ! Collisions change only the momentum, so the profile radius
                 ! of this position serves both the collision and the stop test.
@@ -3537,6 +3549,8 @@ contains
                 end if
                 if (nbi_tally_enabled .and. present(ipart)) &
                     call nbi_tally_collision(ipart, z)
+                if (ntv_tally_enabled .and. present(ipart)) &
+                    call ntv_tally_collision(ipart, z)
                 if (thermalized(z, s_collision)) then
                     ierr_orbit = THERMALIZED_EXIT
                     kt = kt + 1
@@ -3925,6 +3939,7 @@ contains
             end if
         end if
         if (nbi_tally_enabled) call nbi_tally_write('nbi_torque.dat')
+        if (ntv_tally_enabled) call ntv_tally_write('thermal_ntv.dat')
     end subroutine write_output
 
     subroutine write_results
