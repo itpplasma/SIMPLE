@@ -3,6 +3,8 @@ program test_beam_stopping
     !> implementation in ASCOT5 (src/suzuki.c, itpplasma/ascot5 a6cc085a),
     !> evaluated at the same points, and check the impurity enhancement.
     !> The last two points extrapolate the low-energy fit below 10 keV/amu.
+    !> Below 9 keV/amu, where ASCOT5 stops, the reference is an independent
+    !> Python evaluation of Suzuki eqs. (24)-(28) with the paper's Table 3(a).
     use, intrinsic :: iso_fortran_env, only: dp => real64
     use beam_stopping, only: suzuki_stopping
     implicit none
@@ -33,6 +35,11 @@ program test_beam_stopping
        if (err > 1.0e-9_dp) error stop 'beam stopping differs from the ASCOT5 reference'
     end do
     ! Impurities increase stopping at these conditions (Suzuki Fig. 3).
+    ! E/3 of a 50 keV deuterium beam.
+    sigma = suzuki_stopping(8.2_dp, 4e19_dp, 1500.0_dp, 2, 1.0_dp, 0)
+    err = abs(sigma/1.0313201044e-19_dp - 1.0_dp)
+    print '(a,es16.8,a,es9.2)', '8.2 keV/amu sigma = ', sigma, ' rel. error ', err
+    if (err > 1.0e-9_dp) error stop 'beam stopping at 8.2 keV/amu differs from the reference'
     if (suzuki_stopping(30.0_dp, 3e19_dp, 1000.0_dp, 2, 2.0_dp, 6) <= &
         suzuki_stopping(30.0_dp, 3e19_dp, 1000.0_dp, 2, 1.0_dp, 6)) &
         error stop 'carbon does not increase beam stopping'
