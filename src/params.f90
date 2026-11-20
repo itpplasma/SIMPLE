@@ -81,6 +81,8 @@ module params
     !> Neutral beam births (startmode 8): beamlet file, path step and length [m].
     character(1000) :: nbi_file = 'nbi_beamlets.dat'
     real(dp) :: nbi_path_step = 0.005d0, nbi_path_length = 8.0d0
+    !> Radial bins of the beam torque tally in VMEC s; 0 switches the tally off,
+    !> as needed on chartmap reference coordinates.
     integer :: nbi_torque_bins = 50
     real(dp) :: grid_density = 0d0
     logical          :: special_ants_file = .False.

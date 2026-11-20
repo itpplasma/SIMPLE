@@ -25,27 +25,44 @@ module nbi_birth
 contains
 
     function vmec_beam_plasma(x) result(p)
-        !> Plasma at Cartesian x [m] from the VMEC flux label and SIMPLE
-        !> profiles. Species 2 with charge above one acts as the impurity.
+        !> Plasma at Cartesian x [m] from the flux label s of the profiles and
+        !> SIMPLE profiles. Species 2 with charge above one acts as the impurity.
         use reference_coordinates, only: ref_coords
         use simple_profiles, only: get_plasma_params
         use params, only: Z1, Z2
         real(dp), intent(in) :: x(3)
         type(nbi_plasma_t) :: p
-        real(dp) :: u(3), te, ti1, ti2, n1, n2
+        real(dp) :: u(3), s, te, ti1, ti2, n1, n2
         integer :: ierr
 
         call ref_coords%from_cyl([100.0_dp*hypot(x(1), x(2)), atan2(x(2), x(1)), &
                                   100.0_dp*x(3)], u, ierr)
-        p%inside = ierr == 0 .and. u(1) >= 0.0_dp .and. u(1) < 1.0_dp
+        p%inside = .false.
+        if (ierr /= 0) return
+        s = flux_label(u)
+        p%inside = s >= 0.0_dp .and. s < 1.0_dp
         if (.not. p%inside) return
-        call get_plasma_params(u(1), te, ti1, ti2, n1, n2)
+        call get_plasma_params(s, te, ti1, ti2, n1, n2)
         p%te = te
         p%ne = Z1*n1 + Z2*n2
         p%zeff = (Z1**2*n1 + Z2**2*n2)/p%ne
         p%z_impurity = 0
         if (Z2 > 1.5_dp .and. n2 > 0.0_dp) p%z_impurity = nint(Z2)
     end function vmec_beam_plasma
+
+    function flux_label(u) result(s)
+        !> Normalised toroidal flux of the reference point u. The chart radius
+        !> of a chartmap is rho, and beyond the LCFS of an extended chart it
+        !> exceeds rho_lcfs; only VMEC reference coordinates give s directly.
+        use field_can_mod, only: ref_to_integ
+        use profile_radius, only: profile_s
+        real(dp), intent(in) :: u(3)
+        real(dp) :: s
+        real(dp) :: xi(3)
+
+        call ref_to_integ(u, xi)
+        s = profile_s(xi)
+    end function flux_label
 
     subroutine field_direction(u, bhat, bmod)
         !> Unit field vector in Cartesian components at reference point u, from
@@ -174,7 +191,11 @@ contains
             ! Guiding centre in cm and cm/s, Gaussian units.
             call ref_coords%from_cyl([100.0_dp*hypot(x(1), x(2)), atan2(x(2), x(1)), &
                                       100.0_dp*x(3)], u, ierr)
-            if (ierr /= 0 .or. u(1) >= 1.0_dp) then
+            if (ierr /= 0) then
+                prompt_angmom = prompt_angmom + mass*(x(1)*v(2) - x(2)*v(1))
+                cycle
+            end if
+            if (flux_label(u) >= 1.0_dp) then
                 ! The segment midpoint was inside, this point is not.
                 prompt_angmom = prompt_angmom + mass*(x(1)*v(2) - x(2)*v(1))
                 cycle
@@ -186,7 +207,11 @@ contains
                 error stop 'NBI birth: non-finite guiding centre'
       call ref_coords%from_cyl([hypot(xgc(1), xgc(2)), atan2(xgc(2), xgc(1)), xgc(3)], &
                                      ugc, ierr)
-            if (ierr /= 0 .or. ugc(1) >= 1.0_dp) then
+            if (ierr /= 0) then
+                prompt_angmom = prompt_angmom + mass*(x(1)*v(2) - x(2)*v(1))
+                cycle
+            end if
+            if (flux_label(ugc) >= 1.0_dp) then
                 prompt_angmom = prompt_angmom + mass*(x(1)*v(2) - x(2)*v(1))
                 cycle
             end if

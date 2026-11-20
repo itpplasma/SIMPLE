@@ -719,6 +719,17 @@ foreach(case IN ITEMS radial tangential)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/nbi_${case})
 endforeach()
 
+# Beam deposition on a rho chartmap equals the deposition in VMEC coordinates
+add_executable(test_nbi_birth_chartmap.x test_nbi_birth_chartmap.f90)
+target_link_libraries(test_nbi_birth_chartmap.x simple)
+add_dependencies(test_nbi_birth_chartmap.x chartmap_test_data)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/nbi_chartmap)
+add_test(NAME test_nbi_birth_chartmap
+    COMMAND test_nbi_birth_chartmap.x ${WOUT_FILE} ${CHARTMAP_FILE})
+set_tests_properties(test_nbi_birth_chartmap PROPERTIES LABELS "integration"
+    TIMEOUT 300 ENVIRONMENT "OMP_NUM_THREADS=1"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/nbi_chartmap)
+
 add_executable(test_nbi_torque.x test_nbi_torque.f90)
 target_link_libraries(test_nbi_torque.x simple)
 foreach(case IN ITEMS collisional collisionless)

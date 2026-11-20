@@ -2059,6 +2059,7 @@ contains
         use nbi_birth, only: sample_nbi_birth, nbi_marker_angmom, nbi_marker_rate
         use nbi_torque, only: nbi_tally_init
         use params, only: nbi_torque_bins
+        use profile_radius, only: init_profile_radius
         use params, only: marker_weight_file, marker_weights_input
 
         logical, intent(in), optional :: xstart_is_integ_coords
@@ -2105,8 +2106,12 @@ contains
             end select
 
         elseif (8 == startmode) then
+            ! Births need the flux label of the profiles also without collisions.
+            call init_profile_radius
+            if (nbi_torque_bins > 0) call require_vmec_reference_coordinates
             call sample_nbi_birth(zstart, convert_surface_starts)
-            call nbi_tally_init(nbi_torque_bins, nbi_marker_angmom, nbi_marker_rate)
+            if (nbi_torque_bins > 0) &
+                call nbi_tally_init(nbi_torque_bins, nbi_marker_angmom, nbi_marker_rate)
 
         elseif (5 == startmode) then
             if (0 == num_surf) then
@@ -2134,6 +2139,20 @@ contains
             call load_marker_weights(marker_weights_input, trim(marker_weight_file))
         end if
     end subroutine sample_particles
+
+    !> The beam torque tally evaluates VMEC's A_phi and h_phi at the reference
+    !> point, so it needs VMEC reference coordinates.
+    subroutine require_vmec_reference_coordinates
+        use reference_coordinates, only: ref_coords
+        use libneo_coordinates, only: vmec_coordinate_system_t
+
+        select type (cs => ref_coords)
+        class is (vmec_coordinate_system_t)
+        class default
+            error stop 'nbi_torque_bins > 0 needs VMEC reference coordinates; '// &
+                'set nbi_torque_bins = 0 on a chartmap'
+        end select
+    end subroutine require_vmec_reference_coordinates
 
     subroutine sample_particles_test_field
         !> Sample particles for the analytic circular tokamak TEST field.
