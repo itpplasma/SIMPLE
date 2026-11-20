@@ -41,12 +41,15 @@ add_executable(test_magfie_refcoords_splines.x test_magfie_refcoords_splines.f90
 target_link_libraries(test_magfie_refcoords_splines.x simple)
 add_dependencies(test_magfie_refcoords_splines.x ncsx_test_data)
 
+add_library(test_coarse_coils STATIC coarse_coils.f90)
+target_link_libraries(test_coarse_coils PUBLIC simple)
+
 add_executable(test_magfie_gc_tables.x test_magfie_gc_tables.f90)
-target_link_libraries(test_magfie_gc_tables.x simple)
+target_link_libraries(test_magfie_gc_tables.x test_coarse_coils)
 add_dependencies(test_magfie_gc_tables.x ncsx_test_data)
 
 add_executable(test_gc_tables_selection.x test_gc_tables_selection.f90)
-target_link_libraries(test_gc_tables_selection.x simple)
+target_link_libraries(test_gc_tables_selection.x test_coarse_coils)
 add_dependencies(test_gc_tables_selection.x ncsx_test_data)
 
 add_executable(test_orbit_refcoords_rk45.x test_orbit_refcoords_rk45.f90)

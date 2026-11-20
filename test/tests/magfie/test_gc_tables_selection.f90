@@ -16,6 +16,7 @@ program test_gc_tables_selection
     use neo_frozen_current_io, only: save_frozen_current_field
     use fortfem_meridian_bspline_n, only: meridian_bspline_build
     use neo_guiding_centre_field, only: GC_COUNT
+    use coarse_coils, only: write_coarse_coils
     implicit none
 
     real(dp), parameter :: u(3, 3) = reshape([0.2_dp, 0.3_dp, 0.1_dp, &
@@ -24,11 +25,12 @@ program test_gc_tables_selection
     type(tracer_t) :: norb
     real(dp) :: from_coils(GC_COUNT, 3), from_frozen(GC_COUNT, 3)
 
-    call write_frozen_coils('coils.simple', 'frozen_ncsx.field')
+    call write_coarse_coils('coils.simple', 'coils_gc_selection.simple', 16)
+    call write_frozen_coils('coils_gc_selection.simple', 'frozen_ncsx.field')
     coord_input = 'wout_ncsx.chartmap.nc'
     isw_field_type = REFCOORDS
 
-    field_input = 'coils.simple'
+    field_input = 'coils_gc_selection.simple'
     call init_field(norb, 'wout_ncsx.nc', 5, 5, 3, 0)
     if (.not. gc_tables%initialized) error stop 'coil file: no tables'
     call sample(from_coils)
