@@ -25,7 +25,7 @@ and ``DOC/config.md`` for additional usage, units and option interactions.
 &config
 -------
 
-Source: ``src/params.f90:304``.
+Source: ``src/params.f90:306``.
 
 .. list-table::
    :header-rows: 1
@@ -241,6 +241,12 @@ Source: ``src/params.f90:304``.
      - ``scalar``
      - ``0.0d0``
      - Start of the tally window [s].
+   * - ``ntv_flux_drive``
+     - ``logical``
+     - ``default``
+     - ``scalar``
+     - ``.false.``
+     - Drive the weight with the flux displacement ds.
    * - ``special_ants_file``
      - ``logical``
      - ``default``

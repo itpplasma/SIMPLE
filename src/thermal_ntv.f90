@@ -12,7 +12,8 @@ module thermal_ntv
     !> with A_1 = n'/n + e Phi'/T - 3/2 T'/T and A_2 = T'/T, ' = d/ds, the
     !> derivative of ln F_c at fixed total energy. Collisions move markers at
     !> fixed weight; the source C[F_c] of the collisional axisymmetric response
-    !> is not included. The torque on a particle from the field is
+    !> is not included. The flux drive uses ds in the weight evolution.
+    !> The torque on a particle from the field is
     !> the change of canonical toroidal momentum P = (q/c) psi* along a
     !> collisionless step, zero in an axisymmetric field. The torque density on
     !> the species is n <w dP/dt>, estimated per marker by
@@ -29,6 +30,7 @@ module thermal_ntv
               ntv_tally_collision, ntv_tally_write, ntv_tally_weight, ntv_tally_marker
 
     logical :: ntv_tally_enabled = .false.
+    logical :: flux_drive = .false.
     real(dp) :: a1 = 0, a2 = 0, energy_ratio = 0, s_lo = 0, s_hi = 1, t_start = 0
     real(dp), allocatable :: w(:), last_p(:), last_s(:), contrib(:), dwell(:)
     logical, allocatable :: born_in_bin(:)
@@ -38,11 +40,12 @@ module thermal_ntv
 
 contains
 
-    subroutine ntv_tally_init(n_markers, drive, temperature_ev, bin, window_start)
+    subroutine ntv_tally_init(n_markers, drive, temperature_ev, bin, window_start, use_flux_drive)
         use params, only: particle_energy_eV_effective, integmode, isw_field_type
         use magfie_sub, only: BOOZER
         integer, intent(in) :: n_markers
         real(dp), intent(in) :: drive(2), temperature_ev, bin(2), window_start
+        logical, intent(in), optional :: use_flux_drive
         if (temperature_ev <= 0) error stop 'thermal_ntv: temperature must be > 0'
         if (integmode <= 0) error stop 'thermal_ntv: needs a symplectic integmode'
         if (isw_field_type /= BOOZER) error stop 'thermal_ntv: needs Boozer coordinates'
@@ -52,6 +55,8 @@ contains
         s_lo = bin(1)
         s_hi = bin(2)
         t_start = window_start
+        flux_drive = .false.
+        if (present(use_flux_drive)) flux_drive = use_flux_drive
         if (allocated(w)) deallocate (w, last_p, last_s, contrib, dwell, born_in_bin)
         allocate (w(n_markers), last_p(n_markers), last_s(n_markers), &
                   contrib(n_markers), dwell(n_markers), source=0.0_dp)
@@ -114,11 +119,16 @@ contains
         use parmot_mod, only: ro0
         integer, intent(in) :: ipart
         real(dp), intent(in) :: z(5), time, pphi
-        real(dp) :: p, s, dw, w_mid
+        real(dp) :: p, s, drive, dw, w_mid
 
         p = momentum_unit()*ro0/sqrt(2.0_dp)*pphi
         s = flux_label(z)
-        dw = -(a1 + a2*energy_ratio*z(4)**2)*(p - last_p(ipart))/momentum_per_s(z)
+        drive = a1 + a2*energy_ratio*z(4)**2
+        if (flux_drive) then
+            dw = -drive*(s - last_s(ipart))
+        else
+            dw = -drive*(p - last_p(ipart))/momentum_per_s(z)
+        end if
         w_mid = w(ipart) + 0.5_dp*dw
         w(ipart) = w(ipart) + dw
         if (time >= t_start .and. born_in_bin(ipart)) then

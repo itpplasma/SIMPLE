@@ -88,6 +88,8 @@ module params
     logical :: ntv_tally = .false.
     !> A_1, A_2 of the weight equation dw = -(A_1 + A_2 E/T) dP/(dP/ds).
     real(dp) :: ntv_drive(2) = 0.0d0
+    !> Drive the weight with the flux displacement ds.
+    logical :: ntv_flux_drive = .false.
     !> Background temperature T of the tally [eV].
     real(dp) :: ntv_temperature_eV = 0.0d0
     !> Range of the birth s of the markers whose torque is tallied.
@@ -308,6 +310,7 @@ module params
         isw_field_type, generate_start_only, startmode, fusion_grid, grid_density, &
         nbi_file, nbi_path_step, nbi_path_length, nbi_torque_bins, &
         ntv_tally, ntv_drive, ntv_temperature_eV, ntv_bin, ntv_window_start, &
+        ntv_flux_drive, &
         special_ants_file, integmode, orbit_model, orbit_coord, relerr, &
         gpu_mode, gpu_backend, gpu_method, gpu_start_coordinates, &
         gpu_landreman, gpu_compact_init, gpu_work_order, gpu_num_devices, &

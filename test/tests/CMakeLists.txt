@@ -748,7 +748,7 @@ endforeach()
 
 add_executable(test_thermal_ntv.x test_thermal_ntv.f90)
 target_link_libraries(test_thermal_ntv.x simple)
-foreach(case IN ITEMS collisional collisionless)
+foreach(case IN ITEMS collisional collisionless flux_drive)
     file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/thermal_ntv_${case})
     add_test(NAME test_thermal_ntv_${case}
         COMMAND test_thermal_ntv.x ${WOUT_ITER_FILE} ${case})
