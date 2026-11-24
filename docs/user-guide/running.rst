@@ -104,6 +104,12 @@ after that. Generated markers have :math:`v/v_0 = 1` and pitch
 :math:`\lambda = v_\parallel/v` uniform in :math:`[-1, 1]`. Angles are in
 radians and are not wrapped.
 
+Neutral beamlet rows can end with an optional path limit in metres after
+the three Cartesian direction components. Use the distance from the
+beamlet origin to the first material hit. The stopping calculation uses
+the shorter of this distance and ``nbi_path_length``. Omit the last column
+to integrate the full configured path, including any later plasma passages.
+
 Integrators
 -----------
 

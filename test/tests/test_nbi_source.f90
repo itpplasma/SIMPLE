@@ -36,10 +36,11 @@ program test_nbi_source
     use beam_stopping, only: suzuki_stopping
     implicit none
     type(nbi_beamlet_t) :: b
+    type(nbi_beamlet_t), allocatable :: rays(:)
     type(nbi_segment_t), allocatable :: seg(:)
   real(dp) :: injected, shine, sigma, lambda, deposited, l, expected, x(3), v(3), xgc(3)
     real(dp) :: tau
-    integer :: i, j
+    integer :: i, j, unit
     character(16) :: mode
 
     call get_command_argument(1, mode)
@@ -74,6 +75,21 @@ program test_nbi_source
     if (abs(l/expected - 1.0_dp) > 1.0e-10_dp) error stop 'deposition profile not exponential'
     print '(a,f8.5,a,f8.5)', 'shine fraction ', shine/injected, ', analytic ', exp(-2*lambda)
 
+    open (newunit=unit, file='test_nbi_path_limits.dat', status='replace')
+    write (unit, '(a)') 'first 2 60000 1e6 1 0 0 0 0 0 1 0 0 3.0004 # between first and second slabs'
+    write (unit, '(a)') 'second 2 60000 1e6 1 0 0 0 0 0 1 0 0 6.0004 # between second and third slabs'
+    write (unit, '(a)') 'legacy 2 60000 1e6 1 0 0 0 0 0 1 0 0 # all three slabs'
+    close (unit)
+    call read_nbi_beamlets('test_nbi_path_limits.dat', rays)
+    open (newunit=unit, file='test_nbi_path_limits.dat', status='old')
+    close (unit, status='delete')
+    do i = 1, 3
+        call beamlet_deposition(rays(i), 1, three_slabs, 1.0e-3_dp, 9.0_dp, seg, injected, shine)
+        if (abs(shine/(injected*exp(-2*i*lambda)) - 1.0_dp) > 1.0e-10_dp) &
+            error stop 'shine-through through the slab wall fixture'
+        if (any(seg%l1 > 3*i + 0.0004_dp)) error stop 'ionization after material hit'
+    end do
+
     ! Peaked profile, half-energy component: composite Simpson rule on 2e5
     ! intervals for tau = int n_e sigma dx. The midpoint error of the 1 mm
     ! path step is below 1e-7 of tau.
@@ -94,6 +110,13 @@ program test_nbi_source
     print '(a)', 'PASS'
 
 contains
+
+    function three_slabs(x) result(p)
+        real(dp), intent(in) :: x(3)
+        type(nbi_plasma_t) :: p
+
+        p = slab([modulo(x(1), 3.0_dp), x(2:3)])
+    end function three_slabs
 
     function simpson_tau(e_kev_amu, n) result(tau)
         real(dp), intent(in) :: e_kev_amu
