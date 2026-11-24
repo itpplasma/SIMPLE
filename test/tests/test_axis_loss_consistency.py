@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """System-level axis-loss regression for issue #370.
 
 Traces the same deterministic particle set near the axis with the symplectic
@@ -8,18 +7,13 @@ particles lost only in the symplectic run; the strict acceptance here is
 zero symplectic-only losses.
 """
 
+import argparse
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 import numpy as np
-
-SCRIPT_DIR = Path(__file__).resolve().parent
-BUILD_DIR = SCRIPT_DIR.parent.parent / "build"
-SIMPLE_X = BUILD_DIR / "simple.x"
-WOUT = SCRIPT_DIR.parent / "test_data" / "wout.nc"
-WORKDIR = BUILD_DIR / "axis_loss_consistency"
 
 SIMPLE_IN = """\
 &config
@@ -41,20 +35,20 @@ facE_al = 1.0d0
 """
 
 
-def run(case: str, integmode: int, relerr: str, startmode: int,
+def run(simple_x: Path, wout: Path, case: str, integmode: int, relerr: str, startmode: int,
         start_src: Path | None, *, full: bool = False) -> Path:
-    d = WORKDIR / ("full" if full else "fast") / case
+    d = simple_x.parent / "axis_loss_consistency" / ("full" if full else "fast") / case
     if d.exists():
         shutil.rmtree(d)
     d.mkdir(parents=True)
-    (d / "wout.nc").symlink_to(WOUT)
+    (d / "wout.nc").symlink_to(wout)
     (d / "simple.in").write_text(
         SIMPLE_IN.format(integmode=integmode, relerr=relerr,
                          startmode=startmode, npart=32 if full else 8,
                          multharm=5 if full else 1))
     if start_src is not None:
         shutil.copy2(start_src, d / "start.dat")
-    res = subprocess.run([str(SIMPLE_X)], cwd=d, capture_output=True,
+    res = subprocess.run([str(simple_x)], cwd=d, capture_output=True,
                          text=True, timeout=1200)
     if res.returncode != 0:
         print(res.stdout[-2000:])
@@ -68,18 +62,21 @@ def loss_times(d: Path) -> np.ndarray:
 
 
 def main() -> None:
-    if not SIMPLE_X.exists() or not WOUT.exists():
-        sys.exit("missing simple.x or wout.nc")
-
-    if sys.argv[1:] not in ([], ["--full"]):
-        sys.exit("usage: test_axis_loss_consistency.py [--full]")
-    full = bool(sys.argv[1:])
+    parser = argparse.ArgumentParser()
+    parser.add_argument("simple_x", type=Path)
+    parser.add_argument("wout", type=Path)
+    parser.add_argument("--full", action="store_true")
+    args = parser.parse_args()
+    simple_x = args.simple_x.resolve()
+    wout = args.wout.resolve()
+    if not simple_x.is_file() or not wout.is_file():
+        sys.exit(f"missing test input: {simple_x} or {wout}")
 
     # Symplectic run generates the deterministic start.dat; RK reuses it.
-    d_sympl = run("sympl", integmode=1, relerr="1d-13", startmode=1,
-                  start_src=None, full=full)
-    d_rk = run("rk", integmode=0, relerr="1d-12", startmode=2,
-               start_src=d_sympl / "start.dat", full=full)
+    d_sympl = run(simple_x, wout, "sympl", integmode=1, relerr="1d-13", startmode=1,
+                  start_src=None, full=args.full)
+    d_rk = run(simple_x, wout, "rk", integmode=0, relerr="1d-12", startmode=2,
+               start_src=d_sympl / "start.dat", full=args.full)
 
     trace_time = 1e-2
     tl_s = loss_times(d_sympl)
