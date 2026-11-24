@@ -4,7 +4,6 @@ program test_orbit_netcdf_output
     use netcdf
     implicit none
 
-    character(len=*), parameter :: test_dir = '../../../examples/orbit_output_test'
     character(len=*), parameter :: nc_file = 'orbits.nc'
     integer :: status, ncid, dimid_particle, dimid_timestep
     integer :: n_particles, n_timesteps
@@ -21,15 +20,15 @@ program test_orbit_netcdf_output
     print *, 'Testing NetCDF orbit output system...'
 
     ! Check if orbits.nc exists in test directory
-    inquire(file=trim(test_dir)//'/'//trim(nc_file), exist=file_exists)
+    inquire (file=nc_file, exist=file_exists)
     if (.not. file_exists) then
-        print *, 'ERROR: orbits.nc not found in ', trim(test_dir)
+        print *, 'ERROR: orbits.nc not found in the working directory'
         error stop 1
     end if
     print *, 'PASS: orbits.nc file exists'
 
     ! Open NetCDF file
-    status = nf90_open(trim(test_dir)//'/'//trim(nc_file), nf90_nowrite, ncid)
+    status = nf90_open(nc_file, nf90_nowrite, ncid)
     if (status /= nf90_noerr) then
         print *, 'ERROR: Cannot open orbits.nc: ', trim(nf90_strerror(status))
         error stop 1
@@ -123,7 +122,7 @@ program test_orbit_netcdf_output
     end if
     print *, 'PASS: All required variables exist'
 
-    status = nf90_open(test_dir//'/wout.nc', nf90_nowrite, field_ncid)
+    status = nf90_open('wout.nc', nf90_nowrite, field_ncid)
     if (status /= nf90_noerr) error stop 'Cannot open orbit equilibrium'
     status = nf90_inq_varid(field_ncid, 'nfp', field_varid)
     if (status /= nf90_noerr) error stop 'Cannot find field-period count'
@@ -141,7 +140,7 @@ program test_orbit_netcdf_output
                               start=[1, 1], count=[n_particles, 1])
         if (status /= nf90_noerr) error stop 'Cannot read first orbit position'
     end do
-    open (newunit=start_unit, file=test_dir//'/start.dat', status='old')
+    open (newunit=start_unit, file='start.dat', status='old')
     do particle = 1, n_particles
         read (start_unit, *) start_state
         angle_error = modulo(first_position(particle, 2:3) - &

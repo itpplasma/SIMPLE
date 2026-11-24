@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """The explicit integmodes must notice when a marker leaves the plasma.
 
 The symplectic schemes test the radius of every Newton iterate, so a crossing
@@ -27,6 +26,7 @@ under-detection that the invariant alone would miss if markers happened to
 drift back inside before the trace ended.
 """
 
+import argparse
 import shutil
 import subprocess
 import sys
@@ -36,12 +36,6 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
-
-SCRIPT_DIR = Path(__file__).resolve().parent
-BUILD_DIR = SCRIPT_DIR.parent.parent / "build"
-SIMPLE_X = BUILD_DIR / "simple.x"
-WOUT = SCRIPT_DIR.parent / "test_data" / "wout.nc"
-WORKDIR = BUILD_DIR / "explicit_loss_detection"
 
 RUN_TIMEOUT = 600
 
@@ -121,13 +115,13 @@ EXPLICIT = [
 ]
 
 
-def run(case, integmode, relerr, startmode, start_src, sbeg, npart, trace,
+def run(simple_x, wout, case, integmode, relerr, startmode, start_src, sbeg, npart, trace,
         threads=None, full=False):
-    d = WORKDIR / ("full" if full else "fast") / case
+    d = simple_x.parent / "explicit_loss_detection" / ("full" if full else "fast") / case
     if d.exists():
         shutil.rmtree(d)
     d.mkdir(parents=True)
-    (d / "wout.nc").symlink_to(WOUT)
+    (d / "wout.nc").symlink_to(wout)
     (d / "simple.in").write_text(SIMPLE_IN.format(
         trace=trace, npart=npart, integmode=integmode, relerr=relerr,
         startmode=startmode, sbeg=sbeg, multharm=5 if full else 1))
@@ -137,7 +131,7 @@ def run(case, integmode, relerr, startmode, start_src, sbeg, npart, trace,
     if threads is not None:
         env["OMP_NUM_THREADS"] = str(threads)
     t0 = time.monotonic()
-    res = subprocess.run([str(SIMPLE_X)], cwd=d, capture_output=True,
+    res = subprocess.run([str(simple_x)], cwd=d, capture_output=True,
                          text=True, env=env, timeout=RUN_TIMEOUT)
     print(f"  [{case}: {time.monotonic() - t0:.1f} s]", flush=True)
     if res.returncode != 0:
@@ -166,11 +160,11 @@ def classify(tlost, trace):
     return confined, lost, int(np.sum(~finite))
 
 
-def check_surface(sbeg, npart, trace, failures, full=False):
+def check_surface(simple_x, wout, sbeg, npart, trace, failures, full=False):
     """Run the reference and every explicit mode from one launch surface."""
     tag = f"s{sbeg:g}".replace(".", "")
     name, mode, relerr = REFERENCE
-    d_ref = run(f"{tag}_{name}", mode, relerr, startmode=1, start_src=None,
+    d_ref = run(simple_x, wout, f"{tag}_{name}", mode, relerr, startmode=1, start_src=None,
                 sbeg=sbeg, npart=npart, trace=trace, full=full)
     tl_ref, s_ref = read(d_ref)
     _, lost_ref, _ = classify(tl_ref, trace)
@@ -188,7 +182,7 @@ def check_surface(sbeg, npart, trace, failures, full=False):
     # on one thread apiece, bounded by the CTest CPU reservation.
     with ThreadPoolExecutor(max_workers=int(os.environ.get("OMP_NUM_THREADS", "1"))) as pool:
         futures = [
-            pool.submit(run, f"{tag}_{name}", mode, relerr, startmode=2,
+            pool.submit(run, simple_x, wout, f"{tag}_{name}", mode, relerr, startmode=2,
                         start_src=d_ref / "start.dat", sbeg=sbeg, npart=npart,
                         trace=trace, threads=1, full=full)
             for name, mode, relerr in EXPLICIT]
@@ -223,15 +217,19 @@ def check_surface(sbeg, npart, trace, failures, full=False):
 
 
 def main():
-    if not SIMPLE_X.exists() or not WOUT.exists():
-        sys.exit("missing simple.x or wout.nc")
-
-    if sys.argv[1:] not in ([], ["--full"]):
-        sys.exit("usage: test_explicit_loss_detection.py [--full]")
-    full = bool(sys.argv[1:])
+    parser = argparse.ArgumentParser()
+    parser.add_argument("simple_x", type=Path)
+    parser.add_argument("wout", type=Path)
+    parser.add_argument("--full", action="store_true")
+    args = parser.parse_args()
+    simple_x = args.simple_x.resolve()
+    wout = args.wout.resolve()
+    if not simple_x.is_file() or not wout.is_file():
+        sys.exit(f"missing test input: {simple_x} or {wout}")
+    full = args.full
     surfaces = LAUNCH_SURFACES if full else [(0.75, 16, 1e-4), (0.05, 1, 3e-4)]
     failures = []
-    losses = [check_surface(sbeg, npart, trace, failures, full)
+    losses = [check_surface(simple_x, wout, sbeg, npart, trace, failures, full)
               for sbeg, npart, trace in surfaces]
 
     # The outer surface must actually lose markers, or the boundary check has

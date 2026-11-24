@@ -1160,7 +1160,8 @@ set_tests_properties(test_continuous_classifier_scores PROPERTIES LABELS "unit")
     # identical near-axis starts, symplectic Euler vs RK Boozer reference.
     add_test(NAME test_axis_loss_consistency
         COMMAND ${BOOZER_CHARTMAP_PYTHON}
-            ${CMAKE_CURRENT_SOURCE_DIR}/test_axis_loss_consistency.py)
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_axis_loss_consistency.py
+            $<TARGET_FILE:simple.x> ${WOUT_FILE})
     set_tests_properties(test_axis_loss_consistency PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "system;python"
@@ -1174,7 +1175,8 @@ set_tests_properties(test_continuous_classifier_scores PROPERTIES LABELS "unit")
     # s = 1 was integrated onwards and reported as confined.
     add_test(NAME test_explicit_loss_detection
         COMMAND ${BOOZER_CHARTMAP_PYTHON}
-            ${CMAKE_CURRENT_SOURCE_DIR}/test_explicit_loss_detection.py)
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_explicit_loss_detection.py
+            $<TARGET_FILE:simple.x> ${WOUT_FILE})
     set_tests_properties(test_explicit_loss_detection PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         LABELS "system;python"
@@ -1761,9 +1763,9 @@ add_executable(test_orbit_netcdf_output.x test_orbit_netcdf_output.f90)
 target_link_libraries(test_orbit_netcdf_output.x simple)
 
 # Create symlink to wout.nc in example directory
+set(orbit_netcdf_dir "${CMAKE_SOURCE_DIR}/examples/orbit_output_test")
 include(${CMAKE_CURRENT_SOURCE_DIR}/ensure_orbit_wout_link.cmake)
-simple_ensure_orbit_wout_link(
-    "${WOUT_FILE}" "${CMAKE_SOURCE_DIR}/examples/orbit_output_test/wout.nc")
+simple_ensure_orbit_wout_link("${WOUT_FILE}" "${orbit_netcdf_dir}/wout.nc")
 
 add_test(NAME test_orbit_wout_link_configuration
     COMMAND ${Python3_EXECUTABLE}
@@ -1776,9 +1778,8 @@ set_tests_properties(test_orbit_wout_link_configuration PROPERTIES
 # System test: Run SIMPLE to generate orbits.nc, then verify
 add_test(
     NAME orbit_netcdf_output
-    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_SOURCE_DIR}/examples/orbit_output_test
-        ${CMAKE_COMMAND} -E env
-        $<TARGET_FILE:simple.x>
+    COMMAND $<TARGET_FILE:simple.x>
+    WORKING_DIRECTORY "${orbit_netcdf_dir}"
 )
 set_tests_properties(orbit_netcdf_output PROPERTIES
     FIXTURES_SETUP orbit_netcdf_data
@@ -1790,7 +1791,7 @@ set_tests_properties(orbit_netcdf_output PROPERTIES
 add_test(
     NAME orbit_netcdf_verify
     COMMAND test_orbit_netcdf_output.x
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    WORKING_DIRECTORY "${orbit_netcdf_dir}"
 )
 set_tests_properties(orbit_netcdf_verify PROPERTIES
     FIXTURES_REQUIRED orbit_netcdf_data
@@ -2139,8 +2140,10 @@ foreach(driver IN ITEMS test_class_scores_driver test_explicit_loss_detection
     endif()
 endforeach()
 
-add_full_python_driver(test_axis_loss_consistency 1800)
-add_full_python_driver(test_explicit_loss_detection 600)
+add_full_python_driver(test_axis_loss_consistency 1800
+    $<TARGET_FILE:simple.x> ${WOUT_FILE})
+add_full_python_driver(test_explicit_loss_detection 600
+    $<TARGET_FILE:simple.x> ${WOUT_FILE})
 add_full_python_driver(test_spectre_sympl_volume 300
     $<TARGET_FILE:simple.x> ${libneo_SOURCE_DIR}/test/spectre/data/spectre_test.h5)
 
