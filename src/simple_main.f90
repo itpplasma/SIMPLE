@@ -2763,7 +2763,12 @@ contains
             end do
         end if
 
-       if (nbi_tally_enabled) call nbi_tally_end(ipart, thermalized_exit, physical_exit)
+        if (nbi_tally_enabled) then
+            ! An accepted boundary step exits before the regular drift tally.
+            if (physical_exit .and. orbit_model == ORBIT_GC) &
+                call nbi_tally_drift(ipart, z, (exit_step - real(kt, dp))*dtaumin/v0)
+            call nbi_tally_end(ipart, thermalized_exit, physical_exit)
+        end if
         !$omp critical
         call integ_to_ref(z(1:3), zend(1:3, ipart))
         zend(4:5, ipart) = z(4:5)
@@ -3270,10 +3275,11 @@ contains
         integer :: ierr_coll, collision_hold_start
         real(dp) :: z_step_start(5), z_step_end(5), z_recovery_start(5), loss_fraction
         real(dp) :: s_collision
+        real(dp) :: z_nbi_drift(5)
         real(dp) :: u_ref_prev(3), u_ref_cur(3), x_cur_m(3)
         real(dp) :: segment_duration, wall_exit_step
         logical :: hit, wall_query, numerical_hold, numerical_hold_any_local
-        logical :: reference_boundary, symplectic_accepted
+        logical :: reference_boundary, symplectic_accepted, tally_nbi_step
         type(rk_recovery_state_t) :: rk_recovery_local
         type(symplectic_integrator_t) :: si_step_start
         type(field_can_t) :: f_step_start
@@ -3283,6 +3289,7 @@ contains
         type(rk_recovery_state_t) :: collision_recovery_start
 
         wall_query = present(ipart) .and. present(x_prev_m)
+        tally_nbi_step = nbi_tally_enabled .and. present(ipart)
         if (wall_query) call integ_to_ref(z(1:3), u_ref_prev)
         if (present(exit_step)) exit_step = real(kt, dp)
         hold_streak_local = 0
@@ -3521,11 +3528,11 @@ contains
                 call advance_rk_recovery(anorb, z, rk_recovery_local, &
                                          hold_streak_local, recovery_method)
             end if
-            if (nbi_tally_enabled .and. present(ipart)) call nbi_tally_drift(ipart, z)
             if (ntv_tally_enabled .and. present(ipart)) &
                 call ntv_tally_drift(ipart, z, real(kt + 1, dp)*dtaumin/v0, &
                                      anorb%si%z(4))
             if (swcoll) then
+                if (tally_nbi_step) z_nbi_drift = z
                 ! Collisions change only the momentum, so the profile radius
                 ! of this position serves both the collision and the stop test.
                 s_collision = 0.0_dp
@@ -3547,8 +3554,11 @@ contains
                 if (rk_recovery_local%active) then
                     rk_recovery_local%momentum_reference = z(4)
                 end if
-                if (nbi_tally_enabled .and. present(ipart)) &
+                ! A failed collision rejects the drift as well.
+                if (tally_nbi_step) then
+                    call nbi_tally_drift(ipart, z_nbi_drift, dtaumin/v0)
                     call nbi_tally_collision(ipart, z)
+                end if
                 if (ntv_tally_enabled .and. present(ipart)) &
                     call ntv_tally_collision(ipart, z)
                 if (thermalized(z, s_collision)) then
@@ -3556,6 +3566,8 @@ contains
                     kt = kt + 1
                     exit
                 end if
+            else if (tally_nbi_step) then
+                call nbi_tally_drift(ipart, z, dtaumin/v0)
             end if
             if (symplectic_accepted) &
                 call record_symplectic_success(rk_recovery_local)

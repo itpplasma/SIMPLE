@@ -100,9 +100,9 @@ contains
         n_begin = n_begin + 1
     end subroutine nbi_tally_begin
 
-    subroutine nbi_tally_drift(ipart, z)
+    subroutine nbi_tally_drift(ipart, z, dt)
         integer, intent(in) :: ipart
-        real(dp), intent(in) :: z(5)
+        real(dp), intent(in) :: z(5), dt
         real(dp) :: l, a, s, smid
 
         call nbi_gc_momentum(z, l, a, s)
@@ -112,17 +112,17 @@ contains
         last_l(ipart) = l
         last_a(ipart) = a
         last_s(ipart) = s
-        call add(dep_neutron, s, beam_target_neutrons(z, s))
+        call add(dep_neutron, s, beam_target_neutrons(z, s, dt))
     end subroutine nbi_tally_drift
 
-    function beam_target_neutrons(z, s) result(yield)
-        !> Expected D(d,n)3He reactions of one deuteron during one microstep on
-        !> Maxwellian deuterium at the local ion temperature: n_D <sigma u> dt.
-        use params, only: n_d, v0, dtaumin, am1, am2
+    function beam_target_neutrons(z, s, dt) result(yield)
+        !> Expected D(d,n)3He reactions on Maxwellian deuterium during the
+        !> accepted drift duration dt [s]: n_D <sigma u> dt.
+        use params, only: n_d, v0, am1, am2
         use simple_profiles, only: get_plasma_params
         use fusion_source, only: dd_beam_maxwellian_rate
         use util, only: p_mass
-        real(dp), intent(in) :: z(5), s
+        real(dp), intent(in) :: z(5), s, dt
         real(dp) :: yield, te, ti1, ti2, n1, n2, nd, ti
 
         yield = 0.0_dp
@@ -139,8 +139,7 @@ contains
             ti = ti1
         end if
         ! Speed in m/s; SIMPLE's ions have mass n_d m_p, p_mass in g.
-        yield = nd*dd_beam_maxwellian_rate(1.0e-2_dp*v0*z(4), ti, 2.0e-3_dp*p_mass) &
-                *dtaumin/v0
+        yield = nd*dd_beam_maxwellian_rate(1.0e-2_dp*v0*z(4), ti, 2.0e-3_dp*p_mass)*dt
     end function beam_target_neutrons
 
     subroutine nbi_tally_collision(ipart, z)

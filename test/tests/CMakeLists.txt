@@ -737,7 +737,7 @@ set_tests_properties(test_nbi_birth_chartmap PROPERTIES LABELS "integration"
 
 add_executable(test_nbi_torque.x test_nbi_torque.f90)
 target_link_libraries(test_nbi_torque.x simple)
-foreach(case IN ITEMS collisional collisionless)
+foreach(case IN ITEMS collisional collisionless fractional_loss)
     file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/nbi_torque_${case})
     add_test(NAME test_nbi_torque_${case}
         COMMAND test_nbi_torque.x ${WOUT_ITER_FILE} ${case})
