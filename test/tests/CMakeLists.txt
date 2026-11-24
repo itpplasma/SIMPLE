@@ -1555,6 +1555,14 @@ if(SIMPLE_ENABLE_MPI)
     set_tests_properties(test_mpi_two_ranks PROPERTIES
         LABELS "unit;mpi"
         TIMEOUT 300)
+    add_test(NAME test_mpi_nbi
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_mpi_nbi.py
+            ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} $<TARGET_FILE:simple.x>
+            ${WOUT_ITER_FILE} ${CMAKE_CURRENT_BINARY_DIR}/mpi_nbi)
+    set_tests_properties(test_mpi_nbi PROPERTIES
+        LABELS "integration;mpi"
+        TIMEOUT 300)
 endif()
 
 add_test(NAME test_gpu_midpoint_bench

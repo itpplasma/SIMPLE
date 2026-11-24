@@ -1209,6 +1209,7 @@ contains
         ! Rank 0 receives the per-particle results of every rank and the sums
         ! of the per-time-step counters.
         use params, only: class_passing, class_lost
+        use nbi_torque, only: nbi_tally_reduce
 
         if (mpi_ranks == 1) return
         call mpi_gather_r64(zend, size(zend, 1), ntestpart)
@@ -1242,6 +1243,7 @@ contains
         call mpi_reduce_sum_r64(confpart_pass, ntimstep)
         call mpi_reduce_sum_r64(confpart_trap, ntimstep)
         call mpi_reduce_sum_int(unresolved_orbits, ntimstep)
+        if (nbi_tally_enabled) call nbi_tally_reduce()
     contains
         subroutine gather_logical(a)
             logical, intent(inout) :: a(:)

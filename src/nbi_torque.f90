@@ -12,7 +12,7 @@ module nbi_torque
     private
     public :: nbi_tally_enabled, nbi_tally_init, nbi_tally_begin, nbi_tally_drift, &
               nbi_tally_collision, nbi_tally_end, nbi_tally_write, nbi_gc_momentum, &
-              nbi_tally_total
+              nbi_tally_total, nbi_tally_reduce
 
     logical :: nbi_tally_enabled = .false.
     integer :: nbins = 0
@@ -48,6 +48,7 @@ contains
         n_lost = 0
         n_therm = 0
         n_alive = 0
+        n_begin = 0
         marker_rate = rate
         nbi_tally_enabled = .true.
         ! Quadrature nodes before the parallel orbit loop.
@@ -172,6 +173,29 @@ contains
             n_alive = n_alive + 1
         end if
     end subroutine nbi_tally_end
+
+    subroutine nbi_tally_reduce()
+        use simple_mpi, only: mpi_reduce_sum_r64, mpi_reduce_sum_int
+        real(dp) :: endpoint_l(2)
+        integer :: counts(4)
+
+        call mpi_reduce_sum_r64(dep_birth, nbins)
+        call mpi_reduce_sum_r64(dep_coll, nbins)
+        call mpi_reduce_sum_r64(dep_jxb, nbins)
+        call mpi_reduce_sum_r64(dep_therm, nbins)
+        call mpi_reduce_sum_r64(dep_field, nbins)
+        call mpi_reduce_sum_r64(dep_neutron, nbins)
+        endpoint_l = [lost_l, alive_l]
+        call mpi_reduce_sum_r64(endpoint_l, size(endpoint_l))
+        lost_l = endpoint_l(1)
+        alive_l = endpoint_l(2)
+        counts = [n_begin, n_therm, n_lost, n_alive]
+        call mpi_reduce_sum_int(counts, size(counts))
+        n_begin = counts(1)
+        n_therm = counts(2)
+        n_lost = counts(3)
+        n_alive = counts(4)
+    end subroutine nbi_tally_reduce
 
     pure function nbi_tally_total() result(total)
         !> Bulk torque, field torque, lost and still-fast angular momentum
