@@ -180,6 +180,8 @@ checkpoint_interval = 10d0       ! read for input compatibility; no effect
 ! Walls and charts
 wall_input = ''                  ! STL wall file; '' = no wall; requires chartmap coord_input
 wall_units = 'm'                 ! length unit of the STL file: 'm' or 'mm'
+wall_query_min_rho = -1d0        ! query STL when a chord ends above this chart radius
+!                                  -1 uses chart LCFS, 0 queries every accepted chord
 chart_boundary_kind = 'auto'     ! meaning of the chartmap outer boundary: 'lcfs' (loss,
 !                                  exit code 1), 'wall' (exit code 2), 'domain' (numerical
 !                                  exit 101), 'auto' = 'lcfs' if the chart rho_lcfs = 1,

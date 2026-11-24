@@ -111,6 +111,12 @@ Variable                                Meaning
 ``wall_hit_angle_rad``                  incidence angle; 0 is normal incidence
 ======================================  ===============================================
 
+The global attribute ``wall_query_rho_lcfs`` records the effective wall-query
+cutoff in chart radius. A positive value skips chords whose accepted endpoint
+is at or below that radius. Zero means every accepted chord is queried. The
+value is ``-1`` when no wall is configured or the default cutoff has no
+``rho_lcfs`` attribute to use.
+
 ``output_orbits_macrostep = .true.`` writes ``orbits.nc`` with every
 marker's state at every macrostep: ``time``, ``s``, ``theta``, ``phi``,
 ``p_abs`` (:math:`v/v_0`), ``v_par`` (:math:`\lambda`) and, when a reference

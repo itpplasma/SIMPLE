@@ -68,6 +68,19 @@ $\rho_\mathrm{lcfs}$ from the chartmap metadata (1 if absent), except for
 `psi_tor_norm` and `psi_pol_norm` charts, whose radius is already a flux. This rule is off with collisions, in
 strict mode, for full orbits and for SPECTRE.
 
+## STL wall query radius
+
+With `wall_input` set, `wall_query_min_rho` accepts `-1` or a chart radius in
+`[0, 1)`. A positive cutoff skips chords whose accepted endpoint is at or below
+that radius. A value of `0` queries every accepted chord. The default `-1`
+uses the last closed flux surface radius from the chart's `rho_lcfs` attribute.
+If the attribute is absent, every accepted chord is queried.
+
+The flux-surface cutoff suppresses spurious wall intersections from chords
+joining points inside the plasma. When STL facets touch or cross that flux
+surface, set the cutoff below their minimum chart radius with a margin for the
+integration step.
+
 ## Canonical-map grid (Meiss, Albert)
 
 | Key | Default | Meaning |

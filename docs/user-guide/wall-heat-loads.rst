@@ -49,12 +49,15 @@ accepted step with the wall surface.
        export
    * - ``wall_units``
      - ``'m'`` (default) or ``'mm'``, the STL length unit
+   * - ``wall_query_min_rho``
+     - chart-radius cutoff, ``-1`` for the LCFS radius (default), ``0`` to query
+       all chords, or a positive value below 1
    * - ``output_results_netcdf``
      - ``.true.``, to write the hits
 
-The wall is queried only after an accepted step has ended outside the LCFS
-(:math:`\rho > \rho_\text{lcfs}`), because a chord between two points inside
-the LCFS can cut a non-convex wall. A hit ends the marker with exit code 2 and
+By default the wall is queried after an accepted step ends outside the LCFS.
+Lower ``wall_query_min_rho`` when facets reach inside the LCFS. A hit ends the
+marker with exit code 2 and
 writes ``wall_hit = 1``, ``wall_hit_cart``, ``wall_hit_normal_cart``,
 ``wall_hit_angle_rad`` (0 is normal incidence) and ``wall_hit_triangle``
 (zero-based facet index in STL file order, ``-1`` without hit). A marker that

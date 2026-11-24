@@ -5,16 +5,19 @@ program test_stl_wall_intersection
                                      stl_wall_first_hit_segment
     use test_utils, only: check, check_close, check_close_vec
     use simple_main, only: main_wall => wall, chartmap_cart_scale_to_m, &
-                           locate_wall_segment
+                           init_stl_wall_if_enabled, locate_wall_segment
     use params, only: wall_hit, wall_hit_cart, wall_hit_normal_cart, &
                       wall_hit_cos_incidence, wall_hit_angle_rad, wall_hit_triangle, &
                       wall_query_rho_lcfs, reallocate_arrays, ntestpart, &
                       npoiper, ntimstep, zstart, zend, class_lost, &
-                      wall_input, wall_units
+                      wall_input, wall_units, config
     use netcdf_results_output, only: write_results_netcdf
     use new_vmec_stuff_mod, only: nper
     use reference_coordinates, only: ref_coords
     use cartesian_coordinates, only: cartesian_coordinate_system_t
+    use libneo_coordinates, only: chartmap_coordinate_system_t
+    use netcdf, only: nf90_create, nf90_clobber, nf90_def_var, nf90_double, &
+                      nf90_put_att, nf90_global, nf90_close, nf90_noerr
     implicit none
 
     integer :: errors, triangle, j, unit_plane, shift
@@ -229,8 +232,48 @@ program test_stl_wall_intersection
                              1.0e-12_dp, 'grazing point-only location', errors)
         call stl_wall_finalize(main_wall)
     end do
+    call check_wall_query_radius()
     if (errors /= 0) error stop 1
 contains
+
+    subroutine check_wall_query_radius()
+        character(len=*), parameter :: chart = 'near_lcfs_chart.nc'
+        character(len=64) :: options
+        integer :: ncid, varid, status
+
+        call check(nf90_create(chart, nf90_clobber, ncid) == nf90_noerr, &
+                   'create chart metadata', errors)
+        call check(nf90_def_var(ncid, 'x', nf90_double, varid=varid) == nf90_noerr, &
+                   'define chart coordinate', errors)
+        call check(nf90_put_att(ncid, varid, 'units', 'm') == nf90_noerr, &
+                   'set chart units', errors)
+        status = nf90_put_att(ncid, nf90_global, 'rho_lcfs', 0.5001_dp)
+        call check(status == nf90_noerr, 'set chart flux surface', errors)
+        call check(nf90_close(ncid) == nf90_noerr, 'close chart metadata', errors)
+
+        options = '&config wall_query_min_rho = 0.499d0 /'
+        read (options, nml=config)
+        wall_input = 'tetra_m.stl'
+        deallocate (ref_coords)
+        allocate (chartmap_coordinate_system_t :: ref_coords)
+        call init_stl_wall_if_enabled(chart)
+        deallocate (ref_coords)
+        allocate (cartesian_coordinate_system_t :: ref_coords)
+
+        ! The facet at x = 0.5 m lies 0.1 mm inside the flux surface.
+        p0 = [0.4998_dp, 0.25_dp, 0.25_dp]
+        p1 = [0.50005_dp, 0.25_dp, 0.25_dp]
+        z_start = [p0, 1.0_dp, 0.0_dp]
+        z_end = [p1, 1.0_dp, 0.0_dp]
+        z = z_end
+        call locate_wall_segment(z, z_start, z_end, 1, p0, p0, p1, p1, &
+                                 6.0_dp, 0.0_dp, 1.0_dp, hit, hit_step)
+        call check(hit, 'near-LCFS mesh crossing was skipped', errors)
+        call check_close_vec(wall_hit_cart(:, 1), [0.5_dp, 0.25_dp, 0.25_dp], &
+                             1.0e-12_dp, 'near-LCFS mesh hit point', errors)
+        call check_close(hit_step, 0.8_dp, 1.0e-12_dp, 'near-LCFS hit time', errors)
+        call stl_wall_finalize(main_wall)
+    end subroutine check_wall_query_radius
 
     subroutine write_tetra_stl_m(path)
         character(len=*), intent(in) :: path

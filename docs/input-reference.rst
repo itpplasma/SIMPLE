@@ -673,6 +673,12 @@ Source: ``src/params.f90:304``.
      - ``scalar``
      - ``'m'``
      -
+   * - ``wall_query_min_rho``
+     - ``real``
+     - ``dp``
+     - ``scalar``
+     - ``-1.0_dp``
+     - -1: LCFS radius, 0: all chords, >0: chart-radius cutoff
    * - ``chart_boundary_kind``
      - ``character(len=16)``
      - ``default``

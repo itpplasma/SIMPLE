@@ -1561,6 +1561,19 @@
           }
         },
         {
+          "name": "wall_query_min_rho",
+          "type": "real",
+          "kind": "dp",
+          "length": "",
+          "shape": [],
+          "extent": [],
+          "default": "-1.0_dp",
+          "default_value": "-1.0_dp",
+          "documentation": "-1: LCFS radius, 0: all chords, >0: chart-radius cutoff",
+          "source": "src/params.f90",
+          "source_line": 256
+        },
+        {
           "name": "chart_boundary_kind",
           "type": "character",
           "kind": "",
