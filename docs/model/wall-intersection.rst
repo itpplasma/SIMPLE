@@ -61,11 +61,12 @@ orbit with exit code 2.
 Query gate
 ----------
 
-The wall is non-convex: a chord between two points inside the LCFS can cut
-it, e.g. on the inboard side of a bean-shaped section. SIMPLE therefore
-queries the wall only for microsteps ending at :math:`\rho >
-\rho_\text{LCFS}`. If a microstep also crosses the outer chartmap boundary,
-the segment up to that crossing is tested and an earlier wall hit wins.
+A chord inside the LCFS can cut a non-convex wall, for example on the
+inboard side of a bean-shaped section. By default SIMPLE queries microsteps
+ending at :math:`\rho > \rho_\text{LCFS}`. Set ``wall_query_min_rho`` below
+the innermost wall facet to query earlier. If a microstep also crosses the
+outer chartmap boundary, the segment up to that crossing is tested and
+an earlier wall hit wins.
 
 Accuracy
 --------

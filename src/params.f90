@@ -253,8 +253,8 @@ module params
     character(1000) :: marker_weight_file = ''
     real(dp), allocatable :: marker_weights_input(:)
     character(16) :: wall_units = 'm'
-    !> Radial threshold for querying an external STL wall. A negative value
-    !> means that no external-wall query gate is active for this run.
+    real(dp) :: wall_query_min_rho = -1.0_dp  ! -1: LCFS radius, 0: all chords, >0: chart-radius cutoff
+    !> Effective radius below which STL wall queries are skipped.
     real(dp) :: wall_query_rho_lcfs = -1.0_dp
     character(16) :: chart_boundary_kind = 'auto'
     character(16) :: chart_boundary_kind_effective = 'lcfs'
@@ -330,7 +330,8 @@ module params
         batch_size, ran_seed, particle_index_offset, reuse_batch, &
         field_input, coord_input, profile_label_file, &
         marker_weight_file, &
-        wall_input, wall_units, chart_boundary_kind, integ_coords, crossing_level, &
+        wall_input, wall_units, wall_query_min_rho, chart_boundary_kind, &
+        integ_coords, crossing_level, &
         spectre_fo_entry_larmor, spectre_fo_tolerance, spectre_fo_grid, &
         spectre_outer_loss, spectre_fo_jump_tol, &
         spectre_sbeg_is_toroidal_flux, spectre_ncon_r, spectre_ncon_th, &
@@ -406,6 +407,10 @@ contains
 
         call validate_boundary_event_tolerances
         call validate_chart_boundary_kind
+        if (.not. config_value_is_finite(wall_query_min_rho) .or. &
+            (wall_query_min_rho /= -1.0_dp .and. &
+             (wall_query_min_rho < 0.0_dp .or. wall_query_min_rho >= 1.0_dp))) &
+            error stop 'wall_query_min_rho must be -1 or in [0, 1)'
         call validate_marker_weight_file
         if (min(canonical_grid_nr, canonical_grid_ntheta, &
                 canonical_grid_nphi) < 6) then
