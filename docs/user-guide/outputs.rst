@@ -52,6 +52,11 @@ Text files
    :math:`B_\text{min}(s)`, :math:`B_\text{max}(s)` in G.
 ``alpha_source.dat``
    Source normalisation of ``startmode = 7`` (:doc:`/alpha-birth`).
+``nbi_birth_trials.dat``
+   Neutral beam injection (``startmode = 8``). Each row gives the marker index
+   in ``nbi_births.dat`` and the 1-based draw ordinal, including rejected
+   draws in the count. Match ordinals across runs that use the same random
+   stream. The sampled birth positions can differ if the deposition changes.
 
 :math:`\kappa` and :math:`J_\perp` are defined in
 :doc:`/model/guiding-centre`.

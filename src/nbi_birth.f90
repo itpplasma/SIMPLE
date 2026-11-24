@@ -108,6 +108,7 @@ contains
         type(nbi_beamlet_t), allocatable :: beamlets(:)
         type(nbi_segment_t), allocatable :: seg(:), all_seg(:)
         real(dp), allocatable :: cdf(:)
+        integer, allocatable :: trial_ordinal(:)
         real(dp) :: injected, shine, total_injected, total_shine, total_ionized
      real(dp) :: injected_power, ionized_power, injected_torque, rnd(2), l, energy, mass
         real(dp) :: x(3), v(3), u(3), ugc(3), xgc(3), bhat(3), bmod, omega, speed
@@ -160,6 +161,7 @@ contains
         if (allocated(nbi_marker_angmom)) deallocate (nbi_marker_angmom)
         if (allocated(nbi_marker_position)) deallocate (nbi_marker_position)
         allocate (nbi_marker_angmom(n), nbi_marker_position(3, n))
+        allocate (trial_ordinal(n))
         ! Births whose guiding centre lies outside the last closed surface are
         ! prompt losses. They are counted and replaced by a new draw.
         ntrial = 0
@@ -216,6 +218,7 @@ contains
                 cycle
             end if
             ipart = ipart + 1
+            trial_ordinal(ipart) = ntrial
             nbi_marker_angmom(ipart) = mass*(x(1)*v(2) - x(2)*v(1))
             nbi_marker_position(:, ipart) = x
             call field_direction(ugc, bhat, bmod)
@@ -259,6 +262,12 @@ contains
         do ipart = 1, n
             write (unit, '(i10,4es24.16)') ipart, nbi_marker_angmom(ipart), &
                 nbi_marker_position(:, ipart)
+        end do
+        close (unit)
+        open (newunit=unit, file='nbi_birth_trials.dat', status='replace')
+        write (unit, '(a)') '# marker trial_ordinal'
+        do ipart = 1, n
+            write (unit, '(i0,1x,i0)') ipart, trial_ordinal(ipart)
         end do
         close (unit)
         print *, 'NBI ionized power [W] = ', ionized_power, ' (nbi_source.dat)'

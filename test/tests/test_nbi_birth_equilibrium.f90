@@ -2,7 +2,7 @@ program test_nbi_birth_equilibrium
     !> Neutral beam births in a VMEC equilibrium. Radial injection through the
     !> axis gives near-perpendicular pitch, tangential injection near-parallel
     !> pitch, and every guiding centre lies one gyroradius from its birth point.
-    use, intrinsic :: iso_fortran_env, only: dp => real64
+    use, intrinsic :: iso_fortran_env, only: dp => real64, iostat_end
     use simple_api, only: simple_reset_config, simple_init, simple_sample
     use params, only: field_input, coord_input, startmode, isw_field_type, integmode, &
                       nper, npoiper, ntimstep, deterministic, n_d, n_e, &
@@ -21,9 +21,9 @@ program test_nbi_birth_equilibrium
     real(dp), allocatable :: z(:, :)
     real(dp) :: at, ap, dat, dap, iota, sqg, alam, dl_ds, dl_dt, dl_dp, bctr_t, bctr_p
     real(dp) :: bco_s, bco_t, bco_p, e_cov(3, 3), bcart(3), direction(3), worst_pitch
-    real(dp) :: rho, speed, lam, worst, injected, ionized, shine, value
+    real(dp) :: rho, speed, lam, worst, injected, ionized, shine, rate, value
     character(1024) :: filename, mode, key, line
-    integer :: i, unit, ios
+    integer :: i, unit, ios, marker, trial, previous_trial, expected_trials
 
     call get_command_argument(1, filename)
     call get_command_argument(2, mode)
@@ -58,6 +58,7 @@ program test_nbi_birth_equilibrium
     injected = -1.0_dp
     ionized = -1.0_dp
     shine = -1.0_dp
+    rate = -1.0_dp
     open (newunit=unit, file='nbi_source.dat', status='old')
     do
         read (unit, '(a)', iostat=ios) line
@@ -69,11 +70,31 @@ program test_nbi_birth_equilibrium
         if (key == 'injected_rate') injected = value
         if (key == 'ionized_rate') ionized = value
         if (key == 'shine_rate') shine = value
+        if (key == 'marker_rate') rate = value
     end do
     close (unit)
 if (min(injected, ionized, shine) < 0.0_dp) error stop 'rates missing in nbi_source.dat'
     if (abs((ionized + shine)/injected - 1.0_dp) > 1.0e-12_dp) &
         error stop 'ionized plus shine-through differs from injected'
+    if (rate <= 0.0_dp) error stop 'marker rate missing in nbi_source.dat'
+    expected_trials = nint(ionized/rate)
+
+    open (newunit=unit, file='nbi_birth_trials.dat', status='old')
+    read (unit, '(a)') line
+    previous_trial = 0
+    do i = 1, ntestpart
+        read (unit, *) marker, trial
+        if (marker /= i) error stop 'trial table marker indices differ from birth order'
+        if (trial <= previous_trial) error stop 'trial ordinals must increase'
+        previous_trial = trial
+    end do
+    read (unit, '(a)', iostat=ios) line
+    if (ios /= iostat_end) error stop 'trial table has extra rows'
+    close (unit)
+    if (previous_trial /= expected_trials) &
+        error stop 'trial count differs from source rate'
+    if (trim(mode) == 'tangential' .and. previous_trial == ntestpart) &
+        error stop 'expected at least one rejected trial in the tangential fixture'
 
     speed = sqrt(2.0_dp*energy*ev_joule/(2.0e-3_dp*p_mass))
     worst = 0.0_dp
