@@ -102,7 +102,7 @@ contains
         use params, only: nbi_file, nbi_path_step, nbi_path_length, n_d, n_e, &
                           particle_energy_eV_effective, marker_weights_input, sbeg, &
                           num_surf
-        use simple_mpi, only: mpi_is_root
+        use simple_mpi, only: mpi_is_root, mpi_ranks, mpi_broadcast_r64
         real(dp), intent(out) :: zstart(:, :)
         logical, intent(in) :: integration_coords
         type(nbi_beamlet_t), allocatable :: beamlets(:)
@@ -231,6 +231,17 @@ contains
             zstart(5, ipart) = dot_product(v, bhat)/speed
         end do
         nbi_marker_rate = total_ionized/ntrial
+        if (mpi_ranks > 1) then
+            ! The tracing driver broadcasts rank 0's start states.
+            block
+                real(dp) :: rate(1)
+                rate(1) = nbi_marker_rate
+                call mpi_broadcast_r64(rate, 1)
+                nbi_marker_rate = rate(1)
+            end block
+            call mpi_broadcast_r64(nbi_marker_angmom, n)
+            call mpi_broadcast_r64(nbi_marker_position, size(nbi_marker_position))
+        end if
         prompt_rate = total_ionized*(ntrial - n)/ntrial
         prompt_torque = prompt_angmom*total_ionized/ntrial
         if (allocated(marker_weights_input)) deallocate (marker_weights_input)
