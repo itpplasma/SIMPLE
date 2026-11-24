@@ -57,6 +57,11 @@ program test_nbi_torque
     Ti2_scale = 1.0e3_dp
     ni1_scale = 0.3e20_dp
     ni2_scale = 0.0_dp
+    if (trim(mode) == 'projection') then
+        call simple_init
+        call test_axial_momentum
+        stop
+    end if
     nbi_file = 'beamlets.dat'
     ! From 9 m before tangency through the far side of the plasma.
     nbi_path_length = 20.0_dp
@@ -81,6 +86,29 @@ program test_nbi_torque
     print '(a)', 'PASS'
 
 contains
+
+    subroutine test_axial_momentum
+        use field_can_mod, only: ref_to_integ
+        use nbi_birth, only: field_direction
+        use nbi_torque, only: nbi_gc_momentum
+        use reference_coordinates, only: ref_coords
+        use util, only: p_mass
+        real(dp) :: u(3), xyz(3), bhat(3), bmod, state(5)
+        real(dp) :: angular_momentum, potential, s, expected
+
+        u = [0.53_dp, 0.7_dp, 0.31_dp]
+        call ref_coords%evaluate_cart(u, xyz)
+        call field_direction(u, bhat, bmod)
+        call ref_to_integ(u, state(1:3))
+        state(4:5) = [0.9_dp, -0.7_dp]
+        call nbi_gc_momentum(state, angular_momentum, potential, s)
+        expected = 1.0e-7_dp*n_d*p_mass*v0*state(4)*state(5)* &
+                   (xyz(1)*bhat(2) - xyz(2)*bhat(1))
+        print '(a,2es20.11)', 'axial angular momentum, Cartesian reference ', &
+            angular_momentum, expected
+        if (.not. (abs(angular_momentum - expected) <= 5.0e-8_dp*abs(expected))) &
+            error stop 'guiding-centre momentum is not the Cartesian axial projection'
+    end subroutine test_axial_momentum
 
     subroutine start_near_lcfs(start)
         real(dp), intent(out) :: start(:, :)

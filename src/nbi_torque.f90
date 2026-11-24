@@ -1,12 +1,13 @@
 module nbi_torque
     !> Toroidal torque of neutral beam ions on the bulk plasma, from the
-    !> guiding-centre angular momentum L = m v_par h_phi and the canonical
-    !> momentum P = L + (q/c) A_phi in VMEC coordinates (s, theta, phi).
+    !> guiding-centre angular momentum L = R m v_par B_phi / abs(B) about +Z
+    !> and the reference poloidal flux -A_phi(s) in the VMEC flux gauge.
     !> The bulk receives L_neutral - L at birth (the radial current of the
     !> ionization displacement), -dL at each collision, (q/c) dA_phi along the
     !> orbit (j x B of the radial fast-ion current), and the remaining L at
-    !> thermalization. Without axisymmetry the remainder -dL - (q/c) dA_phi of an
-    !> orbit step acts on the source of the non-axisymmetric field.
+    !> thermalization. In an axisymmetric field L + (q/c) A_phi is conserved
+    !> between collisions. In 3D the field ledger records the residual
+    !> -dL - (q/c) dA_phi relative to the reference flux torque.
     use, intrinsic :: iso_fortran_env, only: dp => real64
     implicit none
     private
@@ -55,24 +56,27 @@ contains
     end subroutine nbi_tally_init
 
     subroutine nbi_gc_momentum(z, l, a, s)
-        !> Mechanical and field parts of the canonical toroidal momentum
-        !> [kg m^2/s] and the flux label of the integration state z.
+        !> Axial momentum and reference flux term [kg m^2/s] at state z.
         use field_can_mod, only: integ_to_ref
-        use spline_vmec_sub, only: vmec_field
+        use spline_vmec_sub, only: splint_vmec_data, compute_field_components
         use params, only: v0, n_d, n_e
         use util, only: c, e_charge, p_mass
         real(dp), intent(in) :: z(5)
         real(dp), intent(out) :: l, a, s
         real(dp) :: u(3), at, ap, dat, dap, iota, sqg, alam, dl_ds, dl_dt, dl_dp
-        real(dp) :: bctr_t, bctr_p, bco_s, bco_t, bco_p, bmod, h_phi
+        real(dp) :: r, height, dr_ds, dr_dt, dr_dp, dz_ds, dz_dt, dz_dp
+        real(dp) :: bctr_t, bctr_p, bco_s, bco_t, bco_p, bmod
 
         call integ_to_ref(z(1:3), u)
-        call vmec_field(u(1), u(2), u(3), at, ap, dat, dap, iota, sqg, alam, dl_ds, &
-                        dl_dt, dl_dp, bctr_t, bctr_p, bco_s, bco_t, bco_p)
+        call splint_vmec_data(u(1), u(2), u(3), ap, at, dap, dat, iota, &
+                              r, height, alam, dr_ds, dr_dt, dr_dp, dz_ds, dz_dt, &
+                              dz_dp, dl_ds, dl_dt, dl_dp)
+        call compute_field_components(r, dr_ds, dr_dt, dr_dp, dz_ds, dz_dt, dz_dp, &
+                                      dat, dap, dl_ds, dl_dt, dl_dp, sqg, bctr_t, &
+                                      bctr_p, bco_s, bco_t, bco_p)
         bmod = sqrt(bctr_t*bco_t + bctr_p*bco_p)
-        h_phi = (bco_p + dl_dp*bco_t)/bmod
-        ! SIMPLE's orbit equations use the mass n_d m_p.
-        l = n_d*p_mass*v0*z(4)*z(5)*h_phi*to_si
+        ! The covariant VMEC component includes R and Z changes at fixed s, theta.
+        l = n_d*p_mass*v0*z(4)*z(5)*r**2*bctr_p/bmod*to_si
         a = n_e*e_charge/c*ap*to_si
         s = u(1)
     end subroutine nbi_gc_momentum
@@ -174,7 +178,7 @@ contains
     end subroutine nbi_tally_end
 
     pure function nbi_tally_total() result(total)
-        !> Bulk torque, field torque, lost and still-fast angular momentum
+        !> Bulk torque, field residual, lost and still-fast angular momentum
         !> rates [N m], the injected rate of the markers, and the beam-target
         !> neutron rate [1/s].
         real(dp) :: total(6)

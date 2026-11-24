@@ -737,6 +737,12 @@ set_tests_properties(test_nbi_birth_chartmap PROPERTIES LABELS "integration"
 
 add_executable(test_nbi_torque.x test_nbi_torque.f90)
 target_link_libraries(test_nbi_torque.x simple)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/nbi_torque_axial_projection)
+add_test(NAME test_nbi_torque_axial_projection
+    COMMAND test_nbi_torque.x ${WOUT_FILE} projection)
+set_tests_properties(test_nbi_torque_axial_projection PROPERTIES
+    LABELS "unit" TIMEOUT 30 ENVIRONMENT "OMP_NUM_THREADS=1"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/nbi_torque_axial_projection)
 foreach(case IN ITEMS collisional collisionless fractional_loss)
     file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/nbi_torque_${case})
     add_test(NAME test_nbi_torque_${case}
