@@ -5,7 +5,7 @@ module nbi_source
     !> R_j = f_j P/(E/j) neutrals per second, of which
     !> dR = R_j [exp(-tau(l)) - exp(-tau(l+dl))] ionize on [l, l+dl], with
     !> d tau/dl = n_e sigma (T. H. Stix, Plasma Phys. 14 (1972) 367, Sec. II).
-    use, intrinsic :: iso_fortran_env, only: dp => real64
+    use, intrinsic :: iso_fortran_env, only: dp => real64, iostat_end
     use finite_check, only: is_finite
     use beam_stopping, only: suzuki_stopping, suzuki_impurity_supported
     implicit none
@@ -25,6 +25,7 @@ module nbi_source
         real(dp) :: fraction(3) = [1.0_dp, 0.0_dp, 0.0_dp] ! power at E, E/2, E/3
         real(dp) :: origin(3) = 0.0_dp      ! Cartesian start point [m]
         real(dp) :: direction(3) = 0.0_dp   ! unit vector
+        real(dp) :: path_limit = 0.0_dp     ! distance to material [m], or use lmax
     end type nbi_beamlet_t
 
     !> Local plasma on the beam line: inside the plasma, n_e [m^-3], T_e [eV],
@@ -54,13 +55,14 @@ contains
 
     subroutine read_nbi_beamlets(filename, beamlets)
         !> One beamlet per line: name mass energy_eV power_W f_full f_half
-        !> f_third x y z dx dy dz, Cartesian in metres; '#' starts a comment.
+        !> f_third x y z dx dy dz [path_limit], Cartesian in metres.
         character(len=*), intent(in) :: filename
         type(nbi_beamlet_t), allocatable, intent(out) :: beamlets(:)
         type(nbi_beamlet_t) :: b
         type(nbi_beamlet_t), allocatable :: tmp(:)
         character(len=1024) :: line
-        integer :: unit, ios, n
+        integer :: unit, ios, n, comment
+        real(dp) :: path_limit
         real(dp) :: norm
 
         allocate (beamlets(0))
@@ -70,10 +72,23 @@ contains
             read (unit, '(a)', iostat=ios) line
             if (ios /= 0) exit
             line = adjustl(line)
+            comment = index(line, '#')
+            if (comment > 0) line(comment:) = ' '
             if (len_trim(line) == 0 .or. line(1:1) == '#') cycle
             read (line, *, iostat=ios) b%name, b%mass, b%energy_ev, b%power_w, &
                 b%fraction, b%origin, b%direction
             if (ios /= 0) error stop 'nbi source: malformed beamlet line'
+            path_limit = 0.0_dp
+            read (line, *, iostat=ios) b%name, b%mass, b%energy_ev, b%power_w, &
+                b%fraction, b%origin, b%direction, path_limit
+            if (ios /= iostat_end) then
+                if (ios /= 0) error stop 'nbi source: malformed beamlet path limit'
+                if (.not. is_finite(path_limit)) &
+                    error stop 'nbi source: nonfinite beamlet path limit'
+                if (path_limit <= 0.0_dp) &
+                    error stop 'nbi source: beamlet path limit must be positive'
+            end if
+            b%path_limit = path_limit
             if (.not. all(is_finite([b%energy_ev, b%power_w, b%fraction, b%origin, &
                                      b%direction]))) &
                 error stop 'nbi source: nonfinite beamlet entry'
@@ -107,7 +122,7 @@ contains
         real(dp), intent(out) :: injected, shine
         type(nbi_plasma_t) :: p
         type(nbi_segment_t), allocatable :: tmp(:)
-        real(dp) :: energy, tau, dtau, survive0, survive1, l
+        real(dp) :: energy, tau, dtau, survive0, survive1, l, l0, l1, ds, lstop
         integer :: i, nstep, n
 
     if (component < 1 .or. component > 3) error stop 'nbi source: component must be 1-3'
@@ -117,26 +132,37 @@ contains
         allocate (segments(0))
         shine = injected
         if (injected <= 0.0_dp) return
-        nstep = ceiling(lmax/dl)
+        lstop = lmax
+        if (beamlet%path_limit > 0.0_dp) lstop = min(lmax, beamlet%path_limit)
+        nstep = ceiling(lstop/dl)
         tau = 0.0_dp
         do i = 1, nstep
             l = (i - 0.5_dp)*dl
+            l0 = l - 0.5_dp*dl
+            l1 = l + 0.5_dp*dl
+            ds = dl
+            if (i == nstep .and. beamlet%path_limit > 0.0_dp) then
+                l1 = min(l1, lstop)
+                ds = l1 - l0
+                if (ds <= 0.0_dp) exit
+                l = l0 + 0.5_dp*ds
+            end if
             p = plasma_at(beamlet%origin + l*beamlet%direction)
             if (.not. p%inside) cycle
             dtau = p%ne*suzuki_stopping(energy*1.0e-3_dp/beamlet%mass, p%ne, p%te, &
-                                        beamlet%mass, p%zeff, p%z_impurity)*dl
+                                        beamlet%mass, p%zeff, p%z_impurity)*ds
             survive0 = exp(-tau)
             tau = tau + dtau
             survive1 = exp(-tau)
             n = size(segments)
             allocate (tmp(n + 1))
             tmp(1:n) = segments
-            tmp(n + 1) = nbi_segment_t(0, component, l - 0.5_dp*dl, l + 0.5_dp*dl, &
+            tmp(n + 1) = nbi_segment_t(0, component, l0, l1, &
                                        injected*(survive0 - survive1))
             call move_alloc(tmp, segments)
         end do
         ! A path that ends inside the plasma would count the rest as shine-through.
-        if (p%inside) error stop 'nbi source: beam path ends inside the plasma, raise nbi_path_length'
+        if (p%inside) error stop 'nbi source: beam path ends inside the plasma, check path limits'
         shine = injected*exp(-tau)
     end subroutine beamlet_deposition
 
