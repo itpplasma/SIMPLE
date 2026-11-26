@@ -35,6 +35,12 @@ procedure(coordinate_transform), pointer :: ref_to_integ => identity_transform
 !> chart evaluates it.
     logical :: regular_axis_field = .false.
 
+!> Accept a VMEC equilibrium that fails libneo's Boozer quality check (for
+!> example radial force balance). The reason is required and is logged by
+!> libneo with the overridden status.
+    logical :: allow_poor_equilibrium = .false.
+    character(len=256) :: poor_equilibrium_reason = ''
+
 contains
 
     subroutine set_regular_axis_field(enabled)
@@ -188,6 +194,7 @@ subroutine init_field_can(field_id, field_noncan, n_r, n_th, n_phi, &
     transformation_relerr)
   use get_can_sub, only : get_canonical_coordinates, get_canonical_coordinates_with_field
   use boozer_sub, only : get_boozer_coordinates
+  use boozer_hybrid_quality, only: sfl_quality_config_t
   use boozer_chartmap, only : load_boozer_from_chartmap
   use field_can_meiss, only : get_meiss_coordinates
   use field_can_albert, only : get_albert_coordinates
@@ -198,6 +205,12 @@ subroutine init_field_can(field_id, field_noncan, n_r, n_th, n_phi, &
   integer, intent(in), optional :: n_r, n_th, n_phi
   real(dp), intent(in), optional :: transformation_relerr
   type(vmec_field_t) :: vmec_field
+  type(sfl_quality_config_t) :: quality
+
+   if (allow_poor_equilibrium .and. len_trim(poor_equilibrium_reason) == 0) error stop &
+      'init_field_can: allow_poor_equilibrium needs poor_equilibrium_reason'
+  quality%allow_poor_equilibrium = allow_poor_equilibrium
+  quality%override_reason = poor_equilibrium_reason
 
         ! The libneo Boozer builders read this switch; set it on every
         ! initialisation so a library run that changes fields starts clean.
@@ -219,7 +232,7 @@ subroutine init_field_can(field_id, field_noncan, n_r, n_th, n_phi, &
           integ_to_ref => integ_to_ref_boozer_chartmap
           ref_to_integ => ref_to_integ_boozer_chartmap
         class default
-          call get_boozer_coordinates()
+            call get_boozer_coordinates(quality=quality)
         end select
       case (MEISS)
         call get_meiss_coordinates
@@ -242,7 +255,7 @@ subroutine init_field_can(field_id, field_noncan, n_r, n_th, n_phi, &
       call get_canonical_coordinates
     case (BOOZER)
       call field_can_from_id(field_id)
-      call get_boozer_coordinates
+      call get_boozer_coordinates(quality=quality)
     case (MEISS)
       call create_vmec_field(vmec_field)
       call field_can_from_id(field_id, vmec_field, n_r, n_th, n_phi, &

@@ -103,6 +103,9 @@ multharm = 5                     ! VMEC angular spline grid: n_theta = m_max*mul
 !                                  n_phi = n_max*multharm + 1
 vmec_B_scale = 1d0               ! factor applied to the VMEC magnetic field
 vmec_RZ_scale = 1d0              ! factor applied to the VMEC R and Z (device size)
+allow_poor_equilibrium = .false. ! .true.: build Boozer coordinates from a VMEC file that fails
+!                                  libneo's quality check (e.g. radial force balance)
+poor_equilibrium_reason = ''     ! required with allow_poor_equilibrium; logged by libneo
 canonical_grid_nr = 62           ! MEISS/ALBERT canonical map grid, radial; 6..512
 canonical_grid_ntheta = 63       ! MEISS/ALBERT canonical map grid, poloidal; 6..512
 canonical_grid_nphi = 64         ! MEISS/ALBERT canonical map grid, toroidal; 6..512;

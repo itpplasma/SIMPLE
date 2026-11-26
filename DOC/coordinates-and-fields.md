@@ -395,6 +395,11 @@ evaluation is needed.
 | SPECTRE | `src/field/field_can_spectre.f90` | $\rho_g$ | Meiss per volume (section 6) |
 | test | `src/field/field_can_test.f90` | $r$ | analytic circular tokamak |
 
+libneo checks a VMEC file before it builds Boozer coordinates (radial force
+balance and resolution) and stops when the file fails. `allow_poor_equilibrium
+= .true.` with a non-empty `poor_equilibrium_reason` turns the stop into a
+logged override, passed as `sfl_quality_config_t` to `get_boozer_coordinates`.
+
 Canonical-flux construction and conversion share the selected, read-only field
 object across OpenMP threads. The construction/conversion phase flag is also
 shared and changes only outside the parallel regions; coordinate scratch
