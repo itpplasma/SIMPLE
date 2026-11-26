@@ -25,7 +25,7 @@ and ``DOC/config.md`` for additional usage, units and option interactions.
 &config
 -------
 
-Source: ``src/params.f90:304``.
+Source: ``src/params.f90:305``.
 
 .. list-table::
    :header-rows: 1
@@ -444,6 +444,18 @@ Source: ``src/params.f90:304``.
      - ``kind(1d0)``
      - ``scalar``
      - ``1d0``
+     -
+   * - ``allow_poor_equilibrium``
+     - ``logical``
+     - ``default``
+     - ``scalar``
+     - ``.false.``
+     - Accept a VMEC equilibrium that fails libneo's Boozer quality check (for example radial force balance). The reason is required and is logged by libneo with the overridden status.
+   * - ``poor_equilibrium_reason``
+     - ``character(len=256)``
+     - ``default``
+     - ``scalar``
+     - ``''``
      -
    * - ``vmec_rz_scale``
      - ``real``
