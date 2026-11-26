@@ -10,7 +10,8 @@ module params
                                   vmec_RZ_scale
     use velo_mod, only: isw_field_type
     use magfie_sub, only: TEST, BOOZER
-    use field_can_mod, only: eval_field => evaluate, field_can_t
+    use field_can_mod, only: eval_field => evaluate, field_can_t, &
+                             allow_poor_equilibrium, poor_equilibrium_reason
     use field_can_base, only: set_radial_electric_potential_slope
     use orbit_symplectic_base, only: symplectic_integrator_t, multistage_integrator_t, &
                                      EXPL_IMPL_EULER, &
@@ -319,6 +320,7 @@ module params
         canonical_ode_relerr, &
         tcut, nturns, debug, &
         class_plot, cut_in_per, fast_class, vmec_B_scale, &
+        allow_poor_equilibrium, poor_equilibrium_reason, &
         vmec_RZ_scale, swcoll, collision_model, collision_scheme, collision_noise, &
         collision_noise_seed, thermal_stop_factor, nu_star_standard, &
         lorentz_major_radius_cm, lorentz_iota, radial_electric_potential_slope, &
