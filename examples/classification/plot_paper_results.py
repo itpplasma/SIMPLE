@@ -343,6 +343,15 @@ def plot_volume_classification(data_dir, output_path, config_label="",
 
     tl_data = np.loadtxt(data_dir / "times_lost.dat")
     trap_par = tl_data[:, 2]
+    # Class 0 is the initial value: the orbit left the plasma before it was
+    # classified, or it stayed confined without enough banana tips. Only the
+    # first is a prompt loss; the exit code tells them apart.
+    exit_file = data_dir / "orbit_exit_code.dat"
+    if exit_file.exists():
+        exit_code = np.loadtxt(exit_file)[:, 1].astype(int)
+        lost = (exit_code == 1) | (exit_code == 2)
+    else:
+        lost = np.ones(len(icl), dtype=bool)
 
     bminmax = np.loadtxt(data_dir / "bminmax.dat")
 
@@ -368,7 +377,8 @@ def plot_volume_classification(data_dir, output_path, config_label="",
         if not is_trapped:
             continue
         if icl[ipart] == 0:
-            prompt[k, i] += 1.0
+            if lost[ipart]:
+                prompt[k, i] += 1.0
         elif icl[ipart] == 1:
             regular[k, i] += 1.0
         elif icl[ipart] == 2:
