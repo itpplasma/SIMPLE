@@ -11,7 +11,7 @@ program test_thermal_ntv
     use params, only: field_input, coord_input, startmode, isw_field_type, integmode, &
                       deterministic, n_d, n_e, particle_energy_eV, ntestpart, swcoll, &
                      trace_time, ntimstep, am1, am2, Z1, Z2, contr_pp, num_surf, sbeg, &
-                      ntv_tally, ntv_drive, ntv_temperature_eV, ntv_bin
+                      ntv_tally, ntv_drive, ntv_temperature_eV, ntv_bin, ntv_flux_drive
     use simple_profiles, only: Te_scale, Ti1_scale, Ti2_scale, ni1_scale, ni2_scale
     use thermal_ntv, only: ntv_tally_weight, ntv_tally_marker
     use timing, only: init_timer
@@ -52,6 +52,7 @@ program test_thermal_ntv
     ni1_scale = 1.0e20_dp
     ni2_scale = 0.0_dp
     ntv_tally = .true.
+    ntv_flux_drive = trim(mode) == 'flux_drive'
     ntv_drive = [a1, a2]
     ntv_temperature_eV = 1.0e3_dp
     ntv_bin = [s0 - 1.0e-6_dp, s0 + 1.0e-6_dp]
@@ -79,6 +80,10 @@ program test_thermal_ntv
     ! |c_i| ~ 1e-25 kg m^2/s.
    if (torque > 1.0e-30_dp) error stop 'torque does not vanish in an axisymmetric field'
     ! A ds drive gives |w| ~ (A_1 + A_2 E/T) times the orbit width in s, 1e-3.
-    if (wmax > 1.0e-10_dp) error stop 'weights move in an axisymmetric field'
+    if (ntv_flux_drive) then
+        if (wmax < 1.0e-5_dp) error stop 'flux drive misses the bounce displacement'
+    else
+        if (wmax > 1.0e-10_dp) error stop 'weights move in an axisymmetric field'
+    end if
     print '(a)', 'PASS'
 end program test_thermal_ntv

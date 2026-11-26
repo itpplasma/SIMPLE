@@ -26,7 +26,8 @@ nbi_path_length = 8d0            ! mode 8 path length from the source, m; must e
 !                                  the plasma (stops otherwise)
 nbi_torque_bins = 50             ! mode 8 radial bins in s of nbi_torque.dat
 ntv_tally = .false.              ! thermal delta-f NTV tally, writes thermal_ntv.dat
-ntv_drive = 0d0, 0d0             ! A_1, A_2 of dw = -(A_1 + A_2 E/T) ds
+ntv_drive = 0d0, 0d0             ! A_1, A_2 of the weight equation at fixed energy
+ntv_flux_drive = .false.         ! use ds in the weight drive
 ntv_temperature_eV = 0d0         ! background temperature T of the tally [eV]
 ntv_bin = 0d0, 1d0               ! s range of the tally
 ntv_window_start = 0d0           ! tally start time [s]

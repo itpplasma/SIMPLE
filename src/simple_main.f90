@@ -2063,7 +2063,7 @@ contains
         use params, only: nbi_torque_bins
         use profile_radius, only: init_profile_radius
         use params, only: ntv_tally, ntv_drive, ntv_temperature_eV, ntv_bin, &
-                          ntv_window_start
+                          ntv_window_start, ntv_flux_drive
         use thermal_ntv, only: ntv_tally_init
         use params, only: marker_weight_file, marker_weights_input
 
@@ -2138,8 +2138,10 @@ contains
             print *, 'Unknown startmode: ', startmode
         end if
 
-        if (ntv_tally) call ntv_tally_init(size(zstart, 2), ntv_drive, &
-                                          ntv_temperature_eV, ntv_bin, ntv_window_start)
+        if (ntv_tally) then
+            call ntv_tally_init(size(zstart, 2), ntv_drive, ntv_temperature_eV, &
+                                ntv_bin, ntv_window_start, ntv_flux_drive)
+        end if
 
         if (allocated(marker_weights_input)) deallocate (marker_weights_input)
         if (len_trim(marker_weight_file) > 0) then
